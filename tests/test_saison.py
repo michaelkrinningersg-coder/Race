@@ -691,3 +691,96 @@ def test_der_wechsel_braucht_eine_gefahrene_saison(k, welt, strecken):
     lauf = neuer_lauf(k, welt, strecken)
     with pytest.raises(sa.SaisonFehler, match="Auf- und Abstieg"):
         lauf.naechste_saison()
+
+
+# --- Das gefuehrte Rennwochenende (Punkt 12) ------------------------------
+@pytest.fixture(scope="module")
+def gefuehrt(k, welt, strecken) -> sa.Wochenendlauf:
+    """Dasselbe Wochenende, in Etappen gefahren."""
+    lauf = neuer_lauf(k, welt, strecken)
+    wochenendlauf = sa.Wochenendlauf(lauf, LIGA)
+    wochenendlauf.fahre_qualifying()
+    wochenendlauf.fahre_rennen()
+    wochenendlauf.schliesse_ab()
+    return wochenendlauf
+
+
+def test_gefuehrt_und_am_stueck_ergeben_dasselbe(gefuehrt, ausfuehrlich, k):
+    """Der Kern der Sache: Derselbe Seed, dasselbe Rennen (GDD 15).
+
+    Das gefuehrte Wochenende faengt mit der Liga des Spielers an und
+    haengt die 19 anderen hinten dran; ``fahre_rennen`` geht von Liga 1
+    bis 20 durch. Herauskommen muss beides Mal dasselbe - sonst haengt das
+    Ergebnis an der Reihenfolge, und ein Seed sagt nichts mehr.
+    """
+    am_stueck = ausfuehrlich.wochenenden[0]
+    in_etappen = gefuehrt.wochenende
+
+    assert in_etappen.nummer == am_stueck.nummer
+    assert in_etappen.strecke == am_stueck.strecke
+    assert set(in_etappen.ligen) == set(am_stueck.ligen)
+
+    for liga in sorted(am_stueck.ligen):
+        eine = am_stueck.liga(liga)
+        andere = in_etappen.liga(liga)
+        assert andere == eine, f"Liga {liga} weicht ab"
+
+    # Auch das Abspielbare muss deckungsgleich sein.
+    assert in_etappen.qualifying.aufstellung == am_stueck.qualifying.aufstellung
+    assert in_etappen.verlauf.ergebnisse == am_stueck.verlauf.ergebnisse
+    assert in_etappen.verlauf.positionsgewinne == am_stueck.verlauf.positionsgewinne
+
+
+def test_gefuehrt_fuehrt_die_saison_genauso_weiter(gefuehrt, ausfuehrlich, welt):
+    """Tabelle, Statistik, Kenntnis und Popularitaet muessen gleich stehen."""
+    for liga in sorted(ausfuehrlich.tabellen):
+        eine = ausfuehrlich.tabelle(liga).stand()
+        andere = gefuehrt.lauf.tabelle(liga).stand()
+        assert andere == eine, f"Tabelle der Liga {liga} weicht ab"
+
+    assert gefuehrt.lauf.gefahren == ausfuehrlich.gefahren == 1
+    assert gefuehrt.lauf.naechstes_rennen == ausfuehrlich.naechstes_rennen
+
+    strecke = ausfuehrlich.wochenenden[0].strecke
+    for fahrer in welt.fahrer:
+        assert gefuehrt.lauf.kenntnis.stand(
+            fahrer.nummer, strecke
+        ) == pytest.approx(ausfuehrlich.kenntnis.stand(fahrer.nummer, strecke))
+        assert gefuehrt.lauf.popularitaet.stand(
+            fahrer.nummer
+        ) == pytest.approx(ausfuehrlich.popularitaet.stand(fahrer.nummer))
+
+
+def test_die_etappen_muessen_in_der_reihenfolge_kommen(k, welt, strecken):
+    lauf = sa.Wochenendlauf(neuer_lauf(k, welt, strecken), LIGA)
+    with pytest.raises(sa.WochenendFehler):
+        lauf.fahre_rennen()
+    lauf.fahre_qualifying()
+    with pytest.raises(sa.WochenendFehler):
+        lauf.schliesse_ab()
+
+
+def test_eine_etappe_zweimal_gefahren_bleibt_dieselbe(k, welt, strecken):
+    """Ein zweiter Klick darf das Wochenende nicht neu wuerfeln."""
+    lauf = sa.Wochenendlauf(neuer_lauf(k, welt, strecken), LIGA)
+    assert lauf.fahre_qualifying() is lauf.fahre_qualifying()
+    assert lauf.fahre_rennen() is lauf.fahre_rennen()
+    assert lauf.schliesse_ab() is lauf.schliesse_ab()
+    assert lauf.lauf.gefahren == 1
+
+
+def test_das_wochenende_kennt_strecke_und_runden_vor_dem_fahren(k, welt, strecken):
+    """Die Vorschau im gefuehrten Reiter braucht das, bevor gefahren wird."""
+    saisonlauf = neuer_lauf(k, welt, strecken)
+    lauf = sa.Wochenendlauf(saisonlauf, LIGA)
+    assert lauf.nummer == 1
+    assert lauf.strecke.name == k.strecken[0]["name"]
+    assert lauf.runden > 0
+    assert not lauf.ist_gefahren
+    # Ohne Karriere gibt es keinen Kalender, also auch kein Datum.
+    assert lauf.renntag is None
+
+
+def test_unbekannte_liga_wird_abgewiesen(k, welt, strecken):
+    with pytest.raises(sa.SaisonFehler):
+        sa.Wochenendlauf(neuer_lauf(k, welt, strecken), 99)

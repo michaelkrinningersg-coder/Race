@@ -1023,6 +1023,147 @@ class Saisonlauf:
 
 
 # ---------------------------------------------------------------------------
+# Das gefuehrte Rennwochenende (Punkt 12)
+# ---------------------------------------------------------------------------
+class WochenendFehler(SaisonFehler):
+    """Die Etappen des Rennwochenendes sind in falscher Reihenfolge."""
+
+
+class Wochenendlauf:
+    """Ein Rennwochenende in Etappen, fuer die Oberflaeche (Punkt 12).
+
+    ``Saisonlauf.fahre_rennen`` faehrt alle 20 Ligen am Stueck. Der
+    Spieler soll sein Wochenende dagegen Schritt fuer Schritt erleben:
+    erst das Qualifying, dann - auf dessen Aufstellung - das Rennen, und
+    erst danach laufen die 19 anderen Ligen im Schnellmodus durch.
+
+    Gefahren wird **dasselbe**: Die Seedzweige heissen nach ihrer Sache,
+    nicht nach der Reihenfolge, und jede Liga bucht fuer sich. Ein Test
+    haelt fest, dass gefuehrt und am Stueck bei gleichem Seed Zeichen fuer
+    Zeichen dasselbe herauskommt.
+
+    Zwischen Qualifying und Rennen haelt der Lauf an. Dort sitzt spaeter
+    die Reifenwahl aus Punkt 39.
+    """
+
+    def __init__(self, lauf: Saisonlauf, liga: int) -> None:
+        if liga not in lauf.tabellen:
+            raise SaisonFehler(f"Liga {liga} gibt es nicht")
+        self.lauf = lauf
+        self.liga = liga
+        # Ruestet zu und schaltet den Kalender auf den Renntag (GDD 2).
+        self.rahmen = lauf.beginne_wochenende()
+        self.daten = lauf.ligadaten(self.rahmen, liga)
+        self.qualifying: Qualifying | None = None
+        self.verlauf: Rennverlauf | None = None
+        self.wochenende: Wochenende | None = None
+
+    # -- Was vor dem Fahren schon feststeht ---------------------------------
+    @property
+    def nummer(self) -> int:
+        """Das wievielte Rennen der Saison dieses Wochenende ist."""
+        return self.rahmen.nummer
+
+    @property
+    def strecke(self) -> Strecke:
+        return self.rahmen.strecke
+
+    @property
+    def runden(self) -> int:
+        return self.daten.runden
+
+    @property
+    def renntag(self) -> dt.date | None:
+        return self.lauf.renntag(self.nummer)
+
+    @property
+    def ist_gefahren(self) -> bool:
+        return self.wochenende is not None
+
+    # -- Die Etappen --------------------------------------------------------
+    def fahre_qualifying(self) -> Qualifying:
+        """Erste Etappe: das Qualifying der Liga des Spielers (GDD 4)."""
+        if self.qualifying is not None:
+            return self.qualifying
+        self.qualifying = _fahre_qualifying(
+            self.lauf.konfiguration,
+            self.lauf.welt,
+            self.liga,
+            self.rahmen.strecke,
+            self.daten.seedquelle,
+            self.daten.meisterschaft,
+            self.daten.kenntnis,
+            self.daten.autos,
+            self.daten.tagesform,
+            self.daten.rhythmus,
+        )
+        return self.qualifying
+
+    def fahre_rennen(self) -> Rennverlauf:
+        """Zweite Etappe: das Rennen auf die gefahrene Aufstellung.
+
+        Gebucht wird hier noch nichts - erst ``schliesse_ab`` traegt ein,
+        damit ein abgebrochenes Wochenende die Saison nicht halb bewegt.
+        """
+        if self.qualifying is None:
+            raise WochenendFehler(
+                "Das Qualifying muss vor dem Rennen gefahren werden (GDD 4)"
+            )
+        if self.verlauf is not None:
+            return self.verlauf
+        self._eigenes, self.verlauf = _fahre_rennen(
+            self.lauf.konfiguration,
+            self.lauf.welt,
+            self.liga,
+            self.daten.fahrer,
+            self.rahmen.strecke,
+            self.daten.runden,
+            self.daten.seedquelle,
+            self.lauf.streckenmittel,
+            self.rahmen.verschleiss,
+            self.daten.kenntnis,
+            self.daten.autos,
+            self.daten.tagesform,
+            self.daten.rhythmus,
+            self.qualifying,
+        )
+        return self.verlauf
+
+    def schliesse_ab(self) -> Wochenende:
+        """Dritte Etappe: die 19 anderen Ligen, dann alles verbuchen.
+
+        Die Liga des Spielers wird zuerst gebucht, die uebrigen danach in
+        aufsteigender Reihenfolge. Das darf sie, weil jede Liga ihren
+        eigenen Seedzweig hat und fuer sich bucht.
+        """
+        if self.verlauf is None:
+            raise WochenendFehler("Das Rennen muss vor dem Abschluss gefahren werden")
+        if self.wochenende is not None:
+            return self.wochenende
+
+        ligen: dict[int, Ligawochenende] = {self.liga: self._eigenes}
+        self.lauf.verbuche_liga(self.rahmen, self.daten, self._eigenes)
+        for liga in sorted(self.lauf.tabellen):
+            if liga == self.liga:
+                continue
+            daten = self.lauf.ligadaten(self.rahmen, liga)
+            ligen[liga], _, _ = self.lauf._fahre_liga(self.rahmen, daten, False)
+            self.lauf.verbuche_liga(self.rahmen, daten, ligen[liga])
+
+        self.wochenende = self.lauf.schliesse_wochenende_ab(
+            Wochenende(
+                nummer=self.rahmen.nummer,
+                strecke=self.rahmen.strecke.name,
+                ligen={liga: ligen[liga] for liga in sorted(ligen)},
+                verlauf=self.verlauf,
+                qualifying=self.qualifying,
+                ausfuehrliche_liga=self.liga,
+            )
+        )
+        return self.wochenende
+
+
+# ---------------------------------------------------------------------------
 # Ligawechsel in die Welt uebernehmen
 # ---------------------------------------------------------------------------
 def wende_wechsel_an(welt: Welt, wechsel: tuple[Wechsel, ...]) -> Welt:
