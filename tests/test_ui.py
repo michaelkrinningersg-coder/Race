@@ -13,6 +13,7 @@ from rennmanager import konfiguration as kf
 
 pytest.importorskip("PySide6")
 
+from PySide6.QtCore import Qt  # noqa: E402
 from PySide6.QtWidgets import QTreeWidget  # noqa: E402
 
 from rennmanager.ui.hauptfenster import Hauptfenster  # noqa: E402
@@ -442,7 +443,8 @@ def test_weltseite_zeigt_eine_ganze_liga(qtbot, konfig: kf.Konfiguration) -> Non
     qtbot.addWidget(fenster)
     seite = fenster.weltseite
 
-    assert seite.liga_auswahl.count() == konfig.wert("ligen", "anzahl")
+    # 20 Ligen plus der Eintrag "Alle Ligen".
+    assert seite.liga_auswahl.count() == konfig.wert("ligen", "anzahl") + 1
     assert seite.liste.topLevelItemCount() == konfig.wert("ligen", "autos_je_liga")
     # Die Liste beginnt beim staerksten Fahrer.
     assert seite.liste.topLevelItem(0).text(0) == "1"
@@ -453,11 +455,48 @@ def test_weltseite_wechselt_die_liga(qtbot, konfig: kf.Konfiguration) -> None:
     qtbot.addWidget(fenster)
     seite = fenster.weltseite
 
-    seite.liga_auswahl.setCurrentIndex(0)
+    seite.liga_auswahl.setCurrentIndex(1)
     oben = [seite.liste.topLevelItem(i).text(2) for i in range(5)]
-    seite.liga_auswahl.setCurrentIndex(19)
+    seite.liga_auswahl.setCurrentIndex(20)
     unten = [seite.liste.topLevelItem(i).text(2) for i in range(5)]
     assert oben != unten
+
+
+def test_weltseite_zeigt_alle_600_fahrer(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.weltseite
+
+    seite.liga_auswahl.setCurrentIndex(0)  # "Alle Ligen"
+    assert seite.liste.topLevelItemCount() == len(fenster.welt.fahrer)
+    # Eine Liga-Spalte kommt dazu, und der Platz zaehlt je Liga neu.
+    kopf = [seite.liste.headerItem().text(i) for i in range(seite.liste.columnCount())]
+    assert kopf[1] == "Liga"
+    je_liga = konfig.wert("ligen", "autos_je_liga")
+    assert seite.liste.topLevelItem(0).text(1) == "1"
+    assert seite.liste.topLevelItem(je_liga).text(1) == "2"
+    assert seite.liste.topLevelItem(je_liga).text(0) == "1"
+
+
+def test_weltseite_zeigt_alle_einzelwerte_als_spalten(qtbot, konfig: kf.Konfiguration) -> None:
+    """Die 32 Werte aus GDD 5 und 6 plus die Faehigkeiten daneben."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.weltseite
+
+    vorher = seite.liste.columnCount()
+    seite.alle_werte.setChecked(True)
+    kopf = [seite.liste.headerItem().text(i) for i in range(seite.liste.columnCount())]
+
+    erwartet = [f.schluessel for f in konfig.faehigkeiten] + list(konfig.zusatzfaehigkeiten)
+    assert seite.liste.columnCount() == vorher + len(erwartet)
+    assert kopf[-len(erwartet):] == erwartet
+
+    # Die Werte stehen auch wirklich drin.
+    zeile = seite.liste.topLevelItem(0)
+    fahrer = fenster.welt.fahrer[zeile.data(0, Qt.UserRole)]
+    stelle = kopf.index("F1")
+    assert zeile.text(stelle).replace(".", "") == str(fahrer.auto.werte["F1"])
 
 
 def test_weltseite_zeigt_das_profil(qtbot, konfig: kf.Konfiguration) -> None:
@@ -468,9 +507,24 @@ def test_weltseite_zeigt_das_profil(qtbot, konfig: kf.Konfiguration) -> None:
 
     seite.liste.setCurrentItem(seite.liste.topLevelItem(0))
     profil = seite._profil
-    bereiche = [profil.topLevelItem(i).text(0) for i in range(profil.topLevelItemCount())]
-    assert len(bereiche) == len(konfig.bereiche) + len(konfig.zusatzfaehigkeiten)
-    assert "Reifenfluesterer".lower() in [b.lower() for b in bereiche]
+    gruppen = {
+        profil.topLevelItem(i).text(0): profil.topLevelItem(i)
+        for i in range(profil.topLevelItemCount())
+    }
+    assert len(gruppen) == 4
+
+    bereiche = next(g for name, g in gruppen.items() if name.startswith("Wirkungsbereiche"))
+    assert bereiche.childCount() == len(konfig.bereiche)
+
+    fahrzeug = next(g for name, g in gruppen.items() if name.startswith("Fahrzeug"))
+    fahrerwerte = next(g for name, g in gruppen.items() if name.startswith("Fahrer "))
+    assert fahrzeug.childCount() + fahrerwerte.childCount() == len(konfig.faehigkeiten)
+    assert fahrzeug.child(0).text(0).startswith("F1 ")
+
+    weitere = next(g for name, g in gruppen.items() if name.startswith("Neben der Matrix"))
+    assert weitere.childCount() == len(konfig.zusatzfaehigkeiten)
+    namen = [weitere.child(i).text(0) for i in range(weitere.childCount())]
+    assert "Reifenfluesterer" in namen
 
 
 def test_rennen_nutzt_die_fahrer_der_welt(qtbot, konfig: kf.Konfiguration) -> None:
@@ -565,28 +619,12 @@ def test_sprung_zum_rennen_ueber_die_oberflaeche(qtbot, konfig: kf.Konfiguration
     assert seite.karriere.tag.art.name == "RENNEN"
 
 
-def test_sponsorenangebote_liegen_vor(qtbot, konfig: kf.Konfiguration) -> None:
-    """GDD 10: sechs Plaetze mit je 3 bis 10 Angeboten."""
+def test_karriereseite_zeigt_den_sponsorenstand(qtbot, konfig: kf.Konfiguration) -> None:
+    """Die Auswahl steht im eigenen Reiter; hier nur noch der Stand."""
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
-    seite = fenster.karriereseite
-
-    liste = seite._sponsoren
-    assert liste.topLevelItemCount() >= 6 * konfig.wert("sponsoren", "angebote_je_platz_min")
-    plaetze = {liste.topLevelItem(i).text(0) for i in range(liste.topLevelItemCount())}
-    # Angezeigt wird der deutsche Name, nicht der Schluessel aus der Konfiguration.
-    bezeichnungen = konfig.wert("sponsoren", "bezeichnung")
-    assert plaetze == {bezeichnungen[platz] for platz in konfig.wert("sponsoren", "plaetze")}
-
-
-def test_sponsor_unterschreiben(qtbot, konfig: kf.Konfiguration) -> None:
-    fenster = Hauptfenster(konfig)
-    qtbot.addWidget(fenster)
-    seite = fenster.karriereseite
-
-    seite._sponsoren.setCurrentItem(seite._sponsoren.topLevelItem(0))
-    seite._unterschreibe()
-    assert len(seite.karriere.vertraege) == 1
+    plaetze = len(konfig.wert("sponsoren", "plaetze"))
+    assert str(plaetze) in fenster.karriereseite._sponsorenstand.text()
 
 
 # --- Saison ---------------------------------------------------------------
@@ -635,3 +673,139 @@ def test_saisonseite_wechselt_die_liga(qtbot, konfig: kf.Konfiguration) -> None:
     seite.liga_auswahl.setCurrentIndex(9)
     namen_liga10 = {seite.tabelle.topLevelItem(i).text(1) for i in range(20)}
     assert not namen_liga1 & namen_liga10
+
+
+# --- Sponsoren ------------------------------------------------------------
+def test_sponsorenseite_zeigt_alle_plaetze(qtbot, konfig: kf.Konfiguration) -> None:
+    """GDD 10: sechs Plaetze, am Anfang alle frei."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.sponsorenseite
+
+    plaetze = konfig.wert("sponsoren", "plaetze")
+    assert seite.platzliste.topLevelItemCount() == len(plaetze)
+    staende = {
+        seite.platzliste.topLevelItem(i).text(1)
+        for i in range(seite.platzliste.topLevelItemCount())
+    }
+    assert staende == {"frei"}
+
+
+def test_sponsorenseite_zeigt_die_angebote_des_gewaehlten_platzes(
+    qtbot, konfig: kf.Konfiguration
+) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.sponsorenseite
+
+    for stelle in range(seite.platzliste.topLevelItemCount()):
+        zeile = seite.platzliste.topLevelItem(stelle)
+        seite.platzliste.setCurrentItem(zeile)
+        platz = zeile.data(0, Qt.UserRole)
+        erwartet = len(seite.angebote[platz])
+        assert seite.angebotsliste.topLevelItemCount() == erwartet
+        assert erwartet >= konfig.wert("sponsoren", "angebote_je_platz_min")
+
+
+def test_sponsorenseite_sortiert_nach_spalten(qtbot, konfig: kf.Konfiguration) -> None:
+    """Zahlen muessen als Zahlen sortieren, nicht als Text."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.sponsorenseite
+    liste = seite.angebotsliste
+
+    def betraege() -> list[int]:
+        return [
+            liste.topLevelItem(i).data(1, Qt.UserRole + 1)
+            for i in range(liste.topLevelItemCount())
+        ]
+
+    liste.sortByColumn(1, Qt.AscendingOrder)
+    aufsteigend = betraege()
+    assert aufsteigend == sorted(aufsteigend)
+
+    liste.sortByColumn(1, Qt.DescendingOrder)
+    absteigend = betraege()
+    assert absteigend == sorted(absteigend, reverse=True)
+    # Und das sind wirklich verschiedene Betraege, nicht alle gleich.
+    assert len(set(absteigend)) > 1
+
+
+def test_sponsor_unterschreiben_belegt_den_platz(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.sponsorenseite
+
+    zeile = seite.platzliste.topLevelItem(0)
+    seite.platzliste.setCurrentItem(zeile)
+    platz = zeile.data(0, Qt.UserRole)
+    seite.angebotsliste.setCurrentItem(seite.angebotsliste.topLevelItem(0))
+    seite.knopf_unterschreiben.click()
+
+    assert platz in fenster.karriereseite.karriere.vertraege
+    # Der Platz steht jetzt auf "belegt" und nimmt kein zweites Angebot.
+    belegt = [
+        seite.platzliste.topLevelItem(i)
+        for i in range(seite.platzliste.topLevelItemCount())
+        if seite.platzliste.topLevelItem(i).data(0, Qt.UserRole) == platz
+    ][0]
+    assert belegt.text(1) == "belegt"
+    seite.platzliste.setCurrentItem(belegt)
+    assert not seite.knopf_unterschreiben.isEnabled()
+
+
+# --- Speichern und Laden --------------------------------------------------
+def test_fenster_speichert_und_laedt_einen_spielstand(
+    qtbot, konfig: kf.Konfiguration, tmp_path
+) -> None:
+    """GDD 15: Spielstand lokal speichern und laden."""
+    from rennmanager.kern import spielstand as kern_spielstand
+
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+
+    # Etwas tun, das sich wiedererkennen laesst.
+    karriere = fenster.karriereseite.karriere
+    karriere.kaufe("F1")
+    karriere.uebernimm_defekte(("X7",))
+    fenster.saisonseite.knopf_rennwochenende.click()
+
+    pfad = tmp_path / "stand.sqlite"
+    kern_spielstand.speichere(fenster.spielstand(), pfad)
+
+    # Ein frisches Fenster kennt davon nichts ...
+    zweites = Hauptfenster(konfig)
+    qtbot.addWidget(zweites)
+    assert zweites.karriereseite.karriere.werte["F1"] == 0
+    assert zweites.saisonseite.lauf.gefahren == 0
+
+    # ... bis der Stand geladen ist.
+    zweites.uebernimm(kern_spielstand.lade(konfig, pfad))
+    assert zweites.karriereseite.karriere.werte["F1"] == karriere.werte["F1"]
+    assert [d["schluessel"] for d in zweites.karriereseite.karriere.defekte] == ["X7"]
+    assert zweites.saisonseite.lauf.gefahren == 1
+    assert zweites.welt == fenster.welt
+    # Die Statistik des Wochenendes ist ebenfalls da.
+    assert len(zweites.statistik.rekorde) == konfig.wert("ligen", "anzahl")
+
+
+def test_geladener_stand_laesst_sich_weiterfahren(
+    qtbot, konfig: kf.Konfiguration, tmp_path
+) -> None:
+    from rennmanager.kern import spielstand as kern_spielstand
+
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    fenster.saisonseite.knopf_rennwochenende.click()
+    pfad = tmp_path / "stand.sqlite"
+    kern_spielstand.speichere(fenster.spielstand(), pfad)
+
+    zweites = Hauptfenster(konfig)
+    qtbot.addWidget(zweites)
+    zweites.uebernimm(kern_spielstand.lade(konfig, pfad))
+    zweites.saisonseite.knopf_rennwochenende.click()
+
+    assert zweites.saisonseite.lauf.gefahren == 2
+    # Die Punkte aus dem geladenen Rennen sind noch da.
+    spieler = zweites.welt.spieler
+    assert zweites.saisonseite.lauf.tabelle(spieler.liga).eintraege[spieler.nummer].rennen == 2

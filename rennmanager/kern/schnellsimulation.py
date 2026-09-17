@@ -72,10 +72,22 @@ def fahre_wochenende(
     seedquelle: Seedquelle,
     streckenmittel: float,
     streckenverschleiss: float = 1.0,
+    kenntnisfaktor: tuple[float, ...] | None = None,
 ) -> Schnellergebnis:
-    """Faehrt Qualifying und Rennen einer Liga im Schnellmodus (GDD 13)."""
+    """Faehrt Qualifying und Rennen einer Liga im Schnellmodus (GDD 13).
+
+    :param kenntnisfaktor: Tempofaktor aus der Streckenkenntnis je Auto
+        (GDD 6). Ohne Angabe faehrt jedes Auto ohne Kenntnisbonus.
+    """
     if not teilnehmer:
         raise ValueError("Ohne Teilnehmer gibt es kein Rennwochenende")
+    if kenntnisfaktor is None:
+        kenntnisfaktor = (1.0,) * len(teilnehmer)
+    elif len(kenntnisfaktor) != len(teilnehmer):
+        raise ValueError(
+            f"Kenntnisfaktor fuer {len(kenntnisfaktor)} Autos, "
+            f"im Feld stehen {len(teilnehmer)}"
+        )
 
     anzahl = len(teilnehmer)
     nummern = np.arange(anzahl)
@@ -111,7 +123,9 @@ def fahre_wochenende(
         streuung = kern_form.rundenform(
             konfiguration, auto, seedquelle.zweig("qualirunde", i), 1
         )
-        quali_runden[i] *= streuung / (grip * (1.0 + qualifyingbonus(konfiguration, auto)))
+        quali_runden[i] *= streuung / (
+            grip * (1.0 + qualifyingbonus(konfiguration, auto)) * kenntnisfaktor[i]
+        )
 
     aufstellung = list(np.argsort(quali_runden))
     qualifyingplatz = {int(i): platz for platz, i in enumerate(aufstellung, start=1)}
@@ -183,7 +197,9 @@ def fahre_wochenende(
                 konfiguration, auto, seedquelle.zweig("rundenform", i), runde
             )
             reifen = kern_reifen.tempofaktor(konfiguration, auto, float(verschleiss[i]))
-            zeit = grundrunde[i] * streuung / (grip * reifen * defekt_tempo[i])
+            zeit = grundrunde[i] * streuung / (
+                grip * reifen * defekt_tempo[i] * kenntnisfaktor[i]
+            )
 
             # Fehler kosten einmalig Zeit (GDD 4).
             reifenfehler = kern_reifen.fehlerfaktor(konfiguration, auto, float(verschleiss[i]))

@@ -7,10 +7,13 @@ import sys
 from rennmanager import __version__
 from rennmanager.kern import auto as kern_auto
 from rennmanager.kern import einnahmen as kern_einnahmen
+from rennmanager.kern import ereignis as kern_ereignis
 from rennmanager.kern import kalender as kern_kalender
 from rennmanager.kern import rennen as kern_rennen
 from rennmanager.kern import schnellsimulation as kern_schnell
+from rennmanager.kern import spielstand as kern_spielstand
 from rennmanager.kern import strecke as kern_strecke
+from rennmanager.kern import streckenkenntnis as kern_kenntnis
 from rennmanager.kern import tempo as kern_tempo
 from rennmanager.kern import wertung as kern_wertung
 from rennmanager.kern.zeit import formatiere_dauer
@@ -117,6 +120,24 @@ def pruefe() -> int:
         f"Wirtschaft:    Siegpraemie Liga 20 {euro(kern_einnahmen.siegpraemie(konfiguration, 20))}"
         f", Liga 1 {euro(kern_einnahmen.siegpraemie(konfiguration, 1))}"
         f", Startkapital {euro(kern_einnahmen.startkapital(konfiguration))}"
+    )
+    # Ereignisse einer Saison: prueft GDD 14 im Bundle.
+    plan = kern_ereignis.plane_saison(konfiguration, saison, Seedquelle(3))
+    gezogen = sum(len(liste) for liste in plan.values())
+    print(
+        f"Ereignisse:    {len(kern_ereignis.liste(konfiguration))} moeglich, "
+        f"{gezogen} in der Saison 2026 mit Seed 3, "
+        f"{len(kern_ereignis.zyklen(konfiguration, saison))} Zyklen"
+    )
+    # Streckenkenntnis (GDD 6) und Spielstand (GDD 15).
+    voll = konfiguration.wert("streckenkenntnis", "volle_kenntnis_runden")
+    print(
+        f"Kenntnis:      bis {kern_kenntnis.bonus(konfiguration, voll) * 100:.2f} % Tempo "
+        f"nach {voll} Runden"
+    )
+    print(
+        f"Spielstand:    SQLite, Version {kern_spielstand.SPIELSTAND_VERSION}, "
+        f"{len([z for z in kern_spielstand.SCHEMA.split('CREATE TABLE')[1:]])} Tabellen"
     )
     print(f"Offene Punkte: {len(konfiguration.offene_punkte)}")
     return 0

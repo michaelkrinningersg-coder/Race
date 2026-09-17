@@ -415,6 +415,24 @@ max_bonus = 0.015          # bis +1,5 % Tempo
 volle_kenntnis_runden = 1000
 streuung_je_start = 0.75   # +/- 75 %
 streuung_je_runde = 0.50   # +/- 50 %
+# Entscheidung zu Punkt 38: je Fahrer ein festes Lerntempo. Die beiden
+# Streuungen oben mitteln sich ueber eine Saison weg - nach 20 Starts
+# stehen alle Fahrer nahezu gleich da. Ein fester Faktor je Fahrer bleibt
+# dagegen bestehen: Manche lernen eine Strecke schnell, andere nie ganz.
+lerntempo_streuung = 0.60
+
+# --- Punkt 39: Streckenkenntnis der KI ------------------------------------
+[streckenkenntnis.ki]
+# GDD 12: "Die KI verbessert sich vorerst nicht." Dann darf auch ihre
+# Streckenkenntnis nicht wachsen - sonst wuerden alle 570 KI-Autos ueber
+# die Saisons langsam schneller und liefen der Kalibriertabelle aus GDD 9
+# davon. Der Stand wird deshalb einmal bei der Welterzeugung je Fahrer und
+# Strecke gesetzt und bleibt dann fest.
+#
+# Die Streuung ist bewusst breit: Sie steht fuer alles, was ein KI-Fahrer
+# vor Karrierebeginn auf dieser Strecke gefahren ist.
+anfang_anteil = 0.35       # im Mittel 35 % der vollen Kenntnis
+anfang_streuung = 0.80     # +/- 80 % darum
 
 # ---------------------------------------------------------------------------
 # GDD 4 – Qualifying
@@ -902,8 +920,16 @@ datei = "hersteller.toml"
 leistungsbonus = false
 
 [ki]
-# Einzelwerte streuen um den Mittelwert des Autos
+# Einzelwerte streuen um den Mittelwert des Autos (GDD 12: +/-25 %)
 profil_streuung = 0.25
+# Entscheidung zu Punkt 37: zusaetzlich ein Profil ueber die elf
+# Wirkungsbereiche. Ohne das mittelt sich die Einzelwert-Streuung im
+# Bereichsmittel weg - gemessen blieben von +/-25 % nur 20 % Spanne
+# zwischen dem staerksten und dem schwaechsten Bereich eines Fahrers.
+# Erst dieser Faktor macht Spezialisten, wie GDD 12 sie nennt.
+bereichs_streuung = 0.30
+# Die Wetterfaehigkeiten stehen neben der Matrix und streuen fuer sich.
+wetter_streuung = 0.45
 # KI verbessert sich vorerst nicht
 entwicklung = false
 
@@ -1563,6 +1589,31 @@ auto_neben_2 = 0.15
 anzug = 0.10
 helm = 0.10
 muetze = 0.10
+
+# --- Punkt 34: Dauerhafte Prozentwirkungen der Ereignisse (GDD 14) --------
+[ereignisse.dauerhaft]
+# Elf Ereignisse wirken "dauerhaft", meist mit +/-1 %. Der Spieler startet
+# laut GDD 1 aber mit allen Werten auf 0 - ein Prozentsatz davon waere
+# null. Gerechnet wird deshalb wie im Zeitmodell aus GDD 2: max(+10, +1 %).
+# Bei abweichenden Prozentsaetzen skaliert der Mindestschritt mit, damit
+# die Ereignisse untereinander im Verhaeltnis bleiben: +2 % ergibt
+# mindestens +20, -0,5 % hoechstens -5.
+mindestschritt = 10
+bezugsanteil = 0.01
+
+# --- Punkt 35: Auswahl des Ereignisses (GDD 14) ---------------------------
+[ereignisse.auswahl]
+# GDD 14 nennt keine Gewichte; alle 35 sind gleich wahrscheinlich. Innerhalb
+# eines Zyklus wird ohne Zuruecklegen gezogen, sonst traefe dieselbe
+# Erkaeltung zweimal in vier Tagen.
+verfahren = "gleichverteilt"
+ohne_zuruecklegen_je_zyklus = true
+
+# --- Punkt 36: Ereignisse nur fuer den Spieler (GDD 14) -------------------
+[ereignisse.umfang]
+# GDD 14 schreibt "betreffen Spieler und KI gleichermassen". Entschieden am
+# 2026-09-17: vorerst nur der Spieler. Begruendung in OFFENE_PUNKTE.md.
+gilt_fuer_ki = false
 
 # --- Punkt 20: Ereignisbetraege (GDD 14) ----------------------------------
 [ereignisse.betraege]

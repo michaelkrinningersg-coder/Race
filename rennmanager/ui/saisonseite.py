@@ -48,16 +48,26 @@ class Saisonseite(QWidget):
         konfiguration: Konfiguration,
         welt: Welt,
         seed: int = 0,
+        statistik=None,
+        kenntnis=None,
+        tabellen=None,
+        gefahrene_rennen: int = 0,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._konfiguration = konfiguration
         self._welt = welt
+        # Statistik und Streckenkenntnis ueberdauern die Saison (GDD 6 und
+        # 13); das Fenster haelt sie und reicht sie herein.
         self._lauf = Saisonlauf(
             konfiguration,
             welt,
             Seedquelle(seed),
             strecken=kern_strecke.lade_alle(konfiguration),
+            statistik=statistik,
+            kenntnis=kenntnis,
+            tabellen=tabellen,
+            vorgefahren=gefahrene_rennen,
         )
         self._letztes: Wochenende | None = None
 
@@ -282,7 +292,7 @@ class Saisonseite(QWidget):
             return
         self._wechselkasten.setVisible(True)
         try:
-            wechsel = self._lauf.auf_und_abstieg()
+            wechsel = self._lauf.schliesse_ab()
         except kern_saison.SaisonFehler as fehler:  # pragma: no cover - Notfall
             QMessageBox.warning(self, "Auf- und Abstieg", str(fehler))
             return

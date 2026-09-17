@@ -4,10 +4,10 @@ Motorsport-Manager mit sichtbarer Rennsimulation. Grundlage ist das
 [Game Design Dokument v1.0](Rennmanager%20%E2%80%93%20Game%20Design%20Dokument%20%28v1.0%29.md);
 die Arbeitsregeln stehen in [CLAUDE.md](CLAUDE.md).
 
-**Stand: Schritt 9 von 10 – Saisonwertung, Schnellsimulation, Auf- und Abstieg.**
-Eine ganze Saison laeuft durch: 20 Rennwochenenden in 20 Ligen, Tabelle und
-Ligawechsel. Ereignisse, Statistiken sowie Speichern und Laden folgen in
-Schritt 10.
+**Stand: Schritt 10 von 10 – Ereignisse, Statistiken, Speichern und Laden.**
+Damit ist die Umsetzungsreihenfolge aus den Arbeitsregeln durchlaufen: Eine
+Karriere laeuft vom 1. Januar bis zum Auf- und Abstieg, mit Ereignissen,
+Rundenrekorden, Historie und Spielstand auf der Platte.
 
 ## Aufbau
 
@@ -16,7 +16,7 @@ Schritt 10.
 | `rennmanager/kern/` | Simulationskern, reines Python, kennt die Oberflaeche nicht |
 | `daten/strecken/` | Die 20 Strecken als CSV (TUMFTM, LGPL-3.0), mitgeliefert |
 | `rennmanager/konfiguration.py` | Laden und Pruefen der Balancing-Dateien |
-| `rennmanager/ui/` | PySide6-Oberflaeche |
+| `rennmanager/ui/` | PySide6-Oberflaeche, ein Modul je Reiter |
 | `konfiguration/balancing.toml` | **Alle** Balancing-Werte, zentral an einer Stelle |
 | `konfiguration/hersteller.toml` | Herstellernamen, ausgelagert und austauschbar |
 | `konfiguration/namen.toml` | Fahrer- und Teamnamen, ebenfalls austauschbar |
@@ -262,9 +262,27 @@ feld = welt.starterfeld(w, liga=10)
 ```
 
 Die 4 Autos eines Teams fahren meist in verschiedenen Ligen, wie GDD 12
-es erlaubt. Jedes Auto bekommt ein eigenes Profil: Die Einzelwerte streuen
-um +/- 25 % um die Ligastaerke, es gibt also Regenspezialisten,
-Qualifying-Experten und Reifenschoner.
+es erlaubt. Jedes Auto bekommt ein eigenes Profil.
+
+### Warum es zwei Streuungsebenen gibt
+
+GDD 12 laesst die Einzelwerte "+/- 25 % um den Mittelwert" streuen und
+nennt als Ziel Regenspezialisten, Qualifying-Experten und Reifenschoner.
+Davon kam fast nichts an: Gefahren wird mit den **Bereichsmitteln** aus
+GDD 8, und ueber drei bis fuenf Einzelwerte mittelt sich die Streuung
+weg - zwischen dem staerksten und dem schwaechsten Bereich eines Fahrers
+lagen gemessen nur 20 %.
+
+Deshalb wird zusaetzlich je Fahrer ein Faktor pro Wirkungsbereich gezogen
+(+/- 30 %), den jede Faehigkeit nach ihrer Zeile der Wirkungsmatrix
+gewichtet erbt. Damit steigt die Profilspanne auf 41 % im Schnitt: Ein
+Fahrer ist in drei Bereichen Erster seiner Liga und in anderen Sechster.
+Die Wetterfaehigkeiten stehen neben der Matrix und streuen fuer sich.
+
+Die Faktoren sind auf den Mittelwert 1 normiert, und was das Kappen an der
+Skala wegnimmt, wird zurueckgeholt. Ein Spezialist verteilt seine
+Ligastaerke also um, statt mehr oder weniger davon zu haben: Jede Liga
+trifft ihre beiden Kontrollwerte aus GDD 9 auf den Punkt.
 
 Ligen ohne Kontrollwert in GDD 9 werden ueber die Tempotabelle bestimmt -
 das Tempo waechst je Liga um 6,32 km/h, der Wert S ergibt sich durch
@@ -358,6 +376,78 @@ Welche Liga ausfuehrlich faehrt, veraendert die uebrigen 19 nicht: Jede
 Liga wuerfelt aus ihrem eigenen Zweig
 `saison/<jahr>/rennen/<nummer>/liga/<liga>`.
 
+## Ereignisse, Defekte und Reparatur
+
+`rennmanager.kern.ereignis` setzt GDD 14 um: 0 bis 2 Ereignisse je
+14-Tage-Zyklus, ausgeloest beim Tageswechsel in den ersten vier Tagen.
+
+```python
+from rennmanager.kern import karriere
+from rennmanager.kern.zufall import Seedquelle
+from rennmanager.konfiguration import lade
+
+k = lade()
+c = karriere.beginne(k, 2026, liga=20, seedquelle=Seedquelle(4711))
+c.tag_weiter()
+c.meldungen[-1].zeile        # "E1 Erkaeltung - D2 -15 %, D1 -10 %"
+c.faktoren()                 # {"D2": 0.85, "D1": 0.90}
+c.fahrwerte()                # die Werte, mit denen gefahren wird
+c.gesperrt()                 # was gerade nicht entwickelt werden darf
+c.offene_reparaturen         # Defekte und Schaeden mit ihren Kosten
+```
+
+Die 35 Ereignisse kennen sechs Dauerarten und fuenf Wirkungsarten; ein
+einzelnes kann beides mischen - E23 Hitzetraining hebt die Hitzeresistenz
+dauerhaft und senkt D2 fuer ein Rennwochenende. Defekte bleiben nach dem
+Rennen offen, bis der Spieler die Reparatur zahlt (Kostenstufe mal
+Liga-Faktor).
+
+### Warum das Jahr ein durchgehendes 14-Tage-Raster hat
+
+GDD 14 zaehlt Ereignisse je 14-Tage-Zyklus, GDD 2 kennt Zyklen aber nur
+zwischen zwei Rennen. Vor- und Nachsaison sind zusammen rund ein Viertel
+des Jahres und blieben sonst ereignislos - gerade die Vorsaison, in der
+der Spieler 56 nutzbare Tage entwickelt. Deshalb laeuft ueber das ganze
+Jahr dasselbe Raster, verankert am Tag nach dem ersten Rennen: Jeder
+Zyklus endet genau auf einem Renntag, das Ausloesefenster faellt in die
+freien Tage danach. Macht 27 Zyklen und 21 bis 33 Ereignisse je Saison.
+
+## Streckenkenntnis
+
+`rennmanager.kern.streckenkenntnis` setzt GDD 6 um: Der Kenntniswert
+steigt mit jeder gefahrenen Runde und gibt bis zu 1,5 % Tempo, voll nach
+etwa 1.000 Runden. Er haengt am Paar aus Fahrer und Strecke; die
+Simulation bekommt ihn als fertigen Tempofaktor.
+
+Zwei Entscheidungen stehen daneben, beide gemessen begruendet in
+OFFENE_PUNKTE.md:
+
+* **Lerntempo je Fahrer** (Punkt 38). Die beiden Streuungen aus GDD 6
+  sind Wuerfe je Session und mitteln sich weg - nach 20 Saisons blieben
+  nur 10 % Unterschied zwischen den Fahrern. Ein fester Faktor je Fahrer
+  haelt dagegen 35 %.
+* **Die KI lernt nicht** (Punkt 39). GDD 12 sagt "die KI verbessert sich
+  vorerst nicht"; ihr Stand wird einmal gesetzt und bleibt. Sonst liefen
+  alle 570 KI-Autos ueber die Saisons der Kalibriertabelle aus GDD 9
+  davon.
+
+## Statistik und Spielstand
+
+`rennmanager.kern.statistik` fuehrt, was die Saison ueberdauert (GDD 13):
+
+```python
+statistik.rekord("Monza", liga=10)      # schnellste Runde in Tausendsteln
+statistik.bestenliste("siege")          # Karrierezahlen aller Fahrer
+statistik.laufbahn(fahrer)              # je Saison Liga und Platz
+statistik.punkte_in(2026, 10, fahrer)   # Gesamtpunkte je Liga und Saison
+```
+
+`rennmanager.kern.spielstand` schreibt alles in eine SQLite-Datei, wie
+GDD 15 es vorgibt - 21 Tabellen, eine Datei je Spielstand, im Menue unter
+Datei. Die Welt wird dabei vollstaendig abgelegt statt aus dem Seed neu
+gewuerfelt: Nach dem ersten Auf- und Abstieg stimmt die gewuerfelte Welt
+nicht mehr mit der gespielten ueberein. Ein Test haelt genau das fest.
+
 ## Zwei Regeln, die den Code praegen
 
 **Zeiten sind ganze Millisekunden.** Im Kern gibt es keine Sekunden als
@@ -383,7 +473,7 @@ einmal fuer Qualifying und einmal fuer das Rennen.
 
 Das GDD nennt an vielen Stellen eine Mechanik, ohne sie zu beziffern. Zu
 jeder liegen in [OFFENE_PUNKTE.md](OFFENE_PUNKTE.md) Vorschlaege mit
-Begruendung; alle 36 sind am 2026-09-17 entschieden, der Abschnitt `[offen]`
+Begruendung; alle 39 sind am 2026-09-17 entschieden, der Abschnitt `[offen]`
 in der Konfiguration ist leer. Kommt spaeter eine Luecke hinzu, wird sie dort
 vermerkt und im Hauptfenster angezeigt, statt still gefuellt zu werden.
 

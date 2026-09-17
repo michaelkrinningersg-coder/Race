@@ -26,14 +26,18 @@ from typing import TYPE_CHECKING
 from rennmanager.kern import qualifying as kern_qualifying
 from rennmanager.kern import reifen as kern_reifen
 from rennmanager.kern import rennen as kern_rennen
+from rennmanager.kern import statistik as kern_statistik
 from rennmanager.kern import strecke as kern_strecke
+from rennmanager.kern import streckenkenntnis as kern_streckenkenntnis
 from rennmanager.kern import welt as kern_welt
 from rennmanager.kern import wertung as kern_wertung
 from rennmanager.kern import wetter as kern_wetter
 from rennmanager.kern.qualifying import Qualifying
 from rennmanager.kern.rennen import Rennverlauf
 from rennmanager.kern.schnellsimulation import fahre_wochenende as fahre_schnell
+from rennmanager.kern.statistik import Statistik
 from rennmanager.kern.strecke import Strecke
+from rennmanager.kern.streckenkenntnis import Streckenkenntnis
 from rennmanager.kern.welt import Fahrer, Welt
 from rennmanager.kern.wertung import Rennergebnis, Tabelle, Wechsel
 from rennmanager.kern.zufall import Seedquelle
@@ -102,11 +106,17 @@ def _ausfuehrlich(
     streckenmittel: float,
     streckenverschleiss: float,
     meisterschaft: tuple[int, ...] | None,
+    kenntnisfaktor: tuple[float, ...],
 ) -> tuple[Ligawochenende, Rennverlauf, Qualifying]:
     """Qualifying und Rennen einer Liga in voller Aufloesung (GDD 4)."""
     feld = kern_welt.starterfeld(welt, liga)
     quali = kern_qualifying.fahre(
-        konfiguration, strecke, feld, seedquelle.zweig("qualifying"), meisterschaft
+        konfiguration,
+        strecke,
+        feld,
+        seedquelle.zweig("qualifying"),
+        meisterschaft,
+        kenntnisfaktor=kenntnisfaktor,
     )
     # Die Startaufstellung kommt aus dem Qualifying; Platz 1 ist die Pole.
     gestartet = tuple(
@@ -137,6 +147,9 @@ def _ausfuehrlich(
         streckenmittel,
         wetter=wetter,
         streckenverschleiss=streckenverschleiss,
+        # Die Startaufstellung ordnet das Feld um; der Kenntnisfaktor muss
+        # mitwandern, sonst faehrt jeder mit der Kenntnis eines anderen.
+        kenntnisfaktor=tuple(kenntnisfaktor[i] for i in quali.aufstellung),
     )
 
     # ``Ergebnis.teilnehmer`` zaehlt in der Startaufstellung, also ist der
@@ -181,6 +194,7 @@ def _schnell(
     seedquelle: Seedquelle,
     streckenmittel: float,
     streckenverschleiss: float,
+    kenntnisfaktor: tuple[float, ...],
 ) -> Ligawochenende:
     """Ein Rennwochenende auf Rundenebene (GDD 13).
 
@@ -199,6 +213,7 @@ def _schnell(
         seedquelle,
         streckenmittel,
         streckenverschleiss,
+        kenntnisfaktor=kenntnisfaktor,
     )
     return Ligawochenende(
         liga=liga,
@@ -226,12 +241,22 @@ class Saisonlauf:
         seedquelle: Seedquelle,
         jahr: int = 2026,
         strecken: tuple[Strecke, ...] | None = None,
+        statistik: Statistik | None = None,
+        kenntnis: Streckenkenntnis | None = None,
+        tabellen: dict[int, Tabelle] | None = None,
+        vorgefahren: int = 0,
     ) -> None:
         self.konfiguration = konfiguration
         self.welt = welt
         self.jahr = jahr
         self.seedquelle = seedquelle
         self.strecken = strecken or kern_strecke.lade_alle(konfiguration)
+        # Statistik und Streckenkenntnis ueberdauern die Saison (GDD 6 und
+        # 13); ein Saisonlauf fuehrt sie nur fort.
+        self.statistik = statistik or kern_statistik.Statistik(konfiguration)
+        self.kenntnis = kenntnis or kern_streckenkenntnis.Streckenkenntnis(
+            konfiguration, seedquelle=seedquelle.zweig("lerntempo")
+        )
 
         anzahl = konfiguration.wert("kalender", "rennen_je_saison")
         if len(self.strecken) < anzahl:
@@ -246,10 +271,14 @@ class Saisonlauf:
         )
         self._querbeschleunigung = kern_reifen.mittlere_querbeschleunigung(self.strecken)
 
-        self.tabellen: dict[int, Tabelle] = {
+        self.tabellen: dict[int, Tabelle] = tabellen or {
             liga: Tabelle(liga) for liga in range(1, konfiguration.wert("ligen", "anzahl") + 1)
         }
         self.wochenenden: list[Wochenende] = []
+        # Rennen, die vor dem Laden eines Spielstands schon gefahren waren
+        # (GDD 15). Ihre Wochenenden liegen nicht mehr vor, ihre Punkte
+        # stehen aber in den Tabellen.
+        self.vorgefahren = vorgefahren
 
     # -- Stand -------------------------------------------------------------
     @property
@@ -259,7 +288,7 @@ class Saisonlauf:
     @property
     def gefahren(self) -> int:
         """Zahl der bereits gefahrenen Rennwochenenden."""
-        return len(self.wochenenden)
+        return self.vorgefahren + len(self.wochenenden)
 
     @property
     def naechstes_rennen(self) -> int | None:
@@ -325,8 +354,10 @@ class Saisonlauf:
 
         for liga in sorted(self.tabellen):
             fahrer = self.welt.liga(liga)
+            nummern = tuple(f.nummer for f in fahrer)
             runden = kern_rennen.rundenzahl(self.konfiguration, strecke, liga)
             seed = wochenende.zweig("liga", liga)
+            kenntnis = self.kenntnis.tempofaktoren(nummern, strecke.name)
             if liga == ausfuehrliche_liga:
                 ligen[liga], verlauf, quali = _ausfuehrlich(
                     self.konfiguration,
@@ -339,6 +370,7 @@ class Saisonlauf:
                     self.streckenmittel,
                     verschleiss,
                     self.meisterschaft(liga, fahrer),
+                    kenntnis,
                 )
             else:
                 ligen[liga] = _schnell(
@@ -351,8 +383,24 @@ class Saisonlauf:
                     seed,
                     self.streckenmittel,
                     verschleiss,
+                    kenntnis,
                 )
             self.tabellen[liga].verbuche(self.konfiguration, ligen[liga].ergebnisse)
+            self.statistik.verbuche_wochenende(
+                saison=self.jahr,
+                rennen=nummer,
+                liga=liga,
+                strecke=strecke.name,
+                ergebnisse=ligen[liga].ergebnisse,
+                schnellste_runde_ms=ligen[liga].schnellste_runde_ms,
+            )
+            # Qualifying und Rennen zaehlen beide fuer die Kenntnis (GDD 6).
+            quali_runden = self.konfiguration.wert(
+                "qualifying", "aufwaermrunden"
+            ) + self.konfiguration.wert("qualifying", "gezeitete_runden")
+            self.kenntnis.verbuche_feld(
+                nummern, strecke.name, runden + quali_runden, seed.zweig("kenntnis")
+            )
 
         ergebnis = Wochenende(
             nummer=nummer,
@@ -382,9 +430,16 @@ class Saisonlauf:
         kern_wertung.pruefe_ligastaerken(self.konfiguration, self.tabellen)
         return kern_wertung.auf_und_abstieg(self.konfiguration, self.tabellen)
 
+    def schliesse_ab(self) -> tuple[Wechsel, ...]:
+        """Schreibt die Saison in die Historie und liefert die Wechsel (GDD 13)."""
+        wechsel = self.auf_und_abstieg()
+        if not any(a.saison == self.jahr for a in self.statistik.historie):
+            self.statistik.schliesse_saison(self.jahr, self.tabellen)
+        return wechsel
+
     def naechste_welt(self) -> Welt:
         """Die Welt der Folgesaison, mit vollzogenen Ligawechseln (GDD 13)."""
-        return wende_wechsel_an(self.welt, self.auf_und_abstieg())
+        return wende_wechsel_an(self.welt, self.schliesse_ab())
 
 
 # ---------------------------------------------------------------------------

@@ -24,9 +24,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from rennmanager.kern import ereignis as kern_ereignis
 from rennmanager.kern import kalender as kern_kalender
 from rennmanager.kern import karriere as kern_karriere
-from rennmanager.kern import sponsoren as kern_sponsoren
 from rennmanager.kern.entwicklung import EntwicklungsFehler, ist_bezahlbar
 from rennmanager.kern.kalender import Tagesart
 from rennmanager.kern.karriere import FAHRERPLATZ, WERKSTATTPLATZ, Karriere, KarriereFehler
@@ -37,6 +37,13 @@ FARBE_RENNEN = QColor("#c62828")
 FARBE_QUALIFYING = QColor("#eda100")
 FARBE_REISE = QColor("#8b93a1")
 FARBE_BELEGT = QColor("#2e7d32")
+
+# Dauerarten, bei denen ein Restzaehler nichts aussagt (GDD 14).
+OHNE_RESTZAEHLER = (
+    kern_ereignis.Dauer.BIS_REPARATUR,
+    kern_ereignis.Dauer.SOFORT,
+    kern_ereignis.Dauer.DAUERHAFT,
+)
 
 
 def euro(betrag: float) -> str:
@@ -55,7 +62,6 @@ class Karriereseite(QWidget):
         super().__init__(parent)
         self._konfiguration = konfiguration
         self._karriere = karriere
-        self._angebote: dict[str, tuple[kern_sponsoren.Angebot, ...]] = {}
 
         spalte = QVBoxLayout(self)
         spalte.addLayout(self._baue_kopf())
@@ -67,7 +73,6 @@ class Karriereseite(QWidget):
         teiler.setStretchFactor(1, 2)
         spalte.addWidget(teiler, stretch=1)
 
-        self._wuerfle_angebote()
         self._zeichne()
 
     # -- Aufbau ------------------------------------------------------------
@@ -85,13 +90,18 @@ class Karriereseite(QWidget):
         self._springen.clicked.connect(self._zum_rennen)
 
         self._hinweis = QLabel()
+        # Was der letzte Tageswechsel gebracht hat (GDD 14).
+        self._meldung = QLabel()
+        self._meldung.setWordWrap(True)
+        self._meldung.setStyleSheet(f"color: {FARBE_RENNEN.name()};")
         zeile.addWidget(self._datum)
         zeile.addSpacing(12)
         zeile.addWidget(self._weiter)
         zeile.addWidget(self._springen)
         zeile.addSpacing(12)
         zeile.addWidget(self._hinweis)
-        zeile.addStretch(1)
+        zeile.addSpacing(12)
+        zeile.addWidget(self._meldung, stretch=1)
         return zeile
 
     def _baue_entwicklung(self) -> QWidget:
@@ -130,37 +140,81 @@ class Karriereseite(QWidget):
         kontokasten.setLayout(self._konto)
         spalte.addWidget(kontokasten)
 
-        self._sponsoren = QTreeWidget()
-        self._sponsoren.setHeaderLabels(
-            ["Platz", "Sponsor", "Je Rennen", "Sieg", "Laufzeit", "Stand"]
-        )
-        self._sponsoren.setRootIsDecorated(False)
-        self._sponsoren.setAlternatingRowColors(True)
+        # Ereignisse und Reparaturen (GDD 14).
+        self._ereignisse = QTreeWidget()
+        self._ereignisse.setHeaderLabels(["Ereignis", "Wirkung", "Dauer", "Rest"])
+        self._ereignisse.setRootIsDecorated(False)
+        self._ereignisse.setAlternatingRowColors(True)
+        self._ereigniskasten = QGroupBox("Ereignisse")
+        ereignis_spalte = QVBoxLayout(self._ereigniskasten)
+        ereignis_spalte.addWidget(self._ereignisse)
+        self._reparieren = QPushButton("Reparieren")
+        self._reparieren.clicked.connect(self._repariere)
+        ereignis_spalte.addWidget(self._reparieren)
+        spalte.addWidget(self._ereigniskasten, stretch=1)
+
+        # Die Sponsoren haben seit Schritt 10 einen eigenen Reiter; hier
+        # steht nur noch, was sie einbringen.
+        self._sponsorenstand = QLabel()
+        self._sponsorenstand.setWordWrap(True)
         kasten = QGroupBox("Sponsoren")
         kasten_spalte = QVBoxLayout(kasten)
-        kasten_spalte.addWidget(self._sponsoren)
-        self._unterschreiben = QPushButton("Angebot annehmen")
-        self._unterschreiben.clicked.connect(self._unterschreibe)
-        kasten_spalte.addWidget(self._unterschreiben)
-        spalte.addWidget(kasten, stretch=1)
+        kasten_spalte.addWidget(self._sponsorenstand)
+        spalte.addWidget(kasten)
         return seite
 
     # -- Aktionen ----------------------------------------------------------
     def _tag_weiter(self) -> None:
+        offen = len(self._karriere.meldungen)
         try:
             self._karriere.tag_weiter()
         except KarriereFehler as fehler:
             QMessageBox.information(self, "Saisonende", str(fehler))
             return
         self._zeichne()
+        self._melde_neues(offen)
 
     def _zum_rennen(self) -> None:
+        offen = len(self._karriere.meldungen)
         try:
             self._karriere.bis_zum_rennen()
         except KarriereFehler as fehler:
             QMessageBox.information(self, "Kein Rennen mehr", str(fehler))
             return
         self._zeichne()
+        self._melde_neues(offen)
+
+    def _melde_neues(self, vorher: int) -> None:
+        """Zeigt, was seit dem letzten Tageswechsel passiert ist (GDD 14).
+
+        Bewusst kein modaler Dialog: Der Spieler schaltet viele Tage
+        hintereinander weiter, und ein Fenster, das jedes Mal wegklickt
+        werden will, macht daraus eine Qual.
+        """
+        neue = self._karriere.meldungen[vorher:]
+        if not neue:
+            self._meldung.setText("")
+            return
+        self._meldung.setText(
+            " · ".join(f"{m.datum:%d.%m.} {m.zeile}" for m in neue)
+        )
+
+    def _repariere(self) -> None:
+        """Repariert den gewaehlten Defekt oder Schaden (GDD 14)."""
+        zeile = self._ereignisse.currentItem()
+        schluessel = zeile.data(0, Qt.UserRole) if zeile is not None else None
+        if schluessel is None:
+            QMessageBox.information(
+                self, "Reparatur", "Kein reparierbarer Eintrag gewaehlt."
+            )
+            return
+        try:
+            kosten = self._karriere.repariere(schluessel)
+        except KarriereFehler as fehler:
+            QMessageBox.warning(self, "Reparatur", str(fehler))
+            return
+        self._zeichne()
+        self._meldung.setText(f"{schluessel} repariert fuer {euro(kosten)}.")
 
     def _gewaehlt(self) -> str | None:
         eintrag = self._liste.currentItem()
@@ -186,25 +240,6 @@ class Karriereseite(QWidget):
         except (KarriereFehler, EntwicklungsFehler) as fehler:
             QMessageBox.information(self, "Nicht moeglich", str(fehler))
             return
-        self._zeichne()
-
-    def _wuerfle_angebote(self) -> None:
-        woche = self._karriere.heute.isocalendar().week
-        self._angebote = kern_sponsoren.wuerfle_angebote(
-            self._konfiguration,
-            self._karriere.liga,
-            woche,
-            Seedquelle(self._karriere.saison.jahr),
-        )
-
-    def _unterschreibe(self) -> None:
-        eintrag = self._sponsoren.currentItem()
-        if eintrag is None:
-            return
-        angebot = eintrag.data(0, Qt.UserRole)
-        if angebot is None:
-            return
-        self._karriere.unterschreibe(angebot)
         self._zeichne()
 
     # -- Anzeige -----------------------------------------------------------
@@ -235,12 +270,15 @@ class Karriereseite(QWidget):
 
         self._fuelle_faehigkeiten()
         self._fuelle_konto()
+        self._fuelle_ereignisse()
         self._fuelle_sponsoren()
 
     def _fuelle_faehigkeiten(self) -> None:
         gewaehlt = self._gewaehlt()
         self._liste.clear()
         belegt = self._karriere.belegt
+        # Was ein Ereignis gerade sperrt (GDD 14: E2, E6).
+        gesperrt = self._karriere.gesperrt()
 
         matrix = {f.schluessel: f for f in self._konfiguration.faehigkeiten}
         schluessel = list(matrix)
@@ -261,6 +299,8 @@ class Karriereseite(QWidget):
                 anzeigename = eintrag.get("name", name)
                 waehrung = "".join(eintrag.get("waehrung", ("E",)))
             platz = self._karriere.platz_fuer(name) if vorschau.braucht_tag else "sofort"
+            if name in gesperrt:
+                platz = "gesperrt"
 
             kosten = []
             if vorschau.geld:
@@ -282,7 +322,15 @@ class Karriereseite(QWidget):
                 ],
             )
             zeile.setData(0, Qt.UserRole, name)
-            if not ist_bezahlbar(self._karriere.konto, vorschau):
+            if name in gesperrt:
+                # Ein gesperrter Eintrag ist durchgestrichen und rot - sonst
+                # merkt man die Sperre erst am Fehler beim Klicken.
+                schrift = zeile.font(1)
+                schrift.setStrikeOut(True)
+                for spalte in range(self._liste.columnCount()):
+                    zeile.setFont(spalte, schrift)
+                    zeile.setForeground(spalte, FARBE_RENNEN)
+            elif not ist_bezahlbar(self._karriere.konto, vorschau):
                 for spalte in range(self._liste.columnCount()):
                     zeile.setForeground(spalte, FARBE_REISE)
             elif vorschau.braucht_tag and platz in belegt:
@@ -311,33 +359,77 @@ class Karriereseite(QWidget):
             ),
         )
 
+    def _fuelle_ereignisse(self) -> None:
+        """Laufende Ereignisse und offene Defekte (GDD 14)."""
+        self._ereignisse.clear()
+        laufend = self._karriere.lage.laufende
+        reparierbar = {s: kosten for s, _, kosten in self._karriere.offene_reparaturen}
+
+        for aktiv in laufend:
+            rest = "" if aktiv.dauer in OHNE_RESTZAEHLER else str(aktiv.rest)
+            if aktiv.schluessel in reparierbar:
+                rest = euro(reparierbar[aktiv.schluessel])
+            zeile = QTreeWidgetItem(
+                self._ereignisse,
+                [
+                    f"{aktiv.schluessel} {aktiv.name}",
+                    aktiv.beschreibung(self._konfiguration),
+                    aktiv.dauer.bezeichnung,
+                    rest,
+                ],
+            )
+            if aktiv.reparierbar:
+                zeile.setData(0, Qt.UserRole, aktiv.schluessel)
+                zeile.setForeground(0, FARBE_RENNEN)
+
+        for defekt in self._karriere.defekte:
+            schluessel = defekt["schluessel"]
+            wirkung = ", ".join(
+                f"{w['ziel']} {w['faktor'] * 100:+.1f} %" for w in defekt["wirkung"]
+            )
+            zeile = QTreeWidgetItem(
+                self._ereignisse,
+                [
+                    f"{schluessel} {defekt['name']}",
+                    wirkung,
+                    "bis zur Reparatur",
+                    euro(reparierbar.get(schluessel, 0)),
+                ],
+            )
+            zeile.setData(0, Qt.UserRole, schluessel)
+            zeile.setForeground(0, FARBE_RENNEN)
+
+        anzahl = len(laufend) + len(self._karriere.defekte)
+        offen = len(reparierbar)
+        titel = f"Ereignisse ({anzahl})"
+        if offen:
+            titel += f" - {offen} zu reparieren"
+        self._ereigniskasten.setTitle(titel)
+        self._reparieren.setEnabled(offen > 0)
+        for spalte in range(self._ereignisse.columnCount()):
+            self._ereignisse.resizeColumnToContents(spalte)
+        if self._ereignisse.topLevelItemCount():
+            self._ereignisse.setCurrentItem(self._ereignisse.topLevelItem(0))
+
     def _fuelle_sponsoren(self) -> None:
-        self._sponsoren.clear()
+        """Nur noch der Stand; die Auswahl steht im Reiter Sponsoren."""
         bezeichnungen = self._konfiguration.wert("sponsoren", "bezeichnung")
-        for platz, liste in self._angebote.items():
-            vertrag = self._karriere.vertraege.get(platz)
-            for angebot in liste:
-                stand = ""
-                if vertrag is not None and vertrag.angebot.name == angebot.name:
-                    stand = f"laeuft, {vertrag.verbleibende_rennen} Rennen"
-                elif vertrag is not None:
-                    stand = "Platz belegt"
-                zeile = QTreeWidgetItem(
-                    self._sponsoren,
-                    [
-                        bezeichnungen.get(platz, platz),
-                        angebot.name,
-                        euro(angebot.grundbetrag),
-                        euro(angebot.praemie_sieg),
-                        f"{angebot.laufzeit_rennen} Rennen",
-                        stand,
-                    ],
-                )
-                zeile.setData(0, Qt.UserRole, angebot)
-                if stand.startswith("laeuft"):
-                    zeile.setForeground(5, FARBE_BELEGT)
-        for spalte in range(self._sponsoren.columnCount()):
-            self._sponsoren.resizeColumnToContents(spalte)
+        laufend = [
+            f"{bezeichnungen.get(platz, platz)}: {vertrag.angebot.name} "
+            f"({euro(vertrag.angebot.grundbetrag)} je Rennen, noch "
+            f"{vertrag.verbleibende_rennen} Rennen)"
+            for platz, vertrag in sorted(self._karriere.vertraege.items())
+            if vertrag.laeuft
+        ]
+        plaetze = len(self._konfiguration.wert("sponsoren", "plaetze"))
+        if laufend:
+            self._sponsorenstand.setText(
+                f"{len(laufend)} von {plaetze} Plaetzen belegt:\n" + "\n".join(laufend)
+            )
+        else:
+            self._sponsorenstand.setText(
+                f"Kein Platz von {plaetze} belegt - Angebote stehen im Reiter Sponsoren."
+            )
 
     # -- Zugriff fuer Tests -------------------------------------------------
     @property
@@ -357,11 +449,23 @@ class Karriereseite(QWidget):
         raise KeyError(schluessel)
 
 
-def beginne(konfiguration: Konfiguration, welt) -> Karriere:
-    """Startet die Karriere des Spielers in seiner Liga."""
+def beginne(
+    konfiguration: Konfiguration, welt, seedquelle: Seedquelle | None = None
+) -> Karriere:
+    """Startet die Karriere des Spielers in seiner Liga.
+
+    :param seedquelle: bestimmt die Ereignisse der Saison (GDD 14)
+    """
     spieler = welt.spieler
     liga = spieler.liga if spieler else konfiguration.wert("ligen", "startliga")
     werte = dict(spieler.auto.werte) if spieler else None
     if werte is not None:
         werte.update(spieler.auto.wetterwerte)
-    return kern_karriere.beginne(konfiguration, 2026, liga, werte)
+    return kern_karriere.beginne(
+        konfiguration,
+        2026,
+        liga,
+        werte,
+        seedquelle=seedquelle,
+        fahrernummer=spieler.nummer if spieler else 0,
+    )

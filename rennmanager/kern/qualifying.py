@@ -154,10 +154,22 @@ def fahre(
     teilnehmer: tuple[Teilnehmer, ...],
     seedquelle: Seedquelle,
     meisterschaft: tuple[int, ...] | None = None,
+    kenntnisfaktor: tuple[float, ...] | None = None,
 ) -> Qualifying:
-    """Faehrt ein ganzes Qualifying und liefert die Startaufstellung."""
+    """Faehrt ein ganzes Qualifying und liefert die Startaufstellung.
+
+    :param kenntnisfaktor: Tempofaktor aus der Streckenkenntnis je Auto
+        (GDD 6). Ohne Angabe faehrt jedes Auto ohne Kenntnisbonus.
+    """
     if not teilnehmer:
         raise ValueError("Ohne Teilnehmer gibt es kein Qualifying")
+    if kenntnisfaktor is None:
+        kenntnisfaktor = (1.0,) * len(teilnehmer)
+    elif len(kenntnisfaktor) != len(teilnehmer):
+        raise ValueError(
+            f"Kenntnisfaktor fuer {len(kenntnisfaktor)} Autos, "
+            f"im Feld stehen {len(teilnehmer)}"
+        )
 
     reihenfolge = startreihenfolge(konfiguration, teilnehmer, meisterschaft)
     aufwaermrunden = konfiguration.wert("qualifying", "aufwaermrunden")
@@ -196,9 +208,10 @@ def fahre(
         beginn = uhr
 
         # Aufwaermrunde: ungezeitet, verbraucht aber Zeit.
+        kenntnis = kenntnisfaktor[i]
         for _ in range(aufwaermrunden):
             grip = _grip_je_punkt(strecke, verlauf, konfiguration, auto, uhr)
-            uhr += fahre_runde(konfiguration, strecke, auto, grip).zeit_ms
+            uhr += fahre_runde(konfiguration, strecke, auto, grip).zeit_ms / kenntnis
 
         # Gezeitete Runde. Zustand und Grip gelten fuer den Beginn der
         # Runde - danach kann das Wetter schon gewechselt haben.
@@ -207,9 +220,10 @@ def fahre(
         grip = _grip_je_punkt(strecke, verlauf, konfiguration, auto, beginn_runde)
         runde = fahre_runde(konfiguration, strecke, auto, grip)
 
-        # Rundenform und der Bonus aus der Q-Spalte wirken auf die Zeit.
+        # Rundenform, der Bonus aus der Q-Spalte und die Streckenkenntnis
+        # wirken auf die Zeit.
         streuung = kern_form.rundenform(konfiguration, auto, seedquelle.zweig("runde", i), 1)
-        faktor = streuung / (1.0 + qualifyingbonus(konfiguration, auto))
+        faktor = streuung / ((1.0 + qualifyingbonus(konfiguration, auto)) * kenntnis)
         zeit = int(round(runde.zeit_ms * faktor))
         sektoren = tuple(int(round(wert * faktor)) for wert in runde.sektoren_ms)
         uhr += zeit

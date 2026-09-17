@@ -7,6 +7,15 @@ und Sponsorenvertraege abschliessen.
 Zeit ist dabei eine Kapazitaet (GDD 2): Jeder nutzbare Tag hat zwei
 Plaetze, einen fuer den Fahrer und einen fuer die Werkstatt. Ein Tag, der
 vorbei ist, ohne belegt zu sein, ist verloren.
+
+Seit Schritt 10 haengen drei weitere Zustaende an der Karriere:
+
+* die **Ereignisse** aus GDD 14, die beim Tageswechsel ausgeloest werden
+  und Werte zeitweise oder dauerhaft veraendern,
+* die **offenen Defekte** aus GDD 14, die nach dem Rennen bestehen
+  bleiben, bis der Spieler sie bezahlt,
+* die **Streckenkenntnis** aus GDD 6, die mit jeder gefahrenen Runde
+  waechst.
 """
 
 from __future__ import annotations
@@ -17,10 +26,14 @@ from typing import TYPE_CHECKING
 
 from rennmanager.kern import einnahmen as kern_einnahmen
 from rennmanager.kern import entwicklung as kern_entwicklung
+from rennmanager.kern import ereignis as kern_ereignis
 from rennmanager.kern import kalender as kern_kalender
 from rennmanager.kern import sponsoren as kern_sponsoren
+from rennmanager.kern import streckenkenntnis as kern_streckenkenntnis
+from rennmanager.kern import zwischenfall as kern_zwischenfall
 from rennmanager.kern.entwicklung import Konto
 from rennmanager.kern.kalender import Saison, Tagesart
+from rennmanager.kern.zufall import Seedquelle
 
 if TYPE_CHECKING:  # pragma: no cover
     from rennmanager.konfiguration import Konfiguration
@@ -31,6 +44,27 @@ WERKSTATTPLATZ = "werkstatt"
 
 class KarriereFehler(Exception):
     """Die Aktion ist an diesem Tag oder mit diesem Vorrat nicht moeglich."""
+
+
+@dataclass(frozen=True)
+class Meldung:
+    """Was an einem Tag passiert ist - fuer die Anzeige (GDD 14)."""
+
+    datum: dt.date
+    schluessel: str
+    name: str
+    text: str
+    geld: int = 0
+    erfahrung: int = 0
+
+    @property
+    def zeile(self) -> str:
+        teile = [f"{self.schluessel} {self.name}", self.text]
+        if self.geld:
+            teile.append(f"{self.geld:+,} EUR".replace(",", "."))
+        if self.erfahrung:
+            teile.append(f"{self.erfahrung:+,} EP".replace(",", "."))
+        return " - ".join(teil for teil in teile if teil)
 
 
 @dataclass(frozen=True)
@@ -66,6 +100,25 @@ class Karriere:
     # Belegte Plaetze des laufenden Tages.
     belegt: set[str] = field(default_factory=set)
 
+    # -- Schritt 10 --------------------------------------------------------
+    # Die Ereignisse der Saison, einmal beim Start gewuerfelt (GDD 14).
+    ereignisplan: dict[dt.date, tuple[str, ...]] = field(default_factory=dict)
+    lage: kern_ereignis.Lage | None = None
+    # Defekte, die aus einem Rennen offen geblieben sind (GDD 14).
+    defekte: list[dict] = field(default_factory=list)
+    # Tage, die E29 Reisechaos gekostet hat.
+    verlorene_tage: set[dt.date] = field(default_factory=set)
+    meldungen: list[Meldung] = field(default_factory=list)
+    kenntnis: kern_streckenkenntnis.Streckenkenntnis | None = None
+    # Nummer des Fahrers in der Welt - fuer die Streckenkenntnis.
+    fahrernummer: int = 0
+
+    def __post_init__(self) -> None:
+        if self.lage is None:
+            self.lage = kern_ereignis.Lage(self.konfiguration)
+        if self.kenntnis is None:
+            self.kenntnis = kern_streckenkenntnis.Streckenkenntnis(self.konfiguration)
+
     # -- Kalender ----------------------------------------------------------
     @property
     def tag(self) -> kern_kalender.Kalendertag:
@@ -82,24 +135,181 @@ class Karriere:
 
     @property
     def offene_tage(self) -> int:
-        """Nutzbare Tage bis zum naechsten Rennen, heute eingeschlossen."""
+        """Nutzbare Tage bis zum naechsten Rennen, heute eingeschlossen.
+
+        Tage, die E29 Reisechaos gekostet hat, zaehlen nicht mit (GDD 14).
+        """
         ziel = self.naechstes_rennen
         if ziel is None:
             ziel = self.saison.tage[-1].datum
-        return len(self.saison.nutzbare_tage(self.heute, ziel))
+        return len(
+            [
+                tag
+                for tag in self.saison.nutzbare_tage(self.heute, ziel)
+                if tag.datum not in self.verlorene_tage
+            ]
+        )
+
+    @property
+    def heute_nutzbar(self) -> bool:
+        """Ob heute gearbeitet werden kann (GDD 2 und 14)."""
+        return self.tag.ist_nutzbar and self.heute not in self.verlorene_tage
 
     def tag_weiter(self) -> kern_kalender.Kalendertag:
-        """Schaltet einen Tag weiter (GDD 2).
-
-        Ereignisse werden beim Tageswechsel ausgeloest; sie kommen in
-        Schritt 10 dazu.
-        """
+        """Schaltet einen Tag weiter und loest Ereignisse aus (GDD 2 und 14)."""
         naechster = self.heute + dt.timedelta(days=1)
         if naechster > self.saison.tage[-1].datum:
             raise KarriereFehler("Die Saison ist zu Ende")
+
+        vorher = kern_ereignis.zyklusnummer(self.konfiguration, self.saison, self.heute)
         self.heute = naechster
         self.belegt.clear()
+        if kern_ereignis.zyklusnummer(self.konfiguration, self.saison, naechster) != vorher:
+            self.lage.nach_zyklus()
+
+        for schluessel in self.ereignisplan.get(naechster, ()):
+            self._loese_ereignis_aus(schluessel)
         return self.tag
+
+    # -- Ereignisse (GDD 14) -----------------------------------------------
+    def _loese_ereignis_aus(self, schluessel: str) -> Meldung:
+        """Startet ein Ereignis und verbucht, was sofort wirkt."""
+        e = kern_ereignis.eintrag(self.konfiguration, schluessel)
+        aktiv = self.lage.loese_aus(schluessel, self.heute)
+
+        geld = 0
+        erfahrung = 0
+        for wirkung in e["wirkung"]:
+            ziel = wirkung["ziel"]
+            if wirkung.get("einmalig"):
+                anteil = kern_ereignis.betrag(self.konfiguration, schluessel)
+                if ziel == kern_ereignis.GELD:
+                    geld += int(
+                        round(anteil * kern_einnahmen.siegpraemie(self.konfiguration, self.liga))
+                    )
+                else:
+                    erfahrung += int(
+                        round(
+                            anteil * kern_einnahmen.sieg_erfahrung(self.konfiguration, self.liga)
+                        )
+                    )
+            elif ziel == kern_ereignis.KALENDERTAGE:
+                self._verliere_tage(-int(wirkung["absolut"]))
+            elif kern_ereignis.ist_dauerhaft(e, wirkung) and ziel in self.werte:
+                kleinster = self.konfiguration.wert("skala", "minimum")
+                groesster = self.konfiguration.wert("skala", "maximum")
+                neu_wert = self.werte[ziel] + kern_ereignis.dauerhafter_zuwachs(
+                    self.konfiguration, self.werte[ziel], wirkung["faktor"]
+                )
+                self.werte[ziel] = min(max(neu_wert, kleinster), groesster)
+
+        if geld or erfahrung:
+            self.konto = self.konto.mit(geld=geld, erfahrung=erfahrung)
+
+        meldung = Meldung(
+            datum=self.heute,
+            schluessel=schluessel,
+            name=aktiv.name,
+            text=aktiv.beschreibung(self.konfiguration),
+            geld=geld,
+            erfahrung=erfahrung,
+        )
+        self.meldungen.append(meldung)
+        return meldung
+
+    def _verliere_tage(self, anzahl: int) -> None:
+        """Nimmt die naechsten nutzbaren Tage weg (E29 Reisechaos).
+
+        Entschieden: Es trifft die naechsten nutzbaren Tage, nicht die vor
+        dem Rennen - gemeint ist die Kapazitaet aus GDD 2.
+        """
+        offen = [
+            tag.datum
+            for tag in self.saison.tage
+            if tag.datum >= self.heute
+            and tag.ist_nutzbar
+            and tag.datum not in self.verlorene_tage
+        ]
+        self.verlorene_tage.update(offen[:anzahl])
+
+    def faktoren(self, session: str = kern_ereignis.RENNEN) -> dict[str, float]:
+        """Alle Faktoren, die gerade auf Werte wirken (GDD 14).
+
+        Ereignisse und offene Defekte zusammen; beide sind Faktoren auf
+        einzelne Faehigkeiten.
+        """
+        faktoren = dict(self.lage.faktoren(session))
+        for ziel, faktor in kern_zwischenfall.wertfaktoren(
+            self.konfiguration, self.defekte
+        ).items():
+            faktoren[ziel] = faktoren.get(ziel, 1.0) * faktor
+        return faktoren
+
+    def fahrwerte(self, session: str = kern_ereignis.RENNEN) -> dict[str, int]:
+        """Die Werte, mit denen gefahren wird - Ereignisse und Defekte drin."""
+        faktoren = self.faktoren(session)
+        kleinster = self.konfiguration.wert("skala", "minimum")
+        groesster = self.konfiguration.wert("skala", "maximum")
+        return {
+            schluessel: int(
+                round(min(max(wert * faktoren.get(schluessel, 1.0), kleinster), groesster))
+            )
+            for schluessel, wert in self.werte.items()
+        }
+
+    # -- Defekte und Reparatur (GDD 14) ------------------------------------
+    def uebernimm_defekte(self, schluessel: tuple[str, ...]) -> None:
+        """Traegt die Defekte eines Rennens ein; sie bleiben bis zur Reparatur."""
+        for eintrag_ in schluessel:
+            self.defekte.append(kern_zwischenfall.defekt_von(self.konfiguration, eintrag_))
+
+    @property
+    def offene_reparaturen(self) -> tuple[tuple[str, str, int], ...]:
+        """Alles, was repariert werden kann: Schluessel, Name, Kosten.
+
+        Das sind die offenen Defekte aus GDD 14 und die beiden Ereignisse,
+        die bis zur Reparatur laufen (E8 Motorschaden, E25 Getriebeproblem).
+        """
+        posten = [
+            (d["schluessel"], d["name"], self.reparaturkosten(d["schluessel"]))
+            for d in self.defekte
+        ]
+        posten += [
+            (a.schluessel, a.name, self.reparaturkosten(a.schluessel))
+            for a in self.lage.offene_reparaturen
+        ]
+        return tuple(posten)
+
+    def reparaturkosten(self, schluessel: str) -> int:
+        """Was eine Reparatur kostet (GDD 14: Stufe mal Liga-Faktor)."""
+        defekt = next((d for d in self.defekte if d["schluessel"] == schluessel), None)
+        if defekt is not None:
+            return kern_zwischenfall.reparaturkosten(self.konfiguration, defekt, self.liga)
+        if any(a.schluessel == schluessel for a in self.lage.offene_reparaturen):
+            # Ereignisse nennen keine Kostenstufe; angesetzt wird die
+            # mittlere Stufe der 20 Defekte aus GDD 14.
+            stufen = [d["kostenstufe"] for d in self.konfiguration.wert("defekte", "liste")]
+            mittel = {"kostenstufe": sum(stufen) / len(stufen)}
+            return kern_zwischenfall.reparaturkosten(self.konfiguration, mittel, self.liga)
+        raise KarriereFehler(f"{schluessel} ist nicht offen und nicht reparierbar")
+
+    def repariere(self, schluessel: str) -> int:
+        """Repariert einen Defekt oder ein Ereignis; wirkt sofort (GDD 14).
+
+        :return: die bezahlten Kosten
+        """
+        kosten = self.reparaturkosten(schluessel)
+        if self.konto.geld < kosten:
+            raise KarriereFehler(
+                f"Die Reparatur kostet {kosten} EUR, auf dem Konto liegen {self.konto.geld}"
+            )
+        defekt = next((d for d in self.defekte if d["schluessel"] == schluessel), None)
+        if defekt is not None:
+            self.defekte.remove(defekt)
+        else:
+            self.lage.repariere(schluessel)
+        self.konto = self.konto.mit(geld=-kosten)
+        return kosten
 
     def bis_zum_rennen(self) -> int:
         """Springt direkt zum naechsten Renntag (GDD 2).
@@ -150,6 +360,9 @@ class Karriere:
             raise KarriereFehler(
                 f"{self.heute} ist ein {self.tag.art.bezeichnung}-Tag und nicht nutzbar"
             )
+        if self.heute in self.verlorene_tage:
+            raise KarriereFehler(f"{self.heute} ist durch ein Ereignis ausgefallen")
+        self._pruefe_sperre(schluessel)
         entwicklung = self.vorschau(schluessel)
         if not entwicklung.braucht_tag:
             raise KarriereFehler(
@@ -166,6 +379,7 @@ class Karriere:
 
     def kaufe(self, schluessel: str) -> kern_entwicklung.Entwicklung:
         """Kauft einen +10-Schritt sofort - nur ohne Zeitanteil (GDD 2)."""
+        self._pruefe_sperre(schluessel)
         entwicklung = self.vorschau(schluessel)
         if entwicklung.braucht_tag:
             raise KarriereFehler(
@@ -174,6 +388,27 @@ class Karriere:
         self.konto = kern_entwicklung.buche(self.konto, entwicklung)
         self._uebernimm(entwicklung, platz="")
         return entwicklung
+
+    def gesperrt(self) -> frozenset[str]:
+        """Was gerade nicht entwickelt werden darf (GDD 14: E2, E6)."""
+        sperren = set(self.lage.gesperrt())
+        # E2 sperrt "fahrertraining" als Ganzes, also jede Faehigkeit, die
+        # den Fahrerplatz belegt.
+        if kern_ereignis.FAHRERTRAINING in sperren:
+            sperren.discard(kern_ereignis.FAHRERTRAINING)
+            sperren.update(
+                f.schluessel
+                for f in self.konfiguration.faehigkeiten
+                if kern_entwicklung.ist_fahrertraining(f)
+            )
+            sperren.update(self.konfiguration.zusatzfaehigkeiten)
+        return frozenset(sperren)
+
+    def _pruefe_sperre(self, schluessel: str) -> None:
+        if schluessel in self.gesperrt():
+            raise KarriereFehler(
+                f"{schluessel} ist durch ein Ereignis gesperrt (GDD 14)"
+            )
 
     def _uebernimm(self, entwicklung: kern_entwicklung.Entwicklung, platz: str) -> None:
         self.werte[entwicklung.faehigkeit] = entwicklung.nach
@@ -258,7 +493,31 @@ class Karriere:
 
         self.konto = self.konto.mit(geld=geld, erfahrung=erfahrung, **toepfe)
         self.vertraege = kern_sponsoren.nach_rennen(self.vertraege)
+        # Ereignisse, die in Rennwochenenden laufen, sind eines weiter
+        # (GDD 14).
+        self.lage.nach_rennwochenende()
         return self.konto
+
+    def verbuche_runden(self, strecke: str, runden: int, seedquelle: Seedquelle) -> float:
+        """Schreibt gefahrene Runden der Streckenkenntnis gut (GDD 6).
+
+        E10 Testfahrt geglueckt hebt den Zuwachs der naechsten Strecke.
+        """
+        zuschlag = 1.0 + self.lage.streckenkenntnisbonus()
+        gewachsen = self.kenntnis.verbuche(self.fahrernummer, strecke, runden, seedquelle)
+        if zuschlag != 1.0:
+            zusatz = gewachsen * (zuschlag - 1.0)
+            self.kenntnis.setze(
+                self.fahrernummer,
+                strecke,
+                self.kenntnis.stand(self.fahrernummer, strecke) + zusatz,
+            )
+            gewachsen += zusatz
+        return gewachsen
+
+    def kenntnisfaktor(self, strecke: str) -> float:
+        """Tempofaktor des Spielers auf dieser Strecke (GDD 6)."""
+        return self.kenntnis.tempofaktor(self.fahrernummer, strecke)
 
     def unterschreibe(self, angebot: kern_sponsoren.Angebot) -> None:
         """Nimmt ein Sponsorenangebot an; ein Platz traegt einen Vertrag."""
@@ -266,31 +525,66 @@ class Karriere:
 
 
 def beginne(
-    konfiguration: Konfiguration, jahr: int, liga: int, werte: dict[str, int] | None = None
+    konfiguration: Konfiguration,
+    jahr: int,
+    liga: int,
+    werte: dict[str, int] | None = None,
+    seedquelle: Seedquelle | None = None,
+    fahrernummer: int = 0,
 ) -> Karriere:
-    """Startet eine Karriere am 1. Januar (GDD 1 und 10)."""
+    """Startet eine Karriere am 1. Januar (GDD 1 und 10).
+
+    :param seedquelle: bestimmt die Ereignisse der Saison (GDD 14). Ohne
+        Angabe laeuft das Jahr ohne Ereignisse - so bleiben Tests, die
+        allein die Entwicklung pruefen, von ihnen unberuehrt.
+    """
     saison = kern_kalender.erzeuge(konfiguration, jahr)
     if werte is None:
         # GDD 1: Der Spieler startet mit allen Werten auf 0.
         werte = {f.schluessel: 0 for f in konfiguration.faehigkeiten}
         werte.update(dict.fromkeys(konfiguration.zusatzfaehigkeiten, 0))
-    return Karriere(
+    plan = (
+        kern_ereignis.plane_saison(konfiguration, saison, seedquelle.zweig("ereignisse"))
+        if seedquelle is not None
+        else {}
+    )
+    karriere = Karriere(
         konfiguration=konfiguration,
         saison=saison,
         heute=saison.tage[0].datum,
         liga=liga,
         konto=Konto(geld=kern_einnahmen.startkapital(konfiguration)),
         werte=dict(werte),
+        ereignisplan=plan,
+        fahrernummer=fahrernummer,
     )
+    # Der erste Januar ist selbst schon ein Tag des ersten Zyklus; was auf
+    # ihn faellt, wird nie "weitergeschaltet" und muesste sonst ausfallen.
+    for schluessel in plan.get(karriere.heute, ()):
+        karriere._loese_ereignis_aus(schluessel)
+    return karriere
 
 
 def kopiere(karriere: Karriere) -> Karriere:
     """Eine unabhaengige Kopie - fuer Vorschauen, die nichts veraendern."""
-    return replace(
+    kopie = replace(
         karriere,
         konto=karriere.konto,
         werte=dict(karriere.werte),
         vertraege=dict(karriere.vertraege),
         buchungen=list(karriere.buchungen),
         belegt=set(karriere.belegt),
+        defekte=list(karriere.defekte),
+        verlorene_tage=set(karriere.verlorene_tage),
+        meldungen=list(karriere.meldungen),
+        # Die laufenden Ereignisse werden einzeln kopiert: Ihr Restzaehler
+        # wird an Ort und Stelle heruntergezaehlt, eine flache Kopie der
+        # Liste teilte ihn also mit dem Original.
+        lage=kern_ereignis.Lage(
+            karriere.konfiguration, [replace(a) for a in karriere.lage.aktive]
+        ),
+        kenntnis=kern_streckenkenntnis.Streckenkenntnis(
+            karriere.konfiguration, dict(karriere.kenntnis.runden)
+        ),
     )
+    return kopie

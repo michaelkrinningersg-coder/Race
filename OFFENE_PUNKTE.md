@@ -2,7 +2,7 @@
 
 Das GDD nennt an vielen Stellen eine Mechanik, ohne sie zu beziffern.
 Dieses Dokument listet jede solche Lücke, drei Varianten und die getroffene
-Entscheidung. **Stand 2026-09-17: alle 36 Punkte entschieden.**
+Entscheidung. **Stand 2026-09-17: alle 39 Punkte entschieden.**
 
 Die entschiedenen Werte stehen in `konfiguration/balancing.toml`; der
 Abschnitt `[offen]` dort ist leer. Jede Entscheidung lässt sich ändern,
@@ -134,6 +134,17 @@ Gebraucht ab = der Umsetzungsschritt, der den Wert braucht. Die
 | Nr. | Punkt | Varianten | Ab |
 | --- | --- | --- | --- |
 | 20 | Geld- und Erfahrungsbeträge der Ereignisse | A klein · **B spürbar** · C groß | 10 |
+| 34 | Bezugsgröße dauerhafter Prozentwirkungen | A vom Wert · **B max(+10, +1 %)** · C von der Skala | 10 |
+| 35 | Auswahl des Ereignisses | **gleichverteilt, ohne Zurücklegen je Zyklus** | 10 |
+| 36 | Ereignisse für die KI | A alle 600 · B Spielerliga · **C nur der Spieler** | 10 |
+
+### Streuung und Streckenkenntnis
+
+| Nr. | Punkt | Varianten | Ab |
+| --- | --- | --- | --- |
+| 37 | Profil über die Wirkungsbereiche | **±30 % je Bereich zusätzlich zu GDD 12** | 10 |
+| 38 | Lerntempo je Fahrer | **±60 %, fest über die Karriere** | 10 |
+| 39 | Streckenkenntnis der KI | **fest, einmal gesetzt, ±80 %** | 10 |
 
 ---
 
@@ -855,3 +866,119 @@ Saison beginnt ohnehin mit leeren Tabellen, sodass Rennen 1 automatisch
 unter die GDD-Regel fällt; die Prüfung auf ein unvollständiges Feld ist
 das Netz darunter, damit eine Aufstellung nie aus einer halben Tabelle
 entsteht.
+
+---
+
+## Nachtrag: bei Schritt 10 entschieden
+
+### 34. Bezugsgröße der dauerhaften Prozentwirkungen
+
+**GDD 14** lässt elf Ereignisse „dauerhaft" wirken, meist mit ±1 %
+(E11 D8 +1 %, E32 F1 −0,5 %, E22 Regenfahren +2 %). **GDD 1** lässt den
+Spieler aber mit allen Werten auf 0 starten — ein Prozentsatz davon ist
+null.
+
+| | Variante | |
+| --- | --- | --- |
+| **A** | Prozent vom aktuellen Wert | Wörtlich nach GDD 14, in den ersten Saisons aber wirkungslos |
+| **B** | max(+10, +1 % vom Wert) | Dieselbe Regel wie ein Entwicklungstag in GDD 2 |
+| **C** | Prozent der Referenzskala (98.000) | +1 % wären immer +980 — früh fast 100 Entwicklungstage wert |
+
+**Entscheidung: B** (2026-09-17). Bei abweichenden Prozentsätzen skaliert
+der Mindestschritt mit, damit die Ereignisse untereinander im Verhältnis
+bleiben: +2 % ergibt mindestens +20, −0,5 % höchstens −5. Gemessen: bei
+Wert 0 gibt E11 +10, bei Wert 98.000 gibt es +980.
+
+### 35. Auswahl des Ereignisses
+
+GDD 14 nennt keine Gewichte. **Entschieden:** alle 35 gleich
+wahrscheinlich, innerhalb eines Zyklus ohne Zurücklegen — sonst träfe
+dieselbe Erkältung zweimal in vier Tagen.
+
+Dazu kommt, was GDD 14 offen lässt: Was ist ein „14-Tage-Zyklus" in der
+Vor- und Nachsaison? GDD 2 kennt dort keine Zyklen, zusammen sind sie
+aber rund ein Viertel des Jahres. **Entschieden:** Über das ganze Jahr
+läuft dasselbe 14-Tage-Raster, verankert am Tag nach dem ersten Rennen.
+Jeder Zyklus endet damit genau auf einem Renntag, und sein Auslösefenster
+fällt immer in die freien Tage danach. Gemessen: 27 Zyklen, 21 bis 33
+Ereignisse je Saison.
+
+### 36. Ereignisse für die KI
+
+**GDD 14** schreibt, Ereignisse „betreffen Spieler und KI gleichermaßen".
+
+| | Variante | |
+| --- | --- | --- |
+| **A** | Alle 600 Fahrer | Wörtlich nach GDD, rund 24.000 Zustandsänderungen je Saison |
+| **B** | Nur die Liga des Spielers | 30 statt 600 Fahrer |
+| **C** | Nur der Spieler | Am einfachsten, weicht aber vom GDD ab |
+
+**Entscheidung: C** (2026-09-17, vom Auftraggeber gewählt). Das ist die
+einzige Stelle in Schritt 10, an der bewusst vom GDD abgewichen wird; sie
+steht in der Konfiguration als `[ereignisse.umfang] gilt_fuer_ki = false`
+und lässt sich ohne Codeänderung zurückdrehen.
+
+### 37. Profil über die Wirkungsbereiche
+
+**GDD 12** lässt die Einzelwerte „±25 % um den Mittelwert" streuen und
+nennt als Ziel Regenspezialisten, Qualifying-Experten und Reifenschoner.
+Gemessen kam davon fast nichts an: Die Simulation rechnet mit den
+**Bereichsmitteln** aus GDD 8, und über drei bis fünf Einzelwerte hinweg
+mittelt sich die Streuung weg — zwischen dem stärksten und dem
+schwächsten Bereich eines Fahrers lagen nur **20 %**.
+
+**Entschieden:** eine zweite Ebene. Je Fahrer wird ein Faktor pro
+Wirkungsbereich gezogen (±30 %), den jede Fähigkeit nach ihrer Zeile der
+Wirkungsmatrix gewichtet erbt. Darauf kommt das Rauschen aus GDD 12.
+Gemessen in Liga 10: Profilspanne **41 %** im Schnitt, bis 58 %; ein
+Fahrer ist in drei Bereichen Erster seiner Liga und in anderen Sechster.
+Die Wetterfähigkeiten stehen neben der Matrix und streuen für sich mit
+±45 %, gemessen 65 % Spanne je Fahrer.
+
+Zwei Dinge halten dabei die Kalibriertabelle aus GDD 9 in Ordnung:
+
+* Die Bereichsfaktoren werden **auf den Mittelwert 1 normiert**. Ein
+  Spezialist ist damit eine Frage der *Form*, nicht der Stärke — er
+  verteilt seine Ligastärke um, statt mehr oder weniger davon zu haben.
+  Ohne das rutschte der schwächste Fahrer einer Liga rund 10 % unter
+  seinen Sollwert.
+* Das **Kappen an der Skala wird ausgeglichen**. In Liga 1 liegt die
+  Stärke nahe am Maximum von 100.000; ohne Ausgleich fielen dort die
+  hohen Werte eines Spezialisten weg und sein Mittel sänke um 5 %, also
+  gut 3 km/h. Jetzt werden die Werte mit Luft nach oben so weit
+  angehoben, dass das Mittel wieder stimmt.
+
+Nachgemessen trifft jede Liga ihre beiden Kontrollwerte aus GDD 9 jetzt
+**auf den Punkt** — vorher lagen sie bis zu 4.600 daneben.
+
+Was bleibt: In **Liga 1** drückt die Obergrenze die Profilspanne auf 19 %,
+weil dort ein großer Teil der Werte am Anschlag liegt. Das folgt direkt
+aus GDD 9 (Ligastärke ~95.000, Skala bis 100.000) und lässt sich nicht
+beheben, ohne eine Regel zu erfinden, die das GDD nicht nennt. Der Punkt
+ist dem Auftraggeber vorgelegt.
+
+### 38. Lerntempo je Fahrer
+
+**GDD 6** lässt den Kenntniszuwachs streuen (±75 % je Start, ±50 % je
+Runde). Beides sind Würfe je Session und mitteln sich weg: Nach 20
+Saisons auf derselben Strecke blieben gemessen nur **10 %** Streuung
+zwischen den Fahrern übrig.
+
+**Entschieden:** zusätzlich ein festes Lerntempo je Fahrer (±60 %), aus
+dem Seed abgeleitet und über die ganze Karriere dasselbe. Damit bleiben
+nach 20 Saisons **35 %** Streuung, und der Tempobonus reicht von 0,31 %
+bis 1,31 %.
+
+### 39. Streckenkenntnis der KI
+
+**GDD 12** sagt: „Die KI verbessert sich vorerst nicht." Eine wachsende
+Streckenkenntnis wäre genau das — über die Saisons würden alle 570
+KI-Autos der Kalibriertabelle aus GDD 9 davonlaufen.
+
+**Entschieden:** Der Stand der KI wird einmal bei der Welterzeugung je
+Fahrer und Strecke gesetzt und bleibt dann fest. Er steht für alles, was
+der Fahrer vor Karrierebeginn dort gefahren ist, und streut deshalb breit
+(im Mittel 35 % der vollen Kenntnis, ±80 %). Gemessen in Liga 10 auf
+Monza: 152 bis 614 Runden, also 0,23 % bis 0,92 % Tempobonus; derselbe
+Fahrer kennt eine Strecke mit 620 Runden und eine andere mit 73. Sobald
+`[ki] entwicklung` auf `true` steht, lernt die KI wieder mit.

@@ -91,16 +91,56 @@ def test_liga_ist_nach_staerke_geordnet(welt) -> None:
 
 
 def test_profile_streuen_um_den_mittelwert(welt, k) -> None:
-    """GDD 12: Einzelwerte streuen +/- 25 % - es gibt also Spezialisten."""
-    streuung = k.wert("ki", "profil_streuung")
+    """Zwei Ebenen: Bereichsprofil (Punkt 37) und Rauschen (GDD 12).
+
+    Die Grenze ist das Produkt beider Streuungen; mehr kann nicht
+    herauskommen.
+    """
+    rauschen = k.wert("ki", "profil_streuung")
+    bereich = k.wert("ki", "bereichs_streuung")
+    untere = (1 - bereich) * (1 - rauschen)
+    obere = (1 + bereich) * (1 + rauschen)
     for fahrer in welt.liga(10):
         werte = list(fahrer.auto.werte.values())
         mittel = statistics.mean(werte)
-        assert min(werte) >= mittel * (1 - streuung) * 0.95
-        assert max(werte) <= mittel * (1 + streuung) * 1.05
+        assert min(werte) >= mittel * untere * 0.95
+        assert max(werte) <= mittel * obere * 1.05
     # Und die Spezialisierung unterscheidet sich wirklich je Fahrer.
     regen = [f.auto.wetterwert("regenfahren") / max(f.auto.wert("D1"), 1) for f in welt.liga(10)]
     assert max(regen) - min(regen) > 0.2
+
+
+def test_das_bereichsprofil_macht_spezialisten(welt, k) -> None:
+    """Entscheidung zu Punkt 37: Ohne die zweite Ebene mittelt sich die
+    Streuung im Bereichsmittel weg - gemessen blieben von +/-25 % je
+    Einzelwert nur 20 % Spanne zwischen dem staerksten und dem
+    schwaechsten Bereich eines Fahrers."""
+    from rennmanager.kern.auto import bereichswerte
+
+    spannen = []
+    for fahrer in welt.liga(10):
+        bereiche = list(bereichswerte(k, fahrer.auto).values())
+        spannen.append((max(bereiche) - min(bereiche)) / statistics.mean(bereiche))
+    assert statistics.mean(spannen) > 0.30
+
+
+def test_das_bereichsprofil_aendert_die_staerke_nicht(welt, k) -> None:
+    """Ein Spezialist verteilt seine Ligastaerke um, statt mehr oder
+    weniger davon zu haben.
+
+    Das Kappen an der Skala aus GDD 9 wird ausgeglichen: In Liga 1 liegt
+    die Staerke nahe am Maximum, und ohne Ausgleich fielen dort die hohen
+    Werte weg - der schwaechste Fahrer landete 5 % unter seinem Sollwert,
+    also gut 3 km/h zu langsam.
+    """
+    kontrolle = {zeile["liga"]: zeile for zeile in k.wert("ligen", "kontrolle")}
+    kleinster = k.wert("skala", "minimum")
+    for liga, zeile in kontrolle.items():
+        mittel = [statistics.mean(f.auto.werte.values()) for f in welt.liga(liga)]
+        assert max(mittel) == pytest.approx(zeile["s_bester"], abs=1)
+        # Ganz unten in Liga 20 bremst der Skalenboden bei 0.
+        untergrenze = max(zeile["s_letzter"], kleinster)
+        assert min(mittel) == pytest.approx(untergrenze, abs=max(untergrenze * 0.01, 10))
 
 
 def test_alle_autos_sind_gueltig(welt, k) -> None:
@@ -142,10 +182,21 @@ def test_fahrer_kommen_aus_europa_und_nordamerika(welt, k) -> None:
 
 
 def test_geburtsdatum_ergibt_ein_uebliches_alter(welt, k) -> None:
-    stichtag = dt.date(2026, 3, 1)
+    """Das Alter gilt zum Saisonstart und haelt die Spanne exakt ein.
+
+    Vom 1. Januar aus gerechnet war jeder, der spaeter im Jahr Geburtstag
+    hat, am Saisonstart noch ein Jahr juenger als gewuerfelt - im Feld
+    standen dann 17-Jaehrige, obwohl die Konfiguration 18 als Minimum
+    nennt.
+    """
+    stichtag = dt.date(
+        2026,
+        k.wert("kalender", "saisonstart_monat"),
+        k.wert("kalender", "saisonstart_tag"),
+    )
     alter = [f.alter_am(stichtag) for f in welt.fahrer]
-    assert min(alter) >= k.wert("fahrernamen", "alter_min") - 1
-    assert max(alter) <= k.wert("fahrernamen", "alter_max") + 1
+    assert min(alter) == k.wert("fahrernamen", "alter_min")
+    assert max(alter) == k.wert("fahrernamen", "alter_max")
 
 
 # -- Spieler ----------------------------------------------------------------

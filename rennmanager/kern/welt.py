@@ -222,17 +222,93 @@ def _teamfarbe(grundfarbe: str, nummer: int, anzahl: int) -> str:
 def _wuerfle_werte(
     konfiguration: Konfiguration, mittelwert: int, wuerfel, zusatz: list[str]
 ) -> tuple[dict[str, int], dict[str, int]]:
-    """Profil eines Autos: Einzelwerte streuen um den Mittelwert (GDD 12)."""
+    """Profil eines Autos (GDD 12).
+
+    Zwei Ebenen, damit echte Spezialisten entstehen:
+
+    1. Ein Faktor je **Wirkungsbereich** - er macht den Fahrer, der in
+       engen Kurven glaenzt und auf Geraden Mittelmass ist. Jede
+       Faehigkeit erbt ihn gewichtet nach ihrer Zeile der Wirkungsmatrix.
+    2. Darauf das **Rauschen je Einzelwert** aus GDD 12.
+
+    Ohne die erste Ebene mittelt sich das Rauschen im Bereichsmittel weg:
+    Aus +/-25 % je Einzelwert wurden gemessen nur 20 % Spanne zwischen dem
+    staerksten und dem schwaechsten Bereich eines Fahrers.
+    """
     streuung = konfiguration.wert("ki", "profil_streuung")
+    bereichs_streuung = konfiguration.wert("ki", "bereichs_streuung")
+    wetter_streuung = konfiguration.wert("ki", "wetter_streuung")
     kleinster = konfiguration.wert("skala", "minimum")
     groesster = konfiguration.wert("skala", "maximum")
 
-    def gestreut() -> int:
-        faktor = 1.0 + float(wuerfel.uniform(-streuung, streuung))
-        return int(round(min(max(mittelwert * faktor, kleinster), groesster)))
+    bereichsfaktor = {
+        bereich: 1.0 + float(wuerfel.uniform(-bereichs_streuung, bereichs_streuung))
+        for bereich in konfiguration.bereiche
+    }
 
-    werte = {f.schluessel: gestreut() for f in konfiguration.faehigkeiten}
-    wetterwerte = {schluessel: gestreut() for schluessel in zusatz}
+    def profilfaktor(faehigkeit) -> float:
+        """Der Bereichsfaktor einer Faehigkeit, nach ihren Gewichten."""
+        summe = sum(faehigkeit.gewichte.values())
+        if not summe:
+            return 1.0
+        return (
+            sum(bereichsfaktor[bereich] * gewicht
+                for bereich, gewicht in faehigkeit.gewichte.items())
+            / summe
+        )
+
+    def gestreut(profil: float, breite: float) -> float:
+        rauschen = 1.0 + float(wuerfel.uniform(-breite, breite))
+        return mittelwert * profil * rauschen
+
+    def begrenzt(werte: dict[str, float]) -> dict[str, int]:
+        """Schneidet auf die Skala und holt zurueck, was das Kappen nimmt.
+
+        In Liga 1 liegt die Ligastaerke nahe am Skalenmaximum aus GDD 9.
+        Ohne Ausgleich fielen dort die hohen Werte eines Spezialisten weg
+        und sein Mittel saenke unter den Wert, den die Kalibriertabelle
+        vorgibt - gemessen um 5 %, also gut 3 km/h.
+        """
+        ziel = mittelwert
+        aktuell = dict(werte)
+        for _ in range(8):
+            geschnitten = {
+                s: min(max(w, kleinster), groesster) for s, w in aktuell.items()
+            }
+            ist = sum(geschnitten.values()) / len(geschnitten)
+            if ziel <= 0 or abs(ist - ziel) < 0.5:
+                return {s: int(round(w)) for s, w in geschnitten.items()}
+            # Nur die Werte anheben, die noch Luft haben.
+            frei = {s: w for s, w in geschnitten.items() if kleinster < w < groesster}
+            if not frei:
+                return {s: int(round(w)) for s, w in geschnitten.items()}
+            fehlt = (ziel - ist) * len(geschnitten)
+            faktor = 1.0 + fehlt / sum(frei.values())
+            aktuell = {
+                s: (w * faktor if s in frei else geschnitten[s])
+                for s, w in geschnitten.items()
+            }
+        return {s: int(round(min(max(w, kleinster), groesster))) for s, w in aktuell.items()}
+
+    # Die Bereichsfaktoren werden auf den Mittelwert 1 normiert. Ein
+    # Spezialist ist damit eine Frage der *Form*, nicht der Staerke: Er
+    # verteilt seine Ligastaerke um, statt mehr oder weniger davon zu
+    # haben. Ohne das rutschte der schwaechste Fahrer einer Liga um rund
+    # 10 % unter den Wert, den die Kalibriertabelle in GDD 9 vorgibt.
+    faktoren = {f.schluessel: profilfaktor(f) for f in konfiguration.faehigkeiten}
+    mittel = sum(faktoren.values()) / len(faktoren)
+    werte = begrenzt(
+        {
+            schluessel: gestreut(faktor / mittel, streuung)
+            for schluessel, faktor in faktoren.items()
+        }
+    )
+    # Die Wetterfaehigkeiten stehen neben der Matrix; sie haben keinen
+    # Bereich, aus dem sie einen Faktor erben koennten, und streuen
+    # deshalb fuer sich - dafuer breiter.
+    wetterwerte = begrenzt(
+        {schluessel: gestreut(1.0, wetter_streuung) for schluessel in zusatz}
+    )
     return werte, wetterwerte
 
 
@@ -295,6 +371,12 @@ def _erzeuge_fahrer(
     anteil_na = konfiguration.wert("fahrernamen", "anteil_nordamerika")
     alter_min = konfiguration.wert("fahrernamen", "alter_min")
     alter_max = konfiguration.wert("fahrernamen", "alter_max")
+    # Stichtag fuers Alter ist der Saisonstart aus GDD 2.
+    stichtag = dt.date(
+        saisonjahr,
+        konfiguration.wert("kalender", "saisonstart_monat"),
+        konfiguration.wert("kalender", "saisonstart_tag"),
+    )
 
     vergeben: set[tuple[str, str]] = set()
     kuerzel_vergeben: set[str] = set()
@@ -340,7 +422,11 @@ def _erzeuge_fahrer(
                 else europa[int(wuerfel.integers(0, len(europa)))]
             )
             alter = int(wuerfel.integers(alter_min, alter_max + 1))
-            geburtstag = dt.date(saisonjahr - alter, 1, 1) + dt.timedelta(
+            # Das Alter gilt zum Saisonstart (GDD 12). Der Geburtstag liegt
+            # deshalb im Jahr *vor* dem Stichtag minus Alter - vom 1. Januar
+            # aus gerechnet waere jeder, der spaeter im Jahr Geburtstag hat,
+            # am Saisonstart noch ein Jahr juenger als gewuerfelt.
+            geburtstag = stichtag.replace(year=stichtag.year - alter) - dt.timedelta(
                 days=int(wuerfel.integers(0, 365))
             )
 

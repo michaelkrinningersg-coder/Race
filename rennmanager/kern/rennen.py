@@ -244,6 +244,7 @@ class _Lauf:
         wetter: kern_wetter.Wetterverlauf | None = None,
         ohne_zufall: bool = False,
         streckenverschleiss: float = 1.0,
+        kenntnisfaktor: tuple[float, ...] | None = None,
     ) -> None:
         self.k = konfiguration
         self.strecke = strecke
@@ -357,6 +358,19 @@ class _Lauf:
             0 if ohne_zufall else kern_zwischenfall.ausfallgrenze(konfiguration, self.wuerfel)
         )
 
+        # --- Streckenkenntnis (GDD 6) ---------------------------------
+        # Ein fester Faktor je Auto ueber die ganze Session. Wie der
+        # Reifenverschleiss faellt er im zufallsfreien Modus weg, weil
+        # GDD 9 die Kalibrierung auf der blanken Runde festlegt.
+        self.kenntnis_tempo = np.ones(self.anzahl)
+        if kenntnisfaktor is not None and not ohne_zufall:
+            if len(kenntnisfaktor) != self.anzahl:
+                raise ValueError(
+                    f"Kenntnisfaktor fuer {len(kenntnisfaktor)} Autos, "
+                    f"im Feld stehen {self.anzahl}"
+                )
+            self.kenntnis_tempo = np.array(kenntnisfaktor, dtype=float)
+
         self._setze_rundenform(0)
         self._setze_grip(0.0)
 
@@ -442,15 +456,15 @@ class _Lauf:
         self.index = index
         hier = self.profile[self.laufende_nummer, index]
         dort = self.profile[self.laufende_nummer, danach]
-        # Wetter (Grip) und Rundenform wirken beide als Faktor aufs Tempo.
-        # Grip aus dem Wetter, Rundenform, Reifenzustand und aktive
-        # Defekte wirken alle als Faktor aufs Tempo.
+        # Grip aus dem Wetter, Rundenform, Reifenzustand, aktive Defekte
+        # und die Streckenkenntnis wirken alle als Faktor aufs Tempo.
         frei = (
             (hier + rest * (dort - hier))
             * self.grip
             * self.tempoform
             * self.reifen_tempo
             * self.defekt_tempo
+            * self.kenntnis_tempo
         )
         ziel = np.where(faehrt, frei, 0.0)
 
@@ -763,6 +777,7 @@ def simuliere(
     wetter: kern_wetter.Wetterverlauf | None = None,
     ohne_zufall: bool = False,
     streckenverschleiss: float = 1.0,
+    kenntnisfaktor: tuple[float, ...] | None = None,
     hoechstdauer_ms: int | None = None,
 ) -> Rennverlauf:
     """Faehrt ein ganzes Rennen und liefert den fertigen Verlauf.
@@ -773,8 +788,12 @@ def simuliere(
         trocken mit Grip 1,0 gefahren
     :param streckenverschleiss: Reifenfaktor der Strecke (GDD 3), aus
         rennmanager.kern.reifen.streckenfaktor
+    :param kenntnisfaktor: Tempofaktor aus der Streckenkenntnis je Auto
+        (GDD 6), aus rennmanager.kern.streckenkenntnis. Ohne Angabe faehrt
+        jedes Auto ohne Kenntnisbonus.
     :param ohne_zufall: laesst Tagesform, Eigenschafts-Zufall, Rundenform,
-        Fehler, Unfaelle, Defekte und den Reifenverschleiss weg - also
+        Fehler, Unfaelle, Defekte, Reifenverschleiss und Streckenkenntnis
+        weg - also
         alles, was eine Rennrunde von der kalibrierten Einzelrunde
         abweichen laesst. GDD 9 kalibriert ausdruecklich ohne Zufall, und
         fuer die Massensimulation aus GDD 15 ist es ebenfalls noetig.
@@ -787,7 +806,7 @@ def simuliere(
 
     lauf = _Lauf(
         konfiguration, strecke, teilnehmer, runden, seedquelle, streckenmittel,
-        wetter, ohne_zufall, streckenverschleiss,
+        wetter, ohne_zufall, streckenverschleiss, kenntnisfaktor,
     )
     schritt_ms = konfiguration.wert("simulation", "zeitschritt_ms")
     bild_ms = konfiguration.wert("simulation", "bildschritt_ms")

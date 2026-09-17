@@ -141,6 +141,52 @@ def tempofaktor_defekte(konfiguration: Konfiguration, defekte: list[dict]) -> fl
     return 1.0 - min(verlust, grenze)
 
 
+def defekt_von(konfiguration: Konfiguration, schluessel: str) -> dict:
+    """Ein Defekt aus GDD 14 anhand seines Schluessels."""
+    for defekt in konfiguration.wert("defekte", "liste"):
+        if defekt["schluessel"] == schluessel:
+            return defekt
+    raise KeyError(f"Unbekannter Defekt: {schluessel}")
+
+
+def wertfaktoren(konfiguration: Konfiguration, defekte: list[dict]) -> dict[str, float]:
+    """Faktoren je Fahrzeugwert, solange diese Defekte offen sind (GDD 14).
+
+    Anders als ``tempofaktor_defekte``, das die Summe als Tempoverlust
+    ansetzt, wirken die Defekte hier auf die einzelnen Werte, die GDD 14
+    nennt. Die Deckelung bei 50 % gilt weiterhin fuer die Summe: Reicht
+    sie darueber, werden alle Einzelwirkungen im selben Verhaeltnis
+    verkleinert.
+    """
+    verlust = sum(
+        -wirkung["faktor"] for defekt in defekte for wirkung in defekt["wirkung"]
+    )
+    grenze = konfiguration.wert("defekte", "max_gesamtmalus")
+    daempfung = min(grenze / verlust, 1.0) if verlust > grenze else 1.0
+
+    faktoren: dict[str, float] = {}
+    for defekt in defekte:
+        for wirkung in defekt["wirkung"]:
+            ziel = wirkung["ziel"]
+            faktoren[ziel] = faktoren.get(ziel, 1.0) * (
+                1.0 + wirkung["faktor"] * daempfung
+            )
+    return faktoren
+
+
+def reparaturkosten(konfiguration: Konfiguration, defekt: dict, liga: int) -> int:
+    """Was die Reparatur eines Defekts kostet (GDD 14).
+
+    "Reparatur kostet nur Geld (Stufe x Liga-Faktor) und wirkt sofort."
+    Der Liga-Faktor ist die Siegpraemie der Liga; die Entscheidung dazu
+    steht in OFFENE_PUNKTE.md, Punkt 18.
+    """
+    from rennmanager.kern.einnahmen import siegpraemie
+
+    anteil = konfiguration.wert("defekte", "reparatur", "anteil_siegpraemie_je_stufe")
+    return int(round(defekt["kostenstufe"] * anteil * siegpraemie(konfiguration, liga)))
+
+
 # ---------------------------------------------------------------------------
 # Unfaelle
 # ---------------------------------------------------------------------------

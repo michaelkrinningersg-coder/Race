@@ -8,9 +8,12 @@ offenen Angaben auf.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
+    QFileDialog,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
@@ -27,6 +30,9 @@ from PySide6.QtWidgets import (
 )
 
 from rennmanager import __version__
+from rennmanager.kern import spielstand as kern_spielstand
+from rennmanager.kern import statistik as kern_statistik
+from rennmanager.kern import streckenkenntnis as kern_streckenkenntnis
 from rennmanager.kern import welt as kern_welt
 from rennmanager.kern.zufall import Seedquelle
 from rennmanager.konfiguration import Konfiguration
@@ -36,12 +42,17 @@ from rennmanager.ui.qualifyingseite import Qualifyingseite
 from rennmanager.ui.rennseite import Rennseite
 from rennmanager.ui.rundenseite import Rundenseite
 from rennmanager.ui.saisonseite import Saisonseite
+from rennmanager.ui.sponsorenseite import Sponsorenseite
+from rennmanager.ui.statistikseite import Statistikseite
 from rennmanager.ui.streckenseite import Streckenseite
 from rennmanager.ui.weltseite import Weltseite
 
 # Qt-Spinboxen rechnen mit 32-Bit-Ganzzahlen; der Hauptseed wird in der
 # Oberflaeche deshalb auf diesen Bereich begrenzt.
 SEED_MAX = 2**31 - 1
+
+# GDD 15: Spielstand in SQLite, eine Datei je Stand.
+DATEIFILTER = "Rennmanager-Spielstand (*.sqlite);;Alle Dateien (*)"
 
 
 class Hauptfenster(QMainWindow):
@@ -57,6 +68,21 @@ class Hauptfenster(QMainWindow):
             self._seedquelle.zweig("welt"),
             spielerliga=konfiguration.wert("ligen", "startliga"),
         )
+        # Statistik und Streckenkenntnis ueberdauern die Saison (GDD 6 und
+        # 13) und gehoeren deshalb dem Fenster, nicht dem Saisonlauf.
+        self._karriere = None
+        self._statistik = kern_statistik.Statistik(konfiguration)
+        self._kenntnis = kern_streckenkenntnis.Streckenkenntnis(
+            konfiguration, seedquelle=self._seedquelle.zweig("lerntempo")
+        )
+        # Die KI bekommt ihre Streckenkenntnis einmal fest (GDD 12).
+        kern_streckenkenntnis.setze_ki_anfang(
+            konfiguration,
+            self._welt,
+            self._kenntnis,
+            tuple(e["name"] for e in konfiguration.strecken),
+            self._seedquelle.zweig("kikenntnis"),
+        )
 
         self.setWindowTitle(f"Rennmanager {__version__}")
         self.resize(900, 640)
@@ -70,6 +96,18 @@ class Hauptfenster(QMainWindow):
     # -- Aufbau ------------------------------------------------------------
     def _baue_menue(self) -> None:
         datei = self.menuBar().addMenu("&Datei")
+
+        speichern = QAction("&Speichern ...", self)
+        speichern.setShortcut("Ctrl+S")
+        speichern.triggered.connect(self._speichere)
+        datei.addAction(speichern)
+
+        laden = QAction("&Laden ...", self)
+        laden.setShortcut("Ctrl+O")
+        laden.triggered.connect(self._lade)
+        datei.addAction(laden)
+        datei.addSeparator()
+
         beenden = QAction("&Beenden", self)
         beenden.setShortcut("Ctrl+Q")
         beenden.triggered.connect(self.close)
@@ -89,16 +127,48 @@ class Hauptfenster(QMainWindow):
         self._reiter.addTab(self._rundenseite, "Runde")
         self._weltseite = Weltseite(self._konfiguration, self._welt)
         self._reiter.addTab(self._weltseite, "Welt")
-        self._karriere = beginne_karriere(self._konfiguration, self._welt)
+        if getattr(self, "_karriere", None) is None:
+            self._karriere = beginne_karriere(
+                self._konfiguration, self._welt, self._seedquelle.zweig("karriere")
+            )
         self._karriereseite = Karriereseite(self._konfiguration, self._karriere)
         self._reiter.addTab(self._karriereseite, "Karriere")
+        self._sponsorenseite = Sponsorenseite(
+            self._konfiguration, self._karriere, self._seedquelle.zweig("sponsoren")
+        )
+        self._reiter.addTab(self._sponsorenseite, "Sponsoren")
         self._qualifyingseite = Qualifyingseite(self._konfiguration, self._welt)
         self._reiter.addTab(self._qualifyingseite, "Qualifying")
         self._rennseite = Rennseite(self._konfiguration, self._welt)
         self._reiter.addTab(self._rennseite, "Rennen")
-        self._saisonseite = Saisonseite(self._konfiguration, self._welt)
+        self._saisonseite = Saisonseite(
+            self._konfiguration,
+            self._welt,
+            seed=self._seedquelle.seed,
+            statistik=self._statistik,
+            kenntnis=self._kenntnis,
+            tabellen=getattr(self, "_geladene_tabellen", None),
+            gefahrene_rennen=getattr(self, "_gefahrene_rennen", 0),
+        )
         self._reiter.addTab(self._saisonseite, "Saison")
+        self._statistikseite = Statistikseite(
+            self._konfiguration, self._welt, self._statistik
+        )
+        self._reiter.addTab(self._statistikseite, "Statistik")
+        # Die Statistik waechst mit jedem Rennwochenende; beim Aufschlagen
+        # der Seite wird sie deshalb neu gelesen.
+        self._reiter.currentChanged.connect(self._reiter_gewechselt)
         return self._reiter
+
+    def _reiter_gewechselt(self, stelle: int) -> None:
+        seite = self._reiter.widget(stelle)
+        if seite is self._statistikseite:
+            self._statistikseite.aktualisiere()
+        elif seite is self._sponsorenseite:
+            # Die Angebote haengen an der Kalenderwoche (GDD 10).
+            self._sponsorenseite.wuerfle_angebote()
+        elif seite is self._karriereseite:
+            self._karriereseite._zeichne()
 
     def _baue_uebersichtsseite(self) -> QWidget:
         seite = QWidget()
@@ -236,9 +306,88 @@ class Hauptfenster(QMainWindow):
         return self._saisonseite
 
     @property
+    def sponsorenseite(self) -> Sponsorenseite:
+        """Die Seite mit den sechs Sponsorenplaetzen."""
+        return self._sponsorenseite
+
+    @property
+    def statistikseite(self) -> Statistikseite:
+        """Die Seite mit Rundenrekorden, Bestenliste und Historie."""
+        return self._statistikseite
+
+    @property
+    def statistik(self) -> kern_statistik.Statistik:
+        return self._statistik
+
+    @property
     def seedquelle(self) -> Seedquelle:
         """Der aktuell eingestellte Hauptseed."""
         return self._seedquelle
+
+    # -- Spielstand (GDD 15) -----------------------------------------------
+    def spielstand(self) -> kern_spielstand.Spielstand:
+        """Alles, was zum Speichern gehoert, in einem Stueck."""
+        return kern_spielstand.aus_teilen(
+            seed=self._seedquelle.seed,
+            saisonjahr=self._karriere.saison.jahr,
+            welt=self._welt,
+            karriere=self._karriere,
+            tabellen=self._saisonseite.lauf.tabellen,
+            statistik=self._statistik,
+            kenntnis=self._kenntnis,
+            gefahrene_rennen=self._saisonseite.lauf.gefahren,
+        )
+
+    def _speichere(self) -> None:
+        pfad, _ = QFileDialog.getSaveFileName(
+            self, "Spielstand speichern", str(Path.home() / "rennmanager.sqlite"), DATEIFILTER
+        )
+        if not pfad:
+            return
+        try:
+            ziel = kern_spielstand.speichere(self.spielstand(), pfad)
+        except (OSError, kern_spielstand.SpielstandFehler) as fehler:
+            QMessageBox.critical(self, "Speichern fehlgeschlagen", str(fehler))
+            return
+        self.statusBar().showMessage(f"Spielstand gespeichert: {ziel}", 8000)
+
+    def _lade(self) -> None:
+        pfad, _ = QFileDialog.getOpenFileName(
+            self, "Spielstand laden", str(Path.home()), DATEIFILTER
+        )
+        if not pfad:
+            return
+        try:
+            stand = kern_spielstand.lade(self._konfiguration, pfad)
+        except (OSError, kern_spielstand.SpielstandFehler) as fehler:
+            QMessageBox.critical(self, "Laden fehlgeschlagen", str(fehler))
+            return
+        self.uebernimm(stand)
+        self.statusBar().showMessage(
+            f"Spielstand geladen: {kern_spielstand.beschreibe(pfad)}", 8000
+        )
+
+    def uebernimm(self, stand: kern_spielstand.Spielstand) -> None:
+        """Baut das Fenster auf einen geladenen Spielstand um (GDD 15).
+
+        Die Seiten halten Welt und Karriere fest, deshalb werden sie neu
+        aufgebaut statt einzeln nachgezogen.
+        """
+        self._seedquelle = Seedquelle(stand.seed)
+        self._seed_eingabe.blockSignals(True)
+        self._seed_eingabe.setValue(min(stand.seed, SEED_MAX))
+        self._seed_eingabe.blockSignals(False)
+
+        self._welt = stand.welt
+        self._karriere = stand.karriere
+        self._statistik = stand.statistik
+        self._kenntnis = stand.kenntnis
+        self._geladene_tabellen = stand.tabellen
+        self._gefahrene_rennen = stand.gefahrene_rennen
+
+        stelle = self._reiter.currentIndex()
+        self.setCentralWidget(self._baue_inhalt())
+        self._reiter.setCurrentIndex(min(stelle, self._reiter.count() - 1))
 
     def _zeige_ueber(self) -> None:
         QMessageBox.about(
