@@ -489,3 +489,99 @@ def test_rennen_startet_in_der_liga_des_spielers(qtbot, konfig: kf.Konfiguration
     qtbot.addWidget(fenster)
     assert fenster.rennseite._liga.currentData() == fenster.welt.spieler.liga
     assert fenster.qualifyingseite._liga.currentData() == fenster.welt.spieler.liga
+
+
+# -- Karriereseite ----------------------------------------------------------
+def test_karriereseite_startet_am_ersten_januar(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    karriere = fenster.karriereseite.karriere
+
+    assert karriere.heute.month == 1 and karriere.heute.day == 1
+    assert karriere.konto.geld == konfig.wert("kosten", "startkapital_euro")
+    assert karriere.liga == fenster.welt.spieler.liga
+
+
+def test_karriereseite_listet_alle_faehigkeiten(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    liste = fenster.karriereseite.liste
+    erwartet = len(konfig.faehigkeiten) + len(konfig.zusatzfaehigkeiten)
+    assert liste.topLevelItemCount() == erwartet
+
+
+def test_tag_belegen_ueber_die_oberflaeche(qtbot, konfig: kf.Konfiguration) -> None:
+    """GDD 2: zwei Plaetze je Tag, einer fuer den Fahrer, einer fuer die Werkstatt."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.karriereseite
+
+    seite.waehle("D1")
+    seite._belege_tag()
+    assert seite.karriere.wert("D1") == 10
+
+    seite.waehle("F10")
+    seite._belege_tag()
+    assert seite.karriere.wert("F10") == 10
+    assert len(seite.karriere.belegt) == 2
+
+
+def test_tageswechsel_gibt_die_plaetze_frei(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.karriereseite
+
+    seite.waehle("D1")
+    seite._belege_tag()
+    assert seite.karriere.belegt
+    seite._tag_weiter()
+    assert not seite.karriere.belegt
+    seite.waehle("D1")
+    seite._belege_tag()
+    assert seite.karriere.wert("D1") == 20
+
+
+def test_sofortkauf_ueber_die_oberflaeche(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.karriereseite
+
+    vorher = seite.karriere.konto.geld
+    seite.waehle("F1")
+    seite._kaufe()
+    assert seite.karriere.wert("F1") == 10
+    assert seite.karriere.konto.geld < vorher
+    # Ein Sofortkauf verbraucht keinen Tagesplatz.
+    assert not seite.karriere.belegt
+
+
+def test_sprung_zum_rennen_ueber_die_oberflaeche(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.karriereseite
+
+    seite._zum_rennen()
+    assert seite.karriere.heute == seite.karriere.saison.erstes_rennen
+    assert seite.karriere.tag.art.name == "RENNEN"
+
+
+def test_sponsorenangebote_liegen_vor(qtbot, konfig: kf.Konfiguration) -> None:
+    """GDD 10: sechs Plaetze mit je 3 bis 10 Angeboten."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.karriereseite
+
+    liste = seite._sponsoren
+    assert liste.topLevelItemCount() >= 6 * konfig.wert("sponsoren", "angebote_je_platz_min")
+    plaetze = {liste.topLevelItem(i).text(0) for i in range(liste.topLevelItemCount())}
+    assert plaetze == set(konfig.wert("sponsoren", "plaetze"))
+
+
+def test_sponsor_unterschreiben(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.karriereseite
+
+    seite._sponsoren.setCurrentItem(seite._sponsoren.topLevelItem(0))
+    seite._unterschreibe()
+    assert len(seite.karriere.vertraege) == 1

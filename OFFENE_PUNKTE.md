@@ -334,8 +334,14 @@ insgesamt zu knapp oder zu reichlich ist.
 | **C** | Fest 250 € in jeder Liga | 250 € | 250 € |
 
 **Empfehlung: A.** Das Startgeld soll ein Sockel sein, kein zweites
-Preisgeld; bei A bleibt es unter dem Anteil für Platz 30 (5 % laut GDD) und
-damit unauffällig. C fällt in höheren Ligen komplett aus der Skala.
+Preisgeld; bei A entspricht es genau dem Anteil für Platz 30 (5 % laut GDD)
+und bleibt damit unauffällig. C fällt in höheren Ligen komplett aus der
+Skala.
+
+*Nachtrag bei der Umsetzung:* Hier stand zunächst, das Startgeld bleibe
+**unter** dem Anteil für Platz 30. Das ist falsch — beide sind 5 %, also
+gleich. Der Letzte bekommt damit das Doppelte des Sockels, der Sieger
+105 % statt 100 %. An der Entscheidung ändert das nichts.
 
 **Entscheidung: A** (2026-09-17)
 

@@ -6,6 +6,8 @@ import sys
 
 from rennmanager import __version__
 from rennmanager.kern import auto as kern_auto
+from rennmanager.kern import einnahmen as kern_einnahmen
+from rennmanager.kern import kalender as kern_kalender
 from rennmanager.kern import rennen as kern_rennen
 from rennmanager.kern import strecke as kern_strecke
 from rennmanager.kern import tempo as kern_tempo
@@ -76,6 +78,19 @@ def pruefe() -> int:
         f"Rennen:        {len(verlauf.teilnehmer)} Autos, 2 Runden, Sieger "
         f"{verlauf.teilnehmer[sieger.teilnehmer].kuerzel} in "
         f"{formatiere_dauer(sieger.zeit_ms)}, {len(verlauf.manoever)} Ueberholmanoever"
+    )
+    saison = kern_kalender.erzeuge(konfiguration, 2026)
+    print(
+        f"Kalender:      {len(saison.renntage)} Rennen vom "
+        f"{saison.erstes_rennen:%d.%m.} bis {saison.letztes_rennen:%d.%m.}, "
+        f"{len(saison.vorsaison)} Tage Vorsaison, "
+        f"{len(saison.nachsaison)} Tage Nachsaison"
+    )
+    print(
+        f"Wirtschaft:    Siegpraemie Liga 20 "
+        f"{kern_einnahmen.siegpraemie(konfiguration, 20):,} EUR, Liga 1 "
+        f"{kern_einnahmen.siegpraemie(konfiguration, 1):,} EUR, "
+        f"Startkapital {kern_einnahmen.startkapital(konfiguration):,} EUR".replace(",", ".")
     )
     print(f"Offene Punkte: {len(konfiguration.offene_punkte)}")
     return 0

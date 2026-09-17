@@ -1542,6 +1542,9 @@ praemie_sieg = 1.00
 praemie_top3 = 0.50
 praemie_top10 = 0.20
 
+# Streuung der Angebote gegeneinander, damit die Auswahl etwas bringt.
+streuung = 0.30
+
 [sponsoren.aufteilung]
 auto_haupt = 0.40
 auto_neben_1 = 0.15

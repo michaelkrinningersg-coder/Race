@@ -109,3 +109,25 @@ zweite_teile = [
   "Racing", "Motorsport", "Rennsport", "Speedworks", "Autosport",
   "Competition", "Engineering", "Racing Team", "Motors", "Performance",
 ]
+
+# ---------------------------------------------------------------------------
+# Sponsoren (GDD 10)
+#
+# Erfundene Namen aus zwei Teilen, wie bei den Teams. Das GDD nennt sechs
+# Sponsorenplaetze, aber keine Namen.
+# ---------------------------------------------------------------------------
+[sponsor]
+erste_teile = [
+  "Aurum", "Bernstein", "Boreal", "Cerulea", "Delfin", "Eisvogel", "Falkner",
+  "Fernblick", "Fluxa", "Granit", "Helios", "Hochsee", "Ikarus", "Kaskade",
+  "Kobalt", "Kompass", "Korall", "Lumen", "Magnet", "Meridian", "Monsun",
+  "Nordlicht", "Novum", "Obsidian", "Orkan", "Palisade", "Pegasus", "Polaris",
+  "Quarz", "Regatta", "Rubin", "Saphir", "Seehund", "Silberpfeil", "Sirius",
+  "Solaris", "Sternwarte", "Tundra", "Uferbau", "Vertex", "Vulkan",
+  "Wacholder", "Zenit", "Zirkon", "Zyklon",
+]
+zweite_teile = [
+  "Werke", "Industrie", "Technik", "Energie", "Logistik", "Versicherung",
+  "Chemie", "Getraenke", "Elektronik", "Kaffee", "Bank", "Reisen",
+  "Maschinenbau", "Uhren", "Sportartikel",
+]

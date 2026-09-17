@@ -30,6 +30,8 @@ from rennmanager import __version__
 from rennmanager.kern import welt as kern_welt
 from rennmanager.kern.zufall import Seedquelle
 from rennmanager.konfiguration import Konfiguration
+from rennmanager.ui.karriereseite import Karriereseite
+from rennmanager.ui.karriereseite import beginne as beginne_karriere
 from rennmanager.ui.qualifyingseite import Qualifyingseite
 from rennmanager.ui.rennseite import Rennseite
 from rennmanager.ui.rundenseite import Rundenseite
@@ -86,6 +88,9 @@ class Hauptfenster(QMainWindow):
         self._reiter.addTab(self._rundenseite, "Runde")
         self._weltseite = Weltseite(self._konfiguration, self._welt)
         self._reiter.addTab(self._weltseite, "Welt")
+        self._karriere = beginne_karriere(self._konfiguration, self._welt)
+        self._karriereseite = Karriereseite(self._konfiguration, self._karriere)
+        self._reiter.addTab(self._karriereseite, "Karriere")
         self._qualifyingseite = Qualifyingseite(self._konfiguration, self._welt)
         self._reiter.addTab(self._qualifyingseite, "Qualifying")
         self._rennseite = Rennseite(self._konfiguration, self._welt)
@@ -206,6 +211,11 @@ class Hauptfenster(QMainWindow):
     @property
     def weltseite(self) -> Weltseite:
         return self._weltseite
+
+    @property
+    def karriereseite(self) -> Karriereseite:
+        """Die Seite mit Kalender, Entwicklung und Sponsoren."""
+        return self._karriereseite
 
     @property
     def qualifyingseite(self) -> Qualifyingseite:

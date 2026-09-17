@@ -11,6 +11,7 @@ from __future__ import annotations
 import sys
 import tomllib
 from dataclasses import dataclass, field
+from functools import cached_property
 from pathlib import Path
 from typing import Any
 
@@ -98,6 +99,19 @@ class Konfiguration:
             if eintrag.schluessel == schluessel:
                 return eintrag
         raise KeyError(f"Unbekannte Faehigkeit: {schluessel}")
+
+    @cached_property
+    def k0_faktoren(self) -> dict[str, float]:
+        """Kostenfaktor je Faehigkeit aus ihrer Wirkungsbreite (GDD 9).
+
+        Entscheidung zu Punkt 17: die Summe der Gewichte aus der
+        Wirkungsmatrix, geteilt durch den Mittelwert ueber alle
+        Faehigkeiten. Breit wirkende Faehigkeiten kosten mehr, damit
+        Schwerpunkte noetig werden.
+        """
+        summen = {f.schluessel: sum(f.gewichte.values()) for f in self.faehigkeiten}
+        mittel = sum(summen.values()) / len(summen)
+        return {schluessel: summe / mittel for schluessel, summe in summen.items()}
 
     @property
     def zusatzfaehigkeiten(self) -> tuple[str, ...]:

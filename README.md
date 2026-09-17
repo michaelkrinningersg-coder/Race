@@ -4,8 +4,8 @@ Motorsport-Manager mit sichtbarer Rennsimulation. Grundlage ist das
 [Game Design Dokument v1.0](Rennmanager%20%E2%80%93%20Game%20Design%20Dokument%20%28v1.0%29.md);
 die Arbeitsregeln stehen in [Claude.md](Claude.md).
 
-**Stand: Schritt 7 von 10 – Fahrer, Teams, 600 KI-Autos, Ligen.**
-Die Welt steht; Kalender, Upgrades und Einnahmen folgen in Schritt 8.
+**Stand: Schritt 8 von 10 – Kalender, Zeitmodell, Upgrades, Kosten, Einnahmen, Sponsoren.**
+Eine Saison laesst sich planen; Saisonwertung und Auf-/Abstieg folgen in Schritt 9.
 
 ## Aufbau
 
@@ -268,6 +268,39 @@ Ligen ohne Kontrollwert in GDD 9 werden ueber die Tempotabelle bestimmt -
 das Tempo waechst je Liga um 6,32 km/h, der Wert S ergibt sich durch
 Umkehren der Kalibrierfunktion. So liegen alle 20 Ligen auf derselben
 Kurve.
+
+## Kalender und Zeitmodell
+
+`rennmanager.kern.kalender` baut die Saison (GDD 2): Das erste Rennen ist
+der erste Sonntag ab dem 1. Maerz, danach alle 14 Tage, das zwanzigste
+266 Tage spaeter. Jeder Zyklus hat genau 10 nutzbare Tage; die uebrigen
+vier sind zwei Reisetage, der Qualifying-Samstag und der Renn-Sonntag.
+
+Zeit ist eine Kapazitaet: Jeder nutzbare Tag hat zwei Plaetze, einen fuer
+den Fahrer und einen fuer die Werkstatt. Ein zugewiesener Tag hebt einen
+Wert um `max(+10, +1 %)`.
+
+```python
+from rennmanager.kern import karriere
+from rennmanager.konfiguration import lade
+
+k = lade()
+c = karriere.beginne(k, 2026, liga=20)
+c.belege_tag("D1")     # Konzentration, reine Zeit - kostenlos
+c.belege_tag("F10")    # Reifenhaltbarkeit, Geld und Zeit
+c.kaufe("F1")          # Motorleistung, nur Geld - ohne Tag
+c.bis_zum_rennen()
+c.verbuche_rennen(platz=12, ueberholmanoever=4)
+```
+
+### Was ein Upgrade kostet
+
+`K(S) = K0 * faktor * (1 + S/1000)^0,6` je +10-Schritt. Der Faktor folgt
+der Wirkungsbreite einer Faehigkeit - der Summe ihrer Gewichte aus der
+Wirkungsmatrix, geteilt durch den Mittelwert. F9 Reifen-Grip wirkt auf
+fuenf Bereiche und kostet den Faktor 2,10; F16 Kuehlung wirkt auf einen
+und kostet 0,47. Im Mittel ueber alle Faehigkeiten ist der Faktor genau
+1,0, sodass die Kontrolltabelle aus GDD 9 weiterhin stimmt.
 
 ## Zwei Regeln, die den Code praegen
 
