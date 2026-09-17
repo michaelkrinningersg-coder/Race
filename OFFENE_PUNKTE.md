@@ -1,28 +1,128 @@
 # Offene Punkte – Vorschläge zur Entscheidung
 
-> **Stand 2026-09-17: alle 20 Punkte entschieden** – durchgehend nach der
-> jeweiligen Empfehlung. Die Werte stehen ab sofort in
-> `konfiguration/balancing.toml`; der Abschnitt `[offen]` dort ist leer.
-> Dieses Dokument bleibt als Begründung der Entscheidungen erhalten.
->
-> **Nachtrag 2026-09-17 (Schritt 5):** Bei der Umsetzung von Qualifying,
-> Zufall und Wetter sind vier weitere Lücken aufgefallen. Sie stehen
-> unten als Punkte 21 bis 24 und sind nach demselben Muster entschieden.
+Das GDD nennt an vielen Stellen eine Mechanik, ohne sie zu beziffern.
+Dieses Dokument listet jede solche Lücke, drei Varianten und die getroffene
+Entscheidung. **Stand 2026-09-17: 31 Punkte entschieden, 3 noch offen.**
 
-Das GDD nennt an 20 Stellen eine Mechanik, beziffert sie aber nicht. Laut
-Arbeitsregeln werden diese Werte nicht selbst entschieden. Dieses Dokument
-legt zu jedem Punkt **drei Vorschläge** vor, jeweils mit einer Empfehlung.
+Die entschiedenen Werte stehen in `konfiguration/balancing.toml`; der
+Abschnitt `[offen]` dort ist leer. Jede Entscheidung lässt sich ändern,
+ohne Code anzufassen — die Nummer unten führt zur Begründung.
 
-Die Punkte stehen auch maschinenlesbar unter `[offen]` in
-`konfiguration/balancing.toml` und werden im Hauptfenster angezeigt.
+---
 
-**Wie zu lesen:** Jeder Punkt nennt die Fundstelle im GDD, was fehlt, drei
-Varianten und eine Empfehlung. Entschieden wird durch Eintragen des
-gewählten Buchstabens hinter „Entscheidung:".
+## Noch offen — hier fehlt Ihre Entscheidung
 
-**Reihenfolge:** Die Punkte sind nach dem Umsetzungsschritt gruppiert, der
-sie braucht. Vor Schritt 3 ist nichts zu entscheiden – die Kalibrierung ist
-im GDD vollständig beziffert.
+### O1. Herstellerliste
+
+`konfiguration/hersteller.toml` trägt `bestaetigt = false`. GDD 12 nennt
+„20 reale Autohersteller, nur Name und Farbe", aber keine konkreten. Meine
+Platzhalterliste (Alfa Romeo bis Toyota) ist nie bestätigt worden.
+
+| | Variante |
+| --- | --- |
+| **A** | Platzhalterliste übernehmen und `bestaetigt = true` setzen |
+| **B** | Eigene 20 Hersteller vorgeben |
+| **C** | Erfundene Namen statt echter Marken (vermeidet Markenrecht von vornherein) |
+
+### O2. Referenzstrecke der Kalibrierung
+
+GDD 9 verlangt eine „kurvige Referenzstrecke", nennt aber keine. Ich habe
+**Zandvoort** gewählt — mit 46 % den geringsten Geradenanteil aller 20
+Strecken, laut GDD 3 „Steilkurven, eng". Ein Wechsel ist ein Aufruf von
+`werkzeuge/kalibriere.py --schreiben`.
+
+| | Variante | Geradenanteil |
+| --- | --- | --- |
+| **A** | Zandvoort (gesetzt) | 46 % |
+| **B** | Suzuka | 50 % |
+| **C** | São Paulo | 48 % |
+
+### O3. Dateiname der Arbeitsregeln
+
+Das GDD sagt, die Regeln kommen als `CLAUDE.md` ins Repo; die Datei heißt
+`Claude.md`. Ich habe **nicht** umbenannt: Auf Windows und macOS ist das
+Dateisystem nicht case-sensitiv, eine reine Groß-/Kleinschreibungsänderung
+macht dort beim Auschecken Ärger.
+
+| | Variante |
+| --- | --- |
+| **A** | So lassen (Claude Code liest die Datei ohnehin) |
+| **B** | Auf `CLAUDE.md` umbenennen, wie im GDD beschrieben |
+
+---
+
+## Übersicht aller entschiedenen Punkte
+
+Gebraucht ab = der Umsetzungsschritt, der den Wert braucht. Die
+**fett** markierte Variante ist gesetzt.
+
+### Strecken und Überholen
+
+| Nr. | Punkt | Varianten | Ab |
+| --- | --- | --- | --- |
+| 1 | Mindestlänge je Segment | **A keine** · B 15 m · C 25 m | 2 |
+| 2 | Überholschwierigkeit je Strecke | A Geradenanteil · **B Überholzonenanteil** · C längste Zone | 4 |
+| 3 | Erfolgsformel beim Überholen | A Verhältnis · **B logistisch** · C additiv | 4 |
+
+### Wetter und Zufall
+
+| Nr. | Punkt | Varianten | Ab |
+| --- | --- | --- | --- |
+| 4 | Wetterprofil je Strecke | **A drei Klimaprofile** · B Gleichverteilung · C je Strecke einzeln | 5 |
+| 5 | Verzögerung der Streckennässe | A keine · **B über 3 Runden** · C über 5 Runden | 5 |
+| 21 | Tempobonus der Trockenroutine | A +0,25 % · **B +0,5 %** · C +1,0 % | 5 |
+| 22 | D16 dämpft schlechte Tagesform | A 40 % · **B 60 %** · C 80 % | 5 |
+| 23 | D12 verkleinert die Rundenform | A 60 % · **B 80 %** · C 95 % | 5 |
+| 24 | Q-Spalte als Tempobonus | A +0,5 % · **B +1,0 %** · C +2,0 % | 5 |
+| 27 | Qualifying: Dauer und Wetter | **überlappender Start 1,25 Rd. + 15-Min-Fenster + höchstens 1 Wechsel** | 5 |
+
+### Fehler, Unfälle, Defekte, Reifen
+
+| Nr. | Punkt | Varianten | Ab |
+| --- | --- | --- | --- |
+| 6 | Basisrate für Fehler | A 1 je 20 Rd. · **B 1 je 10 Rd.** · C 1 je 5 Rd. | 6 |
+| 7 | Unfallwahrscheinlichkeit | **A sehr selten** · B mittel · C häufig | 6 |
+| 8 | Defektwahrscheinlichkeit | A 2 % · **B 5 %** · C 10 % | 6 |
+| 9 | Verlauf des Reifenverschleißes | A linear · **B progressiv** · C mit Abbruchkante | 6 |
+| 10 | Verschleiß-Faktor je Strecke | **A Querbeschleunigung** · B Kurvenanteil · C fest 1,0 | 6 |
+| 11 | Ermüdungskurve | A linear über alles · **B ab der Hälfte** · C quadratisch | 6 |
+| 25 | Einordnung des Reifenflüsterers | A als D17 · **B neben der Wirkungsmatrix** · C D14 aufbohren | 6 |
+| 26 | Einheit der Unfallrate | **je Sekunde in Reichweite**, nicht je Zeitschritt | 6 |
+
+### Geld
+
+| Nr. | Punkt | Varianten | Ab |
+| --- | --- | --- | --- |
+| 12 | Preisgeld zwischen den Stützstellen | **A logarithmisch** · B linear · C Spline | 8 |
+| 13 | Preisgeld-Anteile P4 bis P29 | **A geometrisch** · B linear · C gestaffelt | 8 |
+| 14 | Startgeld | **A 5 % der Siegprämie** · B 10 % · C fest 250 € | 8 |
+| 15 | Erfahrungsbeträge | A Platzierung dominiert · **B ausgewogen** · C Teilnahme dominiert | 8 |
+| 16 | Wetter-Erfahrung je km | A 0,05 % · **B 0,1 %** · C 0,2 % | 8 |
+| 17 | K₀-Faktor je Fähigkeit | A alle 1,0 · **B nach Wirkungsbreite** · C drei Klassen | 8 |
+| 18 | Liga-Faktor der Reparaturkosten | **A 1 % je Stufe** · B 2,5 % · C linear | 8 |
+| 19 | Sponsorbeträge | A zurückhaltend · **B zweite Säule** · C tragende Säule | 8 |
+
+### Welt
+
+| Nr. | Punkt | Varianten | Ab |
+| --- | --- | --- | --- |
+| 28 | Bildung der Teamnamen | A 150 von Hand · **B aus zwei Teilen** · C nach Hersteller | 7 |
+| 29 | Teamfarbe neben der Herstellerfarbe | **aus der Herstellerfarbe abgeleitet** | 7 |
+| 30 | Alter und Regionenanteil der Fahrer | **18 bis 42 Jahre, 10 % Nordamerika** | 7 |
+| 31 | Ligastärken zwischen den Stützstellen | **über die Tempotabelle, +6,32 km/h je Liga** | 7 |
+
+### Ereignisse
+
+| Nr. | Punkt | Varianten | Ab |
+| --- | --- | --- | --- |
+| 20 | Geld- und Erfahrungsbeträge der Ereignisse | A klein · **B spürbar** · C groß | 10 |
+
+---
+
+## Begründungen im Einzelnen
+
+Was folgt, sind die Vorlagen, aus denen die Entscheidungen entstanden sind —
+mit den gemessenen Zahlen, auf denen sie beruhen.
 
 ---
 
