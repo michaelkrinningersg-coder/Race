@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 from rennmanager import __version__
 from rennmanager.kern.zufall import Seedquelle
 from rennmanager.konfiguration import Konfiguration
+from rennmanager.ui.rundenseite import Rundenseite
 from rennmanager.ui.streckenseite import Streckenseite
 
 # Qt-Spinboxen rechnen mit 32-Bit-Ganzzahlen; der Hauptseed wird in der
@@ -71,6 +72,8 @@ class Hauptfenster(QMainWindow):
         self._reiter.addTab(self._baue_uebersichtsseite(), "Uebersicht")
         self._streckenseite = Streckenseite(self._konfiguration)
         self._reiter.addTab(self._streckenseite, "Strecke")
+        self._rundenseite = Rundenseite(self._konfiguration)
+        self._reiter.addTab(self._rundenseite, "Runde")
         return self._reiter
 
     def _baue_uebersichtsseite(self) -> QWidget:
@@ -173,6 +176,11 @@ class Hauptfenster(QMainWindow):
     def streckenseite(self) -> Streckenseite:
         """Die Seite mit der Streckendarstellung."""
         return self._streckenseite
+
+    @property
+    def rundenseite(self) -> Rundenseite:
+        """Die Seite mit Geschwindigkeitsprofil und Rundenzeit."""
+        return self._rundenseite
 
     @property
     def seedquelle(self) -> Seedquelle:

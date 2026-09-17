@@ -240,6 +240,8 @@ def _lies_hersteller(roh: dict[str, Any]) -> tuple[Hersteller, ...]:
 # ---------------------------------------------------------------------------
 def _pruefe(k: Konfiguration) -> None:
     _pruefe_wirkungsmatrix(k)
+    _pruefe_tempo(k)
+    _pruefe_wetterprofile(k)
     _pruefe_geldanteil(k)
     _pruefe_strecken(k)
     _pruefe_ligen(k)
@@ -286,6 +288,76 @@ def _pruefe_wirkungsmatrix(k: Konfiguration) -> None:
             raise KonfigurationsFehler(
                 f"Wirkungsbereich {bereich!r}: keine Faehigkeit wirkt darauf"
             )
+
+
+def _pruefe_tempo(k: Konfiguration) -> None:
+    """Prueft das Geschwindigkeitsmodell (GDD 4 und 9)."""
+    anteil = k.wert("tempo", "anteil_bei_null")
+    if not 0.0 < anteil < 1.0:
+        raise KonfigurationsFehler(
+            f"tempo.anteil_bei_null muss zwischen 0 und 1 liegen, ist {anteil}"
+        )
+    if k.wert("tempo", "haftung_referenz") <= 0:
+        raise KonfigurationsFehler("tempo.haftung_referenz muss groesser als 0 sein")
+
+    # GDD 9: Die Endgeschwindigkeit ist getrennt bis 400 km/h skaliert.
+    hoechst = k.wert("tempo", "hoechstgeschwindigkeit_bei_referenz_kmh")
+    grenzwert = k.wert("kalibrierung", "endgeschwindigkeit_max_kmh")
+    if hoechst != grenzwert:
+        raise KonfigurationsFehler(
+            f"tempo.hoechstgeschwindigkeit_bei_referenz_kmh ({hoechst}) und "
+            f"kalibrierung.endgeschwindigkeit_max_kmh ({grenzwert}) muessen "
+            "uebereinstimmen"
+        )
+    # Die Endgeschwindigkeit bei S = 0 ergibt sich aus der Kopplung an
+    # anteil_bei_null und liegt damit zwangslaeufig darunter.
+
+    # Die Verhaeltnisse muessen positiv sein, sonst faehrt niemand.
+    for name in (
+        "faktor_enge_kurve",
+        "faktor_kurve",
+        "faktor_bremsen",
+        "faktor_beschleunigen",
+    ):
+        if k.wert("tempo", name) <= 0:
+            raise KonfigurationsFehler(f"tempo.{name} muss groesser als 0 sein")
+
+    referenzstrecke = k.wert("kalibrierung", "referenzstrecke")
+    namen = {eintrag["name"] for eintrag in k.strecken}
+    if referenzstrecke not in namen:
+        raise KonfigurationsFehler(
+            f"Referenzstrecke {referenzstrecke!r} steht nicht in der Streckenliste"
+        )
+
+
+def _pruefe_wetterprofile(k: Konfiguration) -> None:
+    """Jede Strecke braucht genau ein Wetterprofil (Entscheidung zu Punkt 4)."""
+    profile = k.wert("wetter", "profil", standard=None)
+    if profile is None:
+        return
+
+    kette = set(k.wert("wetter", "kette"))
+    zugeordnet: dict[str, str] = {}
+    for name, profil in profile.items():
+        if set(profil["gewichte"]) != kette:
+            raise KonfigurationsFehler(
+                f"Wetterprofil {name!r} deckt nicht alle Wetterlagen ab"
+            )
+        for strecke in profil["strecken"]:
+            if strecke in zugeordnet:
+                raise KonfigurationsFehler(
+                    f"Strecke {strecke!r} steht in den Profilen {zugeordnet[strecke]!r} "
+                    f"und {name!r}"
+                )
+            zugeordnet[strecke] = name
+
+    namen = {eintrag["name"] for eintrag in k.strecken}
+    ohne = namen - set(zugeordnet)
+    if ohne:
+        raise KonfigurationsFehler(f"Strecken ohne Wetterprofil: {sorted(ohne)}")
+    unbekannt = set(zugeordnet) - namen
+    if unbekannt:
+        raise KonfigurationsFehler(f"Wetterprofil nennt unbekannte Strecken: {sorted(unbekannt)}")
 
 
 def _pruefe_geldanteil(k: Konfiguration) -> None:

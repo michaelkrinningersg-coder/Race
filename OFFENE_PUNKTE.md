@@ -1,5 +1,10 @@
 # Offene Punkte – Vorschläge zur Entscheidung
 
+> **Stand 2026-09-17: alle 20 Punkte entschieden** – durchgehend nach der
+> jeweiligen Empfehlung. Die Werte stehen ab sofort in
+> `konfiguration/balancing.toml`; der Abschnitt `[offen]` dort ist leer.
+> Dieses Dokument bleibt als Begründung der Entscheidungen erhalten.
+
 Das GDD nennt an 20 Stellen eine Mechanik, beziffert sie aber nicht. Laut
 Arbeitsregeln werden diese Werte nicht selbst entschieden. Dieses Dokument
 legt zu jedem Punkt **drei Vorschläge** vor, jeweils mit einer Empfehlung.
@@ -36,7 +41,7 @@ von Fragmenten unter 25 m ändert die Zahl der Überholzonen nur auf 2 von 20
 Strecken, weil die 100-m-Regel sie ohnehin filtert. A hält sich exakt an das
 GDD und braucht keinen zusätzlichen Wert.
 
-Entscheidung:
+**Entscheidung: A** (2026-09-17)
 
 ---
 
@@ -65,7 +70,7 @@ ab 100 m – nur die sollten den Faktor bestimmen. B spreizt außerdem stärker
 (33 % bis 81 % statt 46 % bis 81 %) und trifft die Charakterangaben des GDD:
 Budapest („kaum Überholen") landet bei 41 %, Monza bei 78 %.
 
-Entscheidung:
+**Entscheidung: B** (2026-09-17)
 
 ### 3. Erfolgsformel beim Überholen
 
@@ -86,7 +91,7 @@ starten laut GDD 1 bei 0, und `0/(0+0)` ist gar nicht definiert. C läuft aus
 dem Band, sobald der Tempovorteil groß wird. B braucht zwei Konstanten (`a`,
 `b`), die sich an einer Massensimulation kalibrieren lassen.
 
-Entscheidung:
+**Entscheidung: B** (2026-09-17)
 
 ---
 
@@ -109,7 +114,7 @@ aber Charakter – Spa im Regen, Sakhir in der Hitze – und machen die
 Wetterfähigkeiten aus GDD 7 unterschiedlich wertvoll. B verschenkt das, C
 sind 100 Werte ohne Mehrwert gegenüber A.
 
-Entscheidung:
+**Entscheidung: A** (2026-09-17)
 
 ### 5. Verzögerung der Streckennässe
 
@@ -126,7 +131,7 @@ und damit unrealistisch. Bei Liga 20 (100 km) sind 3 Runden rund 10 % der
 Distanz, bei Liga 1 rund 4 % – in beiden Fällen merklich, aber nicht
 dominierend.
 
-Entscheidung:
+**Entscheidung: B** (2026-09-17)
 
 ---
 
@@ -149,7 +154,7 @@ Anfänger etwa 2 bis 3 Fehler je Rennen, bei Starkregen (× 2,5) rund 6 – spü
 aber nicht beliebig. Bei A wäre die Eigenschaft D1 Konzentration in den unteren
 Ligen kaum wahrnehmbar, bei C wäre Fahren dort reines Glück.
 
-Entscheidung:
+**Entscheidung: B** (2026-09-17)
 
 ### 7. Unfallwahrscheinlichkeit
 
@@ -169,7 +174,7 @@ dichtem Feld gibt es sehr viele Annäherungen unter 30 m; schon A führt zu
 Ausfällen in etwa jedem zweiten Rennen. Die genaue Zahl lässt sich nach einer
 Massensimulation nachziehen.
 
-Entscheidung:
+**Entscheidung: A** (2026-09-17)
 
 ### 8. Defektwahrscheinlichkeit
 
@@ -186,7 +191,7 @@ Wirkungen stehen in GDD 14, die Auslöserate fehlt.
 0,5) und macht F14 Zuverlässigkeit zu einem Upgrade, dessen Wirkung man
 bemerkt. Bei A bliebe F14 in den unteren Ligen wirkungslos.
 
-Entscheidung:
+**Entscheidung: B** (2026-09-17)
 
 ### 9. Verlauf des Reifenverschleißes
 
@@ -205,7 +210,7 @@ Reifenmanagement und F10 Reifenhaltbarkeit gegen Rennende wertvoll, ohne dass
 das Rennen kippt. C wäre ohne Boxenstopps (die laut GDD 16 erst später kommen)
 frustrierend, weil es keine Gegenmaßnahme gibt.
 
-Entscheidung:
+**Entscheidung: B** (2026-09-17)
 
 ### 10. Reifenverschleiß-Faktor je Strecke
 
@@ -232,7 +237,7 @@ zwischen Suzuka (viele, aber schnelle Kurven: 0,98) und Zandvoort (wenige,
 aber enge: 1,26), während B beide fast gleich bewertet. Catalunya landet bei
 A auf Platz 5 von 20, passend zur Charakterangabe im GDD.
 
-Entscheidung:
+**Entscheidung: A** (2026-09-17)
 
 ### 11. Ermüdungskurve
 
@@ -250,7 +255,7 @@ beschreibt D2 als „Leistungsabfall über die Distanz".
 passt zu D1 Konzentration, deren Fehler laut GDD 6 „v. a. späte Runden"
 betreffen. Bei 100.000 geht der Verlust jeweils auf null zurück.
 
-Entscheidung:
+**Entscheidung: B** (2026-09-17)
 
 ---
 
@@ -284,7 +289,7 @@ schlagartig das Sechsfache, danach kaum noch mehr; das widerspricht dem
 Satz „durch die Wurzel liegt der größte relative Kostensprung jetzt in den
 unteren Ligen" aus GDD 9. C braucht zusätzlich SciPy als Abhängigkeit.
 
-Entscheidung:
+**Entscheidung: A** (2026-09-17)
 
 ### 13. Preisgeld-Anteile für die Plätze 4 bis 29
 
@@ -311,7 +316,7 @@ drückt schon Platz 10 auf 15 % und entwertet solide Rennen. Der Topf von
 8,47 Siegprämien ist zugleich ein Hebel fürs Balancing, falls das Geld
 insgesamt zu knapp oder zu reichlich ist.
 
-Entscheidung:
+**Entscheidung: A** (2026-09-17)
 
 ### 14. Startgeld
 
@@ -328,7 +333,7 @@ Entscheidung:
 Preisgeld; bei A bleibt es unter dem Anteil für Platz 30 (5 % laut GDD) und
 damit unauffällig. C fällt in höheren Ligen komplett aus der Skala.
 
-Entscheidung:
+**Entscheidung: A** (2026-09-17)
 
 ### 15. Erfahrung: Grundbetrag, Platzierungs- und Überholbonus
 
@@ -348,7 +353,7 @@ C lohnt sich Fahren ohne Ehrgeiz. B gibt einen brauchbaren Sockel und belohnt
 trotzdem Plätze. Der Überholbonus von 1 % ist bewusst klein, damit sich
 absichtliches Zurückfallen nicht lohnt.
 
-Entscheidung:
+**Entscheidung: B** (2026-09-17)
 
 ### 16. Wetter-Erfahrung je Kilometer
 
@@ -368,7 +373,7 @@ einzahlen, aber nicht in einer Saison ausreichen. Bei B kommen über eine
 Saison mit rund 4 Regenrennen etwa 160 EP zusammen – genug für die ersten
 Schritte, weit weg von 100.000.
 
-Entscheidung:
+**Entscheidung: B** (2026-09-17)
 
 ### 17. K₀ je Fähigkeit
 
@@ -386,7 +391,7 @@ ohne neue Handarbeit erfüllt: Breit wirkende Fähigkeiten kosten mehr, also
 zwingt die Skala zu Schwerpunkten. Die Werte stehen bereits in der
 Wirkungsmatrix. A erfüllt die Vorgabe gar nicht, C sind 32 Einzelentscheidungen.
 
-Entscheidung:
+**Entscheidung: B** (2026-09-17)
 
 ### 18. Liga-Faktor der Reparaturkosten
 
@@ -404,7 +409,7 @@ Bei A kostet der teuerste Defekt 3 % der Siegprämie. Die Kopplung an die
 Siegprämie hält das über alle 20 Ligen automatisch im Verhältnis, was C nicht
 leistet – dort wären 200 € in Liga 20 die Hälfte einer Siegprämie.
 
-Entscheidung:
+**Entscheidung: A** (2026-09-17)
 
 ### 19. Sponsorbeträge
 
@@ -426,7 +431,7 @@ Einnahmequelle und sollen „höhere Ligen bringen bessere Sponsoren und damit
 schnellere Entwicklung" leisten. Bei A wären sie eine Randnotiz, bei C würde
 das Rennergebnis gegenüber der Sponsorenwahl unwichtig.
 
-Entscheidung:
+**Entscheidung: B** (2026-09-17)
 
 ---
 
@@ -450,7 +455,7 @@ einzelnes darf daher ruhig auffallen. Bei A merkt man sie nicht, bei C
 entscheidet Glück über die Entwicklung. Die Kopplung an die Siegprämie hält
 sie über alle Ligen im Verhältnis.
 
-Entscheidung:
+**Entscheidung: B** (2026-09-17)
 
 ---
 

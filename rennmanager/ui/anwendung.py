@@ -5,7 +5,10 @@ from __future__ import annotations
 import sys
 
 from rennmanager import __version__
+from rennmanager.kern import auto as kern_auto
 from rennmanager.kern import strecke as kern_strecke
+from rennmanager.kern import tempo as kern_tempo
+from rennmanager.kern.zeit import formatiere_dauer
 from rennmanager.konfiguration import KonfigurationsFehler, lade
 
 # Prueft nur, ob die Konfiguration gefunden und gelesen werden kann, und
@@ -42,6 +45,20 @@ def pruefe() -> int:
     print(
         f"Strecken:      {len(strecken)} ausgewertet, {gesamt / 1000:.1f} km, "
         f"{zonen} Ueberholzonen"
+    )
+    # Eine Runde ohne Zufall auf der Referenzstrecke: prueft zugleich, ob
+    # das Geschwindigkeitsmodell kalibriert ist (GDD 9).
+    name = konfiguration.wert("kalibrierung", "referenzstrecke")
+    referenz = next(s for s in strecken if s.name == name)
+    s_wert = konfiguration.wert("skala", "referenz")
+    runde = kern_tempo.fahre_runde(
+        konfiguration, referenz, kern_auto.gleichverteilt(konfiguration, s_wert)
+    )
+    soll = konfiguration.wert("kalibrierung", "v_bei_referenz_kmh")
+    print(
+        f"Kalibrierung:  {name} bei S={s_wert}: "
+        f"{formatiere_dauer(runde.zeit_ms)}, {runde.schnitt_kmh:.2f} km/h "
+        f"(Soll {soll:.2f}, Abweichung {runde.schnitt_kmh - soll:+.2f})"
     )
     print(f"Offene Punkte: {len(konfiguration.offene_punkte)}")
     return 0

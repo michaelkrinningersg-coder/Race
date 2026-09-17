@@ -180,10 +180,60 @@ def test_hersteller(k: kf.Konfiguration) -> None:
 
 
 def test_offene_punkte_sind_dokumentiert(k: kf.Konfiguration) -> None:
-    """Luecken im GDD stehen unter [offen] und werden nicht erfunden."""
-    offen = k.offene_punkte
-    assert offen, "Die offenen Punkte duerfen nicht stillschweigend verschwinden"
-    assert all(isinstance(text, str) and text for text in offen.values())
+    """Luecken im GDD stehen unter [offen] und werden nicht erfunden.
+
+    Seit dem 2026-09-17 sind alle 20 Punkte entschieden, der Abschnitt ist
+    also leer. Kommt spaeter ein Punkt hinzu, muss er beschrieben sein.
+    """
+    assert all(isinstance(text, str) and text for text in k.offene_punkte.values())
+
+
+def test_entscheidungen_stehen_in_der_konfiguration(k: kf.Konfiguration) -> None:
+    """Die 20 Entscheidungen aus OFFENE_PUNKTE.md sind hinterlegt."""
+    for pfad in (
+        ("ueberholschwierigkeit", "grundlage"),
+        ("ueberholen", "erfolg", "form"),
+        ("wetter", "profil"),
+        ("wetter", "naesse", "verzoegerung_runden"),
+        ("fehler", "rate_bei_null"),
+        ("unfaelle", "rate", "je_annaeherung"),
+        ("defekte", "rate", "je_auto_und_rennen_bei_null"),
+        ("reifen", "verschleiss", "verlauf"),
+        ("reifen", "streckenfaktor", "grundlage"),
+        ("ermuedung", "beginn_anteil_distanz"),
+        ("preisgeld", "interpolation", "verfahren"),
+        ("preisgeld", "anteil_kurve", "verfahren"),
+        ("preisgeld", "startgeld", "anteil_siegpraemie"),
+        ("erfahrung", "betraege", "grundbetrag_je_session"),
+        ("erfahrung", "wetter", "betrag", "je_km_anteil_sieg_ep"),
+        ("kosten", "k0_faktor", "verfahren"),
+        ("defekte", "reparatur", "anteil_siegpraemie_je_stufe"),
+        ("sponsoren", "betraege", "grundbetrag_alle_plaetze"),
+        ("ereignisse", "betraege", "E7"),
+    ):
+        assert k.wert(*pfad) is not None, " -> ".join(pfad)
+
+
+def test_jede_strecke_hat_genau_ein_wetterprofil(k: kf.Konfiguration) -> None:
+    profile = k.wert("wetter", "profil")
+    zugeordnet = [name for profil in profile.values() for name in profil["strecken"]]
+    assert sorted(zugeordnet) == sorted(eintrag["name"] for eintrag in k.strecken)
+    for name, profil in profile.items():
+        assert sum(profil["gewichte"].values()) == 100, name
+
+
+def test_geschwindigkeitsmodell_ist_hinterlegt(k: kf.Konfiguration) -> None:
+    """Die drei gefitteten Konstanten und die festen Verhaeltnisse."""
+    assert k.wert("tempo", "haftung_referenz") > 0
+    assert 0.0 < k.wert("tempo", "anteil_bei_null") < 1.0
+    # Die Endgeschwindigkeit bei S = 0 wird gekoppelt, nicht hinterlegt.
+    assert "hoechstgeschwindigkeit_basis_kmh" not in k.wert("tempo")
+    assert k.wert("tempo", "hoechstgeschwindigkeit_bei_referenz_kmh") == 400.0
+    # Bremsen kann mehr als Querhaftung, Beschleunigen weniger, enge Kurven
+    # bieten weniger als schnelle.
+    assert k.wert("tempo", "faktor_bremsen") > k.wert("tempo", "faktor_kurve")
+    assert k.wert("tempo", "faktor_beschleunigen") < k.wert("tempo", "faktor_kurve")
+    assert k.wert("tempo", "faktor_enge_kurve") < k.wert("tempo", "faktor_kurve")
 
 
 # -- Zahlen: Kontrolltabellen aus GDD 9 -------------------------------------

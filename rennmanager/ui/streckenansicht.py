@@ -27,6 +27,14 @@ FARBE_SEGMENT = {
 FARBE_UEBERHOLZONE = QColor("#6ee7a0")
 FARBE_SEKTORGRENZE = QColor("#8b93a1")
 FARBE_START = QColor("#ffffff")
+# Farbverlauf fuer das Geschwindigkeitsprofil: langsam nach schnell.
+FARBEN_TEMPO = [
+    QColor("#2c3e88"),
+    QColor("#5aa9e6"),
+    QColor("#6ee7a0"),
+    QColor("#e0d13f"),
+    QColor("#e05252"),
+]
 
 RAND_PX = 28
 LINIENSTAERKE_PX = 3.4
@@ -40,15 +48,32 @@ class Streckenansicht(QWidget):
         super().__init__(parent)
         self._strecke: Strecke | None = None
         self._zeige_ueberholzonen = True
+        self._tempo: np.ndarray | None = None
         self.setMinimumSize(420, 320)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setAutoFillBackground(True)
 
     # -- Steuerung ---------------------------------------------------------
     def zeige(self, strecke: Strecke | None) -> None:
-        """Legt die dargestellte Strecke fest."""
+        """Legt die dargestellte Strecke fest und loescht ein Tempoprofil."""
         self._strecke = strecke
+        self._tempo = None
         self.update()
+
+    def zeige_tempo(self, strecke: Strecke, profil: np.ndarray) -> None:
+        """Faerbt die Linie nach der Geschwindigkeit statt nach Segmenttyp.
+
+        :param profil: Geschwindigkeit je Streckenpunkt in m/s
+        """
+        if len(profil) != len(strecke.punkte):
+            raise ValueError("Das Tempoprofil passt nicht zur Strecke")
+        self._strecke = strecke
+        self._tempo = profil
+        self.update()
+
+    @property
+    def zeigt_tempo(self) -> bool:
+        return self._tempo is not None
 
     def setze_ueberholzonen_sichtbar(self, sichtbar: bool) -> None:
         self._zeige_ueberholzonen = sichtbar
@@ -74,11 +99,14 @@ class Streckenansicht(QWidget):
             return
 
         bild = self._bildpunkte(self._strecke.punkte, umrechnung)
-        # Die Ueberholzonen liegen als breite Spur unter der Linie, sonst
-        # wuerden sie die Segmentfarben verdecken.
-        if self._zeige_ueberholzonen:
-            self._zeichne_ueberholzonen(maler, bild)
-        self._zeichne_segmente(maler, bild)
+        if self._tempo is not None:
+            self._zeichne_tempo(maler, bild, self._tempo)
+        else:
+            # Die Ueberholzonen liegen als breite Spur unter der Linie, sonst
+            # wuerden sie die Segmentfarben verdecken.
+            if self._zeige_ueberholzonen:
+                self._zeichne_ueberholzonen(maler, bild)
+            self._zeichne_segmente(maler, bild)
         self._zeichne_sektorgrenzen(maler, bild)
         self._zeichne_start(maler, bild)
         self._zeichne_legende(maler)
@@ -180,16 +208,57 @@ class Streckenansicht(QWidget):
             QPointF(hier[0] + quer[0], hier[1] + quer[1]),
         )
 
+    def _zeichne_tempo(self, maler: QPainter, bild: np.ndarray, profil: np.ndarray) -> None:
+        """Zeichnet die Linie Stueck fuer Stueck in der Farbe des Tempos."""
+        langsamste = float(profil.min())
+        schnellste = float(profil.max())
+        spanne = max(schnellste - langsamste, 1e-6)
+
+        stift = QPen(FARBE_SEGMENT[Segmentart.GERADE], LINIENSTAERKE_PX + 1.0)
+        stift.setCapStyle(Qt.RoundCap)
+        anzahl = len(bild)
+        for i in range(anzahl):
+            naechster = (i + 1) % anzahl
+            anteil = (float(profil[i]) - langsamste) / spanne
+            stift.setColor(self._tempofarbe(anteil))
+            maler.setPen(stift)
+            maler.drawLine(QPointF(*bild[i]), QPointF(*bild[naechster]))
+
+    @staticmethod
+    def _tempofarbe(anteil: float) -> QColor:
+        """Mischt die Farbe zwischen den Stuetzfarben des Verlaufs."""
+        anteil = min(max(anteil, 0.0), 1.0)
+        stelle = anteil * (len(FARBEN_TEMPO) - 1)
+        unten = int(stelle)
+        if unten >= len(FARBEN_TEMPO) - 1:
+            return FARBEN_TEMPO[-1]
+        rest = stelle - unten
+        von, bis = FARBEN_TEMPO[unten], FARBEN_TEMPO[unten + 1]
+        return QColor(
+            round(von.red() + (bis.red() - von.red()) * rest),
+            round(von.green() + (bis.green() - von.green()) * rest),
+            round(von.blue() + (bis.blue() - von.blue()) * rest),
+        )
+
     def _zeichne_legende(self, maler: QPainter) -> None:
         assert self._strecke is not None
         maler.setFont(QFont(self.font().family(), 8))
-        eintraege = [
-            (FARBE_SEGMENT[Segmentart.ENGE_KURVE], "Enge Kurve"),
-            (FARBE_SEGMENT[Segmentart.KURVE], "Kurve"),
-            (FARBE_SEGMENT[Segmentart.GERADE], "Gerade"),
-        ]
-        if self._zeige_ueberholzonen:
-            eintraege.append((FARBE_UEBERHOLZONE, "Ueberholzone"))
+        if self._tempo is not None:
+            langsamste = float(self._tempo.min()) * 3.6
+            schnellste = float(self._tempo.max()) * 3.6
+            eintraege = [
+                (FARBEN_TEMPO[0], f"{langsamste:.0f} km/h"),
+                (FARBEN_TEMPO[len(FARBEN_TEMPO) // 2], "Tempo"),
+                (FARBEN_TEMPO[-1], f"{schnellste:.0f} km/h"),
+            ]
+        else:
+            eintraege = [
+                (FARBE_SEGMENT[Segmentart.ENGE_KURVE], "Enge Kurve"),
+                (FARBE_SEGMENT[Segmentart.KURVE], "Kurve"),
+                (FARBE_SEGMENT[Segmentart.GERADE], "Gerade"),
+            ]
+            if self._zeige_ueberholzonen:
+                eintraege.append((FARBE_UEBERHOLZONE, "Ueberholzone"))
 
         y = 8.0
         for farbe, beschriftung in eintraege:

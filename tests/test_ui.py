@@ -115,3 +115,72 @@ def test_streckenansicht_ohne_strecke_stuerzt_nicht_ab(qtbot) -> None:
     ansicht.resize(300, 200)
     ansicht.zeige(None)
     assert not ansicht.grab().isNull()
+
+
+def test_rundenseite_startet_auf_der_referenzstrecke(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.rundenseite
+    assert seite.auswahl.currentData() == konfig.wert("kalibrierung", "referenzstrecke")
+    assert seite.ergebnis is not None
+    assert seite.ergebnis.zeit_ms > 0
+
+
+def test_rundenseite_wird_bei_hoeherem_wert_schneller(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.rundenseite
+
+    seite.wert.setValue(0)
+    langsam = seite.ergebnis.zeit_ms
+    seite.wert.setValue(98_130)
+    schnell = seite.ergebnis.zeit_ms
+    assert schnell < langsam
+
+
+def test_rundenseite_trifft_die_kalibrierung(qtbot, konfig: kf.Konfiguration) -> None:
+    """Was die Seite anzeigt, muss der Formel aus GDD 9 entsprechen."""
+    import math
+
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.rundenseite
+    seite.wert.setValue(62_470)
+
+    soll = konfig.wert("kalibrierung", "basis_kmh") + konfig.wert(
+        "kalibrierung", "spanne_kmh"
+    ) * math.sqrt(62_470 / konfig.wert("skala", "referenz"))
+    assert seite.ergebnis.schnitt_kmh == pytest.approx(soll, abs=0.05)
+
+
+def test_regler_und_zahlenfeld_bleiben_gleich(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.rundenseite
+    seite._regler.setValue(37_000)
+    assert seite.wert.value() == 37_000
+
+
+def test_tempoansicht_zeichnet(qtbot, konfig: kf.Konfiguration) -> None:
+    from rennmanager.ui.streckenansicht import Streckenansicht
+
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    fenster.resize(1000, 700)
+    ansicht = fenster.rundenseite.findChild(Streckenansicht)
+    assert ansicht is not None
+    assert ansicht.zeigt_tempo
+    assert not ansicht.grab().isNull()
+
+
+def test_tempoprofil_muss_zur_strecke_passen(qtbot, konfig: kf.Konfiguration) -> None:
+    import numpy as np
+
+    from rennmanager.kern import strecke as kern_strecke
+    from rennmanager.ui.streckenansicht import Streckenansicht
+
+    ansicht = Streckenansicht()
+    qtbot.addWidget(ansicht)
+    strecke = kern_strecke.lade(konfig, "Monza")
+    with pytest.raises(ValueError, match="passt nicht"):
+        ansicht.zeige_tempo(strecke, np.zeros(5))

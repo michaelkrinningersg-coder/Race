@@ -28,6 +28,50 @@ v_bei_referenz_kmh = 180.0
 v_bei_maximum_kmh = 181.3
 # Hoechstgeschwindigkeit auf Geraden, getrennt skaliert (GDD 4 und 9)
 endgeschwindigkeit_max_kmh = 400.0
+# GDD 9 kalibriert "auf einer kurvigen Referenzstrecke", ohne sie zu nennen.
+# Gewaehlt ist Zandvoort: mit 46 % den geringsten Geradenanteil aller 20
+# Strecken, laut GDD 3 "Steilkurven, eng".
+referenzstrecke = "Zandvoort"
+
+# ---------------------------------------------------------------------------
+# GDD 4 / 9 – Geschwindigkeitsmodell
+#
+# Die Kalibrierfunktion aus GDD 9 ist linear in p = sqrt(S / referenz):
+#     v(S) = 55 + 125 * p   [km/h]
+# Das Kurvenlimit folgt aber v = sqrt(a * r). Damit die Geschwindigkeit
+# linear in p herauskommt, muss die Haftung quadratisch in p wachsen:
+#     a(S) = haftung_referenz * (anteil_bei_null + (1 - anteil_bei_null) * p)^2
+# Bei S = referenz ist a = haftung_referenz, bei S = 0 entsprechend kleiner.
+#
+# Aus diesem gemeinsamen Haftungsniveau ergeben sich die vier
+# Beschleunigungsgrenzen ueber feste Faktoren. Jede zieht ihr S aus einem
+# eigenen Wirkungsbereich der Matrix in GDD 8, die Faehigkeiten bleiben
+# also getrennt.
+#
+# Die Endgeschwindigkeit bei S = 0 ist an dasselbe anteil_bei_null
+# gekoppelt:
+#     v_max(S) = hoechst_referenz * (anteil_bei_null + (1 - anteil_bei_null) * p)
+# Ohne diese Kopplung waere das Modell durch GDD 9 nicht eindeutig bestimmt:
+# Man kann mehr Endgeschwindigkeit gegen weniger Haftung tauschen und trifft
+# denselben Rundenschnitt. Die Wahl verschiebt aber das Verhaeltnis zwischen
+# schnellen und kurvigen Strecken, darf also nicht dem Zufall der Anpassung
+# ueberlassen bleiben. Die Kopplung sagt: Bei S = 0 kann das Auto in jeder
+# Hinsicht denselben Bruchteil dessen, was es bei S = referenz kann.
+#
+# haftung_referenz und anteil_bei_null sind gegen die Kalibriertabelle aus
+# GDD 9 gefittet; erzeugt von werkzeuge/kalibriere.py. Nicht von Hand
+# aendern, ohne neu zu kalibrieren.
+# ---------------------------------------------------------------------------
+[tempo]
+haftung_referenz = 20.788
+anteil_bei_null = 0.3056
+# Verhaeltnisse der Grenzen zueinander
+faktor_enge_kurve = 0.75
+faktor_kurve = 1.00
+faktor_bremsen = 1.15
+faktor_beschleunigen = 0.45
+# Endgeschwindigkeit auf Geraden, getrennt skaliert bis 400 km/h in Liga 1
+hoechstgeschwindigkeit_bei_referenz_kmh = 400.0
 
 # ---------------------------------------------------------------------------
 # GDD 9 / 12 – Ligen
@@ -1221,28 +1265,168 @@ massensimulation = true
 seed_eingabe = true
 
 # ---------------------------------------------------------------------------
-# Im GDD nicht festgelegt – bewusst leer, bis entschieden
+# Entscheidungen zu den Luecken im GDD
+#
+# Das GDD nennt 20 Mechaniken, ohne sie zu beziffern. Die Werte unten sind
+# am 2026-09-17 entschieden; Varianten und Begruendung stehen in
+# OFFENE_PUNKTE.md. Der frueher hier stehende Abschnitt [offen] ist leer.
 # ---------------------------------------------------------------------------
 [offen]
-# Jeder Eintrag beschreibt eine Luecke im GDD. Der Code darf sie nicht selbst
-# fuellen; die Konfiguration meldet sie beim Laden als Hinweis.
-preisgeld_interpolation = "GDD 10: 'Zwischenligen werden interpoliert' - Verfahren (linear/logarithmisch) nicht genannt."
-preisgeld_anteile_p4_bis_p29 = "GDD 10: nur P1/P2/P3/P30 genannt, 'danach fallend' - Kurve fuer P4 bis P29 nicht genannt."
-startgeld = "GDD 10: 'Startgeld fuer jeden Teilnehmer' - Hoehe nicht genannt."
-erfahrung_grundbetrag = "GDD 10: Grundbetrag je Session, Platzierungsbonus und Ueberholbonus - Hoehen nicht genannt."
-wetter_erfahrung_je_km = "GDD 10: Verdienst je gefahrenem km im Wetter - Hoehe nicht genannt."
-wetterprofil_je_strecke = "GDD 3/16: 'Wetter je Strecke gewichtet, ueber die Saison schwankend' - Gewichte je Strecke nicht genannt."
-k0_je_faehigkeit = "GDD 9: 'je Faehigkeit ist ein eigener K0-Faktor moeglich' - Faktoren nicht genannt; bis dahin 1,0."
-fehlerwahrscheinlichkeit_basis = "GDD 4: Fehlerwahrscheinlichkeit aus den Eigenschaften - Basisrate und Zeitverlust nicht genannt."
-unfall_wahrscheinlichkeit = "GDD 4: 'sehr selten' - Basisrate und Verteilung ein/beide Autos nicht genannt."
-defekt_wahrscheinlichkeit = "GDD 4: 'selten, aber haeufiger als Unfaelle' - Basisrate nicht genannt."
-reparatur_liga_faktor = "GDD 14: Reparaturkosten = Stufe x Liga-Faktor - Liga-Faktor nicht genannt."
-reifenverschleiss_kurve = "GDD 4: Verschleiss senkt Tempo und erhoeht Fehlerquote - Verlauf nicht genannt."
-ueberholen_erfolgsformel = "GDD 4: Erfolgschance aus Ueberholen/Verteidigen, Streckenfaktor und Tempovorteil - Formel nicht genannt."
-mindestsegmentlaenge = "GDD 3: Segmenttyp rein aus dem Radius - eine Mindestlaenge je Segment ist nicht genannt. Ohne sie entstehen einzelne Segmente von 5 bis 20 m. Gemessen: das Zusammenfassen solcher Fragmente aendert die Zahl der Ueberholzonen nur auf 2 von 20 Strecken, weil die 100-m-Regel sie ohnehin filtert."
-ueberholschwierigkeit_formel = "GDD 3: 'Ueberholschwierigkeit (aus Geradenanteil)' - Formel nicht genannt."
-reifenverschleiss_faktor_strecke = "GDD 3: Kennwert je Strecke - Herleitung nicht genannt."
-streckennaesse_verzoegerung = "GDD 7: 'Streckennaesse folgt dem Wetter verzoegert (Vorschlag)' - Verzoegerung nicht genannt."
-ermuedung_kurve = "GDD 8: Bereich 'Er Ermuedung' - Wirkung auf das Tempo nicht genannt."
-ereignis_geldbetraege = "GDD 14: E4/E7/E14 'einmalig Geld', E9/E16 'einmalig Erfahrung' - Betraege nicht genannt."
-sponsor_betraege = "GDD 10: Grundbetrag und Praemien je Angebot - Hoehen nicht genannt."
+# Alle Punkte entschieden, siehe OFFENE_PUNKTE.md.
+
+# --- Punkt 2: Ueberholschwierigkeit je Strecke (GDD 3) ---------------------
+[ueberholschwierigkeit]
+# Entscheidung B: aus dem Anteil der Ueberholzonen an der Rundenlaenge,
+# normiert auf den Mittelwert aller 20 Strecken. Nur Geraden ab 100 m
+# zaehlen, denn nur dort darf ueberholt werden.
+grundlage = "ueberholzonenanteil"
+normieren_auf_mittelwert = true
+
+# --- Punkt 3: Erfolgsformel beim Ueberholen (GDD 4) ------------------------
+[ueberholen.erfolg]
+# Entscheidung B: logistisch. Nur diese Form bleibt in den Randlagen
+# sinnvoll - alle Fahrer starten laut GDD 1 bei 0.
+#   p = sigmoid(gewicht_koennen * (D10 - D11) / skala
+#               + gewicht_tempo * (dv - min_tempovorteil) / tempo_bezug)
+#       * streckenfaktor
+# Die beiden Gewichte werden in Schritt 4 an einer Massensimulation
+# nachgezogen; die Startwerte stehen hier.
+form = "logistisch"
+gewicht_koennen = 4.0
+gewicht_tempo = 1.0
+tempo_bezug_kmh = 10.0
+wahrscheinlichkeit_min = 0.05
+wahrscheinlichkeit_max = 0.95
+
+# --- Punkt 4: Wetterprofil je Strecke (GDD 3 und 16) ----------------------
+# Entscheidung A: drei Klimaprofile. Gewichte je Wetterlage.
+[wetter.profil.heiss_trocken]
+strecken = ["Sakhir", "Yas Marina", "Mexiko-Stadt", "Austin", "Sao Paulo", "Melbourne", "Shanghai"]
+gewichte = { starkregen = 2, regen = 8, wechselhaft = 15, trocken = 45, heiss = 30 }
+
+[wetter.profil.gemaessigt]
+strecken = ["Catalunya", "Monza", "Budapest", "Suzuka", "Montreal", "Spielberg"]
+gewichte = { starkregen = 5, regen = 15, wechselhaft = 20, trocken = 45, heiss = 15 }
+
+[wetter.profil.regenreich]
+strecken = ["Spa", "Zandvoort", "Silverstone", "Nuerburgring", "Hockenheim", "Norisring", "Oschersleben"]
+gewichte = { starkregen = 10, regen = 25, wechselhaft = 25, trocken = 35, heiss = 5 }
+
+# --- Punkt 5: Streckennaesse (GDD 7) --------------------------------------
+[wetter.naesse]
+# Entscheidung B: der Grip naehert sich dem neuen Wetter ueber 3 Runden an,
+# statt hart zu springen.
+verzoegerung_runden = 3
+
+# --- Punkte 6 bis 9: Fehler, Unfaelle, Defekte, Reifen (GDD 4) -------------
+[fehler]
+# Entscheidung B: bei Wert 0 rund ein Fehler je 10 Runden, bei 100.000 je 100.
+# Der Wetter-Multiplikator aus [wetter.zustand] kommt obendrauf.
+rate_bei_null = 0.10
+rate_bei_maximum = 0.01
+zeitverlust_min_ms = 500
+zeitverlust_max_ms = 2000
+
+[unfaelle.rate]
+# Entscheidung A: sehr selten, wie im GDD ausdruecklich verlangt. Die
+# Obergrenze von 0 bis 5 Ausfaellen je Rennen ist eine Decke, kein Ziel.
+je_annaeherung = 0.0002
+anteil_ein_auto = 0.75
+anteil_beide_autos = 0.25
+
+[defekte.rate]
+# Entscheidung B: deutlich haeufiger als Unfaelle, damit F14
+# Zuverlaessigkeit spuerbar wirkt.
+je_auto_und_rennen_bei_null = 0.05
+je_auto_und_rennen_bei_maximum = 0.005
+
+[reifen.verschleiss]
+# Entscheidung B: progressiv - erst flach, letztes Drittel steil.
+verlauf = "progressiv"
+exponent = 2.0
+tempoverlust_am_ende = 0.03
+fehlerzuschlag_am_ende = 0.5
+
+[reifen.streckenfaktor]
+# Entscheidung A: aus der Querbeschleunigung, also der Summe von 1/Radius
+# ueber die Runde, normiert auf den Mittelwert aller 20 Strecken. Trennt
+# schnelle Kurven (Suzuka) von engen (Zandvoort), was der blosse
+# Kurvenanteil nicht leistet.
+grundlage = "querbeschleunigung"
+normieren_auf_mittelwert = true
+
+# --- Punkt 11: Ermuedung (GDD 8) ------------------------------------------
+[ermuedung]
+# Entscheidung B: wirkt erst ab der halben Distanz, damit das Rennende
+# gepraegt wird und nicht der Start.
+beginn_anteil_distanz = 0.5
+tempoverlust_am_ende_bei_null = 0.02
+tempoverlust_am_ende_bei_maximum = 0.0
+
+# --- Punkte 12 bis 19: Geld (GDD 9, 10, 14) -------------------------------
+[preisgeld.interpolation]
+# Entscheidung A: logarithmisch. Das GDD begruendet die Preisgelder relativ
+# ("Aufstieg in etwa 1,5 Saisons"), also muss auch die Interpolation ueber
+# das Verhaeltnis laufen. Linear erzeugt zwischen Liga 20 und 19 einen
+# Sprung von 5,8x, logarithmisch rund 1,9x je Liga.
+verfahren = "logarithmisch"
+
+[preisgeld.anteil_kurve]
+# Entscheidung A: geometrisch von Platz 3 (65 %) auf Platz 30 (5 %).
+# Ergibt einen Topf von rund 8,47 Siegpraemien je Rennen.
+verfahren = "geometrisch"
+von_platz = 3
+bis_platz = 30
+
+[preisgeld.startgeld]
+# Entscheidung A: Sockel unterhalb des Anteils fuer Platz 30.
+anteil_siegpraemie = 0.05
+
+[erfahrung.betraege]
+# Entscheidung B: ausgewogen. Der Spieler startet laut GDD 1 bei 0 und wird
+# anfangs Letzter; ohne Sockel kaeme er nicht in Gang.
+grundbetrag_je_session = 0.15
+platzierung_nach_tabelle = 1.0
+je_ueberholmanoever = 0.01
+
+[erfahrung.wetter.betrag]
+# Entscheidung B: ein voller Renntag im Regen zahlt spuerbar ein, reicht
+# aber bei weitem nicht fuer die Faehigkeit.
+je_km_anteil_sieg_ep = 0.001
+
+[kosten.k0_faktor]
+# Entscheidung B: nach Wirkungsbreite. Der Faktor ist die Summe der
+# Gewichte einer Faehigkeit aus der Wirkungsmatrix, geteilt durch den
+# Mittelwert ueber alle Faehigkeiten. Breit wirkende Faehigkeiten kosten
+# mehr, damit Schwerpunkte noetig werden (GDD 9).
+verfahren = "wirkungsbreite"
+
+[defekte.reparatur]
+# Entscheidung A: Kostenstufe mal Anteil der Siegpraemie. Die Kopplung an
+# die Siegpraemie haelt die Kosten ueber alle 20 Ligen im Verhaeltnis.
+anteil_siegpraemie_je_stufe = 0.01
+
+[sponsoren.betraege]
+# Entscheidung B: zweite Saeule neben dem Preisgeld.
+grundbetrag_alle_plaetze = 0.60
+praemie_sieg = 1.00
+praemie_top3 = 0.50
+praemie_top10 = 0.20
+
+[sponsoren.aufteilung]
+auto_haupt = 0.40
+auto_neben_1 = 0.15
+auto_neben_2 = 0.15
+anzug = 0.10
+helm = 0.10
+muetze = 0.10
+
+# --- Punkt 20: Ereignisbetraege (GDD 14) ----------------------------------
+[ereignisse.betraege]
+# Entscheidung B: spuerbar. Ereignisse treten nur 0 bis 2 je Zyklus auf,
+# ein einzelnes darf also auffallen. Anteile an Siegpraemie bzw. Sieg-EP.
+E4 = 0.10
+E7 = 0.25
+E14 = 0.15
+E9 = 0.15
+E16 = 0.15

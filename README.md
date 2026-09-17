@@ -4,8 +4,8 @@ Motorsport-Manager mit sichtbarer Rennsimulation. Grundlage ist das
 [Game Design Dokument v1.0](Rennmanager%20%E2%80%93%20Game%20Design%20Dokument%20%28v1.0%29.md);
 die Arbeitsregeln stehen in [Claude.md](Claude.md).
 
-**Stand: Schritt 2 von 10 – Streckenimport, Segmenttypen, Sektoren, Darstellung.**
-Es wird noch nicht gefahren; die Strecken sind eingelesen und ausgewertet.
+**Stand: Schritt 3 von 10 – Geschwindigkeitsprofil, Rundenzeit, Kalibrierung.**
+Ein Auto faehrt eine Runde ohne Zufall; Rennen mit mehreren Autos folgen.
 
 ## Aufbau
 
@@ -17,6 +17,7 @@ Es wird noch nicht gefahren; die Strecken sind eingelesen und ausgewertet.
 | `rennmanager/ui/` | PySide6-Oberflaeche |
 | `konfiguration/balancing.toml` | **Alle** Balancing-Werte, zentral an einer Stelle |
 | `konfiguration/hersteller.toml` | Herstellernamen, ausgelagert und austauschbar |
+| `werkzeuge/` | Balancing-Werkzeuge, nicht Teil der Auslieferung |
 | `tests/` | Tests fuer Kern, Konfiguration, Oberflaeche und Architektur |
 
 Die Trennung zwischen Kern und Oberflaeche wird von `tests/test_aufbau.py`
@@ -87,6 +88,51 @@ ist gemessen und unkritisch: Sie zu verschmelzen aendert die Zahl der
 Ueberholzonen nur auf 2 von 20 Strecken, weil die 100-m-Regel sie ohnehin
 filtert. Die Frage steht unter den offenen Punkten.
 
+## Geschwindigkeit und Rundenzeit
+
+`rennmanager.kern.tempo` setzt das Modell aus GDD 4 um: Kurvenlimit
+`v = sqrt(a * r)`, Hoechstgeschwindigkeit auf Geraden, dann ein
+Vorwaertsdurchlauf mit der Beschleunigungs- und ein Rueckwaertsdurchlauf mit
+der Bremsgrenze.
+
+```python
+from rennmanager.kern import auto, strecke, tempo
+from rennmanager.konfiguration import lade
+
+k = lade()
+runde = tempo.fahre_runde(k, strecke.lade(k, "Monza"), auto.gleichverteilt(k, 98_130))
+runde.zeit_ms        # 84276, ganze Millisekunden
+runde.sektoren_ms    # vier Sektorzeiten
+runde.schnitt_kmh    # 245.96
+```
+
+### Warum die Haftung quadratisch waechst
+
+GDD 9 kalibriert linear in `p = sqrt(S / 98.000)`: `v(S) = 55 + 125 * p`.
+Das Kurvenlimit folgt aber `v = sqrt(a * r)`. Damit die *Geschwindigkeit*
+linear in `p` herauskommt, muss die *Haftung* quadratisch in `p` wachsen:
+
+    a(S) = haftung_referenz * (anteil_bei_null + (1 - anteil_bei_null) * p)^2
+
+Mit dieser Form trifft das Modell alle zehn Kontrollwerte der Ligatabelle
+aus GDD 9 auf 0,01 km/h genau - und ebenso Werte, die bei der Anpassung
+gar nicht vorkamen.
+
+### Warum nur zwei freie Konstanten
+
+Mit einer dritten waere das Modell durch GDD 9 nicht eindeutig bestimmt:
+Man kann mehr Endgeschwindigkeit gegen weniger Haftung tauschen und trifft
+denselben Rundenschnitt auf der Referenzstrecke. Die Wahl verschiebt aber
+das Verhaeltnis zwischen schnellen und kurvigen Strecken. Deshalb ist die
+Endgeschwindigkeit bei `S = 0` an dasselbe `anteil_bei_null` gekoppelt: Bei
+Wert 0 kann das Auto in jeder Hinsicht denselben Bruchteil dessen, was es
+bei `S = referenz` kann.
+
+Kalibriert wird mit `python -m werkzeuge.kalibriere --schreiben`. Als
+Referenzstrecke dient Zandvoort - mit 46 % der geringste Geradenanteil
+aller 20 Strecken, laut GDD 3 "Steilkurven, eng". GDD 9 verlangt eine
+"kurvige Referenzstrecke", ohne sie zu nennen.
+
 ## Zwei Regeln, die den Code praegen
 
 **Zeiten sind ganze Millisekunden.** Im Kern gibt es keine Sekunden als
@@ -110,12 +156,11 @@ einmal fuer Qualifying und einmal fuer das Rennen.
 
 ## Offene Punkte
 
-`konfiguration/balancing.toml` enthaelt einen Abschnitt `[offen]`. Dort steht,
-welche Angaben das GDD nennt, aber nicht beziffert – etwa die Interpolation
-der Preisgelder zwischen den Ligen oder die Basisrate fuer Fehler und
-Defekte. Diese Werte werden **nicht** erfunden; die Anwendung zeigt die Liste
-im Hauptfenster an, damit sie vor dem jeweiligen Umsetzungsschritt geklaert
-werden kann.
+Das GDD nennt an 20 Stellen eine Mechanik, ohne sie zu beziffern. Zu jeder
+liegen in [OFFENE_PUNKTE.md](OFFENE_PUNKTE.md) drei Vorschlaege mit
+Begruendung; alle 20 sind am 2026-09-17 entschieden, der Abschnitt `[offen]`
+in der Konfiguration ist leer. Kommt spaeter eine Luecke hinzu, wird sie dort
+vermerkt und im Hauptfenster angezeigt, statt still gefuellt zu werden.
 
 ## Datenquellen
 

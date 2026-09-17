@@ -28,6 +28,8 @@ analyse = Analysis(
         "PySide6.Qt3DCore",
         "PySide6.QtMultimedia",
         "tkinter",
+        # Balancing-Werkzeuge gehoeren nicht in die Auslieferung.
+        "werkzeuge",
     ],
     noarchive=False,
 )
