@@ -164,3 +164,34 @@ def test_jede_runde_wird_neu_gewuerfelt(k) -> None:
     quelle = Seedquelle(5)
     werte = {fm.rundenform(k, auto, quelle, runde) for runde in range(1, 20)}
     assert len(werte) == 19
+
+
+# -- E3 Motivationsschub (GDD 14) ------------------------------------------
+def test_ein_tagesformbonus_hebt_nur_den_mittelwert(k) -> None:
+    """E3 hebt den Mittelwert der Tagesform, nicht die Streuung."""
+    auto = mit_wert(k, "D16", 0)
+    ohne = [fm.tagesform(k, auto, Seedquelle(seed)) for seed in range(2_000)]
+    mit = [fm.tagesform(k, auto, Seedquelle(seed), 0.03) for seed in range(2_000)]
+
+    assert all(m == pytest.approx(o + 0.03) for o, m in zip(ohne, mit, strict=True))
+    assert statistics.mean(mit) == pytest.approx(statistics.mean(ohne) + 0.03)
+    assert statistics.stdev(mit) == pytest.approx(statistics.stdev(ohne))
+
+
+def test_der_tagesformbonus_geht_in_die_gewuerfelten_werte(k) -> None:
+    """Die Tagesform traegt die Fahrerwerte - also hebt E3 sie mit."""
+    auto = mit_wert(k, "D16", 0)
+    ohne = fm.wuerfle(k, auto, Seedquelle(3))
+    mit = fm.wuerfle(k, auto, Seedquelle(3), 0.05)
+
+    assert mit.tagesform == pytest.approx(ohne.tagesform + 0.05)
+    # Dieselben Eigenschafts-Wuerfe, nur die Tagesform ist hoeher.
+    assert mit.auto.wert("D1") > ohne.auto.wert("D1")
+    # Fahrzeugwerte traegt die Tagesform nicht (GDD 11).
+    assert mit.auto.wert("F1") == ohne.auto.wert("F1")
+
+
+def test_ohne_bonus_bleibt_alles_wie_zuvor(k) -> None:
+    """Der neue Parameter darf die bisherigen Wuerfe nicht verschieben."""
+    auto = ka.gleichverteilt(k, 50_000)
+    assert fm.wuerfle(k, auto, Seedquelle(9), 0.0) == fm.wuerfle(k, auto, Seedquelle(9))

@@ -245,6 +245,7 @@ class _Lauf:
         ohne_zufall: bool = False,
         streckenverschleiss: float = 1.0,
         kenntnisfaktor: tuple[float, ...] | None = None,
+        tagesformbonus: tuple[float, ...] | None = None,
     ) -> None:
         self.k = konfiguration
         self.strecke = strecke
@@ -264,12 +265,24 @@ class _Lauf:
         # Vor dem Rennen wird neu gewuerfelt: Tagesform und
         # Eigenschafts-Zufall, getrennt vom Qualifying (GDD 11).
         self.ohne_zufall = ohne_zufall
+        if tagesformbonus is None:
+            tagesformbonus = (0.0,) * self.anzahl
+        elif len(tagesformbonus) != self.anzahl:
+            raise ValueError(
+                f"Tagesformbonus fuer {len(tagesformbonus)} Autos, "
+                f"im Feld stehen {self.anzahl}"
+            )
         if ohne_zufall:
             self.autos = [t.auto for t in teilnehmer]
             self.tagesform = (1.0,) * self.anzahl
         else:
             formen = [
-                kern_form.wuerfle(konfiguration, t.auto, seedquelle.zweig("form", nummer))
+                kern_form.wuerfle(
+                    konfiguration,
+                    t.auto,
+                    seedquelle.zweig("form", nummer),
+                    tagesformbonus[nummer],
+                )
                 for nummer, t in enumerate(teilnehmer)
             ]
             self.autos = [form.auto for form in formen]
@@ -778,6 +791,7 @@ def simuliere(
     ohne_zufall: bool = False,
     streckenverschleiss: float = 1.0,
     kenntnisfaktor: tuple[float, ...] | None = None,
+    tagesformbonus: tuple[float, ...] | None = None,
     hoechstdauer_ms: int | None = None,
 ) -> Rennverlauf:
     """Faehrt ein ganzes Rennen und liefert den fertigen Verlauf.
@@ -791,6 +805,9 @@ def simuliere(
     :param kenntnisfaktor: Tempofaktor aus der Streckenkenntnis je Auto
         (GDD 6), aus rennmanager.kern.streckenkenntnis. Ohne Angabe faehrt
         jedes Auto ohne Kenntnisbonus.
+    :param tagesformbonus: Zuschlag auf den Tagesform-Mittelwert je Auto
+        (E3 Motivationsschub aus GDD 14). Ohne Angabe faehrt jedes Auto
+        ohne Zuschlag.
     :param ohne_zufall: laesst Tagesform, Eigenschafts-Zufall, Rundenform,
         Fehler, Unfaelle, Defekte, Reifenverschleiss und Streckenkenntnis
         weg - also
@@ -806,7 +823,7 @@ def simuliere(
 
     lauf = _Lauf(
         konfiguration, strecke, teilnehmer, runden, seedquelle, streckenmittel,
-        wetter, ohne_zufall, streckenverschleiss, kenntnisfaktor,
+        wetter, ohne_zufall, streckenverschleiss, kenntnisfaktor, tagesformbonus,
     )
     schritt_ms = konfiguration.wert("simulation", "zeitschritt_ms")
     bild_ms = konfiguration.wert("simulation", "bildschritt_ms")

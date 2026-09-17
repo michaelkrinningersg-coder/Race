@@ -1032,3 +1032,69 @@ ausrechnete. Der Kernloop aus GDD 1 war damit seit Schritt 8 ohne Wirkung.
 `starterfeld(..., autos=...)` ersetzt einzelne Autos, ohne die Reihenfolge
 des Feldes zu verschieben. Qualifying und Rennen bekommen ein eigenes
 Feld, weil E12 nur im Qualifying wirkt.
+
+---
+
+## Nachtrag: beim GDD-Abgleich geschlossen
+
+Der Abgleich gegen das GDD fand vier Stellen, an denen ein fertiges Stueck
+Kern nie aufgerufen wurde. Sie sind keine Entscheidungen, sondern fehlende
+Nahtstellen — hier steht, wo sie jetzt liegen.
+
+### 42. Das Rennwochenende erreichte die Karriere nicht
+
+`Karriere.verbuche_rennen()` rechnete Preisgeld, Startgeld,
+Sponsorenauszahlung und Erfahrung korrekt aus (GDD 10), wurde aber von
+keiner Stelle gerufen. Gemessen: Der Spieler wurde in Sakhir 28., sein
+Konto stand danach unveraendert auf 1.000 € und 0 EP.
+
+**Behoben** in `Saisonlauf.fahre_rennen()`. Damit die Buchung die noetigen
+Zahlen hat, fuehrt jedes `Ligawochenende` jetzt drei Angaben je Fahrer:
+gelungene Ueberholmanoever, im Rennen aufgetretene Defekte und gefahrene
+Kilometer je Wetterlage. Der Schnellmodus zaehlt sie beim Fahren mit, die
+volle Simulation liest sie aus dem `Rennverlauf` — die Kilometer
+abschnittweise zwischen zwei Wetterwechseln, also mit derselben Zuordnung
+wie im Schnellmodus, wo jede Runde zu der Lage zaehlt, die zu ihrem Beginn
+galt.
+
+Dieselbe Naht schliesst **`uebernimm_defekte()`** (GDD 14): Ein Defekt aus
+dem Rennen bleibt jetzt offen, bis der Spieler ihn bezahlt.
+
+### 43. E10 Testfahrt geglückt wirkte nicht
+
+`Karriere.verbuche_runden()` hebt den Kenntniszuwachs der nächsten Strecke
+um 20 % (GDD 14), wurde aber nie gerufen: Der Saisonlauf buchte die Runden
+über `Streckenkenntnis.verbuche_feld()` für das ganze Feld, am Spieler und
+seinen Ereignissen vorbei.
+
+**Behoben:** Der Spieler wird aus dem Feldaufruf herausgenommen und über
+die Karriere gebucht — mit demselben Seedzweig wie zuvor, damit derselbe
+Seed dieselbe Saison ergibt (GDD 15).
+
+Dabei kam eine zweite Trennung heraus: `Karriere.kenntnis` und die
+Streckenkenntnis der Welt waren **zwei getrennte Objekte**. Was der Spieler
+lernte, hätte das Rennen nie gelesen. Der Spielstand führte beide beim
+Laden schon zusammen; der Saisonlauf tut es jetzt auch, für einen neuen
+Spielstand ebenso.
+
+### 44. E3 Motivationsschub wirkte nicht
+
+`Lage.tagesformbonus()` lieferte den Zuschlag, aber `form.tagesform()`
+kannte keinen.
+
+**Behoben** über einen Mittelwert-Parameter, der von `simuliere()`,
+`qualifying.fahre()` und `fahre_wochenende()` je Auto durchgereicht wird —
+so wie der Kenntnisfaktor aus GDD 6. Gesetzt wird er nur beim Spieler: Die
+KI hat keine Ereignisse (GDD 12).
+
+**Wie E3 wirkt.** GDD 14 nennt das Ziel „Tagesform-Mittelwert", GDD 11 die
+Verteilung (σ 3 %, begrenzt auf ±8 %, schlechte Seite durch D16 gedämpft).
+
+| | Variante | |
+| --- | --- | --- |
+| **A** | Zuschlag nach dem Wurf | Der ganze Wurf verschiebt sich, Streuung bleibt |
+| **B** | Zuschlag vor Grenze und Dämpfung | D16 dämpfte auch den Bonus weg |
+| **C** | σ oder Grenze anheben | Änderte die Streuung, die GDD 11 festlegt |
+
+**Entschieden: A.** GDD 14 sagt *Mittelwert*, nicht Spanne. Gemessen über
+2.000 Würfe: Mittelwert +0,030, Streuung unverändert.

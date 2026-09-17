@@ -541,6 +541,14 @@ class Karriere:
         """Tempofaktor des Spielers auf dieser Strecke (GDD 6)."""
         return self.kenntnis.tempofaktor(self.fahrernummer, strecke)
 
+    def tagesformbonus(self) -> float:
+        """Zuschlag auf den Tagesform-Mittelwert (E3 aus GDD 14).
+
+        0,0, solange kein Ereignis darauf wirkt. Der Wert geht als
+        Mittelwertverschiebung in ``rennmanager.kern.form.tagesform``.
+        """
+        return self.lage.tagesformbonus()
+
     def unterschreibe(self, angebot: kern_sponsoren.Angebot) -> None:
         """Nimmt ein Sponsorenangebot an; ein Platz traegt einen Vertrag."""
         self.vertraege[angebot.platz] = kern_sponsoren.unterschreibe(angebot)

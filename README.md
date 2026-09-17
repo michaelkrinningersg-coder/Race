@@ -348,6 +348,24 @@ lauf.auf_und_abstieg()           # 114 Wechsel: 57 Auf-, 57 Abstiege
 neue_welt = lauf.naechste_welt() # Welt der Folgesaison
 ```
 
+Bekommt der Saisonlauf eine Karriere, verbucht er nach jedem
+Rennwochenende, was GDD 10 und 14 dem Spieler zusprechen: Preisgeld,
+Startgeld, Sponsorenauszahlung und Erfahrung - Letztere auch aus den
+gelungenen Ueberholmanoevern und, je Wetterlage getrennt, aus den
+gefahrenen Kilometern. Defekte aus dem Rennen bleiben offen, bis er sie
+bezahlt, und die gefahrenen Runden wachsen seiner Streckenkenntnis zu.
+Dafuer fuehrt jedes `Ligawochenende` drei Angaben je Fahrer mit:
+
+```python
+liga = wochenende.liga(20)
+liga.manoever_je_fahrer[401]     # gelungene Ueberholmanoever
+liga.defekte_je_fahrer[401]      # ("X20",) - offen bis zur Reparatur
+liga.kilometer_je_fahrer[401]    # {"trocken": 92.8, "heiss": 3.8}
+```
+
+Sie stehen fuer alle 600 Fahrer bereit, gebucht wird davon nur der
+Spieler: Die KI hat weder Konto noch Werkstatt (GDD 12).
+
 Punkte gibt es nach GDD 13: 40-35-30-...-1 fuers Rennen, 3 fuer die
 schnellste Runde (auch ohne Zielankunft) und 5-3-1 fuers Qualifying. Bei
 Punktgleichheit liegt vorn, wer mehr Siege hat, dann mehr zweite Plaetze.
@@ -402,6 +420,18 @@ einzelnes kann beides mischen - E23 Hitzetraining hebt die Hitzeresistenz
 dauerhaft und senkt D2 fuer ein Rennwochenende. Defekte bleiben nach dem
 Rennen offen, bis der Spieler die Reparatur zahlt (Kostenstufe mal
 Liga-Faktor).
+
+Drei Ereignisse wirken nicht auf eine Faehigkeit, sondern auf die
+Simulation selbst; der Saisonlauf reicht sie deshalb als eigene Groessen
+durch, jeweils nur fuer den Spieler:
+
+* **E3 Motivationsschub** hebt den *Mittelwert* der Tagesform um 3 %.
+  Streuung, Grenze und die Daempfung durch D16 bleiben, wie GDD 11 sie
+  nennt - der ganze Wurf verschiebt sich nach oben.
+* **E10 Testfahrt geglueckt** hebt den Kenntniszuwachs der naechsten
+  Strecke um 20 %. Deshalb bucht der Spieler seine Runden ueber die
+  Karriere, nicht ueber das Feld.
+* **E29 Reisechaos** nimmt nutzbare Kalendertage weg (GDD 2).
 
 ### Warum das Jahr ein durchgehendes 14-Tage-Raster hat
 

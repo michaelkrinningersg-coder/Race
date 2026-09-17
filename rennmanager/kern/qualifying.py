@@ -155,11 +155,15 @@ def fahre(
     seedquelle: Seedquelle,
     meisterschaft: tuple[int, ...] | None = None,
     kenntnisfaktor: tuple[float, ...] | None = None,
+    tagesformbonus: tuple[float, ...] | None = None,
 ) -> Qualifying:
     """Faehrt ein ganzes Qualifying und liefert die Startaufstellung.
 
     :param kenntnisfaktor: Tempofaktor aus der Streckenkenntnis je Auto
         (GDD 6). Ohne Angabe faehrt jedes Auto ohne Kenntnisbonus.
+    :param tagesformbonus: Zuschlag auf den Tagesform-Mittelwert je Auto
+        (E3 Motivationsschub aus GDD 14). Ohne Angabe faehrt jedes Auto
+        ohne Zuschlag.
     """
     if not teilnehmer:
         raise ValueError("Ohne Teilnehmer gibt es kein Qualifying")
@@ -168,6 +172,13 @@ def fahre(
     elif len(kenntnisfaktor) != len(teilnehmer):
         raise ValueError(
             f"Kenntnisfaktor fuer {len(kenntnisfaktor)} Autos, "
+            f"im Feld stehen {len(teilnehmer)}"
+        )
+    if tagesformbonus is None:
+        tagesformbonus = (0.0,) * len(teilnehmer)
+    elif len(tagesformbonus) != len(teilnehmer):
+        raise ValueError(
+            f"Tagesformbonus fuer {len(tagesformbonus)} Autos, "
             f"im Feld stehen {len(teilnehmer)}"
         )
 
@@ -202,7 +213,7 @@ def fahre(
         uhr = abstand_ms * platz
         # Eigener Wurf je Auto und Session (GDD 11).
         sessionform = kern_form.wuerfle(
-            konfiguration, teilnehmer[i].auto, seedquelle.zweig("form", i)
+            konfiguration, teilnehmer[i].auto, seedquelle.zweig("form", i), tagesformbonus[i]
         )
         auto = sessionform.auto
         beginn = uhr

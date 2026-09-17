@@ -52,11 +52,21 @@ def _begrenzt(wert: float, grenze: float) -> float:
     return min(max(wert, -grenze), grenze)
 
 
-def tagesform(konfiguration: Konfiguration, auto: Auto, seedquelle: Seedquelle) -> float:
+def tagesform(
+    konfiguration: Konfiguration,
+    auto: Auto,
+    seedquelle: Seedquelle,
+    mittelwert: float = 0.0,
+) -> float:
     """Zieht den Tagesform-Faktor eines Autos (GDD 11).
 
     Streuung 3 %, begrenzt auf +/- 8 %. Eine schlechte Tagesform wird durch
     D16 Mentale Staerke gedaempft, eine gute nicht.
+
+    :param mittelwert: Zuschlag auf den Mittelwert der Verteilung (E3
+        Motivationsschub aus GDD 14). Er verschiebt allein das Ergebnis;
+        Streuung, Grenze und die Daempfung durch D16 bleiben, wie GDD 11
+        sie nennt - E3 hebt den *Mittelwert*, nicht die Spanne.
     """
     einstellung = konfiguration.wert("zufall", "tagesform")
     wuerfel = seedquelle.generator()
@@ -68,17 +78,26 @@ def tagesform(konfiguration: Konfiguration, auto: Auto, seedquelle: Seedquelle) 
             auto.wert(daempfung["faehigkeit"]), konfiguration.wert("skala", "referenz")
         )
         abweichung *= 1.0 - daempfung["max_anteil"] * min(anteil, 1.0)
-    return 1.0 + abweichung
+    return 1.0 + mittelwert + abweichung
 
 
-def wuerfle(konfiguration: Konfiguration, auto: Auto, seedquelle: Seedquelle) -> Sessionform:
+def wuerfle(
+    konfiguration: Konfiguration,
+    auto: Auto,
+    seedquelle: Seedquelle,
+    tagesformbonus: float = 0.0,
+) -> Sessionform:
     """Wuerfelt Tagesform und Eigenschafts-Zufall fuer eine Session.
 
     Die Tagesform wirkt laut GDD 11 auf alle Fahrerwerte, der
     Eigenschafts-Zufall auf jeden einzelnen Wert - auch auf die des
     Fahrzeugs und auf die Wetterfaehigkeiten.
+
+    :param tagesformbonus: Zuschlag auf den Tagesform-Mittelwert (E3)
     """
-    faktor = tagesform(konfiguration, auto, seedquelle.zweig("tagesform"))
+    faktor = tagesform(
+        konfiguration, auto, seedquelle.zweig("tagesform"), tagesformbonus
+    )
     einstellung = konfiguration.wert("zufall", "eigenschaft")
     wuerfel = seedquelle.zweig("eigenschaft").generator()
 

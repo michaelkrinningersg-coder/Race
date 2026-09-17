@@ -53,6 +53,12 @@ class Schnellergebnis:
     schnellste_runde_ms: int
     ueberholmanoever: int
     ausfaelle: int
+    # Je Auto: gelungene Ueberholmanoever, offen gebliebene Defekte und
+    # gefahrene Kilometer je Wetterlage. Die Karriere braucht das fuer
+    # Erfahrung, Reparaturen und die Wetter-Erfahrung (GDD 10 und 14).
+    manoever_je_auto: tuple[int, ...] = ()
+    defekte_je_auto: tuple[tuple[str, ...], ...] = ()
+    kilometer_je_wetter: tuple[dict[str, float], ...] = ()
 
 
 def _grundrunden(konfiguration: Konfiguration, strecke: Strecke, autos) -> np.ndarray:
@@ -73,11 +79,15 @@ def fahre_wochenende(
     streckenmittel: float,
     streckenverschleiss: float = 1.0,
     kenntnisfaktor: tuple[float, ...] | None = None,
+    tagesformbonus: tuple[float, ...] | None = None,
 ) -> Schnellergebnis:
     """Faehrt Qualifying und Rennen einer Liga im Schnellmodus (GDD 13).
 
     :param kenntnisfaktor: Tempofaktor aus der Streckenkenntnis je Auto
         (GDD 6). Ohne Angabe faehrt jedes Auto ohne Kenntnisbonus.
+    :param tagesformbonus: Zuschlag auf den Tagesform-Mittelwert je Auto
+        (E3 Motivationsschub aus GDD 14). Ohne Angabe faehrt jedes Auto
+        ohne Zuschlag.
     """
     if not teilnehmer:
         raise ValueError("Ohne Teilnehmer gibt es kein Rennwochenende")
@@ -88,13 +98,22 @@ def fahre_wochenende(
             f"Kenntnisfaktor fuer {len(kenntnisfaktor)} Autos, "
             f"im Feld stehen {len(teilnehmer)}"
         )
+    if tagesformbonus is None:
+        tagesformbonus = (0.0,) * len(teilnehmer)
+    elif len(tagesformbonus) != len(teilnehmer):
+        raise ValueError(
+            f"Tagesformbonus fuer {len(tagesformbonus)} Autos, "
+            f"im Feld stehen {len(teilnehmer)}"
+        )
 
     anzahl = len(teilnehmer)
     nummern = np.arange(anzahl)
 
     # --- Qualifying ------------------------------------------------------
     quali_formen = [
-        kern_form.wuerfle(konfiguration, t.auto, seedquelle.zweig("qualiform", i))
+        kern_form.wuerfle(
+            konfiguration, t.auto, seedquelle.zweig("qualiform", i), tagesformbonus[i]
+        )
         for i, t in enumerate(teilnehmer)
     ]
     quali_autos = [f.auto for f in quali_formen]
@@ -132,7 +151,9 @@ def fahre_wochenende(
 
     # --- Rennen ----------------------------------------------------------
     formen = [
-        kern_form.wuerfle(konfiguration, t.auto, seedquelle.zweig("rennform", i))
+        kern_form.wuerfle(
+            konfiguration, t.auto, seedquelle.zweig("rennform", i), tagesformbonus[i]
+        )
         for i, t in enumerate(teilnehmer)
     ]
     autos = [f.auto for f in formen]
@@ -168,6 +189,9 @@ def fahre_wochenende(
 
     verschleiss = np.zeros(anzahl)
     defekt_tempo = np.ones(anzahl)
+    manoever_je_auto = np.zeros(anzahl, dtype=int)
+    kilometer = [dict.fromkeys(konfiguration.wert("wetter", "kette"), 0.0)
+                 for _ in range(anzahl)]
     # GDD 14 deckelt die Wirkung aller aktiven Defekte zusammen; deshalb
     # werden sie gesammelt und der Faktor jedes Mal neu aus der ganzen
     # Liste gebildet - nicht Defekt fuer Defekt multipliziert.
@@ -219,6 +243,9 @@ def fahre_wochenende(
 
             gesamtzeit[i] += zeit
             beste_runde[i] = min(beste_runde[i], zeit)
+            # Fuer die Wetter-Erfahrung aus GDD 10: Die Runde zaehlt zu der
+            # Lage, die zu ihrem Beginn galt.
+            kilometer[i][zustand] += strecke.laenge_m / 1000.0
             verschleiss[i] += verschleiss_je_runde[i] * wetter_verschleiss
             gefahrene_runden[i] += 1
 
@@ -262,6 +289,7 @@ def fahre_wochenende(
                 )
                 if wuerfel.random() < chance:
                     manoever += 1
+                    manoever_je_auto[hinten] += 1
                     continue
                 # Nicht vorbeigekommen: bleibt knapp dahinter haengen.
                 gesamtzeit[hinten] = max(
@@ -338,4 +366,11 @@ def fahre_wochenende(
         schnellste_runde_ms=int(round(beste_runde[schnellste])),
         ueberholmanoever=manoever,
         ausfaelle=ausfaelle,
+        manoever_je_auto=tuple(int(n) for n in manoever_je_auto),
+        defekte_je_auto=tuple(
+            tuple(d["schluessel"] for d in defekte) for defekte in defekte_je_auto
+        ),
+        kilometer_je_wetter=tuple(
+            {lage: km for lage, km in eintrag.items() if km} for eintrag in kilometer
+        ),
     )

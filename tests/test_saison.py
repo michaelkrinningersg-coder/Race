@@ -312,3 +312,198 @@ def test_ein_ereignis_nur_im_qualifying_wirkt_auch_nur_dort(k, welt, strecken):
 def test_ohne_karriere_faehrt_die_welt_wie_gewuerfelt(k, welt, strecken):
     lauf = neuer_lauf(k, welt, strecken)
     assert lauf.spielerautos(welt.spieler.liga) == {}
+
+
+# --- Was das Rennwochenende der Karriere bringt (GDD 10 und 14) ----------
+def spielerkarriere(k, welt, wert: int = 20_000) -> kk.Karriere:
+    """Eine Karriere fuer den Spieler der Welt, mit brauchbaren Werten."""
+    spieler = welt.spieler
+    werte = dict.fromkeys([f.schluessel for f in k.faehigkeiten], wert)
+    werte.update(dict.fromkeys(k.zusatzfaehigkeiten, wert))
+    return kk.beginne(k, 2026, spieler.liga, werte, fahrernummer=spieler.nummer)
+
+
+def lauf_mit_karriere(k, welt, strecken, karriere, seed: int = SEED) -> sa.Saisonlauf:
+    return sa.Saisonlauf(
+        k, welt, Seedquelle(seed), jahr=2026, strecken=strecken, karriere=karriere
+    )
+
+
+def test_karriere_und_saison_teilen_eine_streckenkenntnis(k, welt, strecken):
+    """GDD 6 kennt einen Stand je Fahrer und Strecke - nicht zwei."""
+    karriere = spielerkarriere(k, welt)
+    eigene = karriere.kenntnis
+    lauf = lauf_mit_karriere(k, welt, strecken, karriere)
+    assert karriere.kenntnis is lauf.kenntnis
+    assert karriere.kenntnis is not eigene
+
+
+def test_das_rennwochenende_zahlt_preisgeld_und_erfahrung(k, welt, strecken):
+    """GDD 10: Preisgeld, Startgeld und Erfahrung kommen vom Rennen."""
+    from rennmanager.kern import einnahmen as ke
+
+    karriere = spielerkarriere(k, welt)
+    vorher = karriere.konto
+    lauf = lauf_mit_karriere(k, welt, strecken, karriere)
+    ergebnis = lauf.fahre_rennen().liga(karriere.liga).ergebnis_von(karriere.fahrernummer)
+
+    manoever = lauf.wochenenden[0].liga(karriere.liga).manoever_je_fahrer.get(
+        karriere.fahrernummer, 0
+    )
+    erwartet = ke.preisgeld(k, karriere.liga, ergebnis.rennplatz) + ke.startgeld(
+        k, karriere.liga
+    )
+    assert karriere.konto.geld - vorher.geld == erwartet
+    assert karriere.konto.erfahrung - vorher.erfahrung == ke.erfahrung_fuer(
+        k, karriere.liga, ergebnis.rennplatz, manoever
+    )
+
+
+def test_gefahrene_kilometer_fuellen_die_wettertoepfe(k, welt, strecken):
+    """GDD 10: eigener EP-Topf je Wetter, Verdienst je gefahrenem km."""
+    karriere = spielerkarriere(k, welt)
+    lauf = lauf_mit_karriere(k, welt, strecken, karriere)
+    wochenende = lauf.fahre_rennen()
+
+    kilometer = wochenende.liga(karriere.liga).kilometer_je_fahrer[karriere.fahrernummer]
+    assert kilometer
+    assert set(karriere.konto.wetter_erfahrung) == set(kilometer)
+    assert all(betrag > 0 for betrag in karriere.konto.wetter_erfahrung.values())
+
+
+def test_defekte_aus_dem_rennen_bleiben_offen(k, welt, strecken):
+    """GDD 14: Defekte laufen bis zur Reparatur, also ueber das Rennen hinaus."""
+    karriere = spielerkarriere(k, welt)
+    lauf = lauf_mit_karriere(k, welt, strecken, karriere)
+    wochenende = sa.Ligawochenende(
+        liga=karriere.liga,
+        ergebnisse=(wt.Rennergebnis(karriere.fahrernummer, 7, 9),),
+        wetter=("trocken",),
+        siegerzeit_ms=1,
+        schnellste_runde_ms=1,
+        ueberholmanoever=0,
+        ausfaelle=0,
+        defekte_je_fahrer={karriere.fahrernummer: ("X1", "X13")},
+    )
+    lauf._verbuche_karriere(wochenende, karriere.fahrernummer)
+
+    assert [d["schluessel"] for d in karriere.defekte] == ["X1", "X13"]
+    assert {p[0] for p in karriere.offene_reparaturen} == {"X1", "X13"}
+
+
+def test_das_rennen_meldet_defekte_je_fahrer(k, welt, strecken):
+    """Ueber 20 Ligen faellt in einem Wochenende immer etwas aus."""
+    lauf = neuer_lauf(k, welt, strecken)
+    wochenende = lauf.fahre_rennen()
+    schluessel = {d["schluessel"] for d in k.wert("defekte", "liste")}
+    gemeldet = [
+        defekt
+        for liga in wochenende.ligen.values()
+        for defekte in liga.defekte_je_fahrer.values()
+        for defekt in defekte
+    ]
+    assert gemeldet
+    assert set(gemeldet) <= schluessel
+
+
+def test_manoever_je_fahrer_ergeben_die_summe_der_liga(wochenende, ausfuehrlich):
+    for liga in (wochenende.liga(LIGA), ausfuehrlich.wochenenden[0].liga(LIGA)):
+        assert sum(liga.manoever_je_fahrer.values()) == liga.ueberholmanoever
+
+
+def test_kilometer_je_fahrer_passen_zur_renndistanz(k, strecken, wochenende):
+    """Wer durchfaehrt, hat die volle Distanz im Buch."""
+    from rennmanager.kern import rennen as kr
+
+    liga = wochenende.liga(LIGA)
+    voll = kr.rundenzahl(k, strecken[0], LIGA) * strecken[0].laenge_m / 1000.0
+    gefahren = [
+        sum(eintrag.values()) for eintrag in liga.kilometer_je_fahrer.values()
+    ]
+    assert len(gefahren) == k.wert("ligen", "autos_je_liga")
+    assert max(gefahren) == pytest.approx(voll, rel=1e-6)
+    assert all(km <= voll + 1e-6 for km in gefahren)
+
+
+# --- Streckenkenntnis des Spielers (GDD 6) --------------------------------
+def test_die_streckenkenntnis_des_spielers_waechst_mit_dem_rennen(k, welt, strecken):
+    karriere = spielerkarriere(k, welt)
+    lauf = lauf_mit_karriere(k, welt, strecken, karriere)
+    name = strecken[0].name
+    assert karriere.kenntnis.stand(karriere.fahrernummer, name) == 0.0
+
+    lauf.fahre_rennen()
+    gewachsen = karriere.kenntnis.stand(karriere.fahrernummer, name)
+    assert gewachsen > 0.0
+    # Die KI steht fest, solange sie sich nicht entwickelt (GDD 12).
+    assert karriere.kenntnisfaktor(name) == lauf.kenntnis.tempofaktor(
+        karriere.fahrernummer, name
+    )
+
+
+def test_jeder_fahrer_wird_genau_einmal_verbucht(k, welt, strecken):
+    """Der Spieler bucht ueber die Karriere - aber nur einmal."""
+    karriere = spielerkarriere(k, welt)
+    mit = lauf_mit_karriere(k, welt, strecken, karriere)
+    mit.fahre_rennen()
+
+    ohne = neuer_lauf(k, welt, strecken)
+    ohne.fahre_rennen()
+    name = strecken[0].name
+    assert mit.kenntnis.stand(karriere.fahrernummer, name) == pytest.approx(
+        ohne.kenntnis.stand(karriere.fahrernummer, name)
+    )
+
+
+def test_e10_hebt_den_kenntniszuwachs(k, welt, strecken):
+    """E10 Testfahrt geglueckt: +20 % auf die naechste Strecke (GDD 14)."""
+    ohne = spielerkarriere(k, welt)
+    lauf_mit_karriere(k, welt, strecken, ohne).fahre_rennen()
+
+    mit = spielerkarriere(k, welt)
+    mit._loese_ereignis_aus("E10")
+    lauf_mit_karriere(k, welt, strecken, mit).fahre_rennen()
+
+    name = strecken[0].name
+    zuschlag = ev.eintrag(k, "E10")["wirkung"][0]["faktor"]
+    assert mit.kenntnis.stand(mit.fahrernummer, name) == pytest.approx(
+        ohne.kenntnis.stand(ohne.fahrernummer, name) * (1.0 + zuschlag)
+    )
+
+
+# --- E3 Motivationsschub (GDD 14) ----------------------------------------
+def test_der_tagesformbonus_trifft_nur_den_spieler(k, welt, strecken):
+    karriere = spielerkarriere(k, welt)
+    lauf = lauf_mit_karriere(k, welt, strecken, karriere)
+    feld = welt.liga(karriere.liga)
+    assert lauf.tagesformbonus(karriere.liga, feld) == (0.0,) * len(feld)
+
+    karriere._loese_ereignis_aus("E3")
+    bonus = ev.eintrag(k, "E3")["wirkung"][0]["faktor"]
+    gesetzt = lauf.tagesformbonus(karriere.liga, feld)
+    assert gesetzt.count(bonus) == 1
+    assert gesetzt[[f.nummer for f in feld].index(karriere.fahrernummer)] == bonus
+    # Andere Ligen bleiben unberuehrt - die KI hat keine Ereignisse.
+    andere = welt.liga(karriere.liga - 1)
+    assert lauf.tagesformbonus(karriere.liga - 1, andere) == (0.0,) * len(andere)
+
+
+def test_e3_macht_den_spieler_schneller(k, welt, strecken):
+    """Ein hoeherer Tagesform-Mittelwert muss im Ergebnis ankommen."""
+    ohne = spielerkarriere(k, welt, wert=60_000)
+    lauf_ohne = lauf_mit_karriere(k, welt, strecken, ohne)
+    platz_ohne = (
+        lauf_ohne.fahre_rennen().liga(ohne.liga).ergebnis_von(ohne.fahrernummer)
+    )
+
+    mit = spielerkarriere(k, welt, wert=60_000)
+    mit._loese_ereignis_aus("E3")
+    lauf_mit = lauf_mit_karriere(k, welt, strecken, mit)
+    platz_mit = lauf_mit.fahre_rennen().liga(mit.liga).ergebnis_von(mit.fahrernummer)
+
+    assert platz_mit.rennplatz <= platz_ohne.rennplatz
+    # Die uebrigen Ligen duerfen sich davon nicht ruehren (GDD 15).
+    for liga in lauf_ohne.wochenenden[0].ligen:
+        if liga == ohne.liga:
+            continue
+        assert lauf_mit.wochenenden[0].liga(liga) == lauf_ohne.wochenenden[0].liga(liga)
