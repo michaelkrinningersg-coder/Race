@@ -27,8 +27,11 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from rennmanager.kern import form as kern_form
+from rennmanager.kern import reifen as kern_reifen
 from rennmanager.kern import wetter as kern_wetter
+from rennmanager.kern import zwischenfall as kern_zwischenfall
 from rennmanager.kern.auto import Auto, bereichswert, gesamtwert
+from rennmanager.kern.reifen import FLUESTERER as REIFENFLUESTERER
 from rennmanager.kern.strecke import Strecke
 from rennmanager.kern.tempo import KMH_JE_MS, geschwindigkeitsprofil, grenzen_aus, leistungsanteil
 from rennmanager.kern.zufall import Seedquelle
@@ -108,6 +111,8 @@ class Rennverlauf:
     ausgefallen: np.ndarray
     protokolle: tuple[Rundenprotokoll, ...]
     manoever: tuple[Ueberholmanoever, ...]
+    zwischenfaelle: tuple[kern_zwischenfall.Zwischenfall, ...]
+    reifenzustand: np.ndarray
     ergebnisse: tuple[Ergebnis, ...]
     dauer_ms: int
 
@@ -119,6 +124,14 @@ class Rennverlauf:
         """Index des letzten Bildes, das nicht nach ``zeit_ms`` liegt."""
         return int(np.clip(np.searchsorted(self.zeitpunkte_ms, zeit_ms, "right") - 1,
                            0, len(self.zeitpunkte_ms) - 1))
+
+    def zwischenfaelle_von(self, teilnehmer: int) -> tuple[kern_zwischenfall.Zwischenfall, ...]:
+        """Alle Zwischenfaelle eines Autos - fuer die Anzeige im Ranking."""
+        return tuple(z for z in self.zwischenfaelle if z.teilnehmer == teilnehmer)
+
+    def reifen_zu(self, zeit_ms: float) -> np.ndarray:
+        """Reifenzustand je Auto zu einem Zeitpunkt, 1,0 frisch bis 0,0."""
+        return self.reifenzustand[self.bild_zu(zeit_ms)]
 
     def distanzen_zu(self, zeit_ms: float) -> np.ndarray:
         """Zurueckgelegte Strecke je Auto, zwischen den Bildern interpoliert."""
@@ -231,6 +244,7 @@ class _Lauf:
         streckenmittel: float,
         wetter: kern_wetter.Wetterverlauf | None = None,
         ohne_zufall: bool = False,
+        streckenverschleiss: float = 1.0,
     ) -> None:
         self.k = konfiguration
         self.strecke = strecke
@@ -304,10 +318,46 @@ class _Lauf:
         )
 
         self.max_abstand_s = konfiguration.wert("ueberholen", "max_abstand_s")
+        self.unfall_abstand_m = konfiguration.wert("unfaelle", "max_abstand_m")
+        self.dt_s = konfiguration.wert("simulation", "zeitschritt_ms") / 1000.0
+        # Der Wetter-Multiplikator auf Fehler und Unfaelle (GDD 7).
+        self.wetter_fehlerfaktor = 1.0
         self.min_vorteil = konfiguration.wert("ueberholen", "min_tempovorteil_kmh") / KMH_JE_MS
         self.sieger_zeit: float | None = None
         self.laufende_nummer = np.arange(self.anzahl)
         self.index = np.zeros(self.anzahl, dtype=int)
+        # --- Reifen (GDD 4) -------------------------------------------
+        renndistanz = runden * self.laenge
+        # Der Verschleiss ist zwar nicht zufaellig, macht die Rundenzeit
+        # aber vom Rennfortschritt abhaengig. GDD 9 kalibriert auf einer
+        # festen Rundenzeit, deshalb faellt er im zufallsfreien Modus mit
+        # weg - sonst waere ein Auto im Rennen langsamer als in der
+        # Einzelrunde und die Kalibrierung liefe ins Leere.
+        self.verschleiss_je_meter = np.zeros(self.anzahl)
+        if not ohne_zufall:
+            self.verschleiss_je_meter = np.array(
+                [
+                    kern_reifen.verschleiss_je_meter(
+                        konfiguration, auto, renndistanz, streckenverschleiss
+                    )
+                    for auto in self.autos
+                ]
+            )
+        self.verschleiss = np.zeros(self.anzahl)
+        self.reifen_tempo = np.ones(self.anzahl)
+        self.reifen_fehler = np.ones(self.anzahl)
+
+        # --- Zwischenfaelle (GDD 4 und 14) ----------------------------
+        self.zwischenfaelle: list[kern_zwischenfall.Zwischenfall] = []
+        self.defekt_tempo = np.ones(self.anzahl)
+        self.defekte_je_auto: list[list[dict]] = [[] for _ in range(self.anzahl)]
+        # Zeit, die ein Auto nach einem Fehler noch steht.
+        self.pause_ms = np.zeros(self.anzahl)
+        self.ausfaelle = 0
+        self.ausfallgrenze = (
+            0 if ohne_zufall else kern_zwischenfall.ausfallgrenze(konfiguration, self.wuerfel)
+        )
+
         self._setze_rundenform(0)
         self._setze_grip(0.0)
 
@@ -320,6 +370,9 @@ class _Lauf:
         if self.wetter is None:
             return
         zustand = self.wetter.zustand_zu(zeit_ms)
+        self.wetter_fehlerfaktor = float(
+            self.k.wert("wetter", "zustand", zustand)["fehlerquote"]
+        )
         # Im Rennen wird der Grip ueber die Sektoren gemittelt: Die Autos
         # sind gleichzeitig an verschiedenen Stellen der Runde.
         roh = sum(
@@ -358,6 +411,12 @@ class _Lauf:
         vorher = self.distanz.copy()
         faehrt = self.aktiv & ~self.im_ziel
         self.distanz[faehrt] += self.tempo[faehrt] * wirksam[faehrt]
+
+        # Reifen bauen mit jedem gefahrenen Meter ab (GDD 4).
+        self.verschleiss += (self.distanz - vorher) * self.verschleiss_je_meter
+        # Eine angefangene Pause nach einem Fehler laeuft ab.
+        self.pause_ms = np.maximum(self.pause_ms - dt * 1000.0, 0.0)
+
         self._pruefe_marken(vorher, zeit_ms, dt)
 
     def _ziel_tempo(self, zeit_ms: int) -> np.ndarray:
@@ -369,7 +428,8 @@ class _Lauf:
         nahe genug sind.
         """
         # Vor Ablauf der Reaktionszeit steht das Auto (GDD 4).
-        faehrt = self.aktiv & ~self.im_ziel
+        # Wer nach einem Fehler noch steht, faehrt nicht (GDD 4).
+        faehrt = self.aktiv & ~self.im_ziel & (self.pause_ms <= 0.0)
 
         # Zwischen den Profilpunkten wird linear interpoliert. Ohne das
         # zielt ein Auto auf das Tempo des schon passierten Punktes und
@@ -384,7 +444,15 @@ class _Lauf:
         hier = self.profile[self.laufende_nummer, index]
         dort = self.profile[self.laufende_nummer, danach]
         # Wetter (Grip) und Rundenform wirken beide als Faktor aufs Tempo.
-        frei = (hier + rest * (dort - hier)) * self.grip * self.tempoform
+        # Grip aus dem Wetter, Rundenform, Reifenzustand und aktive
+        # Defekte wirken alle als Faktor aufs Tempo.
+        frei = (
+            (hier + rest * (dort - hier))
+            * self.grip
+            * self.tempoform
+            * self.reifen_tempo
+            * self.defekt_tempo
+        )
         ziel = np.where(faehrt, frei, 0.0)
 
         # Reihenfolge nach zurueckgelegter Strecke; danach steht fest, wer
@@ -394,6 +462,15 @@ class _Lauf:
         hinten = reihenfolge[1:]
 
         abstand_m = self.distanz[vorne] - self.distanz[hinten]
+
+        # Unfaelle haengen allein am Abstand (GDD 4: unter 30 m), nicht am
+        # engeren Fenster fuers Ueberholen.
+        in_reichweite = (
+            faehrt[hinten] & faehrt[vorne] & (abstand_m < self.unfall_abstand_m)
+        )
+        for paar in np.flatnonzero(in_reichweite):
+            self._prueft_unfall(int(hinten[paar]), int(vorne[paar]), zeit_ms)
+
         tempo_hinten = ziel[hinten]
         # Nur Paare betrachten, bei denen beide fahren und der Abstand
         # unter der Schwelle aus GDD 4 liegt.
@@ -414,6 +491,8 @@ class _Lauf:
             j = int(vorne[paar])
             if i in getauscht or j in getauscht:
                 continue
+            if not (self.aktiv[i] and self.aktiv[j]):
+                continue
             vorteil = ziel[i] - ziel[j]
             if (
                 vorteil >= self.min_vorteil
@@ -427,6 +506,93 @@ class _Lauf:
             if ziel[j] < ziel[i]:
                 ziel[i] = ziel[j]
         return ziel
+
+    def _prueft_unfall(self, hinten: int, vorne: int, zeit_ms: int) -> bool:
+        """Wuerfelt einen Unfall zwischen zwei nahen Autos (GDD 4).
+
+        "Sehr selten und nur bei weniger als 30 m Abstand; mal scheidet ein
+        Auto aus, mal beide; je Rennen wird eine Obergrenze von 0 bis 5
+        Ausfaellen gewuerfelt."
+        """
+        if self.ohne_zufall or self.ausfaelle >= self.ausfallgrenze:
+            return False
+        if not (self.aktiv[hinten] and self.aktiv[vorne]):
+            return False
+
+        rate = kern_zwischenfall.unfallrate(self.k, self.dt_s, self.wetter_fehlerfaktor)
+        if self.wuerfel.random() >= rate:
+            return False
+
+        beide = kern_zwischenfall.beide_betroffen(self.k, self.wuerfel)
+        betroffen = [hinten, vorne] if beide else [hinten]
+        runde = int(self.runden_gefahren[hinten]) + 1
+        for i in betroffen:
+            if self.ausfaelle >= self.ausfallgrenze:
+                break
+            self.aktiv[i] = False
+            self.tempo[i] = 0.0
+            self.ausfaelle += 1
+            self.zwischenfaelle.append(
+                kern_zwischenfall.Zwischenfall(
+                    art=kern_zwischenfall.Art.UNFALL,
+                    zeit_ms=zeit_ms,
+                    teilnehmer=i,
+                    runde=runde,
+                    gegner=vorne if i == hinten else hinten,
+                    ausgefallen=True,
+                )
+            )
+        return True
+
+    def _wuerfle_rundenereignisse(self, i: int, ueberfahrt: float) -> None:
+        """Fehler und Defekte einer abgeschlossenen Runde (GDD 4 und 14)."""
+        if self.ohne_zufall:
+            return
+        runde = int(self.runden_gefahren[i])
+        auto = self.autos[i]
+
+        # Fehler kosten einmalig Zeit; Wetter und abgefahrene Reifen
+        # erhoehen die Wahrscheinlichkeit.
+        rate = kern_zwischenfall.fehlerrate_je_runde(
+            self.k, auto, self.wetter_fehlerfaktor, float(self.reifen_fehler[i])
+        )
+        if self.wuerfel.random() < rate:
+            verlust = kern_zwischenfall.zeitverlust_ms(self.k, self.wuerfel)
+            self.pause_ms[i] = verlust
+            self.zwischenfaelle.append(
+                kern_zwischenfall.Zwischenfall(
+                    art=kern_zwischenfall.Art.FEHLER,
+                    zeit_ms=int(round(ueberfahrt)),
+                    teilnehmer=i,
+                    runde=runde,
+                    zeitverlust_ms=verlust,
+                )
+            )
+
+        # Defekte senken Fahrzeugwerte bis zur Reparatur.
+        if self.wuerfel.random() < kern_zwischenfall.defektrate_je_runde(
+            self.k, auto, self.runden
+        ):
+            defekt = kern_zwischenfall.waehle_defekt(self.k, self.wuerfel)
+            self.defekte_je_auto[i].append(defekt)
+            self.defekt_tempo[i] = kern_zwischenfall.tempofaktor_defekte(
+                self.k, self.defekte_je_auto[i]
+            )
+            self.zwischenfaelle.append(
+                kern_zwischenfall.Zwischenfall(
+                    art=kern_zwischenfall.Art.DEFEKT,
+                    zeit_ms=int(round(ueberfahrt)),
+                    teilnehmer=i,
+                    runde=runde,
+                    defekt=str(defekt["schluessel"]),
+                )
+            )
+
+    def _setze_reifen(self, i: int) -> None:
+        """Rechnet den Reifenzustand eines Autos in Tempo und Fehlerquote um."""
+        auto = self.autos[i]
+        self.reifen_tempo[i] = kern_reifen.tempofaktor(self.k, auto, float(self.verschleiss[i]))
+        self.reifen_fehler[i] = kern_reifen.fehlerfaktor(self.k, auto, float(self.verschleiss[i]))
 
     def _versucht_ueberholen(self, hinten: int, vorne: int, vorteil: float, zeit_ms: int) -> bool:
         chance = erfolgschance(
@@ -516,6 +682,9 @@ class _Lauf:
                 int(self.runden_gefahren[i]),
             )
         self._setze_grip(ueberfahrt)
+        # Reifenzustand und Zwischenfaelle werden je Runde nachgezogen.
+        self._setze_reifen(i)
+        self._wuerfle_rundenereignisse(i, ueberfahrt)
 
         if self.runden_gefahren[i] >= self.runden and self.sieger_zeit is None:
             self.sieger_zeit = ueberfahrt
@@ -594,6 +763,7 @@ def simuliere(
     streckenmittel: float,
     wetter: kern_wetter.Wetterverlauf | None = None,
     ohne_zufall: bool = False,
+    streckenverschleiss: float = 1.0,
     hoechstdauer_ms: int | None = None,
 ) -> Rennverlauf:
     """Faehrt ein ganzes Rennen und liefert den fertigen Verlauf.
@@ -602,8 +772,12 @@ def simuliere(
         Bezugsgroesse fuer den Streckenfaktor beim Ueberholen
     :param wetter: Wetterverlauf der Session (GDD 7); ohne Angabe wird
         trocken mit Grip 1,0 gefahren
-    :param ohne_zufall: laesst Tagesform, Eigenschafts-Zufall und
-        Rundenform weg. GDD 9 kalibriert ausdruecklich ohne Zufall, und
+    :param streckenverschleiss: Reifenfaktor der Strecke (GDD 3), aus
+        rennmanager.kern.reifen.streckenfaktor
+    :param ohne_zufall: laesst Tagesform, Eigenschafts-Zufall, Rundenform,
+        Fehler, Unfaelle, Defekte und den Reifenverschleiss weg - also
+        alles, was eine Rennrunde von der kalibrierten Einzelrunde
+        abweichen laesst. GDD 9 kalibriert ausdruecklich ohne Zufall, und
         fuer die Massensimulation aus GDD 15 ist es ebenfalls noetig.
     :param hoechstdauer_ms: Notbremse gegen ein Rennen, das nie endet
     """
@@ -614,7 +788,7 @@ def simuliere(
 
     lauf = _Lauf(
         konfiguration, strecke, teilnehmer, runden, seedquelle, streckenmittel,
-        wetter, ohne_zufall,
+        wetter, ohne_zufall, streckenverschleiss,
     )
     schritt_ms = konfiguration.wert("simulation", "zeitschritt_ms")
     bild_ms = konfiguration.wert("simulation", "bildschritt_ms")
@@ -628,6 +802,7 @@ def simuliere(
     zeitpunkte = [0]
     distanzen = [lauf.distanz.copy()]
     ausgefallen = [~lauf.aktiv.copy()]
+    reifen = [np.ones(lauf.anzahl)]
 
     zeit_ms = 0
     nummer = 0
@@ -639,12 +814,14 @@ def simuliere(
             zeitpunkte.append(zeit_ms)
             distanzen.append(lauf.distanz.copy())
             ausgefallen.append(~lauf.aktiv.copy())
+            reifen.append(np.clip(1.0 - lauf.verschleiss, 0.0, 1.0))
 
     # Das letzte Bild immer festhalten, damit der Zielstand sichtbar ist.
     if zeitpunkte[-1] != zeit_ms:
         zeitpunkte.append(zeit_ms)
         distanzen.append(lauf.distanz.copy())
         ausgefallen.append(~lauf.aktiv.copy())
+        reifen.append(np.clip(1.0 - lauf.verschleiss, 0.0, 1.0))
 
     return Rennverlauf(
         strecke=strecke,
@@ -657,6 +834,8 @@ def simuliere(
         ausgefallen=np.array(ausgefallen),
         protokolle=lauf.protokolle,
         manoever=tuple(lauf.manoever),
+        zwischenfaelle=tuple(lauf.zwischenfaelle),
+        reifenzustand=np.array(reifen),
         ergebnisse=_ergebnisse(lauf, konfiguration, seedquelle),
         dauer_ms=zeit_ms,
     )
@@ -670,19 +849,26 @@ def starterfeld(
     liga: int,
     spielerplatz: int | None = None,
     umgedreht: bool = False,
+    seedquelle: Seedquelle | None = None,
 ) -> tuple[Teilnehmer, ...]:
     """Baut ein Feld aus 30 Autos fuer eine Liga.
 
-    Vorlaeufig: Die Staerken sind gleichmaessig zwischen dem Letzten und
-    dem Besten der Liga verteilt, wie es die Kalibriertabelle in GDD 9
-    vorgibt, und jedes Auto hat ueberall denselben Wert. Die richtige
-    KI-Erzeugung mit Profilstreuung, Fahrern und Teams kommt in Schritt 7;
+    Die Staerken sind gleichmaessig zwischen dem Letzten und dem Besten der
+    Liga verteilt, wie es die Kalibriertabelle in GDD 9 vorgibt. Mit einer
+    Seedquelle streuen die Einzelwerte zusaetzlich um ihren Mittelwert
+    (GDD 12: "Einzelwerte streuen +/- 25 % um den Mittelwert, z. B.
+    Regenspezialist, Qualifying-Experte, Reifenschoner"). Erst dadurch
+    unterscheiden sich die Autos im Profil und nicht nur in der Staerke -
+    ohne das faehrt jedes seine Reifen gleich schnell ab.
+
+    Fahrer, Teams und die vollstaendige KI-Erzeugung kommen in Schritt 7;
     bis dahin dienen die Herstellerfarben als Platzhalter.
 
     :param spielerplatz: Startplatz des Spielers, ``None`` fuer ein reines
         KI-Feld
     :param umgedreht: Das staerkste Auto startet hinten - nuetzlich, um das
         Ueberholen zu pruefen
+    :param seedquelle: ohne Angabe hat jedes Auto ueberall denselben Wert
     """
     kontrolle = {zeile["liga"]: zeile for zeile in konfiguration.wert("ligen", "kontrolle")}
     if liga not in kontrolle:
@@ -696,18 +882,46 @@ def starterfeld(
     staerkster = zeile["s_bester"]
     anzahl = konfiguration.wert("rennen", "autos")
     hersteller = konfiguration.hersteller
+    streuung = konfiguration.wert("ki", "profil_streuung")
+    kleinster = konfiguration.wert("skala", "minimum")
+    groesster = konfiguration.wert("skala", "maximum")
+
+    # Die zusaetzlichen Fahrereigenschaften ausserhalb der Wirkungsmatrix:
+    # die fuenf Wetterfaehigkeiten (GDD 7) und der Reifenfluesterer.
+    zusatz = [
+        eintrag["schluessel"] for eintrag in konfiguration.wert("wetter", "faehigkeit", "liste")
+    ] + [REIFENFLUESTERER]
 
     teilnehmer = []
     for nummer in range(1, anzahl + 1):
         anteil = (anzahl - nummer) / (anzahl - 1)
         s = round(schwaechster + (staerkster - schwaechster) * anteil)
         startplatz = anzahl + 1 - nummer if umgedreht else nummer
+
+        if seedquelle is None:
+            wert_von = dict.fromkeys(
+                [f.schluessel for f in konfiguration.faehigkeiten] + zusatz, s
+            )
+        else:
+            wuerfel = seedquelle.zweig("profil", nummer).generator()
+
+            def gestreut(mittelwert: int = s, wuerfel=wuerfel) -> int:
+                faktor = 1.0 + float(wuerfel.uniform(-streuung, streuung))
+                return int(round(min(max(mittelwert * faktor, kleinster), groesster)))
+
+            wert_von = {f.schluessel: gestreut() for f in konfiguration.faehigkeiten}
+            wert_von.update({schluessel: gestreut() for schluessel in zusatz})
+
         teilnehmer.append(
             Teilnehmer(
                 auto=Auto(
                     kuerzel=f"A{nummer:02d}",
                     name=f"Auto {nummer}",
-                    werte={f.schluessel: s for f in konfiguration.faehigkeiten},
+                    werte={
+                        f.schluessel: wert_von[f.schluessel]
+                        for f in konfiguration.faehigkeiten
+                    },
+                    wetterwerte={schluessel: wert_von[schluessel] for schluessel in zusatz},
                 ),
                 startplatz=startplatz,
                 farbe=hersteller[(nummer - 1) % len(hersteller)].farbe,

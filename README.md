@@ -4,8 +4,8 @@ Motorsport-Manager mit sichtbarer Rennsimulation. Grundlage ist das
 [Game Design Dokument v1.0](Rennmanager%20%E2%80%93%20Game%20Design%20Dokument%20%28v1.0%29.md);
 die Arbeitsregeln stehen in [Claude.md](Claude.md).
 
-**Stand: Schritt 5 von 10 – Qualifying, Zufallssystem, Wetter.**
-Ein Rennwochenende laeuft durch; Fehler, Unfaelle und Defekte folgen in Schritt 6.
+**Stand: Schritt 6 von 10 – Fehler, Unfaelle, Defekte, Reifenverschleiss.**
+Ein Rennwochenende laeuft durch; Fahrer, Teams und Ligen folgen in Schritt 7.
 
 ## Aufbau
 
@@ -211,6 +211,33 @@ Qualifying und Rennen wuerfeln getrennt - Wetter, Tagesform und
 Eigenschafts-Zufall je einmal pro Session (GDD 7 und 11). Fuer die
 Kalibrierung und die Massensimulation laesst sich der Zufall abschalten:
 `rennen.simuliere(..., ohne_zufall=True)`, wie GDD 9 es verlangt.
+
+## Reifen, Fehler, Unfaelle, Defekte
+
+`rennmanager.kern.reifen` und `rennmanager.kern.zwischenfall` setzen um,
+was GDD 4 und 14 verlangen. Wichtig ist dabei eine Trennung, die es im
+GDD so noch nicht gab:
+
+* **D14 Reifenmanagement** senkt, wie schnell die Reifen abbauen.
+* Der **Reifenfluesterer** senkt, wie sehr abgebaute Reifen wehtun.
+
+Ohne diese Trennung faechert das Feld in der zweiten Rennhaelfte nur auf:
+Wer schneller ist, bleibt schneller. Mit ihr ist ein Auto, das seine
+Reifen schont, frueh langsamer und spaet schneller als eines, das sie
+verheizt - die Linien im Rennverlauf kreuzen sich. Der Reifenfluesterer
+steht wie die Wetterfaehigkeiten aus GDD 7 neben der Wirkungsmatrix;
+die Begruendung dazu in OFFENE_PUNKTE.md.
+
+Die Streckenwirkung kommt aus der Querbeschleunigung der Runde: In
+Zandvoort enden die Reifen einer Liga-10-Session bei 11 bis 19 %, in
+Monza bei 62 bis 66 %.
+
+### Warum die Unfallrate je Sekunde gilt
+
+Als Wahrscheinlichkeit je Zeitschritt gelesen fielen bei 50 Schritten je
+Sekunde alle fuenf erlaubten Ausfaelle in der ersten Runde. Die Rate gilt
+deshalb je Sekunde in Reichweite - sonst haengt die Unfallhaeufigkeit an
+der Schrittweite der Simulation statt am Spiel.
 
 ## Zwei Regeln, die den Code praegen
 

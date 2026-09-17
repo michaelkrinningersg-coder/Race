@@ -40,10 +40,20 @@ def test_jedes_auto_faehrt_genau_eine_gezeitete_runde(session, feld) -> None:
     assert all(f.zeit_ms > 0 for f in session.fahrten)
 
 
-def test_autos_fahren_nacheinander(session) -> None:
-    """GDD 4: Jedes Auto faehrt allein."""
-    for davor, danach in zip(session.fahrten, session.fahrten[1:], strict=False):
-        assert davor.ziel_ms <= danach.beginn_ms
+def test_autos_starten_nacheinander(session, k) -> None:
+    """GDD 4: Jedes Auto faehrt allein - aber ueberlappend gestartet.
+
+    Ohne Ueberlappung dauerte eine Session 30 mal zwei Runden; das Wetter
+    haette dann mehr Einfluss als die Fahrleistung.
+    """
+    abstaende = [
+        danach.beginn_ms - davor.beginn_ms
+        for davor, danach in zip(session.fahrten, session.fahrten[1:], strict=False)
+    ]
+    assert abstaende, "Es muss mehr als ein Auto fahren"
+    # Alle Abstaende gleich und positiv.
+    assert max(abstaende) - min(abstaende) <= 1
+    assert min(abstaende) > 0
 
 
 def test_aufwaermrunde_kostet_zeit(session, k) -> None:

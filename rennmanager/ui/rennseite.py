@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 )
 
 from rennmanager.kern import qualifying as kern_qualifying
+from rennmanager.kern import reifen as kern_reifen
 from rennmanager.kern import rennen as kern_rennen
 from rennmanager.kern import strecke as kern_strecke
 from rennmanager.kern import tempo as kern_tempo
@@ -160,7 +161,9 @@ class Rennseite(QWidget):
 
         # GDD 4: Positionen, Gesamtzeit des Fuehrenden, Rueckstand der uebrigen
         self._rangliste = QTreeWidget()
-        self._rangliste.setHeaderLabels(["Pos", "Auto", "Rd", "Zeit / Rueckstand"])
+        self._rangliste.setHeaderLabels(
+            ["Pos", "Auto", "Rd", "Zeit / Rueckstand", "Reifen", "Status"]
+        )
         self._rangliste.setRootIsDecorated(False)
         self._rangliste.setAlternatingRowColors(True)
         kasten = QGroupBox("Rangliste")
@@ -207,6 +210,10 @@ class Rennseite(QWidget):
                 liga,
                 spielerplatz=spielerplatz,
                 umgedreht=art == "umgedreht",
+                # Mit Seedquelle streuen die Einzelwerte je Auto (GDD 12) -
+                # erst dadurch faehrt nicht jedes Auto die Reifen gleich
+                # schnell ab.
+                seedquelle=haupt.zweig("feld"),
             )
             if art == "qualifying":
                 # Das Qualifying bestimmt die Startaufstellung (GDD 4).
@@ -237,6 +244,7 @@ class Rennseite(QWidget):
                 rundendauer,
                 haupt.zweig("rennwetter"),
             )
+            alle = [self._lade_strecke(e["name"]) for e in self._konfiguration.strecken]
             self._verlauf = kern_rennen.simuliere(
                 self._konfiguration,
                 strecke,
@@ -245,6 +253,9 @@ class Rennseite(QWidget):
                 haupt.zweig("rennen"),
                 self._mittlerer_anteil(),
                 wetter=wetter,
+                streckenverschleiss=kern_reifen.streckenfaktor(
+                    self._konfiguration, strecke, kern_reifen.mittlere_querbeschleunigung(alle)
+                ),
             )
         finally:
             self._starten.setEnabled(True)
@@ -350,6 +361,9 @@ class Rennseite(QWidget):
         laenge = verlauf.strecke.laenge_m
         fuehrender = reihenfolge[0]
         vorne = float(distanzen[fuehrender])
+        reifen = verlauf.reifen_zu(zeit)
+        bild = verlauf.bild_zu(zeit)
+        raus = verlauf.ausgefallen[bild]
 
         for platz, i in enumerate(reihenfolge, start=1):
             teilnehmer = verlauf.teilnehmer[i]
@@ -368,17 +382,52 @@ class Rennseite(QWidget):
                     tempo = self._tempo_naeherung(verlauf, fuehrender, zeit)
                     text = formatiere_rueckstand(int((vorne - distanz) / max(tempo, 1e-6) * 1000))
 
+            # GDD 4: Zwischenfaelle sind im Ranking markiert, die
+            # Einzelheiten stehen im Mouseover.
+            bisher = [z for z in verlauf.zwischenfaelle_von(i) if z.zeit_ms <= zeit]
+            status = self._status(bisher, bool(raus[i]))
+
             zeile = QTreeWidgetItem(
-                self._rangliste, [str(platz), teilnehmer.kuerzel, str(runde), text]
+                self._rangliste,
+                [
+                    str(platz),
+                    teilnehmer.kuerzel,
+                    str(runde),
+                    text,
+                    f"{reifen[i]:.0%}",
+                    status,
+                ],
             )
             zeile.setForeground(1, QColor(teilnehmer.farbe))
+            if bisher:
+                zeile.setToolTip(
+                    5,
+                    "\n".join(f"Runde {z.runde}: {z.beschreibung}" for z in bisher),
+                )
+            if raus[i]:
+                for spalte in range(self._rangliste.columnCount()):
+                    zeile.setForeground(spalte, QColor("#8b93a1"))
             if teilnehmer.ist_spieler:
                 schrift = zeile.font(1)
                 schrift.setBold(True)
                 for spalte in range(4):
                     zeile.setFont(spalte, schrift)
-        for spalte in range(4):
+        for spalte in range(self._rangliste.columnCount()):
             self._rangliste.resizeColumnToContents(spalte)
+
+    @staticmethod
+    def _status(zwischenfaelle, ausgefallen: bool) -> str:
+        """Kurzzeichen fuer die Rangliste (GDD 4)."""
+        if ausgefallen:
+            return "ausgefallen"
+        zeichen = []
+        fehler = sum(1 for z in zwischenfaelle if z.art == "fehler")
+        defekte = sum(1 for z in zwischenfaelle if z.art == "defekt")
+        if defekte:
+            zeichen.append(f"Defekt x{defekte}" if defekte > 1 else "Defekt")
+        if fehler:
+            zeichen.append(f"{fehler} Fehler")
+        return ", ".join(zeichen)
 
     @staticmethod
     def _tempo_naeherung(verlauf: Rennverlauf, i: int, zeit: float) -> float:

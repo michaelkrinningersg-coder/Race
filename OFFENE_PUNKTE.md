@@ -563,3 +563,70 @@ Effekt: Innerhalb einer Liga ist die Spanne der Q-Werte schmal – in Liga 1
 liegen zwischen Erstem und Letztem nur rund 0,05 % – also entscheidet die
 Q-Spalte einzelne Hundertstel, nicht ganze Sekunden. Genau das soll eine
 Zusatzspalte leisten.
+
+
+---
+
+## Nachtrag: bei Schritt 6 entschieden
+
+### 25. Reifenflüsterer — eine Eigenschaft neben den 16 aus GDD 6
+
+**Auf Wunsch neu aufgenommen.** Das GDD kennt D14 Reifenmanagement, das
+den Verschleiß senkt. Damit allein fächert das Feld in der zweiten
+Rennhälfte nur auf: Wer schneller ist, bleibt schneller.
+
+Der Reifenflüsterer greift an anderer Stelle an — er senkt nicht den
+Abbau, sondern dessen **Wirkung**. Ein Fahrer mit hohem Wert holt aus
+schlechten Reifen noch Zeit heraus. Erst dadurch kreuzen sich Linien:
+Ein Auto, das seine Reifen schont, ist früh langsamer und spät schneller
+als eines, das sie verheizt.
+
+| | Variante | Einordnung |
+| --- | --- | --- |
+| **A** | Als 17. Fahrer-Eigenschaft D17 | Ändert GDD 6 (16 Eigenschaften), die Wirkungsmatrix in GDD 8 und die Prüfung „18 Fähigkeiten mit Geldanteil" aus GDD 9 |
+| **B** | Wie die Wetterfähigkeiten: neben der Wirkungsmatrix | Lässt GDD 6, 8 und 9 unberührt; Währung E + Z |
+| **C** | D14 aufbohren, sodass es beides tut | Keine neue Eigenschaft, aber beide Wirkungen nicht mehr trennbar |
+
+**Entscheidung: B.** Das GDD führt mit den fünf Wetterfähigkeiten aus
+Abschnitt 7 bereits Fahrer-Eigenschaften außerhalb der Wirkungsmatrix —
+der Reifenflüsterer reiht sich dort ein, ohne eine einzige bestehende
+Zusage zu brechen. C wäre der kleinste Eingriff, verliert aber genau die
+Trennung, auf die es ankommt: Abbau bremsen und Abbau ertragen sind zwei
+verschiedene Fähigkeiten.
+
+Er lässt sich jederzeit zu einem vollen D17 heraufstufen; dann sind GDD 6,
+8 und 9 nachzuziehen.
+
+### 26. Einheit der Unfallrate
+
+Die Entscheidung zu Punkt 7 nannte „0,02 % je Annäherung", ohne die
+Bezugsgröße zu nennen. Als Wahrscheinlichkeit **je Zeitschritt** gelesen
+fielen bei 50 Schritten je Sekunde und dichtem Feld alle fünf erlaubten
+Ausfälle bereits in der ersten Runde.
+
+**Entscheidung: je Sekunde in Reichweite**, nicht je Zeitschritt. Sonst
+hinge die Unfallhäufigkeit an der Schrittweite der Simulation statt am
+Spiel. Gemessen ergibt das rund 0,5 Unfälle je Rennen — passend zu „sehr
+selten" aus GDD 4 und zur ursprünglichen Vorhersage „rund 0 bis 1 Unfall
+je Rennen".
+
+### 27. Qualifying: Sessiondauer und Wetter
+
+Ohne Gegenmaßnahme dauerte eine Qualifying-Session 30 × 2 Runden — in Spa
+drei Stunden. Das Wetter drehte sich darin mehrfach, und die
+Startreihenfolge entschied mehr als die Fahrleistung: Die fünf stärksten
+Autos landeten im Schnitt auf **Platz 8,0 von 30**.
+
+Drei Maßnahmen, gemessen:
+
+| Maßnahme | Ø Startplatz der 5 Stärksten |
+| --- | --- |
+| ohne | 8,0 |
+| Wetterwechsel nur in einem Fenster am Sessionanfang | 5,9 |
+| dazu höchstens ein Wechsel im Qualifying (15-min-Fenster) | **3,9** |
+| gar kein Wetterwechsel im Qualifying | 3,3 |
+
+**Entschieden:** überlappender Start mit 1,25 Runden Abstand (Session
+3:00 → 1:47) **plus** 15-Minuten-Fenster und höchstens ein Wechsel. Das
+Wetter bleibt damit spürbar, entscheidet aber nicht mehr das Ergebnis.
+Alle drei Werte stehen in der Konfiguration.

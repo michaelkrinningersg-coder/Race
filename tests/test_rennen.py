@@ -115,9 +115,15 @@ def test_hoehere_liga_faehrt_weiter(k, zandvoort) -> None:
 
 
 # -- Verlauf ----------------------------------------------------------------
-def test_alle_autos_kommen_ins_ziel(rennen) -> None:
+def test_jedes_auto_wird_gewertet(rennen) -> None:
+    """Auch Ausgefallene stehen im Ergebnis, ganz hinten (GDD 4)."""
     assert len(rennen.ergebnisse) == 30
-    assert all(e.zeit_ms is not None for e in rennen.ergebnisse)
+    angekommen = [e for e in rennen.ergebnisse if e.zeit_ms is not None]
+    ausgefallen = [e for e in rennen.ergebnisse if e.zeit_ms is None]
+    assert angekommen, "Mindestens ein Auto muss ankommen"
+    # Ausgefallene stehen hinter allen Angekommenen.
+    if ausgefallen:
+        assert min(e.platz for e in ausgefallen) > max(e.platz for e in angekommen)
 
 
 def test_platzierungen_sind_luckenlos(rennen) -> None:
@@ -149,7 +155,7 @@ def test_rueckstand_waechst_mit_dem_platz(rennen) -> None:
 
 def test_zeiten_sind_ganze_millisekunden(rennen) -> None:
     for ergebnis in rennen.ergebnisse:
-        assert isinstance(ergebnis.zeit_ms, int)
+        assert ergebnis.zeit_ms is None or isinstance(ergebnis.zeit_ms, int)
     for protokoll in rennen.protokolle:
         assert all(isinstance(zeit, int) for zeit in protokoll.rundenzeiten_ms)
 
@@ -157,7 +163,11 @@ def test_zeiten_sind_ganze_millisekunden(rennen) -> None:
 def test_jedes_auto_hat_rundenzeiten_und_sektoren(rennen, k) -> None:
     """GDD 4: Zeitenmonitor mit letzter Runde, bester Runde, 4 Sektorzeiten."""
     sektoren = k.wert("strecke", "sektoren")
+    ausgefallen = {e.teilnehmer for e in rennen.ergebnisse if e.zeit_ms is None}
     for i, protokoll in enumerate(rennen.protokolle):
+        if i in ausgefallen and not protokoll.rundenzeiten_ms:
+            # Wer in der ersten Runde ausfaellt, hat keine Rundenzeit.
+            continue
         assert protokoll.rundenzeiten_ms, f"Auto {i} ohne Rundenzeit"
         assert protokoll.beste_runde_ms == min(protokoll.rundenzeiten_ms)
         assert protokoll.letzte_runde_ms == protokoll.rundenzeiten_ms[-1]

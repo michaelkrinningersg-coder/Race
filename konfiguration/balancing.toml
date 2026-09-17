@@ -420,6 +420,26 @@ streuung_je_runde = 0.50   # +/- 50 %
 [qualifying]
 aufwaermrunden = 1
 gezeitete_runden = 1
+# Die Autos fahren zwar allein (GDD 4), starten aber ueberlappend: jedes
+# rueckt 1,25 Runden nach dem vorigen los. Ohne Ueberlappung dauert eine
+# Session 30 x 2 Runden; in Spa waeren das drei Stunden, in denen sich das
+# Wetter zwangslaeufig mehrfach dreht und die Startreihenfolge mehr
+# entscheidet als die Fahrleistung.
+abstand_runden = 1.25
+
+[qualifying.wetter]
+# Selbst mit ueberlappendem Start dauert eine Session in Spa fast zwei
+# Stunden. Wuerde das Wetter darin wie im Rennen bis zu dreimal wechseln,
+# entschiede vor allem die Startreihenfolge - gemessen landeten die fuenf
+# staerksten Autos im Schnitt auf Platz 8,0 von 30.
+#
+# Zwei Begrenzungen bringen das zurecht, beide nur fuers Qualifying:
+#   Fenster fuer die Wechselzeitpunkte ab Sessionbeginn  8,0 -> 5,9
+#   dazu hoechstens ein Wechsel                          5,9 -> 3,9
+# Ohne jeden Wechsel waeren es 3,3; ganz ohne Wetterwirkung soll das
+# Qualifying aber nicht sein.
+fenster_minuten = 15
+wechsel_max = 1
 # Startreihenfolge: umgekehrter Meisterschaftsstand
 reihenfolge = "meisterschaft_umgekehrt"
 # Im ersten Rennen der Saison aufsteigend nach durchschnittlicher Qualifying-Faehigkeit
@@ -1380,7 +1400,13 @@ zeitverlust_max_ms = 2000
 [unfaelle.rate]
 # Entscheidung A: sehr selten, wie im GDD ausdruecklich verlangt. Die
 # Obergrenze von 0 bis 5 Ausfaellen je Rennen ist eine Decke, kein Ziel.
-je_annaeherung = 0.0002
+#
+# Die Rate gilt je Sekunde, in der zwei Autos naeher als 30 m beieinander
+# sind - nicht je Zeitschritt. Mit 50 Schritten je Sekunde und einem
+# dichten Feld waere eine Rate je Schritt um den Faktor 50 zu hoch; in
+# einem Probelauf fielen dadurch alle fuenf erlaubten Ausfaelle in der
+# ersten Runde.
+je_sekunde_in_reichweite = 0.00002
 anteil_ein_auto = 0.75
 anteil_beide_autos = 0.25
 
@@ -1392,10 +1418,43 @@ je_auto_und_rennen_bei_maximum = 0.005
 
 [reifen.verschleiss]
 # Entscheidung B: progressiv - erst flach, letztes Drittel steil.
+#
+#   zustand:      1,0 frisch bis 0,0 abgefahren
+#   verschleiss:  1 - zustand
+#   tempoverlust: tempoverlust_voll * verschleiss ^ exponent
+#
+# Wie schnell der Verschleiss waechst, haengt vom Bereich ve der
+# Wirkungsmatrix ab (F10 Reifenhaltbarkeit, F14, F16, D14
+# Reifenmanagement). Ein Auto bei S = 0 faehrt die Reifen ueber die
+# Renndistanz voll ab, eines bei S = referenz nur zum Teil - die Spanne
+# steht unten.
 verlauf = "progressiv"
 exponent = 2.0
-tempoverlust_am_ende = 0.03
-fehlerzuschlag_am_ende = 0.5
+# Tempoverlust bei voellig abgefahrenen Reifen. Deutlich mehr als die
+# frueheren 3 %: Ohne spuerbaren Abbau faechert das Feld nur auf und es
+# gibt in der zweiten Rennhaelfte keine Positionswechsel mehr.
+tempoverlust_voll = 0.12
+fehlerzuschlag_voll = 1.0
+# Verschleiss ueber die volle Renndistanz, je nach Bereich ve:
+#   bei S = 0         verschleiss_bei_null       (Reifen sind am Ende hin)
+#   bei S = referenz  verschleiss_bei_referenz   (halten locker durch)
+# Gemessen so gewaehlt, dass sich die Zustaende am Rennende spreizen
+# statt gemeinsam bei null zu liegen - waeren am Ende alle Reifen hin,
+# waeren auch alle wieder gleich schnell.
+verschleiss_bei_null = 1.00
+verschleiss_bei_referenz = 0.35
+
+[reifen.fluesterer]
+# Neue Fahrereigenschaft neben den 16 aus GDD 6, aufgebaut wie die
+# Wetterfaehigkeiten aus GDD 7: Sie steht ausserhalb der Wirkungsmatrix
+# und zaehlt nicht zum Durchschnitt der Basiseigenschaften.
+#
+# Unterschied zu D14 Reifenmanagement: D14 senkt, wie schnell die Reifen
+# abbauen. Der Reifenfluesterer senkt, wie sehr abgebaute Reifen wehtun -
+# er holt aus schlechten Reifen noch Zeit heraus.
+name = "Reifenfluesterer"
+waehrung = ["E", "Z"]
+max_daempfung = 0.60
 
 [reifen.streckenfaktor]
 # Entscheidung A: aus der Querbeschleunigung, also der Summe von 1/Radius

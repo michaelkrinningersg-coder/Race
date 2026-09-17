@@ -127,6 +127,8 @@ def wuerfle(
     dauer_ms: int,
     rundendauer_ms: int,
     seedquelle: Seedquelle,
+    wechselfenster_ms: int | None = None,
+    wechsel_max: int | None = None,
 ) -> Wetterverlauf:
     """Wuerfelt das Wetter einer Session (GDD 7).
 
@@ -134,6 +136,15 @@ def wuerfle(
         verteilt werden
     :param rundendauer_ms: Rundenzeit, aus der sich die Verzoegerung der
         Streckennaesse in Runden ergibt
+    :param wechselfenster_ms: Zeitraum ab Sessionbeginn, in dem die Wechsel
+        liegen duerfen. Ohne Angabe die ganze Session.
+    :param wechsel_max: Obergrenze der Wechsel. Ohne Angabe die aus GDD 7.
+
+    Qualifying und Rennen unterscheiden sich hier: Im Rennen sind alle
+    Autos gleichzeitig auf der Strecke und erleben dasselbe Wetter, im
+    Qualifying faehrt jedes zu einer anderen Zeit. Deshalb bekommt das
+    Qualifying ein engeres Fenster und weniger Wechsel - sonst entschiede
+    die Startreihenfolge mehr als die Fahrleistung.
     """
     wuerfel = seedquelle.generator()
     kette = list(konfiguration.wert("wetter", "kette"))
@@ -147,11 +158,11 @@ def wuerfle(
     verteilung /= verteilung.sum()
     stelle = int(wuerfel.choice(len(kette), p=verteilung))
 
+    obergrenze = konfiguration.wert("wetter", "wechsel_max")
+    if wechsel_max is not None:
+        obergrenze = min(obergrenze, wechsel_max)
     anzahl = int(
-        wuerfel.integers(
-            konfiguration.wert("wetter", "wechsel_min"),
-            konfiguration.wert("wetter", "wechsel_max") + 1,
-        )
+        wuerfel.integers(konfiguration.wert("wetter", "wechsel_min"), obergrenze + 1)
     )
     schrittweite = konfiguration.wert("wetter", "wechsel_schrittweite")
 
@@ -159,7 +170,8 @@ def wuerfle(
     abschnitte = [Abschnitt(kette[stelle], 0, start_grip)]
     if anzahl:
         # Zeitpunkte der Wechsel sind zufaellig ueber die Session verteilt.
-        zeitpunkte = sorted(int(wuerfel.random() * dauer_ms) for _ in range(anzahl))
+        fenster = min(wechselfenster_ms or dauer_ms, dauer_ms)
+        zeitpunkte = sorted(int(wuerfel.random() * fenster) for _ in range(anzahl))
         for zeitpunkt in zeitpunkte:
             # Ein Wechsel geht immer nur um eine Stufe (GDD 7).
             richtung = schrittweite if wuerfel.random() < 0.5 else -schrittweite

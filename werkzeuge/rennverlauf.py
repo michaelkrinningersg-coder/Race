@@ -26,6 +26,7 @@ import numpy as np  # noqa: E402
 from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
 
 from rennmanager.kern import qualifying as kern_qualifying  # noqa: E402
+from rennmanager.kern import reifen as kern_reifen  # noqa: E402
 from rennmanager.kern import rennen as kern_rennen  # noqa: E402
 from rennmanager.kern import strecke as kern_strecke  # noqa: E402
 from rennmanager.kern import tempo as kern_tempo  # noqa: E402
@@ -51,7 +52,11 @@ def fahre_wochenende(konfiguration, streckenname: str, liga: int, seed: int, run
     mittel = kern_rennen.mittlerer_ueberholzonenanteil(konfiguration, alle)
     haupt = Seedquelle(seed)
 
-    feld = kern_rennen.starterfeld(konfiguration, liga, spielerplatz=None)
+    # Mit Seedquelle streuen die Einzelwerte je Auto (GDD 12) - erst
+    # dadurch faehrt nicht jedes Auto seine Reifen gleich schnell ab.
+    feld = kern_rennen.starterfeld(
+        konfiguration, liga, spielerplatz=None, seedquelle=haupt.zweig("feld")
+    )
     session = kern_qualifying.fahre(konfiguration, strecke, feld, haupt.zweig("qualifying"))
 
     # Aufstellung nach Qualifying (GDD 4).
@@ -71,7 +76,11 @@ def fahre_wochenende(konfiguration, streckenname: str, liga: int, seed: int, run
         haupt.zweig("rennwetter"),
     )
     verlauf = kern_rennen.simuliere(
-        konfiguration, strecke, gestartet, runden, haupt.zweig("rennen"), mittel, wetter=wetter
+        konfiguration, strecke, gestartet, runden, haupt.zweig("rennen"), mittel,
+        wetter=wetter,
+        streckenverschleiss=kern_reifen.streckenfaktor(
+            konfiguration, strecke, kern_reifen.mittlere_querbeschleunigung(alle)
+        ),
     )
     return session, verlauf
 
@@ -126,7 +135,7 @@ def rueckstand_in_sekunden(verlauf) -> tuple[np.ndarray, np.ndarray]:
     return zeiten, rueckstand
 
 
-def zeichne(konfiguration, session, verlauf, ziel: Path) -> None:
+def zeichne(konfiguration, liga: int, verlauf, ziel: Path) -> None:
     zeiten, rueckstand = rueckstand_in_sekunden(verlauf)
     anzahl = verlauf.anzahl
 
@@ -143,7 +152,7 @@ def zeichne(konfiguration, session, verlauf, ziel: Path) -> None:
 
     _beschrifte_enden(achse, zeiten, rueckstand, verlauf, farbverlauf, anzahl)
     _achsen(achse, zeiten, rueckstand)
-    _titel(bild, achse, konfiguration, session, verlauf)
+    _titel(bild, achse, konfiguration, liga, verlauf)
     _legende(bild, farbverlauf)
 
     bild.savefig(ziel, facecolor=FLAECHE, bbox_inches="tight")
@@ -191,7 +200,10 @@ def _achsen(achse, zeiten, rueckstand) -> None:
     achse.set_xlim(0, zeiten[-1] * 1.045)
     # Der Fuehrende liegt oben: die Achse zeigt nach unten.
     achse.invert_yaxis()
-    achse.set_ylim(float(rueckstand.max()) * 1.02, -float(rueckstand.max()) * 0.02)
+    # Etwas Luft unten, damit die Beschriftungen der letzten Autos nicht
+    # aus dem Bild laufen.
+    groesster = float(rueckstand.max())
+    achse.set_ylim(groesster * 1.10, -groesster * 0.03)
 
     achse.set_xlabel("Verstrichene Rennzeit", color=TEXT_ZWEITRANGIG, fontsize=10)
     achse.set_ylabel("Rueckstand auf den Fuehrenden (s)", color=TEXT_ZWEITRANGIG, fontsize=10)
@@ -207,17 +219,11 @@ def _achsen(achse, zeiten, rueckstand) -> None:
     achse.tick_params(colors=TEXT_ZWEITRANGIG, labelsize=9)
 
 
-def _titel(bild, achse, konfiguration, session, verlauf) -> None:
-    liga = konfiguration.ligenname(
-        next(
-            z["liga"]
-            for z in konfiguration.wert("ligen", "kontrolle")
-            if z["s_bester"] == max(t.auto.wert("F1") for t in session.teilnehmer)
-        )
-    )
+def _titel(bild, achse, konfiguration, liga, verlauf) -> None:
+    ligenname = konfiguration.ligenname(liga)
     sieger = verlauf.teilnehmer[verlauf.ergebnisse[0].teilnehmer]
     achse.set_title(
-        f"Rennverlauf {verlauf.strecke.name} - {liga}",
+        f"Rennverlauf {verlauf.strecke.name} - Liga {liga} ({ligenname})",
         color=TEXT, fontsize=16, fontweight="bold", loc="left", pad=26,
     )
     achse.text(
@@ -229,6 +235,18 @@ def _titel(bild, achse, konfiguration, session, verlauf) -> None:
         f"in {formatiere_dauer(verlauf.ergebnisse[0].zeit_ms)}",
         transform=achse.transAxes, color=TEXT_ZWEITRANGIG, fontsize=10, va="bottom",
     )
+
+
+def _zwischenfaelle(verlauf) -> str:
+    """Kurzfassung der Fehler, Defekte und Unfaelle fuer die Kopfzeile."""
+    from collections import Counter
+
+    gezaehlt = Counter(z.art for z in verlauf.zwischenfaelle)
+    teile = []
+    for art, wort in (("fehler", "Fehler"), ("defekt", "Defekte"), ("unfall", "Unfaelle")):
+        if gezaehlt[art]:
+            teile.append(f"{gezaehlt[art]} {wort}")
+    return ", ".join(teile) if teile else "keine Zwischenfaelle"
 
 
 def _legende(bild, farbverlauf) -> None:
@@ -268,7 +286,7 @@ def main() -> int:
         f"{len(verlauf.manoever)} Manoever, "
         f"Wetter {' -> '.join(verlauf.wetter.zustaende)}"
     )
-    zeichne(konfiguration, session, verlauf, argumente.datei)
+    zeichne(konfiguration, argumente.liga, verlauf, argumente.datei)
     print(f"  Diagramm: {argumente.datei}")
     return 0
 

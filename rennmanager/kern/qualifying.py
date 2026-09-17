@@ -5,9 +5,16 @@ gezeitete Runde. Die Startreihenfolge folgt dem umgekehrten
 Meisterschaftsstand; im ersten Rennen einer Saison stattdessen aufsteigend
 nach durchschnittlicher Qualifying-Faehigkeit.
 
-Weil die Autos nacheinander fahren, laeuft die Uhr ueber die ganze Session
-weiter - das Wetter kann sich also waehrend des Qualifyings aendern, und
-wer spaeter faehrt, trifft andere Bedingungen an.
+Die Autos starten ueberlappend: Jedes rueckt einen festen Rundenanteil
+nach dem vorigen los und faehrt seine Runden trotzdem allein. Ohne das
+dauerte eine Session 30 mal zwei Runden - in Spa drei Stunden, in denen
+sich das Wetter zwangslaeufig mehrfach dreht.
+
+Die Uhr laeuft ueber die ganze Session weiter, das Wetter kann sich also
+waehrend des Qualifyings aendern. Anders als im Rennen, wo alle Autos
+gleichzeitig unterwegs sind, traefe das hier frueh und spaet Fahrende
+ungleich. Deshalb liegen die Wechsel nur in einem Fenster am Anfang und
+sind in der Zahl begrenzt; die Werte stehen in der Konfiguration.
 
 Fuer die gezeitete Runde kommt zur normalen Fahrleistung der Bereich ``q``
 aus der Wirkungsmatrix hinzu (GDD 8: "die Q-Spalte ist ein zusaetzliches
@@ -159,18 +166,28 @@ def fahre(
     # Fuer das Wetter wird die Dauer vorab geschaetzt: jedes Auto faehrt
     # Aufwaermrunde plus gezeitete Runde.
     schaetzrunde = fahre_runde(konfiguration, strecke, teilnehmer[0].auto).zeit_ms
-    dauer_schaetzung = schaetzrunde * (aufwaermrunden + gezeitete) * len(teilnehmer)
+    abstand_runden = konfiguration.wert("qualifying", "abstand_runden")
+    abstand_ms = schaetzrunde * abstand_runden
+    dauer_schaetzung = int(
+        abstand_ms * (len(teilnehmer) - 1) + schaetzrunde * (aufwaermrunden + gezeitete)
+    )
     verlauf = kern_wetter.wuerfle(
         konfiguration,
         strecke.name,
         dauer_schaetzung,
         schaetzrunde,
         seedquelle.zweig("wetter"),
+        wechselfenster_ms=int(
+            konfiguration.wert("qualifying", "wetter", "fenster_minuten") * 60_000
+        ),
+        wechsel_max=konfiguration.wert("qualifying", "wetter", "wechsel_max"),
     )
 
     fahrten: list[Fahrt] = []
-    uhr = 0.0
     for platz, i in enumerate(reihenfolge):
+        # Ueberlappender Start: jedes Auto rueckt abstand_runden nach dem
+        # vorigen los und faehrt seine Runden dennoch allein.
+        uhr = abstand_ms * platz
         # Eigener Wurf je Auto und Session (GDD 11).
         sessionform = kern_form.wuerfle(
             konfiguration, teilnehmer[i].auto, seedquelle.zweig("form", i)
@@ -231,5 +248,5 @@ def fahre(
         fahrten=tuple(fahrten),
         wetter=verlauf,
         aufstellung=tuple(fahrt.teilnehmer for fahrt in geordnet),
-        dauer_ms=int(round(uhr)),
+        dauer_ms=max(fahrt.ziel_ms for fahrt in fahrten),
     )
