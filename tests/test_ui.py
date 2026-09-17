@@ -17,6 +17,7 @@ from PySide6.QtCore import Qt  # noqa: E402
 from PySide6.QtWidgets import QTreeWidget  # noqa: E402
 
 from rennmanager.ui.hauptfenster import Hauptfenster  # noqa: E402
+from rennmanager.ui.tabellen import SortierbareZeile as Zeile  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -951,3 +952,109 @@ def test_editierte_werte_kommen_im_rennen_an(qtbot, konfig: kf.Konfiguration) ->
     kuerzel = fenster.welt.fahrer[nummer].kuerzel
     gefahren = next(t for t in feld if t.auto.kuerzel == kuerzel)
     assert gefahren.auto.wert("F1") == 90_000
+
+
+def test_editor_zeigt_je_fahrer_die_rundenzeit(qtbot, konfig: kf.Konfiguration) -> None:
+    """Trocken und ohne jeden Wurf - so laesst sich vergleichen."""
+    from rennmanager.kern import strecke as kern_strecke
+    from rennmanager.kern import tempo as kern_tempo
+    from rennmanager.kern.zeit import formatiere_dauer
+
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.editorseite
+    seite.liga_auswahl.setCurrentIndex(10)
+
+    name = seite.streckenauswahl.currentData()
+    strecke = kern_strecke.lade(konfig, name)
+    zeile = seite.liste.topLevelItem(0)
+    fahrer = fenster.welt.fahrer[zeile.data(0, Qt.UserRole)]
+
+    frei = kern_tempo.fahre_runde(konfig, strecke, fahrer.auto).zeit_ms
+    kenntnis = fenster._kenntnis.tempofaktor(fahrer.nummer, name)
+    assert zeile.text(5) == formatiere_dauer(int(round(frei / kenntnis)))
+
+
+def test_editor_rechnet_die_zeiten_je_strecke_neu(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.editorseite
+    seite.liga_auswahl.setCurrentIndex(10)
+
+    def zeiten() -> list[str]:
+        return [
+            seite.liste.topLevelItem(i).text(5)
+            for i in range(seite.liste.topLevelItemCount())
+        ]
+
+    erste = zeiten()
+    seite.streckenauswahl.setCurrentIndex(seite.streckenauswahl.findData("Monza"))
+    monza = zeiten()
+    seite.streckenauswahl.setCurrentIndex(seite.streckenauswahl.findData("Spa"))
+    assert monza != erste
+    assert zeiten() != monza
+    # Der Kasten nennt die Strecke, damit klar ist, worauf sich die Zeit bezieht.
+    assert "Spa" in seite._listenkasten.title()
+
+
+def test_editor_zeigt_den_rueckstand_zur_bestzeit(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.editorseite
+    seite.liga_auswahl.setCurrentIndex(10)
+
+    zeiten = [
+        seite.liste.topLevelItem(i).data(5, Zeile.SORTIERROLLE)
+        for i in range(seite.liste.topLevelItemCount())
+    ]
+    rueckstaende = [
+        seite.liste.topLevelItem(i).data(6, Zeile.SORTIERROLLE)
+        for i in range(seite.liste.topLevelItemCount())
+    ]
+    bestzeit = min(zeiten)
+    assert rueckstaende == [zeit - bestzeit for zeit in zeiten]
+    # Genau eine Zeile ist die Bestzeit und hat keinen Rueckstand.
+    leer = [
+        i
+        for i in range(seite.liste.topLevelItemCount())
+        if seite.liste.topLevelItem(i).text(6) == ""
+    ]
+    assert len(leer) == 1
+
+
+def test_editor_sortiert_nach_rundenzeit(qtbot, konfig: kf.Konfiguration) -> None:
+    """Wer auf dieser Strecke am schnellsten ist, muss nicht der Staerkste sein."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.editorseite
+    seite.liga_auswahl.setCurrentIndex(10)
+
+    seite.liste.sortByColumn(5, Qt.AscendingOrder)
+    zeiten = [
+        seite.liste.topLevelItem(i).data(5, Zeile.SORTIERROLLE)
+        for i in range(seite.liste.topLevelItemCount())
+    ]
+    assert zeiten == sorted(zeiten)
+
+
+def test_editor_rechnet_nach_einer_aenderung_neu(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.editorseite
+    seite.liga_auswahl.setCurrentIndex(10)
+
+    zeile = seite.liste.topLevelItem(0)
+    seite.liste.setCurrentItem(zeile)
+    nummer = zeile.data(0, Qt.UserRole)
+    vorher = zeile.data(5, Zeile.SORTIERROLLE)
+
+    for schluessel in seite.felder:
+        seite.felder[schluessel].setValue(90_000)
+    seite.knopf_uebernehmen.click()
+
+    nachher = next(
+        seite.liste.topLevelItem(i).data(5, Zeile.SORTIERROLLE)
+        for i in range(seite.liste.topLevelItemCount())
+        if seite.liste.topLevelItem(i).data(0, Qt.UserRole) == nummer
+    )
+    assert nachher < vorher

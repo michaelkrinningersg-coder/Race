@@ -35,7 +35,6 @@ from PySide6.QtWidgets import (
     QSplitter,
     QTabWidget,
     QTreeWidget,
-    QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -46,8 +45,9 @@ from rennmanager.kern import tempo as kern_tempo
 from rennmanager.kern import welt as kern_welt
 from rennmanager.kern.auto import Auto, bereichswerte
 from rennmanager.kern.welt import Welt, WeltFehler
-from rennmanager.kern.zeit import formatiere_dauer
+from rennmanager.kern.zeit import formatiere_dauer, formatiere_rueckstand
 from rennmanager.konfiguration import Konfiguration
+from rennmanager.ui.tabellen import SortierbareZeile as Zeile
 
 ALLE_LIGEN = 0
 
@@ -81,6 +81,9 @@ class Editorseite(QWidget):
         self._felder: dict[str, QSpinBox] = {}
         self._kenntnisfelder: dict[str, QSpinBox] = {}
         self._probestrecke: kern_strecke.Strecke | None = None
+        # Rundenzeiten je (Strecke, Fahrer); 600 Fahrer kosten sonst bei
+        # jedem Streckenwechsel gut eine Sekunde.
+        self._zeiten: dict[tuple[str, int], int] = {}
         # Solange nichts uebernommen wurde, muss das Fenster nichts neu
         # aufbauen.
         self._geaendert = False
@@ -91,8 +94,10 @@ class Editorseite(QWidget):
         teiler = QSplitter(Qt.Horizontal)
         teiler.addWidget(self._baue_fahrerliste())
         teiler.addWidget(self._baue_blaetter())
-        teiler.setStretchFactor(0, 2)
-        teiler.setStretchFactor(1, 3)
+        # Die Liste traegt sieben Spalten samt Rundenzeit und Rueckstand;
+        # die Blaetter rechts sind Formulare und kommen mit weniger aus.
+        teiler.setStretchFactor(0, 3)
+        teiler.setStretchFactor(1, 2)
         spalte.addWidget(teiler, stretch=1)
         spalte.addLayout(self._baue_fuss())
 
@@ -121,10 +126,19 @@ class Editorseite(QWidget):
         self._zumSpieler.setEnabled(spieler is not None)
         self._zumSpieler.clicked.connect(self._springe_zum_spieler)
 
+        # Die Strecke gilt fuer die ganze Liste: Je Fahrer steht daneben,
+        # was er hier faehrt.
+        self._probe = QComboBox()
+        for eintrag in self._konfiguration.strecken:
+            self._probe.addItem(f"{eintrag['nummer']:>2}  {eintrag['name']}", eintrag["name"])
+        self._probe.currentIndexChanged.connect(self._strecke_gewechselt)
+
         zeile.addWidget(QLabel("Liga:"))
         zeile.addWidget(self._liga)
         zeile.addWidget(QLabel("Suche:"))
         zeile.addWidget(self._suche, stretch=1)
+        zeile.addWidget(QLabel("Strecke:"))
+        zeile.addWidget(self._probe)
         zeile.addWidget(self._zumSpieler)
         return zeile
 
@@ -132,9 +146,19 @@ class Editorseite(QWidget):
         self._listenkasten = QGroupBox("Fahrer")
         spalte = QVBoxLayout(self._listenkasten)
         self._liste = QTreeWidget()
-        self._liste.setHeaderLabels(["Liga", "Kuerzel", "Fahrer", "Team", "Staerke"])
+        self._liste.setHeaderLabels(
+            ["Liga", "Kuerzel", "Fahrer", "Team", "Staerke", "Rundenzeit", "Rueckstand"]
+        )
+        self._liste.headerItem().setToolTip(
+            5,
+            "Gefahrene Runde auf der gewaehlten Strecke: trocken, ohne Tagesform, "
+            "Rundenform und Eigenschafts-Zufall (GDD 11), ohne Reifenverschleiss "
+            "und ohne den Qualifying-Bonus. Die Streckenkenntnis (GDD 6) ist drin, "
+            "denn sie ist kein Zufall, sondern eine Eigenschaft des Fahrers.",
+        )
         self._liste.setRootIsDecorated(False)
         self._liste.setAlternatingRowColors(True)
+        self._liste.setSortingEnabled(True)
         self._liste.currentItemChanged.connect(self._lade_fahrer)
         spalte.addWidget(self._liste)
         return self._listenkasten
@@ -240,11 +264,6 @@ class Editorseite(QWidget):
         self._wirkung = QLabel()
         self._wirkung.setWordWrap(True)
 
-        self._probe = QComboBox()
-        for eintrag in self._konfiguration.strecken:
-            self._probe.addItem(f"{eintrag['nummer']:>2}  {eintrag['name']}", eintrag["name"])
-        self._probe.currentIndexChanged.connect(self._zeige_wirkung)
-
         self._uebernehmen = QPushButton("Uebernehmen")
         self._uebernehmen.clicked.connect(self._uebernimm)
         self._verwerfen = QPushButton("Verwerfen")
@@ -252,8 +271,6 @@ class Editorseite(QWidget):
         self._zuruecksetzen = QPushButton("Auf Ligastaerke setzen")
         self._zuruecksetzen.clicked.connect(self._setze_auf_ligastaerke)
 
-        zeile.addWidget(QLabel("Probe auf:"))
-        zeile.addWidget(self._probe)
         zeile.addWidget(self._wirkung, stretch=1)
         zeile.addWidget(self._zuruecksetzen)
         zeile.addWidget(self._verwerfen)
@@ -287,17 +304,80 @@ class Editorseite(QWidget):
             )
         return fahrer
 
+    def _strecke(self) -> kern_strecke.Strecke:
+        """Die gewaehlte Strecke, einmal geladen und dann behalten."""
+        name = self._probe.currentData()
+        if self._probestrecke is None or self._probestrecke.name != name:
+            self._probestrecke = kern_strecke.lade(self._konfiguration, name)
+        return self._probestrecke
+
+    def _auto_von(self, fahrer) -> Auto:
+        """Das Auto eines Fahrers - beim Spieler aus der Karriere."""
+        werte = self._werte_von(fahrer)
+        matrix = {f.schluessel for f in self._konfiguration.faehigkeiten}
+        return Auto(
+            kuerzel=fahrer.kuerzel,
+            name=fahrer.name,
+            werte={s: w for s, w in werte.items() if s in matrix},
+            wetterwerte={s: w for s, w in werte.items() if s not in matrix},
+        )
+
+    def _rundenzeit(self, fahrer, strecke: kern_strecke.Strecke) -> int:
+        """Rundenzeit eines Fahrers, trocken und ohne jeden Wurf.
+
+        Genau das, was GDD 9 zur Kalibrierung ansetzt: kein Wetter, keine
+        Tagesform, keine Rundenform, kein Eigenschafts-Zufall (GDD 11),
+        kein Reifenverschleiss und kein Qualifying-Bonus. Die
+        Streckenkenntnis aus GDD 6 ist drin - sie ist kein Zufall, sondern
+        eine Eigenschaft des Fahrers auf dieser Strecke.
+
+        Gerechnet wird je Fahrer rund 2 Millisekunden; ueber alle 600 sind
+        das gut eine Sekunde, deshalb der Zwischenspeicher.
+        """
+        schluessel = (strecke.name, fahrer.nummer)
+        if schluessel not in self._zeiten:
+            frei = kern_tempo.fahre_runde(
+                self._konfiguration, strecke, self._auto_von(fahrer)
+            ).zeit_ms
+            kenntnis = self._kenntnis.tempofaktor(fahrer.nummer, strecke.name)
+            self._zeiten[schluessel] = int(round(frei / kenntnis))
+        return self._zeiten[schluessel]
+
+    def _strecke_gewechselt(self, *_) -> None:
+        self._fuelle_liste()
+        self._zeige_wirkung()
+
     def _fuelle_liste(self, *_) -> None:
         vorher = self._geladen
+        self._liste.setSortingEnabled(False)
         self._liste.clear()
-        for fahrer in self._fahrerauswahl():
+
+        strecke = self._strecke()
+        auswahl = self._fahrerauswahl()
+        zeiten = {f.nummer: self._rundenzeit(f, strecke) for f in auswahl}
+        bestzeit = min(zeiten.values()) if zeiten else 0
+
+        for fahrer in auswahl:
             team = self._welt.team_von(fahrer)
-            staerke = sum(fahrer.auto.werte.values()) / len(fahrer.auto.werte)
-            zeile = QTreeWidgetItem(
+            staerke = sum(self._auto_von(fahrer).werte.values()) / len(fahrer.auto.werte)
+            zeit = zeiten[fahrer.nummer]
+            zeile = Zeile(
                 self._liste,
-                [str(fahrer.liga), fahrer.kuerzel, fahrer.name, team.name, _zahl(staerke)],
+                [
+                    str(fahrer.liga),
+                    fahrer.kuerzel,
+                    fahrer.name,
+                    team.name,
+                    _zahl(staerke),
+                    formatiere_dauer(zeit),
+                    "" if zeit == bestzeit else formatiere_rueckstand(zeit - bestzeit),
+                ],
             )
             zeile.setData(0, Qt.UserRole, fahrer.nummer)
+            zeile.setze_sortierwert(0, fahrer.liga)
+            zeile.setze_sortierwert(4, staerke)
+            zeile.setze_sortierwert(5, zeit)
+            zeile.setze_sortierwert(6, zeit - bestzeit)
             if fahrer.ist_spieler:
                 schrift = zeile.font(2)
                 schrift.setBold(True)
@@ -306,7 +386,11 @@ class Editorseite(QWidget):
             if fahrer.nummer == vorher:
                 self._liste.setCurrentItem(zeile)
 
-        self._listenkasten.setTitle(f"Fahrer ({self._liste.topLevelItemCount()})")
+        self._liste.setSortingEnabled(True)
+        self._listenkasten.setTitle(
+            f"Fahrer ({self._liste.topLevelItemCount()}) - Rundenzeit auf {strecke.name}, "
+            "trocken und ohne Zufall"
+        )
         for spalte in range(self._liste.columnCount()):
             self._liste.resizeColumnToContents(spalte)
         if self._liste.currentItem() is None and self._liste.topLevelItemCount():
@@ -406,6 +490,12 @@ class Editorseite(QWidget):
             self._karriere.werte.update(werte)
 
         self._geaendert = True
+        # Die Zeiten des geaenderten Fahrers stimmen nicht mehr.
+        self._zeiten = {
+            schluessel: wert
+            for schluessel, wert in self._zeiten.items()
+            if schluessel[1] != nummer
+        }
         self._fuelle_liste()
         self._zeige_wirkung()
 
@@ -437,10 +527,9 @@ class Editorseite(QWidget):
         bereiche = bereichswerte(self._konfiguration, auto)
         gesamt = sum(auto.werte.values()) / len(auto.werte)
 
-        name = self._probe.currentData()
-        if self._probestrecke is None or self._probestrecke.name != name:
-            self._probestrecke = kern_strecke.lade(self._konfiguration, name)
-        runde = kern_tempo.fahre_runde(self._konfiguration, self._probestrecke, auto)
+        strecke = self._strecke()
+        name = strecke.name
+        runde = kern_tempo.fahre_runde(self._konfiguration, strecke, auto)
         bezeichnung = self._konfiguration.wert("wirkungsmatrix", "bezeichnung")
         bester = max(bereiche, key=lambda b: bereiche[b])
         schwaechster = min(bereiche, key=lambda b: bereiche[b])
@@ -469,6 +558,10 @@ class Editorseite(QWidget):
     @property
     def liga_auswahl(self) -> QComboBox:
         return self._liga
+
+    @property
+    def streckenauswahl(self) -> QComboBox:
+        return self._probe
 
     @property
     def suche(self) -> QLineEdit:

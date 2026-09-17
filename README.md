@@ -456,7 +456,19 @@ GDD 15 nennt unter den Balancing-Werkzeugen eine Debug-Ansicht. Der Reiter
 6, die sechs Faehigkeiten neben der Wirkungsmatrix, die Streckenkenntnis
 je Strecke und die Stammdaten. Unten steht, was die Eingabe bewirkt -
 Bereichsmittel, staerkster und schwaechster Bereich, freie Rundenzeit auf
-einer Probestrecke -, damit man nicht blind schiebt.
+der gewaehlten Strecke -, damit man nicht blind schiebt.
+
+Oben waehlt man die Strecke; die Liste zeigt dann je Fahrer seine
+**Rundenzeit** und den Rueckstand zur Bestzeit. Die Zeit ist trocken und
+ohne jeden Wurf gerechnet - keine Tagesform, keine Rundenform, kein
+Eigenschafts-Zufall (GDD 11), kein Reifenverschleiss, kein
+Qualifying-Bonus -, also genau das Modell, mit dem GDD 9 kalibriert. Die
+Streckenkenntnis aus GDD 6 ist drin: Sie ist kein Zufall, sondern eine
+Eigenschaft des Fahrers auf dieser Strecke.
+
+Daran sieht man, was die Streuung anrichtet: In Liga 10 weichen auf Monza
+27 von 30 Plaetzen von der reinen Staerkereihenfolge ab, und zwischen
+Monza und Zandvoort aendern sich 23 von 30 Plaetzen.
 
 Liga und Team bleiben aussen vor: Ein Wechsel dort spraenge die
 Ligastaerken aus GDD 9 und die Teamgroessen aus GDD 12.

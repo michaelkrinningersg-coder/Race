@@ -21,7 +21,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSplitter,
     QTreeWidget,
-    QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -30,6 +29,7 @@ from rennmanager.kern import sponsoren as kern_sponsoren
 from rennmanager.kern.karriere import Karriere
 from rennmanager.kern.zufall import Seedquelle
 from rennmanager.konfiguration import Konfiguration
+from rennmanager.ui.tabellen import SortierbareZeile as Zeile
 
 FARBE_BELEGT = QColor("#2e7d32")
 FARBE_FREI = QColor("#8b93a1")
@@ -37,27 +37,6 @@ FARBE_FREI = QColor("#8b93a1")
 
 def euro(betrag: float) -> str:
     return f"{betrag:,.0f} €".replace(",", ".")
-
-
-class Zeile(QTreeWidgetItem):
-    """Eine Zeile, die sich nach hinterlegten Schluesseln sortiert.
-
-    Ohne das vergliche Qt die angezeigten Texte - "1.200 €" stuende dann
-    vor "900 €".
-    """
-
-    SORTIERROLLE = Qt.UserRole + 1
-
-    def setze_sortierwert(self, spalte: int, wert) -> None:
-        self.setData(spalte, self.SORTIERROLLE, wert)
-
-    def __lt__(self, andere: QTreeWidgetItem) -> bool:  # noqa: D105
-        spalte = self.treeWidget().sortColumn() if self.treeWidget() else 0
-        eigen = self.data(spalte, self.SORTIERROLLE)
-        fremd = andere.data(spalte, self.SORTIERROLLE)
-        if eigen is None or fremd is None:
-            return self.text(spalte) < andere.text(spalte)
-        return eigen < fremd
 
 
 class Sponsorenseite(QWidget):
