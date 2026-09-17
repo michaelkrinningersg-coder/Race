@@ -4,6 +4,10 @@
 > jeweiligen Empfehlung. Die Werte stehen ab sofort in
 > `konfiguration/balancing.toml`; der Abschnitt `[offen]` dort ist leer.
 > Dieses Dokument bleibt als Begründung der Entscheidungen erhalten.
+>
+> **Nachtrag 2026-09-17 (Schritt 5):** Bei der Umsetzung von Qualifying,
+> Zufall und Wetter sind vier weitere Lücken aufgefallen. Sie stehen
+> unten als Punkte 21 bis 24 und sind nach demselben Muster entschieden.
 
 Das GDD nennt an 20 Stellen eine Mechanik, beziffert sie aber nicht. Laut
 Arbeitsregeln werden diese Werte nicht selbst entschieden. Dieses Dokument
@@ -486,3 +490,76 @@ sie über alle Ligen im Verhältnis.
 
 Vor Schritt 3 ist nichts zu entscheiden. Zwingend vor Schritt 4 sind die
 Punkte 2 und 3.
+
+
+---
+
+## Nachtrag: bei Schritt 5 aufgefallen
+
+Diese vier Angaben nennt das GDD, ohne sie zu beziffern. Sie sind nach
+demselben Muster entschieden wie die Punkte 1 bis 20.
+
+### 21. Tempobonus der Trockenroutine
+
+**GDD 7:** „bei Trocken gibt sie einen kleinen Tempobonus" – ohne Zahl. Bei
+Trocken gibt es keinen Gripverlust zu dämpfen, die Fähigkeit braucht also
+eine eigene Wirkung.
+
+| | Variante | Bonus bei 100.000 |
+| --- | --- | --- |
+| **A** | Sehr klein | +0,25 % |
+| **B** | Klein | +0,5 % |
+| **C** | Spürbar | +1,0 % |
+
+**Entscheidung: B.** Ein Drittel dessen, was die Streckenkenntnis maximal
+bringt (+1,5 %, GDD 6) – das trifft „klein" und bleibt in der vorhandenen
+Größenordnung. Bei C wäre Trockenroutine wertvoller als jede andere
+Wetterfähigkeit, weil Trocken die häufigste Lage ist.
+
+### 22. Dämpfung der schlechten Tagesform durch D16
+
+**GDD 11:** „D16 Mentale Stärke begrenzt nur die negative Seite der
+Tagesform" – ohne Zahl.
+
+| | Variante | Restliche negative Abweichung bei 100.000 |
+| --- | --- | --- |
+| **A** | 40 % Dämpfung | 60 % bleiben |
+| **B** | 60 % Dämpfung | 40 % bleiben |
+| **C** | 80 % Dämpfung | 20 % bleiben |
+
+**Entscheidung: B.** Dieselbe Obergrenze wie bei den Wetterfähigkeiten
+(GDD 7: „um bis zu 60 %"). Damit hat die Skala eine einheitliche
+Dämpfungsstärke, statt für jede Fähigkeit eine eigene zu erfinden.
+
+### 23. Wirkung von D12 Konstanz auf die Rundenform
+
+**GDD 11:** Streuung 0,3 %, „verkleinert durch D12 Konstanz" – ohne Zahl.
+
+| | Variante | Restliche Streuung bei 100.000 |
+| --- | --- | --- |
+| **A** | 60 % Dämpfung | 0,12 % |
+| **B** | 80 % Dämpfung | 0,06 % |
+| **C** | 95 % Dämpfung | 0,015 % |
+
+**Entscheidung: B.** Konstanz ist die einzige Eigenschaft, die überhaupt auf
+die Rundenform wirkt; bei A wäre der Unterschied kaum messbar. C würde einen
+Spitzenfahrer praktisch zur Maschine machen und die Ebene entwerten.
+
+### 24. Umrechnung der Q-Spalte in Zeit
+
+**GDD 8:** „Im Qualifying wirken alle Tempobereiche wie im Rennen; die
+Q-Spalte ist ein zusätzliches Gewicht nur für die gezeitete Runde." Wie aus
+dem Gewicht eine Zeit wird, steht nicht da.
+
+| | Variante | Tempobonus bei 100.000 | Wirkung auf eine 1:25-Runde |
+| --- | --- | --- | --- |
+| **A** | +0,5 % | 0,42 s über die ganze Skala | innerhalb einer Liga kaum messbar |
+| **B** | +1,0 % | 0,85 s | innerhalb einer Liga wenige Hundertstel |
+| **C** | +2,0 % | 1,70 s | Qualifying-Spezialisten dominieren |
+
+**Entscheidung: B.** Dieselbe Form wie die Streckenkenntnis (ein
+Tempobonus mit Obergrenze), in vergleichbarer Größe. Wichtig ist der zweite
+Effekt: Innerhalb einer Liga ist die Spanne der Q-Werte schmal – in Liga 1
+liegen zwischen Erstem und Letztem nur rund 0,05 % – also entscheidet die
+Q-Spalte einzelne Hundertstel, nicht ganze Sekunden. Genau das soll eine
+Zusatzspalte leisten.

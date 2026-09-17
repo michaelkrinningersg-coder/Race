@@ -26,6 +26,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from rennmanager.kern import form as kern_form
+from rennmanager.kern import wetter as kern_wetter
 from rennmanager.kern.auto import Auto, bereichswert, gesamtwert
 from rennmanager.kern.strecke import Strecke
 from rennmanager.kern.tempo import KMH_JE_MS, geschwindigkeitsprofil, grenzen_aus, leistungsanteil
@@ -99,6 +101,8 @@ class Rennverlauf:
     strecke: Strecke
     teilnehmer: tuple[Teilnehmer, ...]
     runden: int
+    wetter: kern_wetter.Wetterverlauf | None
+    tagesform: tuple[float, ...]
     zeitpunkte_ms: np.ndarray
     distanz_m: np.ndarray
     ausgefallen: np.ndarray
@@ -225,13 +229,17 @@ class _Lauf:
         runden: int,
         seedquelle: Seedquelle,
         streckenmittel: float,
+        wetter: kern_wetter.Wetterverlauf | None = None,
+        ohne_zufall: bool = False,
     ) -> None:
         self.k = konfiguration
         self.strecke = strecke
         self.teilnehmer = teilnehmer
         self.runden = runden
         self.anzahl = len(teilnehmer)
+        self.seedquelle = seedquelle
         self.wuerfel = seedquelle.zweig("rennen").generator()
+        self.wetter = wetter
 
         self.ds = strecke.punktabstand_m
         self.laenge = strecke.laenge_m
@@ -239,8 +247,30 @@ class _Lauf:
         self.faktor = streckenfaktor(konfiguration, strecke, streckenmittel)
 
         # Freies Profil je Auto: die Obergrenze ohne andere Autos.
-        grenzen = [grenzen_aus(konfiguration, t.auto) for t in teilnehmer]
+        # Vor dem Rennen wird neu gewuerfelt: Tagesform und
+        # Eigenschafts-Zufall, getrennt vom Qualifying (GDD 11).
+        self.ohne_zufall = ohne_zufall
+        if ohne_zufall:
+            self.autos = [t.auto for t in teilnehmer]
+            self.tagesform = (1.0,) * self.anzahl
+        else:
+            formen = [
+                kern_form.wuerfle(konfiguration, t.auto, seedquelle.zweig("form", nummer))
+                for nummer, t in enumerate(teilnehmer)
+            ]
+            self.autos = [form.auto for form in formen]
+            self.tagesform = tuple(form.tagesform for form in formen)
+
+        grenzen = [grenzen_aus(konfiguration, auto) for auto in self.autos]
         self.profile = np.array([geschwindigkeitsprofil(strecke, g) for g in grenzen])
+        # Grip je Auto und Sektor, gegen die Wetterfaehigkeiten gerechnet.
+        # Er wird beim Rundenwechsel neu gesetzt, weil sich das Wetter
+        # waehrend des Rennens aendern kann (GDD 7).
+        self.grip = np.ones(self.anzahl)
+        self.sektorgrenzen = np.array([sektor.von for sektor in strecke.sektoren])
+        # Rundenform: je Auto und Runde ein Faktor auf die Rundenzeit
+        # (GDD 11). Als Tempofaktor ist es der Kehrwert.
+        self.tempoform = np.ones(self.anzahl)
         # Fuer den stehenden Start und das Wiederbeschleunigen hinter einem
         # langsameren Auto.
         self.laengs = np.array([g.laengs for g in grenzen])
@@ -252,7 +282,9 @@ class _Lauf:
         self.distanz = np.array(
             [startdistanz_m(konfiguration, t.startplatz) for t in teilnehmer]
         )
-        self.reaktion = np.array([reaktionszeit_ms(konfiguration, t.auto) for t in teilnehmer])
+        self.reaktion = np.array(
+            [reaktionszeit_ms(konfiguration, auto) for auto in self.autos]
+        )
         self.tempo = np.zeros(self.anzahl)
         self.aktiv = np.ones(self.anzahl, dtype=bool)
         self.im_ziel = np.zeros(self.anzahl, dtype=bool)
@@ -276,6 +308,37 @@ class _Lauf:
         self.sieger_zeit: float | None = None
         self.laufende_nummer = np.arange(self.anzahl)
         self.index = np.zeros(self.anzahl, dtype=int)
+        self._setze_rundenform(0)
+        self._setze_grip(0.0)
+
+    def _setze_grip(self, zeit_ms: float) -> None:
+        """Grip je Auto zum Zeitpunkt, mit Wetterkoennen (GDD 7).
+
+        Der Grip wirkt als Faktor auf das Tempo; die Beschleunigungsgrenze
+        skaliert deshalb quadratisch mit - genau wie im Profil.
+        """
+        if self.wetter is None:
+            return
+        zustand = self.wetter.zustand_zu(zeit_ms)
+        # Im Rennen wird der Grip ueber die Sektoren gemittelt: Die Autos
+        # sind gleichzeitig an verschiedenen Stellen der Runde.
+        roh = sum(
+            self.wetter.grip_zu(zeit_ms, sektor.nummer) for sektor in self.strecke.sektoren
+        ) / len(self.strecke.sektoren)
+        self.grip = np.array(
+            [kern_wetter.grip_fuer(self.k, auto, zustand, roh) for auto in self.autos]
+        )
+
+    def _setze_rundenform(self, runde: int) -> None:
+        """Zieht fuer jedes Auto die Rundenform dieser Runde (GDD 11)."""
+        if self.ohne_zufall:
+            return
+        faktoren = [
+            kern_form.rundenform(self.k, auto, self.seedquelle.zweig("rundenform", i), runde)
+            for i, auto in enumerate(self.autos)
+        ]
+        # Der Wurf gilt der Rundenzeit; als Tempofaktor ist es der Kehrwert.
+        self.tempoform = 1.0 / np.array(faktoren)
 
     # -- ein Zeitschritt ---------------------------------------------------
     def schritt(self, zeit_ms: int, dt: float) -> None:
@@ -287,8 +350,9 @@ class _Lauf:
 
         ziel = self._ziel_tempo(zeit_ms)
         # Aus dem Stand und hinter einem langsameren Auto wird mit der
-        # eigenen Beschleunigungsgrenze aufgeholt, nicht gesprungen.
-        self.tempo = np.minimum(ziel, self.tempo + self.laengs * dt)
+        # eigenen Beschleunigungsgrenze aufgeholt, nicht gesprungen. Der
+        # Grip senkt auch sie, und zwar quadratisch (siehe kern.tempo).
+        self.tempo = np.minimum(ziel, self.tempo + self.laengs * self.grip**2 * dt)
         self.tempo = np.where(wirksam > 0.0, self.tempo, 0.0)
 
         vorher = self.distanz.copy()
@@ -319,7 +383,9 @@ class _Lauf:
         self.index = index
         hier = self.profile[self.laufende_nummer, index]
         dort = self.profile[self.laufende_nummer, danach]
-        ziel = np.where(faehrt, hier + rest * (dort - hier), 0.0)
+        # Wetter (Grip) und Rundenform wirken beide als Faktor aufs Tempo.
+        frei = (hier + rest * (dort - hier)) * self.grip * self.tempoform
+        ziel = np.where(faehrt, frei, 0.0)
 
         # Reihenfolge nach zurueckgelegter Strecke; danach steht fest, wer
         # vor wem faehrt.
@@ -442,6 +508,15 @@ class _Lauf:
         self.runden_gefahren[i] += 1
         self.naechster_sektor[i] = 0
 
+        # Jede Runde wird die Rundenform neu gezogen (GDD 11); das Wetter
+        # kann sich inzwischen geaendert haben (GDD 7).
+        if not self.ohne_zufall:
+            self.tempoform[i] = 1.0 / kern_form.rundenform(
+                self.k, self.autos[i], self.seedquelle.zweig("rundenform", i),
+                int(self.runden_gefahren[i]),
+            )
+        self._setze_grip(ueberfahrt)
+
         if self.runden_gefahren[i] >= self.runden and self.sieger_zeit is None:
             self.sieger_zeit = ueberfahrt
 
@@ -517,12 +592,19 @@ def simuliere(
     runden: int,
     seedquelle: Seedquelle,
     streckenmittel: float,
+    wetter: kern_wetter.Wetterverlauf | None = None,
+    ohne_zufall: bool = False,
     hoechstdauer_ms: int | None = None,
 ) -> Rennverlauf:
     """Faehrt ein ganzes Rennen und liefert den fertigen Verlauf.
 
     :param streckenmittel: mittlerer Ueberholzonenanteil aller Strecken,
         Bezugsgroesse fuer den Streckenfaktor beim Ueberholen
+    :param wetter: Wetterverlauf der Session (GDD 7); ohne Angabe wird
+        trocken mit Grip 1,0 gefahren
+    :param ohne_zufall: laesst Tagesform, Eigenschafts-Zufall und
+        Rundenform weg. GDD 9 kalibriert ausdruecklich ohne Zufall, und
+        fuer die Massensimulation aus GDD 15 ist es ebenfalls noetig.
     :param hoechstdauer_ms: Notbremse gegen ein Rennen, das nie endet
     """
     if not teilnehmer:
@@ -530,7 +612,10 @@ def simuliere(
     if runden < 1:
         raise ValueError("Ein Rennen geht ueber mindestens eine Runde")
 
-    lauf = _Lauf(konfiguration, strecke, teilnehmer, runden, seedquelle, streckenmittel)
+    lauf = _Lauf(
+        konfiguration, strecke, teilnehmer, runden, seedquelle, streckenmittel,
+        wetter, ohne_zufall,
+    )
     schritt_ms = konfiguration.wert("simulation", "zeitschritt_ms")
     bild_ms = konfiguration.wert("simulation", "bildschritt_ms")
     dt = schritt_ms / 1000.0
@@ -565,6 +650,8 @@ def simuliere(
         strecke=strecke,
         teilnehmer=teilnehmer,
         runden=runden,
+        wetter=wetter,
+        tagesform=lauf.tagesform,
         zeitpunkte_ms=np.array(zeitpunkte),
         distanz_m=np.array(distanzen),
         ausgefallen=np.array(ausgefallen),

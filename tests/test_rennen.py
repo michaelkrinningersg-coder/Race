@@ -178,12 +178,13 @@ def test_freie_fahrt_entspricht_der_einzelrunde(k, zandvoort, mittel) -> None:
 
     Das prueft, dass die Rennschleife dasselbe Modell benutzt wie
     rennmanager.kern.tempo und nicht heimlich langsamer oder schneller ist.
+    Gefahren wird ohne Zufall, wie es GDD 9 zur Kalibrierung verlangt.
     """
     auto = ka.gleichverteilt(k, 8_400, "EIN")
     solo = tp.fahre_runde(k, zandvoort, auto)
     verlauf = rn.simuliere(
         k, zandvoort, (rn.Teilnehmer(auto=auto, startplatz=1, farbe="#fff"),),
-        3, Seedquelle(1), mittel,
+        3, Seedquelle(1), mittel, ohne_zufall=True,
     )
     # Die erste Runde enthaelt den stehenden Start, ab der zweiten faehrt
     # das Auto fliegend.
@@ -195,7 +196,7 @@ def test_erste_runde_ist_wegen_des_starts_langsamer(k, zandvoort, mittel) -> Non
     auto = ka.gleichverteilt(k, 8_400, "EIN")
     verlauf = rn.simuliere(
         k, zandvoort, (rn.Teilnehmer(auto=auto, startplatz=1, farbe="#fff"),),
-        3, Seedquelle(1), mittel,
+        3, Seedquelle(1), mittel, ohne_zufall=True,
     )
     zeiten = verlauf.protokolle[0].rundenzeiten_ms
     assert zeiten[0] > zeiten[1]
@@ -203,12 +204,16 @@ def test_erste_runde_ist_wegen_des_starts_langsamer(k, zandvoort, mittel) -> Non
 
 # -- Ueberholen -------------------------------------------------------------
 def test_ohne_tempovorteil_wird_nicht_ueberholt(k, zandvoort, mittel) -> None:
-    """Gleich schnelle Autos duerfen die Reihenfolge nicht tauschen."""
+    """Gleich schnelle Autos duerfen die Reihenfolge nicht tauschen.
+
+    Ohne Zufall sind die Autos wirklich gleich schnell; mit Zufall
+    unterscheiden sie sich und duerfen sich ueberholen.
+    """
     gleich = tuple(
         rn.Teilnehmer(auto=ka.gleichverteilt(k, 8_400, f"G{n:02d}"), startplatz=n, farbe="#fff")
         for n in range(1, 6)
     )
-    verlauf = rn.simuliere(k, zandvoort, gleich, 2, Seedquelle(7), mittel)
+    verlauf = rn.simuliere(k, zandvoort, gleich, 2, Seedquelle(7), mittel, ohne_zufall=True)
     assert verlauf.manoever == ()
 
 

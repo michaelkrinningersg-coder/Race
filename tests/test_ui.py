@@ -191,7 +191,8 @@ def _kurzes_rennen(fenster, runden: int = 2, umgedreht: bool = False):
     """Berechnet ein moeglichst kurzes Rennen auf der Rennseite."""
     seite = fenster.rennseite
     seite._runden.setValue(runden)
-    seite._umgedreht.setCurrentIndex(1 if umgedreht else 0)
+    # Ohne Qualifying, das wuerde jeden Test um eine ganze Session verlaengern.
+    seite._aufstellung.setCurrentIndex(2 if umgedreht else 1)
     seite._berechne()
     return seite
 
@@ -310,3 +311,113 @@ def test_wiedergabe_stoppt_am_ende(qtbot, konfig: kf.Konfiguration) -> None:
     seite._takt()
     assert seite.zeit_ms == seite.verlauf.dauer_ms
     assert not seite._laeuft
+
+
+def test_rennen_laeuft_von_selbst_los(qtbot, konfig: kf.Konfiguration) -> None:
+    """Das Rennen soll sich wie eine Uebertragung anfuehlen."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = _kurzes_rennen(fenster)
+    assert konfig.wert("zeitraffer", "automatisch_starten")
+    assert seite._laeuft
+    seite._halte_an()
+
+
+def test_zeitraffer_wird_zur_renndauer_gewaehlt(qtbot, konfig: kf.Konfiguration) -> None:
+    """Die Vorwahl muss das Rennen in ertraeglicher Zeit durchlaufen lassen."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = _kurzes_rennen(fenster)
+    seite._halte_an()
+
+    wunsch_ms = konfig.wert("zeitraffer", "wunschdauer_s") * 1000
+    stufen = konfig.wert("zeitraffer", "stufen")
+    gewaehlt = seite._raffer.currentData()
+    dauer = seite.verlauf.dauer_ms / gewaehlt
+    assert dauer <= wunsch_ms or gewaehlt == stufen[-1]
+    # Und es ist die kleinste Stufe, die das schafft.
+    kleiner = [stufe for stufe in stufen if stufe < gewaehlt]
+    if kleiner:
+        assert seite.verlauf.dauer_ms / kleiner[-1] > wunsch_ms
+
+
+def test_rennen_zeigt_das_wetter(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = _kurzes_rennen(fenster)
+    seite._halte_an()
+    seite._springe(seite.verlauf.dauer_ms / 2)
+
+    assert seite.verlauf.wetter is not None
+    assert seite._wetteranzeige.text() != "-"
+    assert seite.verlauf.wetter.zustand_zu(seite.zeit_ms) in seite._wetteranzeige.text()
+
+
+# -- Qualifyingseite --------------------------------------------------------
+def test_qualifyingseite_faehrt_eine_session(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.qualifyingseite
+    seite._fahre()
+
+    assert seite.session is not None
+    assert len(seite.session.fahrten) == konfig.wert("rennen", "autos")
+    assert len(seite.session.aufstellung) == konfig.wert("rennen", "autos")
+
+
+def test_qualifying_sortiert_live_ein(qtbot, konfig: kf.Konfiguration) -> None:
+    """GDD 4: Live-Einsortierung ins Ranking."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.qualifyingseite
+    seite._fahre()
+
+    seite._regler.setValue(1)
+    assert seite._rangliste.topLevelItemCount() == 1
+    seite._regler.setValue(10)
+    assert seite._rangliste.topLevelItemCount() == 10
+    seite._regler.setValue(seite._regler.maximum())
+    assert seite._rangliste.topLevelItemCount() == konfig.wert("rennen", "autos")
+
+
+def test_qualifying_zeigt_aufstellung_und_wetter(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.qualifyingseite
+    seite._fahre()
+
+    assert seite._aufstellung.topLevelItemCount() == konfig.wert("rennen", "autos")
+    assert seite._aufstellung.topLevelItem(0).text(0) == "1"
+    assert seite._wetterfeld.rowCount() > 0
+
+
+def test_qualifying_rueckstand_nur_ab_platz_zwei(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.qualifyingseite
+    seite._fahre()
+    seite._regler.setValue(seite._regler.maximum())
+
+    liste = seite._rangliste
+    assert liste.topLevelItem(0).text(3) == ""
+    assert liste.topLevelItem(1).text(3).startswith("+")
+
+
+def test_rennen_kann_aufstellung_aus_dem_qualifying_nehmen(
+    qtbot, konfig: kf.Konfiguration
+) -> None:
+    """GDD 4: Aufstellung nach Qualifying."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.rennseite
+    seite._runden.setValue(2)
+    seite._aufstellung.setCurrentIndex(0)
+    seite._berechne()
+    seite._halte_an()
+
+    assert seite.qualifying is not None
+    # Wer die Pole geholt hat, startet von Platz 1.
+    pole = seite.qualifying.aufstellung[0]
+    kuerzel = seite.qualifying.teilnehmer[pole].kuerzel
+    erster = next(t for t in seite.verlauf.teilnehmer if t.startplatz == 1)
+    assert erster.kuerzel == kuerzel

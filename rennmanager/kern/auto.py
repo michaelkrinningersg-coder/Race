@@ -28,17 +28,26 @@ class Auto:
 
     :param werte: Wert je Faehigkeit, Schluessel ``F1`` bis ``F16`` und
         ``D1`` bis ``D16``, jeweils 0 bis 100.000
+    :param wetterwerte: Wert je Wetterfaehigkeit (GDD 7), etwa
+        ``"regenfahren"``. Sie stehen getrennt, weil sie keine Zeile in der
+        Wirkungsmatrix haben und nicht in den Durchschnitt der
+        Basiseigenschaften eingehen (GDD 4).
     """
 
     kuerzel: str
     name: str
     werte: dict[str, int] = field(default_factory=dict)
+    wetterwerte: dict[str, int] = field(default_factory=dict)
 
     def wert(self, schluessel: str) -> int:
         try:
             return self.werte[schluessel]
         except KeyError:
             raise AutoFehler(f"{self.kuerzel}: Faehigkeit {schluessel} fehlt") from None
+
+    def wetterwert(self, schluessel: str) -> int:
+        """Wert einer Wetterfaehigkeit; nicht gesetzte gelten als 0."""
+        return self.wetterwerte.get(schluessel, 0)
 
 
 def pruefe(konfiguration: Konfiguration, auto: Auto) -> None:
@@ -51,14 +60,24 @@ def pruefe(konfiguration: Konfiguration, auto: Auto) -> None:
     if unbekannt:
         raise AutoFehler(f"{auto.kuerzel}: unbekannte Faehigkeiten: {sorted(unbekannt)}")
 
+    bekannt = {
+        eintrag["schluessel"] for eintrag in konfiguration.wert("wetter", "faehigkeit", "liste")
+    }
+    unbekanntes_wetter = set(auto.wetterwerte) - bekannt
+    if unbekanntes_wetter:
+        raise AutoFehler(
+            f"{auto.kuerzel}: unbekannte Wetterfaehigkeiten: {sorted(unbekanntes_wetter)}"
+        )
+
     kleinster = konfiguration.wert("skala", "minimum")
     groesster = konfiguration.wert("skala", "maximum")
-    for schluessel, wert in auto.werte.items():
-        if not kleinster <= wert <= groesster:
-            raise AutoFehler(
-                f"{auto.kuerzel}.{schluessel}: {wert} liegt ausserhalb "
-                f"von {kleinster} bis {groesster}"
-            )
+    for quelle in (auto.werte, auto.wetterwerte):
+        for schluessel, wert in quelle.items():
+            if not kleinster <= wert <= groesster:
+                raise AutoFehler(
+                    f"{auto.kuerzel}.{schluessel}: {wert} liegt ausserhalb "
+                    f"von {kleinster} bis {groesster}"
+                )
 
 
 def gleichverteilt(konfiguration: Konfiguration, s: int, kuerzel: str = "REF") -> Auto:
@@ -72,6 +91,10 @@ def gleichverteilt(konfiguration: Konfiguration, s: int, kuerzel: str = "REF") -
         kuerzel=kuerzel,
         name=f"Referenz S={s}",
         werte={f.schluessel: int(s) for f in konfiguration.faehigkeiten},
+        wetterwerte={
+            eintrag["schluessel"]: int(s)
+            for eintrag in konfiguration.wert("wetter", "faehigkeit", "liste")
+        },
     )
 
 

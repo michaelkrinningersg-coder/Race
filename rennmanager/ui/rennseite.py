@@ -24,8 +24,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from rennmanager.kern import qualifying as kern_qualifying
 from rennmanager.kern import rennen as kern_rennen
 from rennmanager.kern import strecke as kern_strecke
+from rennmanager.kern import tempo as kern_tempo
+from rennmanager.kern import wetter as kern_wetter
 from rennmanager.kern.rennen import Rennverlauf
 from rennmanager.kern.zeit import (
     formatiere_dauer,
@@ -36,9 +39,9 @@ from rennmanager.kern.zufall import Seedquelle
 from rennmanager.konfiguration import Konfiguration
 from rennmanager.ui.streckenansicht import Streckenansicht
 
-# Takt der Wiedergabe. Der Zeitraffer vervielfacht die Rennzeit je Takt,
-# nicht die Zahl der Takte - die Anzeige bleibt damit gleich fluessig.
-TAKT_MS = 40
+# Der Zeitraffer vervielfacht die Rennzeit je Takt, nicht die Zahl der
+# Takte - die Anzeige bleibt damit gleich fluessig, egal wie schnell
+# gerafft wird.
 
 
 class Rennseite(QWidget):
@@ -49,12 +52,14 @@ class Rennseite(QWidget):
         self._konfiguration = konfiguration
         self._strecken: dict[str, kern_strecke.Strecke] = {}
         self._verlauf: Rennverlauf | None = None
+        self._qualifying = None
         self._zeit_ms = 0.0
         self._laeuft = False
 
         self._ansicht = Streckenansicht()
+        self._takt_ms = konfiguration.wert("zeitraffer", "takt_ms")
         self._uhr = QTimer(self)
-        self._uhr.setInterval(TAKT_MS)
+        self._uhr.setInterval(self._takt_ms)
         self._uhr.timeout.connect(self._takt)
 
         spalte = QVBoxLayout(self)
@@ -91,9 +96,10 @@ class Rennseite(QWidget):
         self._runden.setRange(1, 200)
         self._runden.setValue(5)
 
-        self._umgedreht = QComboBox()
-        self._umgedreht.addItem("Aufstellung nach Staerke", False)
-        self._umgedreht.addItem("Staerkster startet hinten", True)
+        self._aufstellung = QComboBox()
+        self._aufstellung.addItem("Aufstellung aus dem Qualifying", "qualifying")
+        self._aufstellung.addItem("Aufstellung nach Staerke", "staerke")
+        self._aufstellung.addItem("Staerkster startet hinten", "umgedreht")
 
         self._starten = QPushButton("Rennen berechnen")
         self._starten.clicked.connect(self._berechne)
@@ -103,7 +109,7 @@ class Rennseite(QWidget):
             ("Liga:", self._liga),
             ("Runden:", self._runden),
             ("Seed:", self._seed),
-            ("", self._umgedreht),
+            ("", self._aufstellung),
         ):
             if beschriftung:
                 zeile.addWidget(QLabel(beschriftung))
@@ -140,8 +146,11 @@ class Rennseite(QWidget):
         zeile.addWidget(QLabel("Zeitraffer:"))
         zeile.addWidget(self._raffer)
         zeile.addWidget(self._sofort)
+        self._wetteranzeige = QLabel("-")
         zeile.addWidget(self._uhrzeit)
         zeile.addWidget(self._fortschritt, stretch=1)
+        zeile.addWidget(QLabel("Wetter:"))
+        zeile.addWidget(self._wetteranzeige)
         return zeile
 
     def _baue_seitenleiste(self) -> QWidget:
@@ -189,19 +198,53 @@ class Rennseite(QWidget):
         try:
             strecke = self._lade_strecke(self._auswahl.currentData())
             liga = self._liga.currentData()
+            art = self._aufstellung.currentData()
+            spielerplatz = self._konfiguration.wert("rennen", "autos")
+            haupt = Seedquelle(self._seed.value())
+
             feld = kern_rennen.starterfeld(
                 self._konfiguration,
                 liga,
-                spielerplatz=self._konfiguration.wert("rennen", "autos"),
-                umgedreht=self._umgedreht.currentData(),
+                spielerplatz=spielerplatz,
+                umgedreht=art == "umgedreht",
+            )
+            if art == "qualifying":
+                # Das Qualifying bestimmt die Startaufstellung (GDD 4).
+                self._qualifying = kern_qualifying.fahre(
+                    self._konfiguration, strecke, feld, haupt.zweig("qualifying")
+                )
+                feld = tuple(
+                    kern_rennen.Teilnehmer(
+                        auto=feld[i].auto,
+                        startplatz=platz,
+                        farbe=feld[i].farbe,
+                        ist_spieler=feld[i].ist_spieler,
+                    )
+                    for platz, i in enumerate(self._qualifying.aufstellung, start=1)
+                )
+            else:
+                self._qualifying = None
+
+            # Das Wetter des Rennens wird getrennt vom Qualifying gewuerfelt
+            # (GDD 7).
+            rundendauer = kern_tempo.fahre_runde(
+                self._konfiguration, strecke, feld[0].auto
+            ).zeit_ms
+            wetter = kern_wetter.wuerfle(
+                self._konfiguration,
+                strecke.name,
+                rundendauer * self._runden.value(),
+                rundendauer,
+                haupt.zweig("rennwetter"),
             )
             self._verlauf = kern_rennen.simuliere(
                 self._konfiguration,
                 strecke,
                 feld,
                 self._runden.value(),
-                Seedquelle(self._seed.value()),
+                haupt.zweig("rennen"),
                 self._mittlerer_anteil(),
+                wetter=wetter,
             )
         finally:
             self._starten.setEnabled(True)
@@ -211,7 +254,29 @@ class Rennseite(QWidget):
         self._fortschritt.setRange(0, max(self._verlauf.dauer_ms, 1))
         for knopf in (self._abspielen, self._zurueck, self._sofort):
             knopf.setEnabled(True)
+        self._waehle_zeitraffer()
         self._springe(0)
+
+        # Das Rennen laeuft von selbst los, damit es sich wie eine
+        # Uebertragung anfuehlt und nicht wie eine Auswertung.
+        if self._konfiguration.wert("zeitraffer", "automatisch_starten"):
+            self._umschalten()
+
+    def _waehle_zeitraffer(self) -> None:
+        """Waehlt die kleinste Stufe, mit der das Rennen zuegig durchlaeuft.
+
+        Ein Rennen dauert real bis zu anderthalb Stunden; bei einfacher
+        Geschwindigkeit saehe man nichts als Warten.
+        """
+        if self._verlauf is None:
+            return
+        wunsch_ms = self._konfiguration.wert("zeitraffer", "wunschdauer_s") * 1000
+        stufen = self._konfiguration.wert("zeitraffer", "stufen")
+        passend = next(
+            (stufe for stufe in stufen if self._verlauf.dauer_ms / stufe <= wunsch_ms),
+            stufen[-1],
+        )
+        self._raffer.setCurrentIndex(stufen.index(passend))
 
     # -- Wiedergabe --------------------------------------------------------
     def _umschalten(self) -> None:
@@ -240,7 +305,7 @@ class Rennseite(QWidget):
     def _takt(self) -> None:
         if self._verlauf is None:
             return
-        self._zeit_ms += TAKT_MS * self._raffer.currentData()
+        self._zeit_ms += self._takt_ms * self._raffer.currentData()
         if self._zeit_ms >= self._verlauf.dauer_ms:
             self._zeit_ms = self._verlauf.dauer_ms
             self._halte_an()
@@ -254,6 +319,11 @@ class Rennseite(QWidget):
         zeit = self._zeit_ms
         self._uhrzeit.setText(formatiere_dauer(int(zeit)))
         self._fortschritt.setValue(int(zeit))
+
+        if verlauf.wetter is not None:
+            zustand = verlauf.wetter.zustand_zu(zeit)
+            grip = verlauf.wetter.grip_zu(zeit)
+            self._wetteranzeige.setText(f"{zustand}  (Grip {grip:.2f})")
 
         distanzen = verlauf.distanzen_zu(zeit)
         reihenfolge = verlauf.reihenfolge_zu(zeit)
@@ -341,6 +411,11 @@ class Rennseite(QWidget):
     @property
     def verlauf(self) -> Rennverlauf | None:
         return self._verlauf
+
+    @property
+    def qualifying(self):
+        """Das Qualifying, falls die Aufstellung daraus stammt."""
+        return self._qualifying
 
     @property
     def zeit_ms(self) -> float:

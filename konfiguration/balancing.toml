@@ -370,6 +370,15 @@ ausfaelle_max = 5
 [zeitraffer]
 stufen = [1, 2, 5, 10, 20, 50, 100]
 sofortergebnis = true
+# Wiedergabe: Takt der Anzeige. 33 ms sind rund 30 Bilder je Sekunde, das
+# laeuft fluessig, ohne unnoetig Rechenzeit zu kosten.
+takt_ms = 33
+# Nach dem Berechnen laeuft das Rennen von selbst los.
+automatisch_starten = true
+# Vorgewaehlte Zeitrafferstufe: die kleinste, mit der das Rennen in etwa
+# dieser Zeit durchlaeuft. Ein Rennen in Liga 20 dauert real ueber eine
+# Stunde - bei 1x wuerde niemand zusehen.
+wunschdauer_s = 210
 
 [simulation]
 # Schrittweite der Rennsimulation. 50 ms sind fein genug: Bei 400 km/h
@@ -1326,6 +1335,38 @@ gewichte = { starkregen = 10, regen = 25, wechselhaft = 25, trocken = 35, heiss 
 # Entscheidung B: der Grip naehert sich dem neuen Wetter ueber 3 Runden an,
 # statt hart zu springen.
 verzoegerung_runden = 3
+
+# --- Punkt 21: Tempobonus der Trockenroutine (GDD 7) ----------------------
+# GDD 7: "bei Trocken gibt sie einen kleinen Tempobonus" - ohne Zahl. Bei
+# Trocken gibt es keinen Gripverlust zu daempfen, also braucht die
+# Faehigkeit eine eigene Wirkung. Gewaehlt: bis +0,5 % bei 100.000, also
+# ein Drittel dessen, was die Streckenkenntnis maximal bringt (GDD 6).
+[wetter.trockenbonus]
+max_anteil = 0.005
+
+# --- Punkt 22: Daempfung der schlechten Tagesform durch D16 (GDD 11) ------
+# GDD 11: "D16 Mentale Staerke begrenzt nur die negative Seite der
+# Tagesform" - ohne Zahl. Gewaehlt: dieselbe Obergrenze wie bei den
+# Wetterfaehigkeiten, damit die Skala einheitlich bleibt.
+[zufall.tagesform.daempfung]
+faehigkeit = "D16"
+max_anteil = 0.60
+
+# --- Punkt 23: Wirkung von D12 Konstanz auf die Rundenform (GDD 11) -------
+# GDD 11: "verkleinert durch D12 Konstanz" - ohne Zahl. Gewaehlt: dieselbe
+# Obergrenze; bei 100.000 bleibt ein Fuenftel der Streuung uebrig.
+[zufall.rundenform.daempfung]
+faehigkeit = "D12"
+max_anteil = 0.80
+
+# --- Punkt 24: Wirkung der Q-Spalte auf die gezeitete Runde (GDD 8) -------
+# GDD 8: "die Q-Spalte ist ein zusaetzliches Gewicht nur fuer die gezeitete
+# Runde" - ohne Umrechnung in Zeit. Gewaehlt: ein Tempobonus wie bei der
+# Streckenkenntnis, bis +1,0 % bei 100.000. Innerhalb einer Liga ist die
+# Spanne der Q-Werte schmal, der Unterschied betraegt dort wenige
+# Hundertstel je Runde.
+[qualifying.bonus]
+max_anteil = 0.01
 
 # --- Punkte 6 bis 9: Fehler, Unfaelle, Defekte, Reifen (GDD 4) -------------
 [fehler]

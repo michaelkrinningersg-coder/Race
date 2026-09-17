@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 from rennmanager import __version__
 from rennmanager.kern.zufall import Seedquelle
 from rennmanager.konfiguration import Konfiguration
+from rennmanager.ui.qualifyingseite import Qualifyingseite
 from rennmanager.ui.rennseite import Rennseite
 from rennmanager.ui.rundenseite import Rundenseite
 from rennmanager.ui.streckenseite import Streckenseite
@@ -75,6 +76,8 @@ class Hauptfenster(QMainWindow):
         self._reiter.addTab(self._streckenseite, "Strecke")
         self._rundenseite = Rundenseite(self._konfiguration)
         self._reiter.addTab(self._rundenseite, "Runde")
+        self._qualifyingseite = Qualifyingseite(self._konfiguration)
+        self._reiter.addTab(self._qualifyingseite, "Qualifying")
         self._rennseite = Rennseite(self._konfiguration)
         self._reiter.addTab(self._rennseite, "Rennen")
         return self._reiter
@@ -184,6 +187,11 @@ class Hauptfenster(QMainWindow):
     def rundenseite(self) -> Rundenseite:
         """Die Seite mit Geschwindigkeitsprofil und Rundenzeit."""
         return self._rundenseite
+
+    @property
+    def qualifyingseite(self) -> Qualifyingseite:
+        """Die Seite mit dem Qualifying."""
+        return self._qualifyingseite
 
     @property
     def rennseite(self) -> Rennseite:

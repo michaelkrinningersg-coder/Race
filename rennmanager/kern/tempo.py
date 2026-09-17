@@ -129,49 +129,66 @@ def grenzen_aus(konfiguration: Konfiguration, auto: Auto) -> Grenzen:
     )
 
 
-def kurvenlimit(strecke: Strecke, grenzen: Grenzen) -> np.ndarray:
+def kurvenlimit(
+    strecke: Strecke, grenzen: Grenzen, grip: np.ndarray | float = 1.0
+) -> np.ndarray:
     """Hoechstmoegliche Geschwindigkeit je Punkt aus Radius und Querhaftung.
 
     ``v = sqrt(a_quer * r)``; die Hoechstgeschwindigkeit begrenzt zusaetzlich.
+
+    :param grip: Grip-Faktor aus dem Wetter (GDD 7), je Punkt oder fuer die
+        ganze Runde. Er wird quadratisch auf die Beschleunigungen gelegt -
+        dann streckt er das fertige Profil um genau diesen Faktor, denn
+        ``sqrt(g^2 * a * r) = g * sqrt(a * r)``. Genau das meint GDD 4 mit
+        "der Grip-Faktor senkt das Tempo jedes Autos".
     """
     quer = np.where(
         strecke.art_je_punkt == Segmentart.ENGE_KURVE,
         grenzen.quer_eng,
         grenzen.quer,
-    )
+    ) * np.square(grip)
     # Auf exakten Geraden ist der Radius unendlich; dort greift allein die
     # Hoechstgeschwindigkeit.
+    hoechst = grenzen.hoechst * np.asarray(grip, dtype=float)
     with np.errstate(invalid="ignore"):
         limit = np.sqrt(quer * strecke.radius_m)
-    return np.minimum(np.nan_to_num(limit, posinf=grenzen.hoechst), grenzen.hoechst)
+    limit = np.where(np.isfinite(limit), limit, np.max(hoechst))
+    return np.minimum(limit, hoechst)
 
 
-def geschwindigkeitsprofil(strecke: Strecke, grenzen: Grenzen) -> np.ndarray:
+def geschwindigkeitsprofil(
+    strecke: Strecke, grenzen: Grenzen, grip: np.ndarray | float = 1.0
+) -> np.ndarray:
     """Berechnet die Geschwindigkeit je Streckenpunkt in m/s.
 
     Vorwaertsdurchlauf mit der Beschleunigungsgrenze, Rueckwaertsdurchlauf
     mit der Bremsgrenze (GDD 4). Weil die Runde geschlossen ist, laufen
     beide Durchgaenge zweimal herum.
+
+    :param grip: Grip-Faktor aus dem Wetter, je Punkt oder fuer die ganze
+        Runde. Bei gleichem Grip ueberall ist das Ergebnis exakt das
+        ``grip``-fache des trockenen Profils.
     """
-    v = kurvenlimit(strecke, grenzen)
+    v = kurvenlimit(strecke, grenzen, grip)
     anzahl = len(v)
     ds = strecke.punktabstand_m
+    grip_quadrat = np.broadcast_to(np.square(np.asarray(grip, dtype=float)), (anzahl,))
 
     # Vorwaerts: schneller werden geht nur mit der Beschleunigungsgrenze.
-    zuwachs = 2.0 * grenzen.laengs * ds
+    zuwachs = 2.0 * grenzen.laengs * ds * grip_quadrat
     for _ in range(UMLAEUFE):
         for i in range(anzahl):
             naechster = (i + 1) % anzahl
-            moeglich = math.sqrt(v[i] * v[i] + zuwachs)
+            moeglich = math.sqrt(v[i] * v[i] + zuwachs[i])
             if moeglich < v[naechster]:
                 v[naechster] = moeglich
 
     # Rueckwaerts: vor einer Kurve muss rechtzeitig gebremst werden.
-    abnahme = 2.0 * grenzen.brems * ds
+    abnahme = 2.0 * grenzen.brems * ds * grip_quadrat
     for _ in range(UMLAEUFE):
         for i in range(anzahl - 1, -1, -1):
             naechster = (i + 1) % anzahl
-            moeglich = math.sqrt(v[naechster] * v[naechster] + abnahme)
+            moeglich = math.sqrt(v[naechster] * v[naechster] + abnahme[i])
             if moeglich < v[i]:
                 v[i] = moeglich
 
@@ -220,10 +237,19 @@ class Rundenergebnis:
     profil: np.ndarray
 
 
-def fahre_runde(konfiguration: Konfiguration, strecke: Strecke, auto: Auto) -> Rundenergebnis:
-    """Faehrt eine Runde ohne Zufall und liefert Zeit und Profil."""
+def fahre_runde(
+    konfiguration: Konfiguration,
+    strecke: Strecke,
+    auto: Auto,
+    grip: np.ndarray | float = 1.0,
+) -> Rundenergebnis:
+    """Faehrt eine Runde ohne Zufall und liefert Zeit und Profil.
+
+    :param grip: Grip-Faktor aus dem Wetter (GDD 7), je Punkt oder fuer die
+        ganze Runde
+    """
     grenzen = grenzen_aus(konfiguration, auto)
-    profil = geschwindigkeitsprofil(strecke, grenzen)
+    profil = geschwindigkeitsprofil(strecke, grenzen, grip)
     zeit = rundenzeit_ms(strecke, profil)
     return Rundenergebnis(
         zeit_ms=zeit,

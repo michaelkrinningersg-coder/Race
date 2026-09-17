@@ -4,8 +4,8 @@ Motorsport-Manager mit sichtbarer Rennsimulation. Grundlage ist das
 [Game Design Dokument v1.0](Rennmanager%20%E2%80%93%20Game%20Design%20Dokument%20%28v1.0%29.md);
 die Arbeitsregeln stehen in [Claude.md](Claude.md).
 
-**Stand: Schritt 4 von 10 – 30 Autos, Start, Ueberholen, Seitenleiste, Zeitraffer.**
-Rennen laufen ohne Zufall im Tempo; Qualifying und Wetter folgen in Schritt 5.
+**Stand: Schritt 5 von 10 – Qualifying, Zufallssystem, Wetter.**
+Ein Rennwochenende laeuft durch; Fehler, Unfaelle und Defekte folgen in Schritt 6.
 
 ## Aufbau
 
@@ -170,6 +170,47 @@ Mit linearer Interpolation zwischen den Punkten stimmt die Rennrunde wieder
 mit der Einzelrunde aus Schritt 3 ueberein, auf 30 Millisekunden genau. Ein
 Test haelt das fest: Ein Auto allein auf der Strecke muss im Rennen so
 schnell sein wie in der Einzelrunde.
+
+## Wetter und Zufall
+
+`rennmanager.kern.wetter` wuerfelt je Session eine Lage, die 0- bis 3-mal
+um je eine Stufe wechselt. `rennmanager.kern.form` liefert die drei
+Zufallsebenen aus GDD 11: Tagesform, Eigenschafts-Zufall und Rundenform.
+
+### Warum der Grip quadratisch angesetzt wird
+
+GDD 4 sagt: "Der Grip-Faktor senkt das Tempo jedes Autos." Das Kurvenlimit
+folgt aber `v = sqrt(a * r)`. Legt man den Grip quadratisch auf alle
+Beschleunigungen, kommt genau das heraus:
+
+    sqrt(g^2 * a * r) = g * sqrt(a * r)
+
+Auch der Vorwaerts- und der Rueckwaertsdurchlauf skalieren dann exakt mit.
+Ein Test haelt fest, dass Grip 0,72 die Rundengeschwindigkeit auf genau
+72,000 % senkt - nicht auf 71,8 oder 72,3 %.
+
+## Das Rennwochenende
+
+```python
+from rennmanager.kern import qualifying, rennen, strecke, wetter
+from rennmanager.kern.zufall import Seedquelle
+from rennmanager.konfiguration import lade
+
+k = lade()
+spa = strecke.lade(k, "Spa")
+feld = rennen.starterfeld(k, liga=10, spielerplatz=30)
+haupt = Seedquelle(4711)
+
+# Samstag: jedes Auto allein, Aufwaermrunde plus gezeitete Runde
+session = qualifying.fahre(k, spa, feld, haupt.zweig("qualifying"))
+session.aufstellung          # Startaufstellung fuers Rennen
+session.wetter.zustaende     # ("starkregen", "regen", ...)
+```
+
+Qualifying und Rennen wuerfeln getrennt - Wetter, Tagesform und
+Eigenschafts-Zufall je einmal pro Session (GDD 7 und 11). Fuer die
+Kalibrierung und die Massensimulation laesst sich der Zufall abschalten:
+`rennen.simuliere(..., ohne_zufall=True)`, wie GDD 9 es verlangt.
 
 ## Zwei Regeln, die den Code praegen
 
