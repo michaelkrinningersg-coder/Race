@@ -6,9 +6,11 @@ import sys
 
 from rennmanager import __version__
 from rennmanager.kern import auto as kern_auto
+from rennmanager.kern import rennen as kern_rennen
 from rennmanager.kern import strecke as kern_strecke
 from rennmanager.kern import tempo as kern_tempo
 from rennmanager.kern.zeit import formatiere_dauer
+from rennmanager.kern.zufall import Seedquelle
 from rennmanager.konfiguration import KonfigurationsFehler, lade
 
 # Prueft nur, ob die Konfiguration gefunden und gelesen werden kann, und
@@ -59,6 +61,21 @@ def pruefe() -> int:
         f"Kalibrierung:  {name} bei S={s_wert}: "
         f"{formatiere_dauer(runde.zeit_ms)}, {runde.schnitt_kmh:.2f} km/h "
         f"(Soll {soll:.2f}, Abweichung {runde.schnitt_kmh - soll:+.2f})"
+    )
+    # Ein Kurzrennen ueber zwei Runden: prueft die Rennschleife im Bundle.
+    verlauf = kern_rennen.simuliere(
+        konfiguration,
+        referenz,
+        kern_rennen.starterfeld(konfiguration, 20, umgedreht=True),
+        2,
+        Seedquelle(1),
+        kern_rennen.mittlerer_ueberholzonenanteil(konfiguration, strecken),
+    )
+    sieger = verlauf.ergebnisse[0]
+    print(
+        f"Rennen:        {len(verlauf.teilnehmer)} Autos, 2 Runden, Sieger "
+        f"{verlauf.teilnehmer[sieger.teilnehmer].kuerzel} in "
+        f"{formatiere_dauer(sieger.zeit_ms)}, {len(verlauf.manoever)} Ueberholmanoever"
     )
     print(f"Offene Punkte: {len(konfiguration.offene_punkte)}")
     return 0

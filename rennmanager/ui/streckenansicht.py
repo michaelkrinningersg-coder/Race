@@ -37,6 +37,10 @@ FARBEN_TEMPO = [
 ]
 
 RAND_PX = 28
+PUNKT_RADIUS_PX = 6.0
+SPIELER_RING_PX = 2.5
+# Seitlicher Versatz bei Duellen, damit sich Punkte nicht decken (GDD 4).
+DUELL_VERSATZ_PX = 5.0
 LINIENSTAERKE_PX = 3.4
 ZONENSTAERKE_PX = 11.0
 
@@ -49,6 +53,7 @@ class Streckenansicht(QWidget):
         self._strecke: Strecke | None = None
         self._zeige_ueberholzonen = True
         self._tempo: np.ndarray | None = None
+        self._autos: list[tuple[float, str, str, bool]] = []
         self.setMinimumSize(420, 320)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setAutoFillBackground(True)
@@ -74,6 +79,15 @@ class Streckenansicht(QWidget):
     @property
     def zeigt_tempo(self) -> bool:
         return self._tempo is not None
+
+    def zeige_autos(self, autos: list[tuple[float, str, str, bool]]) -> None:
+        """Setzt die Autos, die als Punkte gezeichnet werden (GDD 4).
+
+        :param autos: je Auto ``(Distanz auf der Runde in m, Kuerzel,
+            Farbe, ist_spieler)``
+        """
+        self._autos = autos
+        self.update()
 
     def setze_ueberholzonen_sichtbar(self, sichtbar: bool) -> None:
         self._zeige_ueberholzonen = sichtbar
@@ -109,6 +123,8 @@ class Streckenansicht(QWidget):
             self._zeichne_segmente(maler, bild)
         self._zeichne_sektorgrenzen(maler, bild)
         self._zeichne_start(maler, bild)
+        if self._autos:
+            self._zeichne_autos(maler, umrechnung)
         self._zeichne_legende(maler)
 
     def _umrechnung(self, punkte: np.ndarray) -> tuple[float, float, float] | None:
@@ -239,6 +255,97 @@ class Streckenansicht(QWidget):
             round(von.green() + (bis.green() - von.green()) * rest),
             round(von.blue() + (bis.blue() - von.blue()) * rest),
         )
+
+    def _zeichne_autos(self, maler: QPainter, umrechnung: tuple[float, float, float]) -> None:
+        """Zeichnet die Autos als Punkte in Teamfarbe mit Kuerzel (GDD 4).
+
+        Zwei Dinge muessen sich vertragen: Bei Duellen liegen die Autos
+        dicht beieinander, trotzdem soll jeder Punkt sichtbar bleiben.
+        Deshalb werden dicht gedraengte Punkte quer zur Fahrtrichtung
+        versetzt (GDD 4: "bei Duellen werden die Punkte leicht seitlich
+        versetzt"), und ein Kuerzel wird nur gesetzt, wenn dafuer Platz
+        ist. Der Punkt des Spielers und sein Kuerzel haben Vorrang.
+        """
+        assert self._strecke is not None
+        orte = [self._ort_auf_der_linie(distanz) for distanz, *_ in self._autos]
+        bild = self._bildpunkte(np.array(orte), umrechnung)
+        quer = np.array([self._querrichtung(distanz) for distanz, *_ in self._autos])
+
+        # Von hinten nach vorn setzen, damit der Fuehrende obenauf liegt.
+        gesetzt: list[np.ndarray] = []
+        stellen: list[np.ndarray] = []
+        for nummer in range(len(self._autos) - 1, -1, -1):
+            stelle = bild[nummer].copy()
+            versatz = 0
+            while any(
+                float(np.hypot(*(stelle - belegt))) < 2 * PUNKT_RADIUS_PX
+                for belegt in gesetzt
+            ):
+                versatz += 1
+                if versatz > 12:
+                    break
+                seite = 1.0 if versatz % 2 else -1.0
+                weite = ((versatz + 1) // 2) * DUELL_VERSATZ_PX * seite
+                stelle = bild[nummer] + quer[nummer] * weite
+            gesetzt.append(stelle)
+            stellen.append(stelle)
+        stellen.reverse()
+
+        for nummer, stelle in enumerate(stellen):
+            _, _, farbe, ist_spieler = self._autos[nummer]
+            maler.setBrush(QColor(farbe))
+            maler.setPen(QPen(FARBE_START, SPIELER_RING_PX) if ist_spieler else QPen(Qt.NoPen))
+            maler.drawEllipse(QPointF(*stelle), PUNKT_RADIUS_PX, PUNKT_RADIUS_PX)
+        maler.setBrush(Qt.NoBrush)
+
+        self._zeichne_kuerzel(maler, stellen)
+
+    def _zeichne_kuerzel(self, maler: QPainter, stellen: list[np.ndarray]) -> None:
+        """Setzt die Kuerzel, wo Platz ist; das des Spielers immer."""
+        maler.setFont(QFont(self.font().family(), 7, QFont.Bold))
+        breite, hoehe = 30.0, 12.0
+
+        # Spieler zuerst, danach von vorn nach hinten.
+        reihenfolge = sorted(
+            range(len(stellen)), key=lambda n: (not self._autos[n][3], n)
+        )
+        belegt: list[QRectF] = []
+        for nummer in reihenfolge:
+            stelle = stellen[nummer]
+            feld = QRectF(
+                stelle[0] - breite / 2,
+                stelle[1] - PUNKT_RADIUS_PX - hoehe - 2,
+                breite,
+                hoehe,
+            )
+            ist_spieler = self._autos[nummer][3]
+            if not ist_spieler and any(feld.intersects(anderes) for anderes in belegt):
+                continue
+            belegt.append(feld)
+            maler.setPen(QPen(FARBE_START if ist_spieler else FARBE_TEXT))
+            maler.drawText(feld, Qt.AlignCenter, self._autos[nummer][1])
+
+    def _ort_auf_der_linie(self, distanz: float) -> np.ndarray:
+        """Punkt auf der Ideallinie zu einer Distanz, zwischen den Punkten."""
+        assert self._strecke is not None
+        punkte = self._strecke.punkte
+        anzahl = len(punkte)
+        stelle = (distanz % self._strecke.laenge_m) / self._strecke.punktabstand_m
+        hier = int(stelle) % anzahl
+        dort = (hier + 1) % anzahl
+        rest = stelle - int(stelle)
+        return punkte[hier] + rest * (punkte[dort] - punkte[hier])
+
+    def _querrichtung(self, distanz: float) -> np.ndarray:
+        """Einheitsvektor quer zur Fahrtrichtung, in Bildkoordinaten."""
+        assert self._strecke is not None
+        punkte = self._strecke.punkte
+        anzahl = len(punkte)
+        hier = int((distanz % self._strecke.laenge_m) / self._strecke.punktabstand_m) % anzahl
+        richtung = punkte[(hier + 1) % anzahl] - punkte[hier]
+        betrag = float(np.hypot(*richtung)) or 1.0
+        # Die y-Achse ist in der Anzeige gespiegelt.
+        return np.array([-richtung[1], -richtung[0]]) / betrag
 
     def _zeichne_legende(self, maler: QPainter) -> None:
         assert self._strecke is not None

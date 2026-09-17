@@ -371,6 +371,15 @@ ausfaelle_max = 5
 stufen = [1, 2, 5, 10, 20, 50, 100]
 sofortergebnis = true
 
+[simulation]
+# Schrittweite der Rennsimulation. 50 ms sind fein genug: Bei 400 km/h
+# faehrt ein Auto 5,6 m je Schritt, der Abstand zum Vordermann wird aber
+# aus den Positionen gerechnet und ist damit genauer als die Schrittweite.
+zeitschritt_ms = 50
+# Nur jede so viele Millisekunden wird eine Position festgehalten. Die
+# Anzeige liest daraus und rechnet dazwischen linear (GDD 15).
+bildschritt_ms = 200
+
 [zeitmessung]
 # Intern ganze Millisekunden, Linienueberfahrten interpoliert
 einheit = "ms"

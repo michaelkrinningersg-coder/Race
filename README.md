@@ -4,8 +4,8 @@ Motorsport-Manager mit sichtbarer Rennsimulation. Grundlage ist das
 [Game Design Dokument v1.0](Rennmanager%20%E2%80%93%20Game%20Design%20Dokument%20%28v1.0%29.md);
 die Arbeitsregeln stehen in [Claude.md](Claude.md).
 
-**Stand: Schritt 3 von 10 – Geschwindigkeitsprofil, Rundenzeit, Kalibrierung.**
-Ein Auto faehrt eine Runde ohne Zufall; Rennen mit mehreren Autos folgen.
+**Stand: Schritt 4 von 10 – 30 Autos, Start, Ueberholen, Seitenleiste, Zeitraffer.**
+Rennen laufen ohne Zufall im Tempo; Qualifying und Wetter folgen in Schritt 5.
 
 ## Aufbau
 
@@ -132,6 +132,44 @@ Kalibriert wird mit `python -m werkzeuge.kalibriere --schreiben`. Als
 Referenzstrecke dient Zandvoort - mit 46 % der geringste Geradenanteil
 aller 20 Strecken, laut GDD 3 "Steilkurven, eng". GDD 9 verlangt eine
 "kurvige Referenzstrecke", ohne sie zu nennen.
+
+## Das Rennen
+
+`rennmanager.kern.rennen` faehrt ein ganzes Rennen vorab durch und legt die
+Positionen in festen Abstaenden ab; die Oberflaeche spielt diesen Verlauf
+nur noch ab (GDD 15). Deshalb kostet 100-facher Zeitraffer nichts.
+
+```python
+from rennmanager.kern import rennen, strecke
+from rennmanager.kern.zufall import Seedquelle
+from rennmanager.konfiguration import lade
+
+k = lade()
+alle = strecke.lade_alle(k)
+monza = next(s for s in alle if s.name == "Monza")
+feld = rennen.starterfeld(k, liga=10, spielerplatz=30)
+verlauf = rennen.simuliere(
+    k, monza, feld, rennen.rundenzahl(k, monza, 10), Seedquelle(4711),
+    rennen.mittlerer_ueberholzonenanteil(k, alle),
+)
+verlauf.reihenfolge_zu(90_000)   # Positionen nach anderthalb Minuten
+verlauf.ergebnisse[0].zeit_ms    # Siegerzeit in Millisekunden
+```
+
+Das freie Profil aus Schritt 3 ist dabei die Obergrenze. Interaktion
+entsteht durch die zwei Regeln aus GDD 4: Wer naeher als 0,05 s auffaehrt,
+faehrt das Tempo des Vordermanns; ueberholen darf er nur in einer
+Ueberholzone und nur mit mindestens 2 km/h Vorteil.
+
+### Warum zwischen den Profilpunkten interpoliert wird
+
+Das Profil ist alle 5 m definiert. Zielt ein Auto auf das Tempo des zuletzt
+passierten Punktes, dann hinkt es durch die Beschleunigungsgrenze dauerhaft
+einen Punkt hinterher - auf einer Runde in Zandvoort kostet das rund 1,5 s.
+Mit linearer Interpolation zwischen den Punkten stimmt die Rennrunde wieder
+mit der Einzelrunde aus Schritt 3 ueberein, auf 30 Millisekunden genau. Ein
+Test haelt das fest: Ein Auto allein auf der Strecke muss im Rennen so
+schnell sein wie in der Einzelrunde.
 
 ## Zwei Regeln, die den Code praegen
 

@@ -184,3 +184,129 @@ def test_tempoprofil_muss_zur_strecke_passen(qtbot, konfig: kf.Konfiguration) ->
     strecke = kern_strecke.lade(konfig, "Monza")
     with pytest.raises(ValueError, match="passt nicht"):
         ansicht.zeige_tempo(strecke, np.zeros(5))
+
+
+# -- Rennseite --------------------------------------------------------------
+def _kurzes_rennen(fenster, runden: int = 2, umgedreht: bool = False):
+    """Berechnet ein moeglichst kurzes Rennen auf der Rennseite."""
+    seite = fenster.rennseite
+    seite._runden.setValue(runden)
+    seite._umgedreht.setCurrentIndex(1 if umgedreht else 0)
+    seite._berechne()
+    return seite
+
+
+def test_rennseite_berechnet_ein_rennen(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = _kurzes_rennen(fenster)
+
+    assert seite.verlauf is not None
+    assert len(seite.verlauf.teilnehmer) == konfig.wert("rennen", "autos")
+    assert len(seite.verlauf.ergebnisse) == konfig.wert("rennen", "autos")
+
+
+def test_rennseite_spielt_den_verlauf_ab(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = _kurzes_rennen(fenster)
+
+    seite._springe(0)
+    anfang = seite.verlauf.distanzen_zu(seite.zeit_ms).copy()
+    seite._springe(seite.verlauf.dauer_ms / 2)
+    mitte = seite.verlauf.distanzen_zu(seite.zeit_ms)
+    assert (mitte > anfang).all()
+
+
+def test_sofortergebnis_springt_ans_ende(qtbot, konfig: kf.Konfiguration) -> None:
+    """GDD 4: Zeitraffer bis 100x und Sofortergebnis."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = _kurzes_rennen(fenster)
+
+    seite._springe(0)
+    seite._zum_ende()
+    assert seite.zeit_ms == seite.verlauf.dauer_ms
+
+
+def test_zeitrafferstufen_kommen_aus_der_konfiguration(qtbot, konfig) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.rennseite
+    stufen = [seite._raffer.itemData(i) for i in range(seite._raffer.count())]
+    assert stufen == konfig.wert("zeitraffer", "stufen")
+    assert stufen[-1] == 100
+
+
+def test_zeitraffer_bewegt_die_uhr_schneller(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = _kurzes_rennen(fenster)
+
+    seite._raffer.setCurrentIndex(0)  # 1x
+    seite._springe(0)
+    seite._takt()
+    langsam = seite.zeit_ms
+
+    seite._raffer.setCurrentIndex(seite._raffer.count() - 1)  # 100x
+    seite._springe(0)
+    seite._takt()
+    assert seite.zeit_ms == pytest.approx(langsam * 100)
+
+
+def test_rangliste_zeigt_alle_autos(qtbot, konfig: kf.Konfiguration) -> None:
+    """GDD 4: Positionen, Zeit des Fuehrenden, Rueckstand der uebrigen."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = _kurzes_rennen(fenster)
+    seite._springe(seite.verlauf.dauer_ms / 2)
+
+    liste = seite._rangliste
+    assert liste.topLevelItemCount() == konfig.wert("rennen", "autos")
+    assert [liste.topLevelItem(i).text(0) for i in range(5)] == ["1", "2", "3", "4", "5"]
+    # Der Fuehrende zeigt seine Gesamtzeit, die uebrigen einen Rueckstand.
+    assert not liste.topLevelItem(0).text(3).startswith("+")
+    assert liste.topLevelItem(1).text(3).startswith("+")
+
+
+def test_zeitenmonitor_zeigt_runden_und_sektoren(qtbot, konfig: kf.Konfiguration) -> None:
+    """GDD 4: letzte Runde, beste Runde, 4 Sektorzeiten."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = _kurzes_rennen(fenster)
+    seite._zum_ende()
+
+    monitor = seite._monitor
+    assert monitor.columnCount() == 7
+    assert monitor.topLevelItemCount() > 0
+    erste = monitor.topLevelItem(0)
+    assert erste.text(1) != "-"  # letzte Runde
+    assert erste.text(2) != "-"  # beste Runde
+
+
+def test_rennansicht_zeichnet_die_autos(qtbot, konfig: kf.Konfiguration) -> None:
+    from rennmanager.ui.streckenansicht import Streckenansicht
+
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    fenster.resize(1200, 800)
+    seite = _kurzes_rennen(fenster)
+    seite._springe(seite.verlauf.dauer_ms / 2)
+
+    ansicht = seite.findChild(Streckenansicht)
+    assert ansicht is not None
+    assert len(ansicht._autos) == konfig.wert("rennen", "autos")
+    assert not ansicht.grab().isNull()
+
+
+def test_wiedergabe_stoppt_am_ende(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = _kurzes_rennen(fenster)
+
+    seite._springe(seite.verlauf.dauer_ms - 10)
+    seite._laeuft = True
+    seite._raffer.setCurrentIndex(seite._raffer.count() - 1)
+    seite._takt()
+    assert seite.zeit_ms == seite.verlauf.dauer_ms
+    assert not seite._laeuft
