@@ -112,6 +112,11 @@ class Rennverlauf:
     ausgefallen: np.ndarray
     protokolle: tuple[Rundenprotokoll, ...]
     manoever: tuple[Ueberholmanoever, ...]
+    # Je Auto: wie viele fahrende Gegner es ueber die Runden hinweg hinter
+    # sich gebracht hat. Anders als ``manoever`` zaehlt das keine Duelle
+    # mit, die innerhalb einer Runde hin und her gehen - deshalb haengt die
+    # Erfahrung aus GDD 10 hieran und nicht an den rohen Vorbeigaengen.
+    positionsgewinne: tuple[int, ...]
     zwischenfaelle: tuple[kern_zwischenfall.Zwischenfall, ...]
     reifenzustand: np.ndarray
     ergebnisse: tuple[Ergebnis, ...]
@@ -344,6 +349,13 @@ class _Lauf:
 
         self.protokolle = tuple(Rundenprotokoll() for _ in range(self.anzahl))
         self.manoever: list[Ueberholmanoever] = []
+        # Positionsgewinne je Runde: Wer lag zu Rundenbeginn vor mir, und
+        # wen davon habe ich bis zum Rundenende hinter mir gelassen? Zu
+        # Beginn ist das die Startaufstellung. Ein ausgefallener Gegner
+        # zaehlt nicht mit - an ihm ist niemand vorbeigefahren.
+        startplaetze = np.array([t.startplatz for t in teilnehmer])
+        self.vorne_bei_rundenbeginn = startplaetze[None, :] < startplaetze[:, None]
+        self.positionsgewinne = np.zeros(self.anzahl, dtype=int)
         # Letzte Ueberfahrt je Auto: Startlinie und Sektorgrenzen.
         self.linienzeit = np.zeros(self.anzahl)
         self.markenzeit = np.zeros(self.anzahl)
@@ -767,6 +779,28 @@ class _Lauf:
                 )
             )
 
+    def _zaehle_positionsgewinne(self, i: int) -> None:
+        """Wen dieses Auto in der abgelaufenen Runde hinter sich gelassen hat.
+
+        Verglichen wird der Stand zu Rundenbeginn mit dem am Rundenende.
+        Ein Duell, das innerhalb einer Runde mehrfach hin und her geht,
+        zaehlt damit einmal - oder gar nicht, wenn es am Ende steht wie am
+        Anfang. Genau so zaehlt auch der Schnellmodus aus GDD 13, und nur
+        so sind die Erfahrungswerte aus GDD 10 zwischen beiden Modellen
+        vergleichbar.
+
+        Zwei Gruppen zaehlen nicht mit, obwohl die Distanz es so aussehen
+        laesst: **Ausgefallene** stehen am Streckenrand, und **Autos im
+        Ziel** fahren nicht mehr weiter. An beiden ist niemand
+        vorbeigefahren - sie bleiben nur zurueck, waehrend die anderen
+        weiterfahren.
+        """
+        faehrt_noch = self.aktiv & ~self.im_ziel
+        jetzt_vorne = self.distanz > self.distanz[i]
+        ueberholt = self.vorne_bei_rundenbeginn[i] & ~jetzt_vorne & faehrt_noch
+        self.positionsgewinne[i] += int(np.count_nonzero(ueberholt))
+        self.vorne_bei_rundenbeginn[i] = jetzt_vorne
+
     def _setze_reifen(self, i: int) -> None:
         """Rechnet den Reifenzustand eines Autos in Tempo und Fehlerquote um."""
         auto = self.autos[i]
@@ -852,6 +886,7 @@ class _Lauf:
         self.linienzeit[i] = ueberfahrt
         self.runden_gefahren[i] += 1
         self.naechster_sektor[i] = 0
+        self._zaehle_positionsgewinne(i)
 
         # Jede Runde wird die Rundenform neu gezogen (GDD 11); das Wetter
         # kann sich inzwischen geaendert haben (GDD 7).
@@ -1027,6 +1062,7 @@ def simuliere(
         ausgefallen=np.array(ausgefallen),
         protokolle=lauf.protokolle,
         manoever=tuple(lauf.manoever),
+        positionsgewinne=tuple(int(n) for n in lauf.positionsgewinne),
         zwischenfaelle=tuple(lauf.zwischenfaelle),
         reifenzustand=np.array(reifen),
         ergebnisse=_ergebnisse(lauf, konfiguration, seedquelle),

@@ -69,6 +69,11 @@ class Ligawochenende:
 
     ``ergebnisse`` nennt Fahrer mit ihrer weltweiten Nummer, nicht mit dem
     Platz im Starterfeld - nur so passen die Zeilen zur Tabelle.
+
+    ``ueberholmanoever`` zaehlt Positionsgewinne je Runde, in beiden
+    Rennmodellen gleich. Die volle Simulation kennt daneben jeden einzelnen
+    Vorbeigang; der steht in ``Rennverlauf.manoever`` und ist fuer die
+    Anzeige des Rennens da, nicht fuer die Wertung.
     """
 
     liga: int
@@ -256,10 +261,16 @@ def _ausfuehrlich(
     def nummer_von(stelle: int) -> int:
         return fahrer[quali.aufstellung[stelle]].nummer
 
-    manoever_je_fahrer: dict[int, int] = {}
-    for m in verlauf.manoever:
-        schluessel = nummer_von(m.angreifer)
-        manoever_je_fahrer[schluessel] = manoever_je_fahrer.get(schluessel, 0) + 1
+    # Gezaehlt werden die Positionsgewinne je Runde, nicht die rohen
+    # Vorbeigaenge: Ein Duell, das innerhalb einer Runde hin und her geht,
+    # ist kein Dutzend Ueberholmanoever. Nur so ist die Erfahrung aus
+    # GDD 10 mit der des Schnellmodus vergleichbar - gemessen lagen die
+    # rohen Vorbeigaenge um den Faktor 3,2 darueber.
+    manoever_je_fahrer = {
+        nummer_von(stelle): anzahl
+        for stelle, anzahl in enumerate(verlauf.positionsgewinne)
+        if anzahl
+    }
 
     defekte_je_fahrer: dict[int, tuple[str, ...]] = {}
     for zwischenfall in verlauf.zwischenfaelle:
@@ -283,7 +294,7 @@ def _ausfuehrlich(
         wetter=wetter.zustaende,
         siegerzeit_ms=verlauf.ergebnisse[0].zeit_ms or 0,
         schnellste_runde_ms=schnellste_ms,
-        ueberholmanoever=len(verlauf.manoever),
+        ueberholmanoever=sum(verlauf.positionsgewinne),
         ausfaelle=sum(1 for e in verlauf.ergebnisse if e.zeit_ms is None),
         ausfuehrlich=True,
         manoever_je_fahrer=manoever_je_fahrer,

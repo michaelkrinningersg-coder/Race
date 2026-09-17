@@ -366,6 +366,34 @@ liga.kilometer_je_fahrer[401]    # {"trocken": 92.8, "heiss": 3.8}
 Sie stehen fuer alle 600 Fahrer bereit, gebucht wird davon nur der
 Spieler: Die KI hat weder Konto noch Werkstatt (GDD 12).
 
+### Warum Ueberholmanoever nicht gleich Vorbeigaenge sind
+
+``ueberholmanoever`` zaehlt **Positionsgewinne je Runde**: Wer lag zu
+Rundenbeginn vor mir, und wen davon habe ich bis zum Rundenende hinter mir
+gelassen? Ein Duell, das innerhalb einer Runde mehrfach hin und her geht,
+ist damit *ein* Manoever - oder gar keins, wenn es am Ende steht wie am
+Anfang. Ausgefallene und schon im Ziel stehende Autos zaehlen nicht mit:
+An ihnen ist niemand vorbeigefahren, sie bleiben nur zurueck.
+
+Das ist noetig, weil die Erfahrung aus GDD 10 an dieser Zahl haengt und
+die beiden Rennmodelle sie sonst verschieden messen. Gemessen ueber ein
+Rennen in Zandvoort (Liga 10, 48 Runden, 30 Autos):
+
+| Zaehlweise | Manoever | je Auto |
+| --- | --- | --- |
+| jeder Vorbeigang (``Rennverlauf.manoever``) | 879 | 29,3 |
+| Positionsgewinne je Runde | 301 | 10,0 |
+| Schnellmodus | 72 | 2,4 |
+
+Fuer Liga 10, Platz 8 schrumpft der Unterschied in der Erfahrung damit von
++37 % auf +11 %. Der Rest kommt daher, dass der Schnellmodus je Runde nur
+*einen* Ueberholversuch zulaesst, die volle Simulation dagegen an jeder
+Ueberholzone einen - das ist ein Unterschied in der Verkehrsdynamik, nicht
+in der Zaehlweise.
+
+Jeder einzelne Vorbeigang steht weiter in ``Rennverlauf.manoever`` und ist
+fuer die Anzeige des Rennens da, nicht fuer die Wertung.
+
 Kalender und Rennwochenende haengen dabei zusammen (GDD 2): Ein Rennen
 findet an seinem Renntag statt. `fahre_rennen()` schaltet den Kalender der
 Karriere bis dorthin vor - vor dem Rennen, damit die Ereignisse dieser

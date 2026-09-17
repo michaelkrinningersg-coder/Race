@@ -88,7 +88,8 @@ def pruefe() -> int:
     print(
         f"Rennen:        {len(verlauf.teilnehmer)} Autos, 2 Runden, Sieger "
         f"{verlauf.teilnehmer[sieger.teilnehmer].kuerzel} in "
-        f"{formatiere_dauer(sieger.zeit_ms)}, {len(verlauf.manoever)} Ueberholmanoever"
+        f"{formatiere_dauer(sieger.zeit_ms)}, {sum(verlauf.positionsgewinne)} "
+        f"Ueberholmanoever ({len(verlauf.manoever)} Vorbeigaenge)"
     )
     # Ein Rennwochenende im Schnellmodus und seine Wertung: prueft die
     # Bausteine der Saison (GDD 13) im fertigen Bundle.

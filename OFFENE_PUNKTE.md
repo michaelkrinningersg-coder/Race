@@ -1257,3 +1257,48 @@ Autos fünfmal überrundet, und die Rundenzeiten des Schnellen im Verkehr
 sind **auf die Millisekunde identisch** mit seiner Alleinfahrt. Zwei Tests
 halten das jetzt fest, damit eine spätere Änderung an der Reihenfolge es
 nicht still kaputtmacht.
+
+---
+
+## Nachtrag: Überholmanöver zählen in beiden Rennmodellen gleich
+
+### 54. Woran die Erfahrung aus GDD 10 hängt
+
+Seit Punkt 42 verbucht das Rennwochenende die Erfahrung wirklich — und
+damit fiel auf, dass die beiden Rennmodelle „gelungene Überholmanöver"
+verschieden messen. Gemessen in Zandvoort (Liga 10, 48 Runden, 30 Autos):
+
+| Zählweise | Manöver | je Auto |
+| --- | --- | --- |
+| volle Simulation, jeder Vorbeigang | 879 | 29,3 |
+| … je Gegner und Runde einmal | 482 | 16,1 |
+| … Positionsgewinne je Runde | 301 | 10,0 |
+| Schnellmodus | 72 | 2,4 |
+
+576 der 879 Vorbeigänge gehören zu Hin-und-Her-Duellen **innerhalb
+derselben Runde**. Der Schnellmodus sieht davon am Rundenende nichts.
+
+| | Variante | |
+| --- | --- | --- |
+| **A** | Beide Modelle zählen Positionsgewinne je Runde | Keine erfundene Zahl; holt 3,2 der 12 Faktoren |
+| **B** | Der Schnellmodus skaliert seine Zahl hoch | Erfundene Konstante, beim nächsten Balancing falsch |
+| **C** | Die Erfahrung hängt an den Plätzen zwischen Start und Ziel | Widerspricht GDD 10 („je gelungenem Überholmanöver") |
+
+**Entscheidung: A** (vom Auftraggeber gewählt).
+
+`Rennverlauf.positionsgewinne` zählt je Auto und Runde, wie viele
+**fahrende** Gegner, die zu Rundenbeginn vorn lagen, am Rundenende hinter
+ihm liegen. Ausgefallene und schon im Ziel stehende Autos zählen nicht:
+An ihnen ist niemand vorbeigefahren, sie bleiben nur zurück, während die
+anderen weiterfahren. Ohne diese Ausnahme zählte ein 2-Runden-Rennen mehr
+Manöver als Vorbeigänge — gemessen 604 gegen 486.
+
+Gemessen für Liga 10, Platz 8: Die Erfahrung liegt jetzt bei 29.756 EP
+(ausführlich) gegen 26.796 EP (Schnellmodus) statt 36.786 gegen 26.796 —
+der Unterschied fällt von **+37 % auf +11 %**.
+
+**Der Rest ist Verkehrsdynamik, nicht Zählweise.** Der Schnellmodus lässt
+je Runde *einen* Überholversuch zu („wer nicht vorbeikommt, hängt fest"),
+die volle Simulation einen an jeder Überholzone — im Schnitt sechs je
+Strecke. Ihn anzugleichen wäre Schritt B; er würde die Ergebnisse aller
+19 KI-Ligen verändern und ist deshalb nicht gebaut.

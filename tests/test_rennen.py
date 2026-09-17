@@ -369,3 +369,77 @@ def test_simulation_ohne_teilnehmer_meldet_fehler(k, zandvoort, mittel) -> None:
 def test_simulation_ohne_runden_meldet_fehler(k, zandvoort, mittel) -> None:
     with pytest.raises(ValueError, match="Runde"):
         rn.simuliere(k, zandvoort, rn.starterfeld(k, LIGA), 0, Seedquelle(1), mittel)
+
+
+# --- Positionsgewinne je Runde (Punkt 1 der Manoeverzaehlung) --------------
+def gleiches_feld(k, werte: list[int]) -> tuple[rn.Teilnehmer, ...]:
+    """Ein Feld in der Reihenfolge der uebergebenen Staerken."""
+    return tuple(
+        rn.Teilnehmer(
+            auto=ka.gleichverteilt(k, wert, kuerzel=f"A{i:02d}"),
+            startplatz=i + 1,
+            farbe="#888888",
+        )
+        for i, wert in enumerate(werte)
+    )
+
+
+def test_ohne_positionswechsel_gibt_es_keine_gewinne(k, zandvoort, mittel) -> None:
+    """Der Schnellste steht vorn und bleibt vorn - niemand gewinnt etwas."""
+    feld = gleiches_feld(k, [60_000, 40_000, 20_000])
+    verlauf = rn.simuliere(
+        k, zandvoort, feld, 4, Seedquelle(1), mittel, ohne_zufall=True
+    )
+    assert verlauf.manoever == ()
+    assert verlauf.positionsgewinne == (0, 0, 0)
+
+
+def test_wer_ins_ziel_faehrt_wird_nicht_mehr_ueberholt(k, zandvoort, mittel) -> None:
+    """Der Sieger steht im Ziel, waehrend die anderen noch fahren.
+
+    Seine Distanz waechst dann nicht mehr - ohne Sonderbehandlung saehe es
+    aus, als ginge das ganze Feld an ihm vorbei.
+    """
+    feld = gleiches_feld(k, [60_000, 40_000, 20_000])
+    verlauf = rn.simuliere(
+        k, zandvoort, feld, 4, Seedquelle(1), mittel, ohne_zufall=True
+    )
+    # Das Feld zieht auseinander: Der Zweite kommt eine knappe Minute
+    # spaeter an, der Dritte wird sogar ueberrundet.
+    assert verlauf.ergebnisse[1].rueckstand_ms > 30_000
+    assert verlauf.ergebnisse[2].rundenrueckstand == 1
+    # Trotzdem hat niemand einen Platz gewonnen - es ist keiner an einem
+    # stehenden oder ueberrundeten Auto vorbeigefahren.
+    assert sum(verlauf.positionsgewinne) == 0
+
+
+def test_wer_sich_nach_vorn_arbeitet_sammelt_gewinne(k, zandvoort, mittel) -> None:
+    """Ein starkes Auto von hinten holt jeden Platz genau einmal."""
+    feld = gleiches_feld(k, [10_000, 10_000, 10_000, 90_000])
+    verlauf = rn.simuliere(k, zandvoort, feld, 6, Seedquelle(2), mittel)
+    ergebnis = next(e for e in verlauf.ergebnisse if e.teilnehmer == 3)
+    assert ergebnis.platz == 1
+    # Drei Gegner, drei Plaetze - egal wie oft unterwegs gekaempft wurde.
+    assert verlauf.positionsgewinne[3] == 3
+
+
+def test_duelle_innerhalb_einer_runde_zaehlen_nicht_mehrfach(k, zandvoort, mittel) -> None:
+    """Der Kern von Schritt A: Positionsgewinne statt roher Vorbeigaenge.
+
+    In einem engen Feld gehen dieselben zwei Autos in einer Runde mehrfach
+    aneinander vorbei. Fuer die Erfahrung aus GDD 10 ist das *ein*
+    Ueberholmanoever, nicht ein Dutzend.
+    """
+    feld = gleiches_feld(k, [50_000] * 10)
+    verlauf = rn.simuliere(k, zandvoort, feld, 8, Seedquelle(3), mittel)
+    assert len(verlauf.manoever) > 0
+    assert sum(verlauf.positionsgewinne) < len(verlauf.manoever)
+
+
+def test_die_gewinne_zaehlen_je_auto(k, zandvoort, mittel) -> None:
+    feld = gleiches_feld(k, [50_000] * 6)
+    verlauf = rn.simuliere(k, zandvoort, feld, 5, Seedquelle(4), mittel)
+    assert len(verlauf.positionsgewinne) == len(feld)
+    assert all(wert >= 0 for wert in verlauf.positionsgewinne)
+    # Mehr Plaetze als Gegner kann niemand je Runde gewinnen.
+    assert max(verlauf.positionsgewinne) <= (len(feld) - 1) * 5
