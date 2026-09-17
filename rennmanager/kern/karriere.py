@@ -203,7 +203,7 @@ class Karriere:
         """
         from rennmanager.konfiguration import Faehigkeit
 
-        eintrag = self._zusatz_eintrag(schluessel)
+        eintrag = self.zusatz_eintrag(schluessel)
         faehigkeit = Faehigkeit(
             schluessel=schluessel,
             name=eintrag.get("name", schluessel),
@@ -220,7 +220,13 @@ class Karriere:
             return kern_entwicklung.als_wettertopf(entwicklung, wetter)
         return entwicklung
 
-    def _zusatz_eintrag(self, schluessel: str) -> dict:
+    def zusatz_eintrag(self, schluessel: str) -> dict:
+        """Der Konfigurationseintrag einer Faehigkeit ausserhalb der Matrix.
+
+        Die Wetterfaehigkeiten aus GDD 7 und der Reifenfluesterer stehen
+        nicht in der Wirkungsmatrix; Name und Waehrung kommen deshalb aus
+        ihrem eigenen Abschnitt der Konfiguration.
+        """
         for eintrag in self.konfiguration.wert("wetter", "faehigkeit", "liste"):
             if eintrag["schluessel"] == schluessel:
                 return eintrag

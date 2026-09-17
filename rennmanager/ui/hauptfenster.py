@@ -35,6 +35,7 @@ from rennmanager.ui.karriereseite import beginne as beginne_karriere
 from rennmanager.ui.qualifyingseite import Qualifyingseite
 from rennmanager.ui.rennseite import Rennseite
 from rennmanager.ui.rundenseite import Rundenseite
+from rennmanager.ui.saisonseite import Saisonseite
 from rennmanager.ui.streckenseite import Streckenseite
 from rennmanager.ui.weltseite import Weltseite
 
@@ -95,6 +96,8 @@ class Hauptfenster(QMainWindow):
         self._reiter.addTab(self._qualifyingseite, "Qualifying")
         self._rennseite = Rennseite(self._konfiguration, self._welt)
         self._reiter.addTab(self._rennseite, "Rennen")
+        self._saisonseite = Saisonseite(self._konfiguration, self._welt)
+        self._reiter.addTab(self._saisonseite, "Saison")
         return self._reiter
 
     def _baue_uebersichtsseite(self) -> QWidget:
@@ -226,6 +229,11 @@ class Hauptfenster(QMainWindow):
     def rennseite(self) -> Rennseite:
         """Die Seite mit der Rennsimulation."""
         return self._rennseite
+
+    @property
+    def saisonseite(self) -> Saisonseite:
+        """Die Seite mit Saisonwertung und Auf-/Abstieg."""
+        return self._saisonseite
 
     @property
     def seedquelle(self) -> Seedquelle:

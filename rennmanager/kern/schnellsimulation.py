@@ -1,0 +1,325 @@
+"""Schnellsimulation der uebrigen Ligen (GDD 13).
+
+"Nach jedem Rennwochenende des Spielers im Schnellmodus auf Rundenebene:
+Qualifying und Rennen mit Wetter, Fehlern, Unfaellen und Defekten in
+vereinfachter Form."
+
+Der Unterschied zur vollen Simulation aus ``rennmanager.kern.rennen``: Dort
+laeuft die Uhr in 50-Millisekunden-Schritten und die Autos stehen einzeln
+auf der Strecke. Hier wird je Runde eine Rundenzeit gebildet und
+aufsummiert; Verkehr und Ueberholen werden ueber die Reihenfolge geregelt,
+nicht ueber Positionen.
+
+Das genuegt fuer 19 Ligen zu je 30 Autos nach jedem Rennwochenende - die
+volle Simulation braeuchte dafuer Minuten, diese Sekunden.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+import numpy as np
+
+from rennmanager.kern import form as kern_form
+from rennmanager.kern import reifen as kern_reifen
+from rennmanager.kern import wetter as kern_wetter
+from rennmanager.kern import zwischenfall as kern_zwischenfall
+from rennmanager.kern.auto import gesamtwert
+from rennmanager.kern.qualifying import qualifyingbonus
+from rennmanager.kern.rennen import Teilnehmer, erfolgschance, streckenfaktor
+from rennmanager.kern.strecke import Strecke
+from rennmanager.kern.tempo import fahre_runde
+from rennmanager.kern.wertung import Rennergebnis
+from rennmanager.kern.zufall import Seedquelle
+
+if TYPE_CHECKING:  # pragma: no cover
+    from rennmanager.konfiguration import Konfiguration
+
+# Mindestabstand, den ein aufgehaltenes Auto zum Vordermann behaelt. Er
+# entspricht der Schwelle aus GDD 4, ab der ueberholt werden darf.
+STAU_ABSTAND_S = 0.05
+
+
+@dataclass(frozen=True)
+class Schnellergebnis:
+    """Ergebnis eines Rennwochenendes im Schnellmodus."""
+
+    liga: int
+    strecke: str
+    ergebnisse: tuple[Rennergebnis, ...]
+    wetter: tuple[str, ...]
+    siegerzeit_ms: int
+    schnellste_runde_ms: int
+    ueberholmanoever: int
+    ausfaelle: int
+
+
+def _grundrunden(konfiguration: Konfiguration, strecke: Strecke, autos) -> np.ndarray:
+    """Rundenzeit jedes Autos ohne Wetter, Zufall und Verschleiss."""
+    return np.array(
+        [fahre_runde(konfiguration, strecke, auto).zeit_ms for auto in autos],
+        dtype=float,
+    )
+
+
+def fahre_wochenende(
+    konfiguration: Konfiguration,
+    liga: int,
+    strecke: Strecke,
+    teilnehmer: tuple[Teilnehmer, ...],
+    runden: int,
+    seedquelle: Seedquelle,
+    streckenmittel: float,
+    streckenverschleiss: float = 1.0,
+) -> Schnellergebnis:
+    """Faehrt Qualifying und Rennen einer Liga im Schnellmodus (GDD 13)."""
+    if not teilnehmer:
+        raise ValueError("Ohne Teilnehmer gibt es kein Rennwochenende")
+
+    anzahl = len(teilnehmer)
+    nummern = np.arange(anzahl)
+
+    # --- Qualifying ------------------------------------------------------
+    quali_formen = [
+        kern_form.wuerfle(konfiguration, t.auto, seedquelle.zweig("qualiform", i))
+        for i, t in enumerate(teilnehmer)
+    ]
+    quali_autos = [f.auto for f in quali_formen]
+    quali_runden = _grundrunden(konfiguration, strecke, quali_autos)
+    quali_wetter = kern_wetter.wuerfle(
+        konfiguration,
+        strecke.name,
+        int(quali_runden.mean() * 2 * anzahl),
+        int(quali_runden.mean()),
+        seedquelle.zweig("qualiwetter"),
+        wechselfenster_ms=int(
+            konfiguration.wert("qualifying", "wetter", "fenster_minuten") * 60_000
+        ),
+        wechsel_max=konfiguration.wert("qualifying", "wetter", "wechsel_max"),
+    )
+    # Vereinfachung des Schnellmodus (GDD 13): Alle Autos fahren ihre
+    # gezeitete Runde in der Lage zu Sessionbeginn. Im vollen Qualifying
+    # rueckt jedes Auto einzeln los und trifft deshalb je nach Startzeit
+    # anderes Wetter an - dafuer braeuchte es hier eine Uhr, die der
+    # Schnellmodus gerade nicht fuehrt.
+    quali_zustand = quali_wetter.startzustand
+    for i, auto in enumerate(quali_autos):
+        grip = kern_wetter.grip_fuer(
+            konfiguration, auto, quali_zustand, quali_wetter.grip_zu(0)
+        )
+        streuung = kern_form.rundenform(
+            konfiguration, auto, seedquelle.zweig("qualirunde", i), 1
+        )
+        quali_runden[i] *= streuung / (grip * (1.0 + qualifyingbonus(konfiguration, auto)))
+
+    aufstellung = list(np.argsort(quali_runden))
+    qualifyingplatz = {int(i): platz for platz, i in enumerate(aufstellung, start=1)}
+
+    # --- Rennen ----------------------------------------------------------
+    formen = [
+        kern_form.wuerfle(konfiguration, t.auto, seedquelle.zweig("rennform", i))
+        for i, t in enumerate(teilnehmer)
+    ]
+    autos = [f.auto for f in formen]
+    grundrunde = _grundrunden(konfiguration, strecke, autos)
+
+    wetter = kern_wetter.wuerfle(
+        konfiguration,
+        strecke.name,
+        int(grundrunde.mean() * runden),
+        int(grundrunde.mean()),
+        seedquelle.zweig("rennwetter"),
+    )
+    faktor = streckenfaktor(konfiguration, strecke, streckenmittel)
+    wuerfel = seedquelle.zweig("schnellrennen").generator()
+
+    renndistanz = runden * strecke.laenge_m
+    verschleiss_je_runde = np.array(
+        [
+            kern_reifen.verschleiss_je_meter(
+                konfiguration, auto, renndistanz, streckenverschleiss
+            )
+            * strecke.laenge_m
+            for auto in autos
+        ]
+    )
+
+    gesamtzeit = np.zeros(anzahl)
+    # Die Startaufstellung kostet Zeit: 5 m Abstand je Platz.
+    abstand_m = konfiguration.wert("start", "abstand_m")
+    tempo_ms = strecke.laenge_m / grundrunde  # m pro ms
+    for platz, i in enumerate(aufstellung):
+        gesamtzeit[i] = abstand_m * platz / tempo_ms[i]
+
+    verschleiss = np.zeros(anzahl)
+    defekt_tempo = np.ones(anzahl)
+    # GDD 14 deckelt die Wirkung aller aktiven Defekte zusammen; deshalb
+    # werden sie gesammelt und der Faktor jedes Mal neu aus der ganzen
+    # Liste gebildet - nicht Defekt fuer Defekt multipliziert.
+    defekte_je_auto: list[list[dict]] = [[] for _ in range(anzahl)]
+    aktiv = np.ones(anzahl, dtype=bool)
+    gefahrene_runden = np.zeros(anzahl, dtype=int)
+    beste_runde = np.full(anzahl, np.inf)
+    manoever = 0
+    ausfaelle = 0
+    grenze = kern_zwischenfall.ausfallgrenze(konfiguration, wuerfel)
+    # Die Startaufstellung ist die Reihenfolge vor der ersten Runde.
+    vorige_reihenfolge = list(aufstellung)
+
+    for runde in range(1, runden + 1):
+        zustand = wetter.zustand_zu(gesamtzeit[aktiv].min() if aktiv.any() else 0.0)
+        wetter_fehler = float(konfiguration.wert("wetter", "zustand", zustand)["fehlerquote"])
+        wetter_verschleiss = kern_wetter.verschleissfaktor(konfiguration, zustand)
+
+        for i in range(anzahl):
+            if not aktiv[i]:
+                continue
+            auto = autos[i]
+            grip = kern_wetter.grip_fuer(
+                konfiguration, auto, zustand, wetter.grip_zu(gesamtzeit[i])
+            )
+            streuung = kern_form.rundenform(
+                konfiguration, auto, seedquelle.zweig("rundenform", i), runde
+            )
+            reifen = kern_reifen.tempofaktor(konfiguration, auto, float(verschleiss[i]))
+            zeit = grundrunde[i] * streuung / (grip * reifen * defekt_tempo[i])
+
+            # Fehler kosten einmalig Zeit (GDD 4).
+            reifenfehler = kern_reifen.fehlerfaktor(konfiguration, auto, float(verschleiss[i]))
+            if wuerfel.random() < kern_zwischenfall.fehlerrate_je_runde(
+                konfiguration, auto, wetter_fehler, reifenfehler
+            ):
+                zeit += kern_zwischenfall.zeitverlust_ms(konfiguration, wuerfel)
+
+            # Defekte senken das Tempo bis zur Reparatur (GDD 4 und 14).
+            if wuerfel.random() < kern_zwischenfall.defektrate_je_runde(
+                konfiguration, auto, runden
+            ):
+                defekte_je_auto[i].append(kern_zwischenfall.waehle_defekt(konfiguration, wuerfel))
+                defekt_tempo[i] = kern_zwischenfall.tempofaktor_defekte(
+                    konfiguration, defekte_je_auto[i]
+                )
+
+            gesamtzeit[i] += zeit
+            beste_runde[i] = min(beste_runde[i], zeit)
+            verschleiss[i] += verschleiss_je_runde[i] * wetter_verschleiss
+            gefahrene_runden[i] += 1
+
+        # Verkehr und Ueberholen: Wo sich die Reihenfolge gegenueber der
+        # Vorrunde geaendert hat, ist auf der Strecke ueberholt worden -
+        # und das gelingt nur mit einem Wurf (GDD 4). Der blosse Abstand
+        # am Rundenende taugt dafuer nicht: Zwei Autos koennen eine ganze
+        # Runde nebeneinander fahren und trotzdem 20 Sekunden auseinander
+        # ins Ziel kommen.
+        #
+        # Angefahren wird von hinten nach vorne: zuerst der naechste
+        # Vordermann, dann der davor. Beim ersten misslungenen Versuch ist
+        # Schluss - wer nicht vorbeikommt, haengt fest und erreicht die
+        # weiter vorne Fahrenden in dieser Runde gar nicht mehr.
+        neu = sorted(nummern[aktiv], key=lambda i: gesamtzeit[i])
+        stelle_vorher = {i: platz for platz, i in enumerate(vorige_reihenfolge)}
+        # Wer in der neuen Reihenfolge weiter hinten steht - daraus
+        # ergibt sich, wen ein Auto in dieser Runde ueberholt hat.
+        jetzt_hinter = set(neu)
+        for hinten in neu:
+            jetzt_hinter.discard(hinten)
+            if hinten not in stelle_vorher:
+                continue
+            # Alle, die vorher vorne lagen und jetzt dahinter sind, vom
+            # naechsten Vordermann aus aufwaerts.
+            ueberholt = sorted(
+                (i for i in jetzt_hinter if stelle_vorher.get(i, -1) < stelle_vorher[hinten]),
+                key=lambda i: -stelle_vorher[i],
+            )
+            for vorne in ueberholt:
+                vorteil_kmh = (
+                    strecke.laenge_m / grundrunde[hinten]
+                    - strecke.laenge_m / grundrunde[vorne]
+                ) * 3600.0
+                chance = erfolgschance(
+                    konfiguration,
+                    autos[hinten],
+                    autos[vorne],
+                    max(vorteil_kmh, 0.0),
+                    faktor,
+                )
+                if wuerfel.random() < chance:
+                    manoever += 1
+                    continue
+                # Nicht vorbeigekommen: bleibt knapp dahinter haengen.
+                gesamtzeit[hinten] = max(
+                    gesamtzeit[hinten], gesamtzeit[vorne] + STAU_ABSTAND_S * 1000
+                )
+                break
+
+        reihenfolge = sorted(nummern[aktiv], key=lambda i: gesamtzeit[i])
+        vorige_reihenfolge = list(reihenfolge)
+
+        # Unfaelle: sehr selten, nur zwischen nahen Autos (GDD 4).
+        if ausfaelle < grenze:
+            for stelle in range(1, len(reihenfolge)):
+                vorne, hinten = reihenfolge[stelle - 1], reihenfolge[stelle]
+                # In Reichweite ist, wer weniger als eine Rundenlaenge
+                # Abstand hat, gemessen an der 30-m-Regel aus GDD 4.
+                abstand_zeit = gesamtzeit[hinten] - gesamtzeit[vorne]
+                reichweite = (
+                    konfiguration.wert("unfaelle", "max_abstand_m")
+                    / strecke.laenge_m
+                    * grundrunde[hinten]
+                )
+                if abstand_zeit >= reichweite:
+                    continue
+                dauer_s = grundrunde[hinten] / 1000.0
+                if wuerfel.random() < kern_zwischenfall.unfallrate(
+                    konfiguration, dauer_s, wetter_fehler
+                ):
+                    betroffen = (
+                        [hinten, vorne]
+                        if kern_zwischenfall.beide_betroffen(konfiguration, wuerfel)
+                        else [hinten]
+                    )
+                    for i in betroffen:
+                        if ausfaelle < grenze and aktiv[i]:
+                            aktiv[i] = False
+                            ausfaelle += 1
+                    break
+
+        if not aktiv.any():
+            break
+
+    # --- Wertung ---------------------------------------------------------
+    def schluessel(i: int) -> tuple:
+        # Mehr Runden zuerst, dann die kuerzere Gesamtzeit; bei Gleichstand
+        # der hoehere Durchschnitt der Basiseigenschaften (GDD 4).
+        return (
+            0 if aktiv[i] else 1,
+            -int(gefahrene_runden[i]),
+            float(gesamtzeit[i]),
+            -gesamtwert(konfiguration, teilnehmer[i].auto),
+        )
+
+    schlussstand = sorted(range(anzahl), key=schluessel)
+    schnellste = int(np.argmin(beste_runde))
+
+    ergebnisse = tuple(
+        Rennergebnis(
+            fahrer=i,
+            rennplatz=platz,
+            qualifyingplatz=qualifyingplatz[i],
+            schnellste_runde=(i == schnellste),
+            ausgefallen=not bool(aktiv[i]),
+        )
+        for platz, i in enumerate(schlussstand, start=1)
+    )
+
+    return Schnellergebnis(
+        liga=liga,
+        strecke=strecke.name,
+        ergebnisse=ergebnisse,
+        wetter=wetter.zustaende,
+        siegerzeit_ms=int(round(gesamtzeit[schlussstand[0]])),
+        schnellste_runde_ms=int(round(beste_runde[schnellste])),
+        ueberholmanoever=manoever,
+        ausfaelle=ausfaelle,
+    )

@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from rennmanager.kern import kalender as kern_kalender
 from rennmanager.kern import karriere as kern_karriere
 from rennmanager.kern import sponsoren as kern_sponsoren
 from rennmanager.kern.entwicklung import EntwicklungsFehler, ist_bezahlbar
@@ -210,7 +211,7 @@ class Karriereseite(QWidget):
     def _zeichne(self) -> None:
         tag = self._karriere.tag
         self._datum.setText(
-            f"{tag.datum.strftime('%a %d.%m.%Y')} — {tag.art.bezeichnung}"
+            f"{kern_kalender.wochentag(tag.datum)} {tag.datum:%d.%m.%Y} — {tag.art.bezeichnung}"
         )
         rennen = self._karriere.naechstes_rennen
         if rennen is None:
@@ -241,7 +242,8 @@ class Karriereseite(QWidget):
         self._liste.clear()
         belegt = self._karriere.belegt
 
-        schluessel = [f.schluessel for f in self._konfiguration.faehigkeiten]
+        matrix = {f.schluessel: f for f in self._konfiguration.faehigkeiten}
+        schluessel = list(matrix)
         schluessel += list(self._konfiguration.zusatzfaehigkeiten)
         for name in schluessel:
             try:
@@ -249,15 +251,15 @@ class Karriereseite(QWidget):
             except EntwicklungsFehler:
                 continue
 
-            faehigkeit = self._konfiguration.faehigkeit(name) if name in [
-                f.schluessel for f in self._konfiguration.faehigkeiten
-            ] else None
-            anzeigename = faehigkeit.name if faehigkeit else name
-            waehrung = (
-                "".join(faehigkeit.waehrung)
-                if faehigkeit
-                else "".join(self._karriere._zusatz_eintrag(name).get("waehrung", ("E",)))
-            )
+            if name in matrix:
+                anzeigename = matrix[name].name
+                waehrung = "".join(matrix[name].waehrung)
+            else:
+                # Wetterfaehigkeiten und Reifenfluesterer stehen ausserhalb
+                # der Wirkungsmatrix und bringen ihren Namen selbst mit.
+                eintrag = self._karriere.zusatz_eintrag(name)
+                anzeigename = eintrag.get("name", name)
+                waehrung = "".join(eintrag.get("waehrung", ("E",)))
             platz = self._karriere.platz_fuer(name) if vorschau.braucht_tag else "sofort"
 
             kosten = []
@@ -311,6 +313,7 @@ class Karriereseite(QWidget):
 
     def _fuelle_sponsoren(self) -> None:
         self._sponsoren.clear()
+        bezeichnungen = self._konfiguration.wert("sponsoren", "bezeichnung")
         for platz, liste in self._angebote.items():
             vertrag = self._karriere.vertraege.get(platz)
             for angebot in liste:
@@ -322,7 +325,7 @@ class Karriereseite(QWidget):
                 zeile = QTreeWidgetItem(
                     self._sponsoren,
                     [
-                        platz,
+                        bezeichnungen.get(platz, platz),
                         angebot.name,
                         euro(angebot.grundbetrag),
                         euro(angebot.praemie_sieg),

@@ -9,8 +9,10 @@ from rennmanager.kern import auto as kern_auto
 from rennmanager.kern import einnahmen as kern_einnahmen
 from rennmanager.kern import kalender as kern_kalender
 from rennmanager.kern import rennen as kern_rennen
+from rennmanager.kern import schnellsimulation as kern_schnell
 from rennmanager.kern import strecke as kern_strecke
 from rennmanager.kern import tempo as kern_tempo
+from rennmanager.kern import wertung as kern_wertung
 from rennmanager.kern.zeit import formatiere_dauer
 from rennmanager.kern.zufall import Seedquelle
 from rennmanager.konfiguration import KonfigurationsFehler, lade
@@ -19,6 +21,11 @@ from rennmanager.konfiguration import KonfigurationsFehler, lade
 # beendet sich dann. Der Build nutzt das, um die fertige .exe zu testen,
 # ohne dass ein Fenster geoeffnet werden muss.
 PRUEFMODUS = "--pruefe"
+
+
+def euro(betrag: int) -> str:
+    """Betrag mit Punkt als Tausendertrennzeichen."""
+    return f"{betrag:,} EUR".replace(",", ".")
 
 
 def pruefe() -> int:
@@ -79,6 +86,26 @@ def pruefe() -> int:
         f"{verlauf.teilnehmer[sieger.teilnehmer].kuerzel} in "
         f"{formatiere_dauer(sieger.zeit_ms)}, {len(verlauf.manoever)} Ueberholmanoever"
     )
+    # Ein Rennwochenende im Schnellmodus und seine Wertung: prueft die
+    # Bausteine der Saison (GDD 13) im fertigen Bundle.
+    feld = kern_rennen.starterfeld(konfiguration, 20, seedquelle=Seedquelle(2))
+    schnell = kern_schnell.fahre_wochenende(
+        konfiguration,
+        20,
+        referenz,
+        feld,
+        2,
+        Seedquelle(2),
+        kern_rennen.mittlerer_ueberholzonenanteil(konfiguration, strecken),
+    )
+    tabelle = kern_wertung.Tabelle(20)
+    tabelle.verbuche(konfiguration, schnell.ergebnisse)
+    bester = tabelle.stand()[0]
+    print(
+        f"Schnellmodus:  {len(schnell.ergebnisse)} Autos, 2 Runden, Sieger "
+        f"{feld[bester.fahrer].kuerzel} in {formatiere_dauer(schnell.siegerzeit_ms)}, "
+        f"{bester.punkte} Punkte, {schnell.ueberholmanoever} Ueberholmanoever"
+    )
     saison = kern_kalender.erzeuge(konfiguration, 2026)
     print(
         f"Kalender:      {len(saison.renntage)} Rennen vom "
@@ -87,10 +114,9 @@ def pruefe() -> int:
         f"{len(saison.nachsaison)} Tage Nachsaison"
     )
     print(
-        f"Wirtschaft:    Siegpraemie Liga 20 "
-        f"{kern_einnahmen.siegpraemie(konfiguration, 20):,} EUR, Liga 1 "
-        f"{kern_einnahmen.siegpraemie(konfiguration, 1):,} EUR, "
-        f"Startkapital {kern_einnahmen.startkapital(konfiguration):,} EUR".replace(",", ".")
+        f"Wirtschaft:    Siegpraemie Liga 20 {euro(kern_einnahmen.siegpraemie(konfiguration, 20))}"
+        f", Liga 1 {euro(kern_einnahmen.siegpraemie(konfiguration, 1))}"
+        f", Startkapital {euro(kern_einnahmen.startkapital(konfiguration))}"
     )
     print(f"Offene Punkte: {len(konfiguration.offene_punkte)}")
     return 0

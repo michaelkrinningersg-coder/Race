@@ -574,7 +574,9 @@ def test_sponsorenangebote_liegen_vor(qtbot, konfig: kf.Konfiguration) -> None:
     liste = seite._sponsoren
     assert liste.topLevelItemCount() >= 6 * konfig.wert("sponsoren", "angebote_je_platz_min")
     plaetze = {liste.topLevelItem(i).text(0) for i in range(liste.topLevelItemCount())}
-    assert plaetze == set(konfig.wert("sponsoren", "plaetze"))
+    # Angezeigt wird der deutsche Name, nicht der Schluessel aus der Konfiguration.
+    bezeichnungen = konfig.wert("sponsoren", "bezeichnung")
+    assert plaetze == {bezeichnungen[platz] for platz in konfig.wert("sponsoren", "plaetze")}
 
 
 def test_sponsor_unterschreiben(qtbot, konfig: kf.Konfiguration) -> None:
@@ -585,3 +587,51 @@ def test_sponsor_unterschreiben(qtbot, konfig: kf.Konfiguration) -> None:
     seite._sponsoren.setCurrentItem(seite._sponsoren.topLevelItem(0))
     seite._unterschreibe()
     assert len(seite.karriere.vertraege) == 1
+
+
+# --- Saison ---------------------------------------------------------------
+def test_saisonseite_startet_bei_der_liga_des_spielers(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.saisonseite
+
+    assert seite.liga_auswahl.currentData() == fenster.welt.spieler.liga
+    assert seite.lauf.gefahren == 0
+    assert seite.lauf.naechstes_rennen == 1
+    # Vor dem ersten Rennen ist die Tabelle leer und es gibt keine Wechsel.
+    assert seite.tabelle.topLevelItemCount() == 0
+    assert seite.rennliste.topLevelItemCount() == 0
+    assert seite.wechselliste.topLevelItemCount() == 0
+
+
+def test_saisonseite_faehrt_ein_rennwochenende(qtbot, konfig: kf.Konfiguration) -> None:
+    """Ein Klick faehrt alle 20 Ligen und fuellt Tabelle und Ergebnis."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.saisonseite
+
+    seite.knopf_rennwochenende.click()
+
+    autos = konfig.wert("ligen", "autos_je_liga")
+    assert seite.lauf.gefahren == 1
+    assert seite.tabelle.topLevelItemCount() == autos
+    assert seite.rennliste.topLevelItemCount() == autos
+    # Der Tabellenerste hat die meisten Punkte.
+    punkte = [int(seite.tabelle.topLevelItem(i).text(3)) for i in range(autos)]
+    assert punkte == sorted(punkte, reverse=True)
+    # Der Auf- und Abstieg steht erst am Saisonende fest.
+    assert seite.wechselliste.topLevelItemCount() == 0
+
+
+def test_saisonseite_wechselt_die_liga(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.saisonseite
+    seite.knopf_rennwochenende.click()
+
+    seite.liga_auswahl.setCurrentIndex(0)
+    assert seite.liga_auswahl.currentData() == 1
+    namen_liga1 = {seite.tabelle.topLevelItem(i).text(1) for i in range(20)}
+    seite.liga_auswahl.setCurrentIndex(9)
+    namen_liga10 = {seite.tabelle.topLevelItem(i).text(1) for i in range(20)}
+    assert not namen_liga1 & namen_liga10

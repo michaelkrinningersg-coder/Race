@@ -2,10 +2,12 @@
 
 Motorsport-Manager mit sichtbarer Rennsimulation. Grundlage ist das
 [Game Design Dokument v1.0](Rennmanager%20%E2%80%93%20Game%20Design%20Dokument%20%28v1.0%29.md);
-die Arbeitsregeln stehen in [Claude.md](Claude.md).
+die Arbeitsregeln stehen in [CLAUDE.md](CLAUDE.md).
 
-**Stand: Schritt 8 von 10 – Kalender, Zeitmodell, Upgrades, Kosten, Einnahmen, Sponsoren.**
-Eine Saison laesst sich planen; Saisonwertung und Auf-/Abstieg folgen in Schritt 9.
+**Stand: Schritt 9 von 10 – Saisonwertung, Schnellsimulation, Auf- und Abstieg.**
+Eine ganze Saison laeuft durch: 20 Rennwochenenden in 20 Ligen, Tabelle und
+Ligawechsel. Ereignisse, Statistiken sowie Speichern und Laden folgen in
+Schritt 10.
 
 ## Aufbau
 
@@ -302,6 +304,60 @@ fuenf Bereiche und kostet den Faktor 2,10; F16 Kuehlung wirkt auf einen
 und kostet 0,47. Im Mittel ueber alle Faehigkeiten ist der Faktor genau
 1,0, sodass die Kontrolltabelle aus GDD 9 weiterhin stimmt.
 
+## Die Saison
+
+`rennmanager.kern.saison` faehrt die 20 Rennwochenenden aus GDD 2 in allen
+20 Ligen und fuehrt je Liga eine Tabelle (GDD 13):
+
+```python
+from rennmanager.kern import saison, strecke, welt
+from rennmanager.kern.zufall import Seedquelle
+from rennmanager.konfiguration import lade
+
+k = lade()
+haupt = Seedquelle(4711)
+w = welt.erzeuge(k, haupt.zweig("welt"), spielerliga=20)
+lauf = saison.Saisonlauf(k, w, haupt, jahr=2026, strecken=strecke.lade_alle(k))
+
+wochenende = lauf.fahre_rennen(ausfuehrliche_liga=20)
+wochenende.verlauf               # abspielbares Rennen der Spielerliga
+wochenende.liga(7).ergebnisse    # Wertung einer der 19 Schnellmodus-Ligen
+lauf.tabelle(20).stand()[0]      # Tabellenfuehrer
+
+lauf.fahre_saison()              # die restlichen 19 Wochenenden
+lauf.auf_und_abstieg()           # 114 Wechsel: 57 Auf-, 57 Abstiege
+neue_welt = lauf.naechste_welt() # Welt der Folgesaison
+```
+
+Punkte gibt es nach GDD 13: 40-35-30-...-1 fuers Rennen, 3 fuer die
+schnellste Runde (auch ohne Zielankunft) und 5-3-1 fuers Qualifying. Bei
+Punktgleichheit liegt vorn, wer mehr Siege hat, dann mehr zweite Plaetze.
+Am Saisonende steigen je Liga die ersten drei auf und die letzten drei ab;
+Liga 1 kennt keinen Auf-, Liga 20 keinen Abstieg. Der Wechsel gilt fuer
+Fahrer, nicht fuer Teams - ein Team hat danach seine vier Autos
+gegebenenfalls in anderen Ligen.
+
+### Warum es zwei Rennmodelle gibt
+
+Ein volles Rennwochenende in allen 20 Ligen wuerde mit
+`rennmanager.kern.rennen` Minuten dauern. `rennmanager.kern.schnellsimulation`
+bildet je Runde eine Rundenzeit statt 50-Millisekunden-Schritte: Ein
+Wochenende ueber alle 20 Ligen braucht rund 4 Sekunden, eine ganze Saison
+86. Wetter, Fehler, Unfaelle, Defekte und Reifenverschleiss sind dabei
+dieselben Bausteine wie in der vollen Simulation.
+
+Verkehr entsteht ueber die Reihenfolge: Wo sich die Reihenfolge gegenueber
+der Vorrunde geaendert hat, ist ueberholt worden - und das gelingt nur mit
+einem Wurf nach GDD 4. Bei gleichem Wetter in beiden Modellen weicht die
+Siegerzeit um weniger als 1,3 % ab, die schnellste Runde um weniger als
+1,4 %; ein Test haelt eine 2-%-Schranke fest. Ohne diesen Abgleich waeren
+die Rundenrekorde der ausfuehrlich gefahrenen Spielerliga nicht mit denen
+der uebrigen 19 vergleichbar.
+
+Welche Liga ausfuehrlich faehrt, veraendert die uebrigen 19 nicht: Jede
+Liga wuerfelt aus ihrem eigenen Zweig
+`saison/<jahr>/rennen/<nummer>/liga/<liga>`.
+
 ## Zwei Regeln, die den Code praegen
 
 **Zeiten sind ganze Millisekunden.** Im Kern gibt es keine Sekunden als
@@ -325,9 +381,9 @@ einmal fuer Qualifying und einmal fuer das Rennen.
 
 ## Offene Punkte
 
-Das GDD nennt an 20 Stellen eine Mechanik, ohne sie zu beziffern. Zu jeder
-liegen in [OFFENE_PUNKTE.md](OFFENE_PUNKTE.md) drei Vorschlaege mit
-Begruendung; alle 20 sind am 2026-09-17 entschieden, der Abschnitt `[offen]`
+Das GDD nennt an vielen Stellen eine Mechanik, ohne sie zu beziffern. Zu
+jeder liegen in [OFFENE_PUNKTE.md](OFFENE_PUNKTE.md) Vorschlaege mit
+Begruendung; alle 36 sind am 2026-09-17 entschieden, der Abschnitt `[offen]`
 in der Konfiguration ist leer. Kommt spaeter eine Luecke hinzu, wird sie dort
 vermerkt und im Hauptfenster angezeigt, statt still gefuellt zu werden.
 

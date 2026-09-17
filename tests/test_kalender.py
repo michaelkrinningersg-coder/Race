@@ -127,3 +127,18 @@ def test_naechster_renntag(saison) -> None:
 def test_tag_ausserhalb_der_saison_meldet_fehler(saison) -> None:
     with pytest.raises(kl.KalenderFehler, match="nicht in der Saison"):
         saison.tag(dt.date(2025, 12, 31))
+
+
+def test_wochentage_sind_deutsch():
+    """CLAUDE.md: Die Oberflaeche ist deutsch - strftime waere Locale-abhaengig."""
+    montag = dt.date(2026, 1, 5)
+    assert montag.weekday() == 0
+    assert [kl.wochentag(montag + dt.timedelta(days=n)) for n in range(7)] == [
+        "Mo",
+        "Di",
+        "Mi",
+        "Do",
+        "Fr",
+        "Sa",
+        "So",
+    ]

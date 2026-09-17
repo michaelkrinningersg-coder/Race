@@ -25,6 +25,17 @@ if TYPE_CHECKING:  # pragma: no cover
     from rennmanager.konfiguration import Konfiguration
 
 
+# Die Oberflaeche ist deutsch (Arbeitsregel in CLAUDE.md); ``strftime("%a")``
+# richtet sich dagegen nach der Locale des Rechners und liefert unter der
+# C-Locale "Thu" statt "Do".
+WOCHENTAGE = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
+
+
+def wochentag(datum: dt.date) -> str:
+    """Deutsche Abkuerzung des Wochentags, unabhaengig von der Locale."""
+    return WOCHENTAGE[datum.weekday()]
+
+
 class KalenderFehler(Exception):
     """Der Kalender laesst sich mit dieser Konfiguration nicht bilden."""
 
@@ -125,8 +136,8 @@ def erstes_rennen(konfiguration: Konfiguration, jahr: int) -> dt.date:
         konfiguration.wert("kalender", "saisonstart_monat"),
         konfiguration.wert("kalender", "saisonstart_tag"),
     )
-    wochentag = konfiguration.wert("kalender", "rennen_wochentag")
-    return stichtag + dt.timedelta(days=(wochentag - stichtag.weekday()) % 7)
+    zielwochentag = konfiguration.wert("kalender", "rennen_wochentag")
+    return stichtag + dt.timedelta(days=(zielwochentag - stichtag.weekday()) % 7)
 
 
 def erzeuge(konfiguration: Konfiguration, jahr: int) -> Saison:

@@ -4,12 +4,13 @@
 # Diese Datei ist bewusst ausgelagert, damit die Namen bei einer
 # Veroeffentlichung austauschbar sind (Markenrecht).
 #
-# HINWEIS: Das GDD nennt die Zahl 20, aber weder die konkreten Hersteller
-# noch deren Farben. Die folgende Liste ist ein Platzhalter und muss
-# bestaetigt oder ersetzt werden.
+# Das GDD nennt die Zahl 20, aber weder die konkreten Hersteller noch
+# deren Farben. Diese Liste ist am 2026-09-17 bestaetigt worden
+# (OFFENE_PUNKTE.md, Punkt O1). Vor einer Veroeffentlichung laesst sie
+# sich hier austauschen, ohne den Code anzufassen.
 
 schema_version = 1
-bestaetigt = false
+bestaetigt = true
 
 [[hersteller]]
 schluessel = "H01"

@@ -29,8 +29,10 @@ v_bei_maximum_kmh = 181.3
 # Hoechstgeschwindigkeit auf Geraden, getrennt skaliert (GDD 4 und 9)
 endgeschwindigkeit_max_kmh = 400.0
 # GDD 9 kalibriert "auf einer kurvigen Referenzstrecke", ohne sie zu nennen.
-# Gewaehlt ist Zandvoort: mit 46 % den geringsten Geradenanteil aller 20
-# Strecken, laut GDD 3 "Steilkurven, eng".
+# Entschieden am 2026-09-17 (OFFENE_PUNKTE.md, Punkt O2): Zandvoort - mit
+# 46 % der geringste Geradenanteil aller 20 Strecken, laut GDD 3
+# "Steilkurven, eng". Ein Wechsel erfordert einen Lauf von
+# werkzeuge/kalibriere.py --schreiben.
 referenzstrecke = "Zandvoort"
 
 # ---------------------------------------------------------------------------
@@ -842,6 +844,15 @@ laufzeit_rennen_max = 25
 saisonuebergreifend = true
 verguetung = ["grundbetrag_je_rennen", "praemie_sieg", "praemie_top3", "praemie_top10"]
 skaliert_mit_liga = true
+
+# Anzeigenamen der sechs Plaetze; die Oberflaeche ist deutsch.
+[sponsoren.bezeichnung]
+anzug = "Anzug"
+helm = "Helm"
+muetze = "Muetze"
+auto_haupt = "Auto, Hauptplatz"
+auto_neben_1 = "Auto, Nebenplatz 1"
+auto_neben_2 = "Auto, Nebenplatz 2"
 
 # ---------------------------------------------------------------------------
 # GDD 11 – Zufallssystem

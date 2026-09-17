@@ -275,6 +275,7 @@ def _pruefe(k: Konfiguration) -> None:
     _pruefe_ligen(k)
     _pruefe_wetter(k)
     _pruefe_wertung(k)
+    _pruefe_sponsoren(k)
     _pruefe_listenlaenge(k, ("ereignisse", "liste"), ANZAHL_EREIGNISSE, "E")
     _pruefe_listenlaenge(k, ("defekte", "liste"), ANZAHL_DEFEKTE, "X")
 
@@ -470,6 +471,23 @@ def _pruefe_wertung(k: Konfiguration) -> None:
     if len(punkte) > autos:
         raise KonfigurationsFehler(
             f"Mehr Punkteraenge ({len(punkte)}) als Autos im Rennen ({autos})"
+        )
+
+
+def _pruefe_sponsoren(k: Konfiguration) -> None:
+    """Jeder Sponsorenplatz braucht einen deutschen Anzeigenamen."""
+    plaetze = set(k.wert("sponsoren", "plaetze"))
+    benannt = set(k.wert("sponsoren", "bezeichnung"))
+    fehlend = plaetze - benannt
+    if fehlend:
+        raise KonfigurationsFehler(
+            "Ohne Anzeigenamen in [sponsoren.bezeichnung]: " + ", ".join(sorted(fehlend))
+        )
+    ueberzaehlig = benannt - plaetze
+    if ueberzaehlig:
+        raise KonfigurationsFehler(
+            "[sponsoren.bezeichnung] nennt unbekannte Plaetze: "
+            + ", ".join(sorted(ueberzaehlig))
         )
 
 

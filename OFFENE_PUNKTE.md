@@ -2,7 +2,7 @@
 
 Das GDD nennt an vielen Stellen eine Mechanik, ohne sie zu beziffern.
 Dieses Dokument listet jede solche Lücke, drei Varianten und die getroffene
-Entscheidung. **Stand 2026-09-17: 31 Punkte entschieden, 3 noch offen.**
+Entscheidung. **Stand 2026-09-17: alle 36 Punkte entschieden.**
 
 Die entschiedenen Werte stehen in `konfiguration/balancing.toml`; der
 Abschnitt `[offen]` dort ist leer. Jede Entscheidung lässt sich ändern,
@@ -10,19 +10,23 @@ ohne Code anzufassen — die Nummer unten führt zur Begründung.
 
 ---
 
-## Noch offen — hier fehlt Ihre Entscheidung
+## Grundsatzfragen zum Projekt
 
 ### O1. Herstellerliste
 
-`konfiguration/hersteller.toml` trägt `bestaetigt = false`. GDD 12 nennt
-„20 reale Autohersteller, nur Name und Farbe", aber keine konkreten. Meine
-Platzhalterliste (Alfa Romeo bis Toyota) ist nie bestätigt worden.
+GDD 12 nennt „20 reale Autohersteller, nur Name und Farbe", aber keine
+konkreten.
 
 | | Variante |
 | --- | --- |
-| **A** | Platzhalterliste übernehmen und `bestaetigt = true` setzen |
+| **A** | Vorgeschlagene Liste übernehmen (Alfa Romeo bis Toyota) |
 | **B** | Eigene 20 Hersteller vorgeben |
 | **C** | Erfundene Namen statt echter Marken (vermeidet Markenrecht von vornherein) |
+
+**Entscheidung: A** (2026-09-17). `hersteller.toml` trägt jetzt
+`bestaetigt = true`. Die Datei bleibt ausgelagert, damit sich die Namen vor
+einer Veröffentlichung austauschen lassen — das Markenrecht bleibt also
+lösbar, ohne Code anzufassen.
 
 ### O2. Referenzstrecke der Kalibrierung
 
@@ -33,21 +37,28 @@ Strecken, laut GDD 3 „Steilkurven, eng". Ein Wechsel ist ein Aufruf von
 
 | | Variante | Geradenanteil |
 | --- | --- | --- |
-| **A** | Zandvoort (gesetzt) | 46 % |
+| **A** | Zandvoort | 46 % |
 | **B** | Suzuka | 50 % |
 | **C** | São Paulo | 48 % |
 
+**Entscheidung: A** (2026-09-17). Zandvoort bleibt Referenzstrecke.
+
 ### O3. Dateiname der Arbeitsregeln
 
-Das GDD sagt, die Regeln kommen als `CLAUDE.md` ins Repo; die Datei heißt
-`Claude.md`. Ich habe **nicht** umbenannt: Auf Windows und macOS ist das
-Dateisystem nicht case-sensitiv, eine reine Groß-/Kleinschreibungsänderung
-macht dort beim Auschecken Ärger.
+Das GDD sagt, die Regeln kommen als `CLAUDE.md` ins Repo; angelegt war sie
+als `Claude.md`. Zunächst hatte ich **nicht** umbenannt: Auf Windows und
+macOS ist das Dateisystem nicht case-sensitiv, eine reine
+Groß-/Kleinschreibungsänderung macht dort beim Auschecken Ärger.
 
 | | Variante |
 | --- | --- |
 | **A** | So lassen (Claude Code liest die Datei ohnehin) |
 | **B** | Auf `CLAUDE.md` umbenennen, wie im GDD beschrieben |
+
+**Entscheidung: B** (2026-09-17). Die Datei heißt jetzt `CLAUDE.md`. Wer
+das Repo auf Windows oder macOS ausgecheckt hat, bevor die Umbenennung kam,
+löscht die Datei dort einmal und zieht sie neu — sonst hält das
+Dateisystem die alte Schreibweise fest.
 
 ---
 
@@ -110,6 +121,13 @@ Gebraucht ab = der Umsetzungsschritt, der den Wert braucht. Die
 | 29 | Teamfarbe neben der Herstellerfarbe | **aus der Herstellerfarbe abgeleitet** | 7 |
 | 30 | Alter und Regionenanteil der Fahrer | **18 bis 42 Jahre, 10 % Nordamerika** | 7 |
 | 31 | Ligastärken zwischen den Stützstellen | **über die Tempotabelle, +6,32 km/h je Liga** | 7 |
+
+### Saison
+
+| Nr. | Punkt | Varianten | Ab |
+| --- | --- | --- | --- |
+| 32 | Verkehr im Schnellmodus | A Abstand am Rundenende · **B Reihenfolgewechsel je Runde** · C gar nicht | 9 |
+| 33 | Qualifying-Reihenfolge ohne Vorjahresstand | **wie im ersten Rennen: aufsteigend nach Q-Fähigkeit** | 9 |
 
 ### Ereignisse
 
@@ -785,3 +803,55 @@ Die Kalibriertabelle nennt nur die Ligen 20, 15, 10, 5 und 1. Für die
 wächst je Liga um 6,32 km/h, der Wert S ergibt sich durch Umkehren der
 Kalibrierfunktion. Damit liegen alle 20 Ligen auf derselben Kurve, statt
 zwischen den Stützstellen zu springen.
+
+---
+
+## Nachtrag: bei Schritt 9 entschieden
+
+### 32. Verkehr und Überholen im Schnellmodus
+
+**GDD 13** verlangt für die übrigen 19 Ligen einen „Schnellmodus auf
+Rundenebene: Qualifying und Rennen mit Wetter, Fehlern, Unfällen und
+Defekten in vereinfachter Form" — sagt aber nicht, wie dabei Verkehr
+entsteht. Auf Rundenebene gibt es keine Positionen auf der Strecke, an
+denen zwei Autos nebeneinander wären.
+
+| | Variante | |
+| --- | --- | --- |
+| **A** | Überholen prüfen, wenn der Abstand am Rundenende unter 0,05 s liegt | Trifft fast nie zu: zwei Autos können eine ganze Runde nebeneinander fahren und trotzdem 20 s auseinander über die Linie kommen — gemessen 5 Manöver je Rennen gegen 359 in der vollen Simulation |
+| **B** | Überholen prüfen, wo sich die Reihenfolge gegenüber der Vorrunde geändert hat | Jeder Positionswechsel braucht einen Wurf nach GDD 4; misslingt er, hängt das Auto knapp hinter dem Vordermann fest |
+| **C** | Gar nicht überholen, nur Rundenzeiten addieren | Das Ergebnis wäre die Reihenfolge der Rundenzeiten — Überholschwierigkeit je Strecke und D10/D11 blieben wirkungslos |
+
+**Entscheidung: B.** Angefahren wird von hinten nach vorn — zuerst der
+nächste Vordermann, dann der davor —, und beim ersten misslungenen Versuch
+ist Schluss: Wer nicht vorbeikommt, erreicht die weiter vorne Fahrenden in
+dieser Runde gar nicht mehr.
+
+Nachgemessen bei gleichem Wetter in beiden Modellen (dasselbe wird aus
+demselben Zweig der Seedquelle gezogen): Die Siegerzeit im Schnellmodus
+weicht auf Zandvoort und Monza in den Ligen 5 und 20 um **−1,2 bis +0,5 %**
+von der vollen Simulation ab, die schnellste Runde um **−1,4 bis −0,2 %**.
+Ein Test hält die 2-%-Schranke fest. Die *Zahl* der Manöver bleibt
+naturgemäß kleiner — in der vollen Simulation zählt jeder Positionstausch
+innerhalb einer Runde mit, hier nur das Ergebnis am Rundenende.
+
+Zweite Vereinfachung im selben Sinn: Im Qualifying fahren alle Autos ihre
+gezeitete Runde in der Wetterlage zu Sessionbeginn. Der überlappende Start
+aus GDD 4 bräuchte eine Uhr über die Session — genau das, was der
+Schnellmodus einspart.
+
+### 33. Qualifying-Reihenfolge, wenn kein Vorjahresstand passt
+
+**GDD 4** ordnet die Qualifying-Reihenfolge nach dem umgekehrten
+Meisterschaftsstand und nennt für das erste Rennen einer Saison die
+Ausnahme: aufsteigend nach durchschnittlicher Qualifying-Fähigkeit.
+
+Offen bleibt, was gilt, wenn eine Tabelle nicht zum Feld passt — nach
+einem Auf- oder Abstieg fährt ein Fahrer in einer Liga, deren Wertung ihn
+nicht kennt.
+
+**Entschieden:** Dann gilt dieselbe Ausnahme wie im ersten Rennen. Jede
+Saison beginnt ohnehin mit leeren Tabellen, sodass Rennen 1 automatisch
+unter die GDD-Regel fällt; die Prüfung auf ein unvollständiges Feld ist
+das Netz darunter, damit eine Aufstellung nie aus einer halben Tabelle
+entsteht.
