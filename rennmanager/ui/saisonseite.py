@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from rennmanager.kern import kalender as kern_kalender
 from rennmanager.kern import saison as kern_saison
 from rennmanager.kern import strecke as kern_strecke
 from rennmanager.kern import wertung as kern_wertung
@@ -77,6 +78,7 @@ class Saisonseite(QWidget):
 
         spalte = QVBoxLayout(self)
         spalte.addLayout(self._baue_kopf())
+        spalte.addWidget(self._baue_kalenderzeile())
 
         teiler = QSplitter(Qt.Horizontal)
         teiler.addWidget(self._baue_tabelle())
@@ -122,6 +124,17 @@ class Saisonseite(QWidget):
         zeile.addWidget(self._ganze_saison)
         zeile.addWidget(self._stand, stretch=1)
         return zeile
+
+    def _baue_kalenderzeile(self) -> QWidget:
+        """Zeigt, wo der Kalender steht und was ein Rennen jetzt kostet.
+
+        Bewusst kein modaler Dialog: Der Hinweis muss vor dem Klick zu
+        sehen sein, nicht danach - und ein Fenster, das jedes Mal
+        weggeklickt werden will, steht nur im Weg.
+        """
+        self._kalender = QLabel()
+        self._kalender.setWordWrap(True)
+        return self._kalender
 
     def _baue_tabelle(self) -> QWidget:
         self._tabellenkasten = QGroupBox("Saisonwertung")
@@ -202,6 +215,7 @@ class Saisonseite(QWidget):
         self._zeige_tabelle(liga)
         self._zeige_rennen(liga)
         self._zeige_wechsel()
+        self._zeige_kalender()
         if self._lauf.ist_fertig:
             self._stand.setText(
                 f"Saison {self._lauf.jahr} beendet - {self._lauf.gefahren} Rennen gefahren."
@@ -211,6 +225,42 @@ class Saisonseite(QWidget):
                 f"Rennen {self._lauf.gefahren} von {self._lauf.rennen_je_saison} gefahren; "
                 f"als naechstes {self._lauf.strecke_zu(self._lauf.naechstes_rennen).name}."
             )
+
+    def _zeige_kalender(self) -> None:
+        """Kalenderstand und die Tage, die ein Rennen jetzt kosten wuerde.
+
+        GDD 2: Das Rennen findet an seinem Renntag statt; wer vorher
+        faehrt, laesst die nutzbaren Tage bis dahin verfallen.
+        """
+        karriere = self._lauf.karriere
+        if karriere is None:
+            self._kalender.setText("")
+            return
+        stand = (
+            f"Kalender: {kern_kalender.wochentag(karriere.heute)} "
+            f"{karriere.heute:%d.%m.%Y}"
+        )
+        nummer = self._lauf.naechstes_rennen
+        if nummer is None:
+            self._kalender.setStyleSheet("")
+            self._kalender.setText(f"{stand} · Saison gefahren.")
+            return
+
+        renntag = self._lauf.renntag(nummer)
+        stand += (
+            f" · Rennen {nummer} am {kern_kalender.wochentag(renntag)} "
+            f"{renntag:%d.%m.%Y}"
+        )
+        offen = self._lauf.offene_tage_vor_dem_rennen
+        if offen:
+            self._kalender.setStyleSheet(f"color: {FARBE_ABSTIEG.name()};")
+            self._kalender.setText(
+                f"{stand} · Noch {offen} nutzbare Tage - wer jetzt faehrt, "
+                "laesst sie verfallen (GDD 2)."
+            )
+        else:
+            self._kalender.setStyleSheet("")
+            self._kalender.setText(f"{stand} · Heute ist Renntag.")
 
     def _zeige_tabelle(self, liga: int) -> None:
         self._tabelle.clear()
@@ -335,3 +385,7 @@ class Saisonseite(QWidget):
     @property
     def knopf_rennwochenende(self) -> QPushButton:
         return self._ein_rennen
+
+    @property
+    def kalenderzeile(self) -> QLabel:
+        return self._kalender

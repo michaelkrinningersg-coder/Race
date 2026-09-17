@@ -8,6 +8,8 @@ laenger. Die teuren Laeufe stehen deshalb in Fixtures mit
 
 from __future__ import annotations
 
+import datetime as dt
+
 import pytest
 
 from rennmanager import konfiguration as kf
@@ -507,3 +509,60 @@ def test_e3_macht_den_spieler_schneller(k, welt, strecken):
         if liga == ohne.liga:
             continue
         assert lauf_mit.wochenenden[0].liga(liga) == lauf_ohne.wochenenden[0].liga(liga)
+
+
+# --- Kalender und Rennwochenende (GDD 2) ---------------------------------
+def test_das_rennen_findet_an_seinem_renntag_statt(k, welt, strecken):
+    """GDD 2: Rennen 1 ist der erste Sonntag ab dem 1. Maerz."""
+    karriere = spielerkarriere(k, welt)
+    lauf = lauf_mit_karriere(k, welt, strecken, karriere)
+    assert karriere.heute == dt.date(2026, 1, 1)
+
+    renntag = lauf.renntag(1)
+    assert renntag == karriere.saison.renntage[0]
+    lauf.fahre_rennen()
+    # Der Renntag ist vorbei; der naechste Tag gehoert wieder der Planung.
+    assert karriere.heute == renntag + dt.timedelta(days=1)
+
+
+def test_jedes_rennen_schiebt_den_kalender_einen_zyklus_weiter(k, welt, strecken):
+    karriere = spielerkarriere(k, welt)
+    lauf = lauf_mit_karriere(k, welt, strecken, karriere)
+    for nummer in range(1, 4):
+        lauf.fahre_rennen()
+        assert karriere.heute == lauf.renntag(nummer) + dt.timedelta(days=1)
+        # GDD 2: 10 nutzbare Tage je 14-Tage-Zyklus.
+        assert karriere.offene_tage == k.wert("kalender", "nutzbare_tage_je_zyklus")
+
+
+def test_wer_vorher_zum_rennen_springt_verliert_keinen_tag(k, welt, strecken):
+    """Erst planen, dann fahren - der Kalender steht dann schon richtig."""
+    karriere = spielerkarriere(k, welt)
+    lauf = lauf_mit_karriere(k, welt, strecken, karriere)
+    karriere.bis_zum_rennen()
+    assert karriere.heute == lauf.renntag(1)
+    assert lauf.offene_tage_vor_dem_rennen == 0
+
+    lauf.fahre_rennen()
+    assert lauf.gefahren == 1
+
+
+def test_ereignisse_der_uebersprungenen_tage_wirken_noch_im_rennen(k, welt, strecken):
+    """Der Kalender laeuft vor dem Rennen hoch, nicht danach (GDD 14)."""
+    karriere = spielerkarriere(k, welt)
+    lauf = lauf_mit_karriere(k, welt, strecken, karriere)
+    # E5 Genialer Mechaniker, drei Tage vor dem ersten Rennen.
+    karriere.ereignisplan = {lauf.renntag(1) - dt.timedelta(days=3): ("E5",)}
+
+    lauf.fahre_rennen()
+    assert [m.schluessel for m in karriere.meldungen] == ["E5"]
+    # Es lief beim Rennen schon, zaehlt also ein Rennwochenende herunter.
+    assert lauf.karriere.lage.aktive[0].rest == 2
+
+
+def test_ohne_karriere_gibt_es_keinen_kalender(k, welt, strecken):
+    lauf = neuer_lauf(k, welt, strecken)
+    assert lauf.renntag(1) is None
+    assert lauf.offene_tage_vor_dem_rennen == 0
+    lauf.fahre_rennen()
+    assert lauf.gefahren == 1

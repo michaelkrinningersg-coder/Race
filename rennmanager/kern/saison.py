@@ -20,6 +20,7 @@ bleiben davon unberuehrt (GDD 15).
 
 from __future__ import annotations
 
+import datetime as dt
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 
@@ -501,6 +502,10 @@ class Saisonlauf:
 
         # Eine Karriere kann auch nach dem Aufbau gesetzt worden sein.
         self._teile_kenntnis()
+        # GDD 2: Das Rennen findet an seinem Renntag statt. Der Kalender
+        # der Karriere wird deshalb bis dorthin vorgeschaltet - vor dem
+        # Rennen, damit die Ereignisse dieser Tage noch auf es wirken.
+        self._stelle_auf_renntag(nummer)
         strecke = self.strecke_zu(nummer)
         verschleiss = kern_reifen.streckenfaktor(
             self.konfiguration, strecke, self._querbeschleunigung
@@ -590,7 +595,62 @@ class Saisonlauf:
             ausfuehrliche_liga=ausfuehrliche_liga,
         )
         self.wochenenden.append(ergebnis)
+        # Der Renntag ist vorbei; der naechste Tag gehoert schon wieder
+        # der Planung (GDD 2).
+        self._schliesse_renntag_ab()
         return ergebnis
+
+    # -- Kalender (GDD 2) --------------------------------------------------
+    def renntag(self, nummer: int) -> dt.date | None:
+        """Das Datum, an dem dieses Rennen stattfindet.
+
+        Der Kalender haengt an der Karriere; ohne sie hat der Saisonlauf
+        keine Daten, nur Rennnummern.
+        """
+        if self.karriere is None:
+            return None
+        renntage = self.karriere.saison.renntage
+        return renntage[nummer - 1] if 1 <= nummer <= len(renntage) else None
+
+    @property
+    def offene_tage_vor_dem_rennen(self) -> int:
+        """Nutzbare Tage, die bis zum naechsten Renntag noch frei sind.
+
+        Die Oberflaeche warnt damit vor Tagen, die ungenutzt verfallen
+        wuerden (GDD 2: "Ein Tag, der vorbei ist, ohne belegt zu sein, ist
+        verloren").
+        """
+        if self.karriere is None or self.naechstes_rennen is None:
+            return 0
+        return self.karriere.offene_tage
+
+    def _stelle_auf_renntag(self, nummer: int) -> int:
+        """Schaltet den Kalender der Karriere bis zum Renntag (GDD 2).
+
+        Nur vorwaerts: Ein geladener Spielstand kann schon weiter sein,
+        dann bleibt der Kalender, wie er ist.
+
+        :return: Zahl der uebersprungenen Tage
+        """
+        ziel = self.renntag(nummer)
+        if ziel is None:
+            return 0
+        uebersprungen = 0
+        while self.karriere.heute < ziel:
+            self.karriere.tag_weiter()
+            uebersprungen += 1
+        return uebersprungen
+
+    def _schliesse_renntag_ab(self) -> None:
+        """Schaltet einen Tag ueber den Renntag hinaus (GDD 2).
+
+        Sonst stuende der Kalender weiter auf dem Renntag und das naechste
+        Rennwochenende faende am selben Tag statt.
+        """
+        if self.karriere is None:
+            return
+        if self.karriere.heute < self.karriere.saison.tage[-1].datum:
+            self.karriere.tag_weiter()
 
     def _teile_kenntnis(self) -> None:
         """Karriere und Welt teilen sich eine Streckenkenntnis (GDD 6).

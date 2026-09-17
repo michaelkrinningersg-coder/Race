@@ -366,6 +366,13 @@ liga.kilometer_je_fahrer[401]    # {"trocken": 92.8, "heiss": 3.8}
 Sie stehen fuer alle 600 Fahrer bereit, gebucht wird davon nur der
 Spieler: Die KI hat weder Konto noch Werkstatt (GDD 12).
 
+Kalender und Rennwochenende haengen dabei zusammen (GDD 2): Ein Rennen
+findet an seinem Renntag statt. `fahre_rennen()` schaltet den Kalender der
+Karriere bis dorthin vor - vor dem Rennen, damit die Ereignisse dieser
+Tage noch auf es wirken - und danach einen Tag darueber hinaus. Wer
+faehrt, ohne vorher geplant zu haben, laesst die nutzbaren Tage bis zum
+Renntag verfallen; die Saisonseite sagt vorher, wie viele das waeren.
+
 Punkte gibt es nach GDD 13: 40-35-30-...-1 fuers Rennen, 3 fuer die
 schnellste Runde (auch ohne Zielankunft) und 5-3-1 fuers Qualifying. Bei
 Punktgleichheit liegt vorn, wer mehr Siege hat, dann mehr zweite Plaetze.
