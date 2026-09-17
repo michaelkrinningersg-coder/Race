@@ -1,0 +1,1221 @@
+# Rennmanager – zentrale Balancing-Konfiguration
+#
+# Quelle aller Werte: "Rennmanager – Game Design Dokument (v1.0)".
+# Jede Sektion nennt den zugehoerigen GDD-Abschnitt.
+#
+# Arbeitsregel: Balancing-Werte stehen ausschliesslich hier, nie im Code.
+# Fehlt im GDD eine Angabe, steht sie unter [offen] und wird nicht erfunden.
+
+schema_version = 1
+gdd_version = "1.0"
+
+# ---------------------------------------------------------------------------
+# GDD 1 / 9 – Werteskala und Kalibrierung
+# ---------------------------------------------------------------------------
+[skala]
+minimum = 0
+maximum = 100_000
+# Referenzwert, an dem die Kalibrierfunktion 180 km/h liefert
+referenz = 98_000
+
+[kalibrierung]
+# v(S) = basis_kmh + spanne_kmh * sqrt(S / referenz)
+basis_kmh = 55.0
+spanne_kmh = 125.0
+# Kontrollpunkte aus GDD 9
+v_bei_0_kmh = 55.0
+v_bei_referenz_kmh = 180.0
+v_bei_maximum_kmh = 181.3
+# Hoechstgeschwindigkeit auf Geraden, getrennt skaliert (GDD 4 und 9)
+endgeschwindigkeit_max_kmh = 400.0
+
+# ---------------------------------------------------------------------------
+# GDD 9 / 12 – Ligen
+# ---------------------------------------------------------------------------
+[ligen]
+anzahl = 20
+autos_je_liga = 30
+# Tempo des Besten je Liga: Liga 20 = 60,0 km/h, je Liga aufwaerts +6,32 km/h
+bester_liga20_kmh = 60.0
+zuwachs_je_liga_kmh = 6.32
+# Der Letzte einer Liga ist 0,3 km/h langsamer als der Beste der Liga darunter
+ueberlappung_kmh = 0.3
+# Ausnahme Liga 20: Der Letzte faehrt 56,0 km/h
+letzter_liga20_kmh = 56.0
+startliga = 20
+
+# Kontrollwerte aus der Tabelle in GDD 9 (Pruefwerte fuer die Kalibrierung)
+[[ligen.kontrolle]]
+liga = 20
+bester_kmh = 60.0
+letzter_kmh = 56.0
+s_bester = 157
+s_letzter = 6
+
+[[ligen.kontrolle]]
+liga = 15
+bester_kmh = 91.6
+letzter_kmh = 85.0
+s_bester = 8_400
+s_letzter = 5_640
+
+[[ligen.kontrolle]]
+liga = 10
+bester_kmh = 123.2
+letzter_kmh = 116.6
+s_bester = 29_170
+s_letzter = 23_780
+
+[[ligen.kontrolle]]
+liga = 5
+bester_kmh = 154.8
+letzter_kmh = 148.2
+s_bester = 62_470
+s_letzter = 54_460
+
+[[ligen.kontrolle]]
+liga = 1
+bester_kmh = 180.1
+letzter_kmh = 173.5
+s_bester = 98_130
+s_letzter = 88_010
+
+# Ligennamen: Platin, Gold, Silber, Bronze mit je 5 Stufen (GDD 12)
+[[ligen.namen]]
+stufe = "Platin"
+von_liga = 1
+bis_liga = 5
+
+[[ligen.namen]]
+stufe = "Gold"
+von_liga = 6
+bis_liga = 10
+
+[[ligen.namen]]
+stufe = "Silber"
+von_liga = 11
+bis_liga = 15
+
+[[ligen.namen]]
+stufe = "Bronze"
+von_liga = 16
+bis_liga = 20
+
+# ---------------------------------------------------------------------------
+# GDD 2 – Kalender und Zeitmodell
+# ---------------------------------------------------------------------------
+[kalender]
+# Erstes Rennen am ersten Sonntag ab dem 01.03.
+saisonstart_monat = 3
+saisonstart_tag = 1
+rennen_je_saison = 20
+abstand_tage = 14
+nutzbare_tage_je_zyklus = 10
+# Qualifying Samstag, Rennen Sonntag
+qualifying_wochentag = 5   # 0 = Montag
+rennen_wochentag = 6
+# Vorsaison ab 01.01., Nachsaison bis 31.12.; Saisonwechsel 31.12./01.01.
+vorsaison_start_monat = 1
+vorsaison_start_tag = 1
+nachsaison_ende_monat = 12
+nachsaison_ende_tag = 31
+# Zwei parallele Plaetze je Tag: Fahrer (Training) und Werkstatt (Entwicklung)
+plaetze_je_tag = ["fahrer", "werkstatt"]
+
+[zeitmodell]
+# Ein zugewiesener Tag hebt den Wert um max(schritt_absolut, anteil * S)
+schritt_absolut = 10
+schritt_anteil = 0.01
+# Schrittweite fuer Kaeufe (GDD 9)
+kaufschritt = 10
+
+# ---------------------------------------------------------------------------
+# GDD 3 – Streckenmodell
+# ---------------------------------------------------------------------------
+[strecke]
+# Linie auf festen Punktabstand neu abtasten
+abtastabstand_m = 5.0
+# Segmenttyp aus dem Kruemmungsradius
+enge_kurve_radius_max_m = 60.0
+gerade_radius_min_m = 300.0
+# Nur Geraden ab dieser Laenge sind Ueberholzonen
+ueberholzone_mindestlaenge_m = 100.0
+sektoren = 4
+quelle = "TUMFTM/racetrack-database"
+lizenz = "LGPL-3.0"
+
+# Die 20 Strecken der Saison (GDD 3). Monaco, Imola und Mugello fehlen im Datensatz.
+[[strecke.liste]]
+nummer = 1
+name = "Sakhir"
+land = "Bahrain"
+charakter = "Traktion, harte Bremszonen"
+
+[[strecke.liste]]
+nummer = 2
+name = "Melbourne"
+land = "Australien"
+charakter = "Halbstadtkurs"
+
+[[strecke.liste]]
+nummer = 3
+name = "Shanghai"
+land = "China"
+charakter = "Lange Gerade, enge Schnecke"
+
+[[strecke.liste]]
+nummer = 4
+name = "Catalunya"
+land = "Spanien"
+charakter = "Ausgewogen, Reifenverschleiss"
+
+[[strecke.liste]]
+nummer = 5
+name = "Montreal"
+land = "Kanada"
+charakter = "Schikanen, Bremsen"
+
+[[strecke.liste]]
+nummer = 6
+name = "Spielberg"
+land = "Oesterreich"
+charakter = "Kurz, Bergauf-Bremszonen"
+
+[[strecke.liste]]
+nummer = 7
+name = "Silverstone"
+land = "Grossbritannien"
+charakter = "Schnelle Kurven"
+
+[[strecke.liste]]
+nummer = 8
+name = "Budapest"
+land = "Ungarn"
+charakter = "Eng, kaum Ueberholen"
+
+[[strecke.liste]]
+nummer = 9
+name = "Spa"
+land = "Belgien"
+charakter = "Lang und schnell"
+
+[[strecke.liste]]
+nummer = 10
+name = "Zandvoort"
+land = "Niederlande"
+charakter = "Steilkurven, eng"
+
+[[strecke.liste]]
+nummer = 11
+name = "Monza"
+land = "Italien"
+charakter = "Hoechstgeschwindigkeit"
+
+[[strecke.liste]]
+nummer = 12
+name = "Hockenheim"
+land = "Deutschland"
+charakter = "Lange Geraden"
+
+[[strecke.liste]]
+nummer = 13
+name = "Nuerburgring"
+land = "Deutschland"
+charakter = "Technisch"
+
+[[strecke.liste]]
+nummer = 14
+name = "Norisring"
+land = "Deutschland"
+charakter = "Kurzer Stadtkurs, Haarnadeln"
+
+[[strecke.liste]]
+nummer = 15
+name = "Oschersleben"
+land = "Deutschland"
+charakter = "Kurvig, eng"
+
+[[strecke.liste]]
+nummer = 16
+name = "Suzuka"
+land = "Japan"
+charakter = "Achterform, Fahrerstrecke"
+
+[[strecke.liste]]
+nummer = 17
+name = "Austin"
+land = "USA"
+charakter = "Vielseitig"
+
+[[strecke.liste]]
+nummer = 18
+name = "Mexiko-Stadt"
+land = "Mexiko"
+charakter = "Lange Gerade"
+
+[[strecke.liste]]
+nummer = 19
+name = "Sao Paulo"
+land = "Brasilien"
+charakter = "Gegen den Uhrzeigersinn"
+
+[[strecke.liste]]
+nummer = 20
+name = "Yas Marina"
+land = "Abu Dhabi"
+charakter = "Geraden und enge Kurven"
+
+# ---------------------------------------------------------------------------
+# GDD 4 – Rennsimulation
+# ---------------------------------------------------------------------------
+[rennen]
+autos = 30
+# Renndistanz: Liga 20 = 100 km, je Liga aufwaerts +10 km (Liga 1 = 290 km)
+distanz_liga20_km = 100
+distanz_zuwachs_je_liga_km = 10
+# Rundenzahl = Distanz / Streckenlaenge, aufgerundet
+rundenzahl_aufrunden = true
+
+[start]
+# Jedes Auto steht 5 m hinter dem Vordermann
+abstand_m = 5.0
+reaktionszeit_min_ms = 100
+reaktionszeit_max_ms = 300
+
+[ueberholen]
+# Nur auf Geraden ab ueberholzone_mindestlaenge_m, nie in Kurven
+nur_in_ueberholzonen = true
+max_abstand_s = 0.05
+min_tempovorteil_kmh = 2.0
+# Bei Duellen werden die Punkte leicht seitlich versetzt (keine Kollisionsphysik)
+seitlicher_versatz = true
+
+[unfaelle]
+# Sehr selten und nur bei geringem Abstand
+max_abstand_m = 30.0
+# Je Rennen wird eine Obergrenze von 0 bis 5 Ausfaellen gewuerfelt
+ausfaelle_min = 0
+ausfaelle_max = 5
+
+[zeitraffer]
+stufen = [1, 2, 5, 10, 20, 50, 100]
+sofortergebnis = true
+
+[zeitmessung]
+# Intern ganze Millisekunden, Linienueberfahrten interpoliert
+einheit = "ms"
+format_unter_stunde = "m:ss.mmm"
+format_ab_stunde = "h:mm:ss.mmm"
+# Rueckstand in der Seitenleiste
+rueckstand_format_unter_60s = "s.mmm"
+rueckstand_format_ab_60s = "m:ss.mmm"
+ueberrundet_text = "+{runden} Rd."
+# Gleichstand auf die Millisekunde: hoeherer Durchschnitt der Basiseigenschaften,
+# sonst entscheidet das Los
+gleichstand_reihenfolge = ["basiseigenschaften_mittelwert", "los"]
+
+[zeitenmonitor]
+spalten = ["letzte_runde", "beste_runde", "sektor_1", "sektor_2", "sektor_3", "sektor_4"]
+
+# ---------------------------------------------------------------------------
+# GDD 4 / 6 – Streckenkenntnis (automatisch)
+# ---------------------------------------------------------------------------
+[streckenkenntnis]
+max_bonus = 0.015          # bis +1,5 % Tempo
+volle_kenntnis_runden = 1000
+streuung_je_start = 0.75   # +/- 75 %
+streuung_je_runde = 0.50   # +/- 50 %
+
+# ---------------------------------------------------------------------------
+# GDD 4 – Qualifying
+# ---------------------------------------------------------------------------
+[qualifying]
+aufwaermrunden = 1
+gezeitete_runden = 1
+# Startreihenfolge: umgekehrter Meisterschaftsstand
+reihenfolge = "meisterschaft_umgekehrt"
+# Im ersten Rennen der Saison aufsteigend nach durchschnittlicher Qualifying-Faehigkeit
+reihenfolge_erstes_rennen = "qualifying_faehigkeit_aufsteigend"
+live_einsortierung = true
+
+# ---------------------------------------------------------------------------
+# GDD 7 – Wetter
+# ---------------------------------------------------------------------------
+[wetter]
+# Kette: Starkregen <-> Regen <-> Wechselhaft <-> Trocken <-> Heiss
+kette = ["starkregen", "regen", "wechselhaft", "trocken", "heiss"]
+wechsel_min = 0
+wechsel_max = 3
+# Ein Wechsel geht immer nur um eine Stufe
+wechsel_schrittweite = 1
+# Qualifying und Rennen werden getrennt gewuerfelt
+getrennt_je_session = true
+
+[wetter.zustand.trocken]
+grip = 1.00
+fehlerquote = 1.0
+reifenverschleiss = 1.0
+
+[wetter.zustand.heiss]
+grip = 0.97
+fehlerquote = 1.2
+reifenverschleiss = 1.4
+
+[wetter.zustand.wechselhaft]
+grip_min = 0.90
+grip_max = 1.00
+fehlerquote = 1.4
+reifenverschleiss = 1.1
+# Grip schwankt je Sektor
+grip_je_sektor = true
+
+[wetter.zustand.regen]
+grip = 0.85
+fehlerquote = 1.8
+reifenverschleiss = 0.8
+
+[wetter.zustand.starkregen]
+grip = 0.72
+fehlerquote = 2.5
+reifenverschleiss = 0.7
+
+# Wetterfaehigkeiten des Fahrers (GDD 7)
+[wetter.faehigkeit]
+# Die passende Faehigkeit senkt den Grip- und Fehlerverlust um bis zu 60 % bei 100.000
+max_daempfung = 0.60
+
+[[wetter.faehigkeit.liste]]
+schluessel = "trockenroutine"
+name = "Trockenroutine"
+wetter = "trocken"
+waehrung = ["E"]
+
+[[wetter.faehigkeit.liste]]
+schluessel = "hitzeresistenz"
+name = "Hitzeresistenz"
+wetter = "heiss"
+waehrung = ["Z"]
+
+[[wetter.faehigkeit.liste]]
+schluessel = "anpassungsfaehigkeit"
+name = "Anpassungsfaehigkeit"
+wetter = "wechselhaft"
+waehrung = ["E"]
+
+[[wetter.faehigkeit.liste]]
+schluessel = "regenfahren"
+name = "Regenfahren"
+wetter = "regen"
+waehrung = ["E"]
+
+[[wetter.faehigkeit.liste]]
+schluessel = "starkregen_koennen"
+name = "Starkregen-Koennen"
+wetter = "starkregen"
+waehrung = ["E", "Z"]
+
+# ---------------------------------------------------------------------------
+# GDD 5 – Fahrzeug: 16 Upgrades
+# GDD 8 – Wirkungsmatrix (Gewichte 0-3)
+# Bereiche: ek, k, g, bplus, bminus, st, du, fe, ve, er, q
+# ---------------------------------------------------------------------------
+[[fahrzeug]]
+schluessel = "F1"
+name = "Motorleistung"
+waehrung = ["G"]
+gewichte = { g = 3, bplus = 2, q = 3 }
+
+[[fahrzeug]]
+schluessel = "F2"
+name = "Drehmoment"
+waehrung = ["G", "Z"]
+gewichte = { ek = 1, bplus = 3, st = 1, q = 3 }
+
+[[fahrzeug]]
+schluessel = "F3"
+name = "Getriebe"
+waehrung = ["G", "E"]
+gewichte = { g = 1, bplus = 2 }
+
+[[fahrzeug]]
+schluessel = "F4"
+name = "Uebersetzung"
+waehrung = ["G", "E"]
+gewichte = { g = 3, bplus = 1 }
+
+[[fahrzeug]]
+schluessel = "F5"
+name = "Abtrieb"
+waehrung = ["G", "Z"]
+gewichte = { ek = 1, k = 3, bminus = 1 }
+
+[[fahrzeug]]
+schluessel = "F6"
+name = "Luftwiderstand"
+waehrung = ["G", "Z"]
+gewichte = { g = 3 }
+
+[[fahrzeug]]
+schluessel = "F7"
+name = "Fahrwerk"
+waehrung = ["G", "E"]
+gewichte = { ek = 2, k = 2, fe = 1 }
+
+[[fahrzeug]]
+schluessel = "F8"
+name = "Bremsanlage"
+waehrung = ["G"]
+gewichte = { bminus = 3, du = 1 }
+
+[[fahrzeug]]
+schluessel = "F9"
+name = "Reifen-Grip"
+waehrung = ["G"]
+gewichte = { ek = 2, k = 2, bplus = 1, bminus = 1, q = 3 }
+
+[[fahrzeug]]
+schluessel = "F10"
+name = "Reifenhaltbarkeit"
+waehrung = ["G", "Z"]
+gewichte = { ve = 3 }
+
+[[fahrzeug]]
+schluessel = "F11"
+name = "Gewicht"
+waehrung = ["G", "Z"]
+gewichte = { ek = 1, bplus = 1, bminus = 1 }
+
+[[fahrzeug]]
+schluessel = "F12"
+name = "Traktion"
+waehrung = ["G", "E"]
+gewichte = { ek = 2, bplus = 2, st = 2 }
+
+[[fahrzeug]]
+schluessel = "F13"
+name = "Lenkung"
+waehrung = ["G", "E"]
+gewichte = { ek = 3, k = 1, q = 3 }
+
+[[fahrzeug]]
+schluessel = "F14"
+name = "Zuverlaessigkeit"
+waehrung = ["G", "E", "Z"]
+gewichte = { ve = 3 }
+
+[[fahrzeug]]
+schluessel = "F15"
+name = "Elektronik"
+waehrung = ["G", "E"]
+gewichte = { bplus = 1, st = 1, fe = 2 }
+
+[[fahrzeug]]
+schluessel = "F16"
+name = "Kuehlung"
+waehrung = ["G", "Z"]
+gewichte = { ve = 2 }
+# Wirkt nur bei Hitze (GDD 8)
+nur_bei_wetter = ["heiss"]
+
+# ---------------------------------------------------------------------------
+# GDD 6 – Fahrer: 16 Eigenschaften
+# GDD 8 – Wirkungsmatrix
+# ---------------------------------------------------------------------------
+[[fahrer]]
+schluessel = "D1"
+name = "Konzentration"
+waehrung = ["Z"]
+gewichte = { fe = 3, er = 1, q = 1 }
+
+[[fahrer]]
+schluessel = "D2"
+name = "Ausdauer"
+waehrung = ["Z"]
+gewichte = { er = 3 }
+
+[[fahrer]]
+schluessel = "D3"
+name = "Fitness"
+waehrung = ["Z", "G"]
+gewichte = { k = 1, er = 2 }
+
+[[fahrer]]
+schluessel = "D4"
+name = "Reaktion/Start"
+waehrung = ["Z", "E"]
+gewichte = { st = 3 }
+
+[[fahrer]]
+schluessel = "D5"
+name = "Enge Kurven"
+waehrung = ["E"]
+gewichte = { ek = 3 }
+
+[[fahrer]]
+schluessel = "D6"
+name = "Kurven"
+waehrung = ["E"]
+gewichte = { k = 3, q = 1 }
+
+[[fahrer]]
+schluessel = "D7"
+name = "Geraden"
+waehrung = ["E"]
+gewichte = { g = 2, du = 1, q = 1 }
+
+[[fahrer]]
+schluessel = "D8"
+name = "Bremsen"
+waehrung = ["E"]
+gewichte = { bminus = 3, du = 1, q = 1 }
+
+[[fahrer]]
+schluessel = "D9"
+name = "Beschleunigen"
+waehrung = ["E"]
+gewichte = { ek = 1, bplus = 3 }
+
+[[fahrer]]
+schluessel = "D10"
+name = "Ueberholen"
+waehrung = ["E"]
+gewichte = { du = 3 }
+
+[[fahrer]]
+schluessel = "D11"
+name = "Verteidigen"
+waehrung = ["E"]
+gewichte = { du = 3 }
+
+[[fahrer]]
+schluessel = "D12"
+name = "Konstanz"
+waehrung = ["E", "Z"]
+gewichte = { fe = 3, q = 1 }
+
+[[fahrer]]
+schluessel = "D13"
+name = "Qualifying"
+waehrung = ["E"]
+gewichte = { q = 3 }
+
+[[fahrer]]
+schluessel = "D14"
+name = "Reifenmanagement"
+waehrung = ["E"]
+gewichte = { ve = 3 }
+
+[[fahrer]]
+schluessel = "D15"
+name = "Nervenstaerke"
+waehrung = ["E", "Z"]
+gewichte = { du = 1, fe = 2, q = 3 }
+
+[[fahrer]]
+schluessel = "D16"
+name = "Mentale Staerke"
+waehrung = ["Z", "G"]
+gewichte = { fe = 1, q = 3 }
+# Daempft zusaetzlich die negative Seite der Tagesform (GDD 8 und 11)
+daempft_tagesform_negativ = true
+
+# ---------------------------------------------------------------------------
+# GDD 8 – Bereiche der Wirkungsmatrix
+# ---------------------------------------------------------------------------
+[wirkungsmatrix]
+bereiche = ["ek", "k", "g", "bplus", "bminus", "st", "du", "fe", "ve", "er", "q"]
+gewicht_min = 0
+gewicht_max = 3
+# Innerhalb eines Bereichs werden die Gewichte normiert
+normieren_je_bereich = true
+
+[wirkungsmatrix.bezeichnung]
+ek = "Enge Kurve"
+k = "Kurve"
+g = "Gerade"
+bplus = "Beschleunigen"
+bminus = "Bremsen"
+st = "Start"
+du = "Duell"
+fe = "Fehler/Streuung"
+ve = "Verschleiss/Defekte"
+er = "Ermuedung"
+q = "Qualifying"
+
+# ---------------------------------------------------------------------------
+# GDD 9 – Kosten
+# ---------------------------------------------------------------------------
+[kosten]
+# K(S) = k0 * (1 + S / teiler) ^ exponent, je Kaufschritt von +10
+teiler = 1000.0
+exponent = 0.6
+k0_geld = 50.0
+k0_erfahrung = 5.0
+# Nur Einzelkauf, kein Mehrfachkauf
+mehrfachkauf = false
+startkapital_euro = 1000
+
+# Kontrollwerte aus der Tabelle in GDD 9
+[[kosten.kontrolle]]
+bezeichnung = "Bester Liga 20"
+s = 157
+naechster_schritt_euro = 55
+summe_ab_0_euro = 820
+
+[[kosten.kontrolle]]
+bezeichnung = "Bester Liga 15"
+s = 8_400
+naechster_schritt_euro = 190
+summe_ab_0_euro = 110_000
+
+[[kosten.kontrolle]]
+bezeichnung = "Bester Liga 10"
+s = 29_170
+naechster_schritt_euro = 390
+summe_ab_0_euro = 725_000
+
+[[kosten.kontrolle]]
+bezeichnung = "Bester Liga 5"
+s = 62_470
+naechster_schritt_euro = 600
+summe_ab_0_euro = 2_400_000
+
+[[kosten.kontrolle]]
+bezeichnung = "Bester Liga 1"
+s = 98_130
+naechster_schritt_euro = 790
+summe_ab_0_euro = 4_900_000
+
+# ---------------------------------------------------------------------------
+# GDD 10 – Einnahmen
+# ---------------------------------------------------------------------------
+[preisgeld]
+# Siegpraemie je Liga; Zwischenligen werden interpoliert (Verfahren siehe [offen])
+[preisgeld.siegpraemie_euro]
+20 = 4_000
+15 = 100_000
+10 = 370_000
+5 = 840_000
+1 = 1_300_000
+
+[preisgeld.anteil]
+# Anteil an der Siegpraemie je Platz; im GDD sind nur diese Stuetzstellen genannt
+1 = 1.00
+2 = 0.80
+3 = 0.65
+30 = 0.05
+
+[erfahrung]
+# EP-Betraege = Preisgeld / 10
+teiler_gegenueber_preisgeld = 10
+# Grundbetrag je Session, Platzierungsbonus und Bonus je Ueberholmanoever
+quellen = ["grundbetrag_session", "platzierungsbonus", "ueberholbonus"]
+
+[erfahrung.wetter]
+# Eigener Topf je Wetter, nur fuer die passende Wetterfaehigkeit nutzbar
+eigener_topf_je_wetter = true
+quellen = ["je_km_im_wetter", "platzierungsbonus"]
+
+[finanzen]
+laufende_kosten = false
+schulden = false
+bankrott = false
+# KI-Teambudgets sind vorerst nur Anzeige
+ki_budget_wirksam = false
+
+[sponsoren]
+plaetze = ["anzug", "helm", "muetze", "auto_haupt", "auto_neben_1", "auto_neben_2"]
+angebote_je_platz_min = 3
+angebote_je_platz_max = 10
+angebot_gueltig_wochen_min = 3
+angebot_gueltig_wochen_max = 10
+laufzeit_rennen_min = 3
+laufzeit_rennen_max = 25
+saisonuebergreifend = true
+verguetung = ["grundbetrag_je_rennen", "praemie_sieg", "praemie_top3", "praemie_top10"]
+skaliert_mit_liga = true
+
+# ---------------------------------------------------------------------------
+# GDD 11 – Zufallssystem
+# ---------------------------------------------------------------------------
+[zufall.tagesform]
+# Ein Faktor auf alle Fahrerwerte, vor Qualifying und erneut vor Rennen
+sigma = 0.03
+grenze = 0.08
+
+[zufall.eigenschaft]
+# Jeder einzelne Wert, vor Qualifying und erneut vor Rennen
+sigma = 0.02
+grenze = 0.05
+
+[zufall.rundenform]
+# Jede Runde auf die Rundenzeit, verkleinert durch D12 Konstanz
+sigma = 0.003
+verkleinert_durch = "D12"
+
+# ---------------------------------------------------------------------------
+# GDD 12 – Teams, Hersteller, KI
+# ---------------------------------------------------------------------------
+[teams]
+anzahl = 150
+autos_je_team = 4
+# Die 4 Autos eines Teams koennen in verschiedenen Ligen fahren
+ligen_gemischt = true
+# Der Spieler faehrt in einem Team mit 3 KI-Fahrern
+ki_teamkollegen = 3
+felder = ["name", "herkunftsland", "hersteller", "budget", "teamfarbe"]
+
+[hersteller]
+anzahl = 20
+# Namen stehen in konfiguration/hersteller.toml (austauschbar, Markenrecht)
+datei = "hersteller.toml"
+leistungsbonus = false
+
+[ki]
+# Einzelwerte streuen um den Mittelwert des Autos
+profil_streuung = 0.25
+# KI verbessert sich vorerst nicht
+entwicklung = false
+
+[fahrernamen]
+geschlecht = "maennlich"
+regionen = ["Europa", "Nordamerika"]
+an_echte_fahrer_angelehnt = false
+felder = ["vorname", "nachname", "herkunftsland", "geburtsdatum", "team", "hersteller"]
+altern = false
+
+# ---------------------------------------------------------------------------
+# GDD 13 – Wertung, Auf- und Abstieg
+# ---------------------------------------------------------------------------
+[wertung]
+# Rennen, Plaetze 1-20
+punkte_rennen = [40, 35, 30, 25, 20, 18, 16, 14, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
+# Schnellste Rennrunde, auch ohne Zielankunft
+punkte_schnellste_runde = 3
+# Qualifying, Plaetze 1-3
+punkte_qualifying = [5, 3, 1]
+# Gleichstand: mehr Siege, dann mehr zweite Plaetze usw.
+gleichstand = "platzierungen_absteigend"
+
+[auf_abstieg]
+aufsteiger = 3
+absteiger = 3
+# Liga 1 ohne Aufstieg, Liga 20 ohne Abstieg
+gilt_fuer = "fahrer"
+
+[schnellsimulation]
+# Die uebrigen 19 Ligen nach jedem Rennwochenende des Spielers
+aufloesung = "runde"
+enthaelt = ["wetter", "fehler", "unfaelle", "defekte"]
+
+[statistik]
+inhalte = [
+  "rundenrekorde_je_strecke_und_liga",
+  "siege",
+  "podien",
+  "pole_positions",
+  "schnellste_runden",
+  "gesamtpunkte_je_liga_und_saison",
+  "historie_aller_saisons_und_ligen",
+]
+
+# ---------------------------------------------------------------------------
+# GDD 14 – Einzelereignisse
+# ---------------------------------------------------------------------------
+[ereignisse]
+je_zyklus_min = 0
+je_zyklus_max = 2
+# Ausgeloest nur in den ersten 4 Tagen eines Zyklus, beim Tageswechsel
+ausloesefenster_tage = 4
+gilt_fuer = ["spieler", "ki"]
+
+[[ereignisse.liste]]
+schluessel = "E1"
+name = "Erkaeltung"
+wirkung = [{ ziel = "D2", faktor = -0.15 }, { ziel = "D1", faktor = -0.10 }]
+dauer = { art = "rennwochenenden", anzahl = 1 }
+
+[[ereignisse.liste]]
+schluessel = "E2"
+name = "Trainingsverletzung"
+wirkung = [{ ziel = "D3", faktor = -0.20 }, { ziel = "fahrertraining", sperre = true }]
+dauer = { art = "rennwochenenden", anzahl = 2 }
+
+[[ereignisse.liste]]
+schluessel = "E3"
+name = "Motivationsschub"
+wirkung = [{ ziel = "tagesform_mittelwert", faktor = 0.03 }]
+dauer = { art = "rennwochenenden", anzahl = 1 }
+
+[[ereignisse.liste]]
+schluessel = "E4"
+name = "Medienrummel"
+wirkung = [{ ziel = "D1", faktor = -0.08 }, { ziel = "geld", einmalig = true }]
+dauer = { art = "rennwochenenden", anzahl = 1 }
+
+[[ereignisse.liste]]
+schluessel = "E5"
+name = "Genialer Mechaniker"
+wirkung = [{ ziel = "F14", faktor = 0.10 }]
+dauer = { art = "rennwochenenden", anzahl = 3 }
+
+[[ereignisse.liste]]
+schluessel = "E6"
+name = "Teilelieferung verzoegert"
+wirkung = [{ ziel = "F5", sperre = true }, { ziel = "F6", sperre = true }]
+dauer = { art = "zyklen", anzahl = 1 }
+
+[[ereignisse.liste]]
+schluessel = "E7"
+name = "Sponsorbonus"
+wirkung = [{ ziel = "geld", einmalig = true }]
+dauer = { art = "sofort" }
+
+[[ereignisse.liste]]
+schluessel = "E8"
+name = "Motorschaden im Test"
+wirkung = [{ ziel = "F1", faktor = -0.05 }]
+dauer = { art = "bis_reparatur" }
+
+[[ereignisse.liste]]
+schluessel = "E9"
+name = "Mentor-Tipp"
+wirkung = [{ ziel = "erfahrung", einmalig = true }]
+dauer = { art = "sofort" }
+
+[[ereignisse.liste]]
+schluessel = "E10"
+name = "Testfahrt geglueckt"
+wirkung = [{ ziel = "streckenkenntnis_naechste", faktor = 0.20 }]
+dauer = { art = "rennwochenenden", anzahl = 1 }
+
+[[ereignisse.liste]]
+schluessel = "E11"
+name = "Fahrsicherheitstraining"
+wirkung = [{ ziel = "D8", faktor = 0.01 }]
+dauer = { art = "dauerhaft" }
+
+[[ereignisse.liste]]
+schluessel = "E12"
+name = "Schlecht geschlafen"
+wirkung = [{ ziel = "D1", faktor = -0.05 }]
+dauer = { art = "nur_qualifying" }
+
+[[ereignisse.liste]]
+schluessel = "E13"
+name = "Neues Ernaehrungskonzept"
+wirkung = [{ ziel = "D2", faktor = 0.01 }]
+dauer = { art = "dauerhaft" }
+
+[[ereignisse.liste]]
+schluessel = "E14"
+name = "Sponsorenabend"
+wirkung = [{ ziel = "geld", einmalig = true }, { ziel = "D2", faktor = -0.05 }]
+dauer = { art = "rennwochenenden", anzahl = 1 }
+
+[[ereignisse.liste]]
+schluessel = "E15"
+name = "Streit im Team"
+wirkung = [{ ziel = "D16", faktor = -0.10 }]
+dauer = { art = "rennwochenenden", anzahl = 2 }
+
+[[ereignisse.liste]]
+schluessel = "E16"
+name = "Simulatortag beim Hersteller"
+wirkung = [{ ziel = "erfahrung", einmalig = true }]
+dauer = { art = "sofort" }
+
+[[ereignisse.liste]]
+schluessel = "E17"
+name = "Neue Bremsbelaege vom Zulieferer"
+wirkung = [{ ziel = "F8", faktor = 0.02 }]
+dauer = { art = "rennwochenenden", anzahl = 3 }
+
+[[ereignisse.liste]]
+schluessel = "E18"
+name = "Fehlerhafte Reifencharge"
+wirkung = [{ ziel = "F9", faktor = -0.05 }]
+dauer = { art = "rennwochenenden", anzahl = 1 }
+
+[[ereignisse.liste]]
+schluessel = "E19"
+name = "Windkanalzeit gewonnen"
+wirkung = [{ ziel = "F5", faktor = 0.01 }]
+dauer = { art = "dauerhaft" }
+
+[[ereignisse.liste]]
+schluessel = "E20"
+name = "Lebensmittelvergiftung"
+wirkung = [{ ziel = "D2", faktor = -0.20 }, { ziel = "D1", faktor = -0.10 }]
+dauer = { art = "rennwochenenden", anzahl = 1 }
+
+[[ereignisse.liste]]
+schluessel = "E21"
+name = "Fanpost-Welle"
+wirkung = [{ ziel = "D16", faktor = 0.05 }]
+dauer = { art = "rennwochenenden", anzahl = 2 }
+
+[[ereignisse.liste]]
+schluessel = "E22"
+name = "Regentraining"
+wirkung = [{ ziel = "regenfahren", faktor = 0.02 }]
+dauer = { art = "dauerhaft" }
+
+[[ereignisse.liste]]
+schluessel = "E23"
+name = "Hitzetraining"
+wirkung = [
+  { ziel = "hitzeresistenz", faktor = 0.01, dauerhaft = true },
+  { ziel = "D2", faktor = -0.05 },
+]
+dauer = { art = "rennwochenenden", anzahl = 1 }
+
+[[ereignisse.liste]]
+schluessel = "E24"
+name = "Motor-Update vom Hersteller"
+wirkung = [{ ziel = "F1", faktor = 0.03 }]
+dauer = { art = "rennwochenenden", anzahl = 2 }
+
+[[ereignisse.liste]]
+schluessel = "E25"
+name = "Getriebeproblem im Test"
+wirkung = [{ ziel = "F3", faktor = -0.05 }]
+dauer = { art = "bis_reparatur" }
+
+[[ereignisse.liste]]
+schluessel = "E26"
+name = "Gewichtsersparnis entdeckt"
+wirkung = [{ ziel = "F11", faktor = 0.01 }]
+dauer = { art = "dauerhaft" }
+
+[[ereignisse.liste]]
+schluessel = "E27"
+name = "Pressekritik"
+wirkung = [{ ziel = "D15", faktor = -0.08 }]
+dauer = { art = "rennwochenenden", anzahl = 1 }
+
+[[ereignisse.liste]]
+schluessel = "E28"
+name = "Mentaltrainer-Workshop"
+wirkung = [{ ziel = "D16", faktor = 0.01 }]
+dauer = { art = "dauerhaft" }
+
+[[ereignisse.liste]]
+schluessel = "E29"
+name = "Reisechaos"
+wirkung = [{ ziel = "kalendertage", absolut = -2 }]
+dauer = { art = "zyklen", anzahl = 1 }
+
+[[ereignisse.liste]]
+schluessel = "E30"
+name = "Besuch einer Rennlegende"
+wirkung = [{ ziel = "D13", faktor = 0.03 }]
+dauer = { art = "rennwochenenden", anzahl = 1 }
+
+[[ereignisse.liste]]
+schluessel = "E31"
+name = "Verschleppte Nackenzerrung"
+wirkung = [{ ziel = "D3", faktor = -0.01 }]
+dauer = { art = "dauerhaft" }
+
+[[ereignisse.liste]]
+schluessel = "E32"
+name = "Materialermuedung am Motorblock"
+wirkung = [{ ziel = "F1", faktor = -0.005 }]
+dauer = { art = "dauerhaft" }
+
+[[ereignisse.liste]]
+schluessel = "E33"
+name = "Falsche Gewohnheit im Simulator"
+wirkung = [{ ziel = "D8", faktor = -0.01 }]
+dauer = { art = "dauerhaft" }
+
+[[ereignisse.liste]]
+schluessel = "E34"
+name = "Chassis beim Transport verzogen"
+wirkung = [{ ziel = "F7", faktor = -0.01 }]
+dauer = { art = "dauerhaft" }
+
+[[ereignisse.liste]]
+schluessel = "E35"
+name = "Vertrauensverlust nach Dreher"
+wirkung = [{ ziel = "D15", faktor = -0.01 }]
+dauer = { art = "dauerhaft" }
+
+# ---------------------------------------------------------------------------
+# GDD 14 – 20 Defekte
+# ---------------------------------------------------------------------------
+[defekte]
+# Alle aktiven Defekte zusammen senken den Fahrzeugzustand um hoechstens 50 %
+max_gesamtmalus = 0.50
+# Reparatur kostet nur Geld (Stufe x Liga-Faktor) und wirkt sofort
+reparatur_waehrung = "G"
+reparatur_sofort = true
+# Ohne Reparatur bleibt der Malus ueber die Rennen bestehen
+malus_bleibt = true
+
+[[defekte.liste]]
+schluessel = "X1"
+name = "Zuendaussetzer"
+wirkung = [{ ziel = "F1", faktor = -0.025 }]
+kostenstufe = 1
+
+[[defekte.liste]]
+schluessel = "X2"
+name = "Leistungsverlust Ansaugtrakt"
+wirkung = [{ ziel = "F1", faktor = -0.04 }]
+kostenstufe = 2
+
+[[defekte.liste]]
+schluessel = "X3"
+name = "Kupplung schleift"
+wirkung = [{ ziel = "F3", faktor = -0.03 }]
+kostenstufe = 1
+
+[[defekte.liste]]
+schluessel = "X4"
+name = "Schaltprobleme"
+wirkung = [{ ziel = "F3", faktor = -0.05 }]
+kostenstufe = 2
+
+[[defekte.liste]]
+schluessel = "X5"
+name = "Antriebswelle"
+wirkung = [{ ziel = "F2", faktor = -0.03 }]
+kostenstufe = 2
+
+[[defekte.liste]]
+schluessel = "X6"
+name = "Differenzial"
+wirkung = [{ ziel = "F12", faktor = -0.04 }]
+kostenstufe = 2
+
+[[defekte.liste]]
+schluessel = "X7"
+name = "Bremsscheibe verzogen"
+wirkung = [{ ziel = "F8", faktor = -0.03 }]
+kostenstufe = 1
+
+[[defekte.liste]]
+schluessel = "X8"
+name = "Bremskuehlung verstopft"
+wirkung = [{ ziel = "F8", faktor = -0.02 }]
+kostenstufe = 1
+
+[[defekte.liste]]
+schluessel = "X9"
+name = "Frontfluegel beschaedigt"
+wirkung = [{ ziel = "F5", faktor = -0.04 }]
+kostenstufe = 2
+
+[[defekte.liste]]
+schluessel = "X10"
+name = "Unterboden beschaedigt"
+wirkung = [{ ziel = "F5", faktor = -0.025 }, { ziel = "F6", faktor = -0.015 }]
+kostenstufe = 3
+
+[[defekte.liste]]
+schluessel = "X11"
+name = "Heckfluegel lose"
+wirkung = [{ ziel = "F6", faktor = -0.025 }]
+kostenstufe = 1
+
+[[defekte.liste]]
+schluessel = "X12"
+name = "Stossdaempfer"
+wirkung = [{ ziel = "F7", faktor = -0.035 }]
+kostenstufe = 2
+
+[[defekte.liste]]
+schluessel = "X13"
+name = "Aufhaengung verbogen"
+wirkung = [{ ziel = "F7", faktor = -0.05 }]
+kostenstufe = 3
+
+[[defekte.liste]]
+schluessel = "X14"
+name = "Lenkungsspiel"
+wirkung = [{ ziel = "F13", faktor = -0.04 }]
+kostenstufe = 2
+
+[[defekte.liste]]
+schluessel = "X15"
+name = "Kuehlerleck"
+wirkung = [{ ziel = "F16", faktor = -0.05 }]
+kostenstufe = 2
+
+[[defekte.liste]]
+schluessel = "X16"
+name = "Elektronikfehler"
+wirkung = [{ ziel = "F15", faktor = -0.04 }]
+kostenstufe = 2
+
+[[defekte.liste]]
+schluessel = "X17"
+name = "Radlager"
+wirkung = [{ ziel = "F9", faktor = -0.025 }]
+kostenstufe = 1
+
+[[defekte.liste]]
+schluessel = "X18"
+name = "Motor ueberhitzt"
+wirkung = [{ ziel = "F1", faktor = -0.02 }, { ziel = "F16", faktor = -0.025 }]
+kostenstufe = 3
+
+[[defekte.liste]]
+schluessel = "X19"
+name = "Getriebeoelverlust"
+wirkung = [{ ziel = "F3", faktor = -0.02 }, { ziel = "F14", faktor = -0.025 }]
+kostenstufe = 2
+
+[[defekte.liste]]
+schluessel = "X20"
+name = "Karosserieschaden"
+wirkung = [{ ziel = "F6", faktor = -0.02 }, { ziel = "F11", faktor = -0.01 }]
+kostenstufe = 1
+
+# ---------------------------------------------------------------------------
+# GDD 4 – Reifen (nur Verschleiss, Boxenstopps spaeter)
+# ---------------------------------------------------------------------------
+[reifen]
+verschleiss_aktiv = true
+boxenstopps = false
+kraftstoff = false
+# Verschleiss senkt das Tempo und erhoeht die Fehlerquote
+wirkt_auf = ["tempo", "fehlerquote"]
+
+# ---------------------------------------------------------------------------
+# GDD 15 – Technik
+# ---------------------------------------------------------------------------
+[technik]
+spielstand_format = "sqlite"
+konfigurationsformat = "toml"
+debug_ansicht = true
+massensimulation = true
+seed_eingabe = true
+
+# ---------------------------------------------------------------------------
+# Im GDD nicht festgelegt – bewusst leer, bis entschieden
+# ---------------------------------------------------------------------------
+[offen]
+# Jeder Eintrag beschreibt eine Luecke im GDD. Der Code darf sie nicht selbst
+# fuellen; die Konfiguration meldet sie beim Laden als Hinweis.
+preisgeld_interpolation = "GDD 10: 'Zwischenligen werden interpoliert' - Verfahren (linear/logarithmisch) nicht genannt."
+preisgeld_anteile_p4_bis_p29 = "GDD 10: nur P1/P2/P3/P30 genannt, 'danach fallend' - Kurve fuer P4 bis P29 nicht genannt."
+startgeld = "GDD 10: 'Startgeld fuer jeden Teilnehmer' - Hoehe nicht genannt."
+erfahrung_grundbetrag = "GDD 10: Grundbetrag je Session, Platzierungsbonus und Ueberholbonus - Hoehen nicht genannt."
+wetter_erfahrung_je_km = "GDD 10: Verdienst je gefahrenem km im Wetter - Hoehe nicht genannt."
+wetterprofil_je_strecke = "GDD 3/16: 'Wetter je Strecke gewichtet, ueber die Saison schwankend' - Gewichte je Strecke nicht genannt."
+k0_je_faehigkeit = "GDD 9: 'je Faehigkeit ist ein eigener K0-Faktor moeglich' - Faktoren nicht genannt; bis dahin 1,0."
+fehlerwahrscheinlichkeit_basis = "GDD 4: Fehlerwahrscheinlichkeit aus den Eigenschaften - Basisrate und Zeitverlust nicht genannt."
+unfall_wahrscheinlichkeit = "GDD 4: 'sehr selten' - Basisrate und Verteilung ein/beide Autos nicht genannt."
+defekt_wahrscheinlichkeit = "GDD 4: 'selten, aber haeufiger als Unfaelle' - Basisrate nicht genannt."
+reparatur_liga_faktor = "GDD 14: Reparaturkosten = Stufe x Liga-Faktor - Liga-Faktor nicht genannt."
+reifenverschleiss_kurve = "GDD 4: Verschleiss senkt Tempo und erhoeht Fehlerquote - Verlauf nicht genannt."
+ueberholen_erfolgsformel = "GDD 4: Erfolgschance aus Ueberholen/Verteidigen, Streckenfaktor und Tempovorteil - Formel nicht genannt."
+ueberholschwierigkeit_formel = "GDD 3: 'Ueberholschwierigkeit (aus Geradenanteil)' - Formel nicht genannt."
+reifenverschleiss_faktor_strecke = "GDD 3: Kennwert je Strecke - Herleitung nicht genannt."
+streckennaesse_verzoegerung = "GDD 7: 'Streckennaesse folgt dem Wetter verzoegert (Vorschlag)' - Verzoegerung nicht genannt."
+ermuedung_kurve = "GDD 8: Bereich 'Er Ermuedung' - Wirkung auf das Tempo nicht genannt."
+ereignis_geldbetraege = "GDD 14: E4/E7/E14 'einmalig Geld', E9/E16 'einmalig Erfahrung' - Betraege nicht genannt."
+sponsor_betraege = "GDD 10: Grundbetrag und Praemien je Angebot - Hoehen nicht genannt."

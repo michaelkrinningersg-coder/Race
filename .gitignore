@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Werkzeuge
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Spielstaende
+*.sqlite
+*.sqlite3
+spielstand/

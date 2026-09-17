@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rennmanager"
+version = "0.1.0"
+description = "Motorsport-Manager mit sichtbarer Rennsimulation"
+requires-python = ">=3.11"
+dependencies = [
+    "PySide6>=6.6",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+entwicklung = [
+    "pytest>=8.0",
+    "pytest-qt>=4.4",
+    "ruff>=0.5",
+    "pyinstaller>=6.6",
+]
+
+[project.gui-scripts]
+rennmanager = "rennmanager.ui.anwendung:starte"
+
+[tool.setuptools.packages.find]
+include = ["rennmanager*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+qt_api = "pyside6"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# Die Oberflaechen-Tests greifen bewusst auf innere Felder des Fensters zu.
+"tests/*" = ["SLF001"]

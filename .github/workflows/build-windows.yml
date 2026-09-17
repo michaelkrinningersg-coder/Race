@@ -1,0 +1,68 @@
+name: Windows-Build
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  exe:
+    name: Rennmanager.exe bauen
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Abhaengigkeiten installieren
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[entwicklung]"
+
+      - name: Tests vor dem Build
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: pytest
+
+      - name: PyInstaller
+        run: pyinstaller --clean --noconfirm rennmanager.spec
+
+      - name: Findet die .exe ihre Konfiguration?
+        # Der Pruefmodus laedt die mitgepackte Konfiguration und beendet sich;
+        # ein Fehler im Bundle faellt damit schon im Build auf.
+        shell: pwsh
+        run: |
+          $ausgabe = & "dist\Rennmanager.exe" --pruefe 2>&1 | Out-String
+          Write-Host $ausgabe
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Die .exe konnte ihre Konfiguration nicht laden (Code $LASTEXITCODE)."
+            exit 1
+          }
+
+      - name: Startet die Oberflaeche?
+        # Die Anwendung wird ohne Bildschirm gestartet und nach kurzer Zeit
+        # beendet; ein Absturz beim Start faellt damit im Build auf.
+        env:
+          QT_QPA_PLATFORM: offscreen
+        shell: pwsh
+        run: |
+          $prozess = Start-Process -FilePath "dist\Rennmanager.exe" -PassThru
+          Start-Sleep -Seconds 20
+          if ($prozess.HasExited) {
+            Write-Error "Die .exe hat sich mit Code $($prozess.ExitCode) beendet."
+            exit 1
+          }
+          Stop-Process -Id $prozess.Id -Force
+          Write-Host "Die Oberflaeche laeuft."
+
+      - name: .exe als Artefakt hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: Rennmanager-windows
+          path: dist/Rennmanager.exe
+          if-no-files-found: error

@@ -1,0 +1,112 @@
+# Rennmanager – Hersteller (GDD 12)
+#
+# 20 reale Autohersteller, nur Name und Farbe, kein Leistungsbonus.
+# Diese Datei ist bewusst ausgelagert, damit die Namen bei einer
+# Veroeffentlichung austauschbar sind (Markenrecht).
+#
+# HINWEIS: Das GDD nennt die Zahl 20, aber weder die konkreten Hersteller
+# noch deren Farben. Die folgende Liste ist ein Platzhalter und muss
+# bestaetigt oder ersetzt werden.
+
+schema_version = 1
+bestaetigt = false
+
+[[hersteller]]
+schluessel = "H01"
+name = "Alfa Romeo"
+farbe = "#A21C25"
+
+[[hersteller]]
+schluessel = "H02"
+name = "Alpine"
+farbe = "#0055A4"
+
+[[hersteller]]
+schluessel = "H03"
+name = "Aston Martin"
+farbe = "#00594F"
+
+[[hersteller]]
+schluessel = "H04"
+name = "Audi"
+farbe = "#BB0A30"
+
+[[hersteller]]
+schluessel = "H05"
+name = "BMW"
+farbe = "#0066B1"
+
+[[hersteller]]
+schluessel = "H06"
+name = "Bugatti"
+farbe = "#0E4C92"
+
+[[hersteller]]
+schluessel = "H07"
+name = "Cadillac"
+farbe = "#5B2C45"
+
+[[hersteller]]
+schluessel = "H08"
+name = "Chevrolet"
+farbe = "#D1B161"
+
+[[hersteller]]
+schluessel = "H09"
+name = "Ferrari"
+farbe = "#DC0000"
+
+[[hersteller]]
+schluessel = "H10"
+name = "Ford"
+farbe = "#003478"
+
+[[hersteller]]
+schluessel = "H11"
+name = "Honda"
+farbe = "#CC0000"
+
+[[hersteller]]
+schluessel = "H12"
+name = "Jaguar"
+farbe = "#1F4E37"
+
+[[hersteller]]
+schluessel = "H13"
+name = "Lamborghini"
+farbe = "#DDB321"
+
+[[hersteller]]
+schluessel = "H14"
+name = "Lotus"
+farbe = "#0B5E2E"
+
+[[hersteller]]
+schluessel = "H15"
+name = "Maserati"
+farbe = "#0C2340"
+
+[[hersteller]]
+schluessel = "H16"
+name = "McLaren"
+farbe = "#FF8000"
+
+[[hersteller]]
+schluessel = "H17"
+name = "Mercedes-Benz"
+farbe = "#00A19B"
+
+[[hersteller]]
+schluessel = "H18"
+name = "Peugeot"
+farbe = "#1C3F94"
+
+[[hersteller]]
+schluessel = "H19"
+name = "Porsche"
+farbe = "#B12B28"
+
+[[hersteller]]
+schluessel = "H20"
+name = "Toyota"
+farbe = "#EB0A1E"
