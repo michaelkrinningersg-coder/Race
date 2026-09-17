@@ -366,6 +366,15 @@ liga.kilometer_je_fahrer[401]    # {"trocken": 92.8, "heiss": 3.8}
 Sie stehen fuer alle 600 Fahrer bereit, gebucht wird davon nur der
 Spieler: Die KI hat weder Konto noch Werkstatt (GDD 12).
 
+### Woraus die Erfolgschance beim Ueberholen kommt
+
+Der Wirkungsbereich ``du`` aus GDD 8 traegt sechs Eigenschaften: F8
+Bremsanlage, D7 Geraden, D8 Bremsen (je Gewicht 1), D10 Ueberholen und D11
+Verteidigen (je 3) und D15 Nervenstaerke (1). ``erfolgschance`` rechnet
+mit dem ganzen Bereich - vorher standen dort allein D10 und D11, die
+uebrigen vier wurden berechnet und von nichts gelesen. Damit hat jeder der
+elf Bereiche der Matrix eine Wirkung.
+
 ### Warum Ueberholmanoever nicht gleich Vorbeigaenge sind
 
 ``ueberholmanoever`` zaehlt **Positionsgewinne je Runde**: Wer lag zu

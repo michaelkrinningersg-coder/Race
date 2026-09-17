@@ -443,3 +443,38 @@ def test_die_gewinne_zaehlen_je_auto(k, zandvoort, mittel) -> None:
     assert all(wert >= 0 for wert in verlauf.positionsgewinne)
     # Mehr Plaetze als Gegner kann niemand je Runde gewinnen.
     assert max(verlauf.positionsgewinne) <= (len(feld) - 1) * 5
+
+
+# --- Duellstaerke: der Bereich du aus GDD 8 (Punkt 55) --------------------
+def mit_wert(k, schluessel: str, wert: int, grund: int = 50_000) -> ka.Auto:
+    werte = {f.schluessel: grund for f in k.faehigkeiten}
+    werte[schluessel] = wert
+    return ka.Auto("TST", "Test", werte)
+
+
+def test_die_ganze_duellzeile_wirkt(k, mittel) -> None:
+    """GDD 8: Der Bereich du traegt sechs Eigenschaften, nicht zwei.
+
+    F8, D7, D8 und D15 wurden vorher berechnet, aber von nichts gelesen.
+    """
+    gegner = ka.gleichverteilt(k, 50_000)
+    grund = rn.erfolgschance(k, ka.gleichverteilt(k, 50_000), gegner, 5.0, 1.0)
+    for schluessel in ("F8", "D7", "D8", "D15"):
+        stark = rn.erfolgschance(k, mit_wert(k, schluessel, 100_000), gegner, 5.0, 1.0)
+        assert stark > grund, f"{schluessel} wirkt nicht im Duell"
+
+
+def test_ueberholen_und_verteidigen_wiegen_am_schwersten(k) -> None:
+    """GDD 8 gibt D10 und D11 je 3 von 10 - mehr als allen anderen."""
+    gegner = ka.gleichverteilt(k, 50_000)
+    grund = rn.erfolgschance(k, ka.gleichverteilt(k, 50_000), gegner, 5.0, 1.0)
+    ueberholen = rn.erfolgschance(k, mit_wert(k, "D10", 100_000), gegner, 5.0, 1.0)
+    bremsen = rn.erfolgschance(k, mit_wert(k, "D8", 100_000), gegner, 5.0, 1.0)
+    assert ueberholen > bremsen > grund
+
+
+def test_ein_starker_verteidiger_senkt_die_chance(k) -> None:
+    angreifer = ka.gleichverteilt(k, 50_000)
+    schwach = rn.erfolgschance(k, angreifer, mit_wert(k, "D11", 0), 5.0, 1.0)
+    stark = rn.erfolgschance(k, angreifer, mit_wert(k, "D11", 100_000), 5.0, 1.0)
+    assert stark < schwach

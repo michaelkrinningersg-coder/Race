@@ -40,6 +40,9 @@ from rennmanager.kern.zufall import Seedquelle
 if TYPE_CHECKING:  # pragma: no cover
     from rennmanager.konfiguration import Konfiguration
 
+# Wirkungsbereich aus GDD 8, der das Duell traegt (Punkt 55).
+BEREICH_DUELL = "du"
+
 
 @dataclass(frozen=True)
 class Teilnehmer:
@@ -211,12 +214,21 @@ def erfolgschance(
     Entscheidung zu Punkt 3: logistische Form. Sie bleibt auch dann
     sinnvoll, wenn beide Fahrer bei 0 stehen - was laut GDD 1 der
     Ausgangszustand ist.
+
+    Das Koennen kommt aus dem Wirkungsbereich ``du`` der Matrix aus GDD 8
+    (Punkt 55). Vorher standen dort allein D10 und D11; die uebrigen vier
+    Eigenschaften der Zeile - F8 Bremsanlage, D7 Geraden, D8 Bremsen und
+    D15 Nervenstaerke - wurden berechnet, aber von nichts gelesen. Innerhalb
+    des Bereichs wiegen D10 und D11 mit je 3 von 10 weiterhin am
+    schwersten, wie GDD 8 es vorgibt.
     """
     einstellung = konfiguration.wert("ueberholen", "erfolg")
     skala = konfiguration.wert("skala", "maximum")
     mindestvorteil = konfiguration.wert("ueberholen", "min_tempovorteil_kmh")
 
-    koennen = angreifer.wert("D10") - verteidiger.wert("D11")
+    koennen = bereichswert(konfiguration, angreifer, BEREICH_DUELL) - bereichswert(
+        konfiguration, verteidiger, BEREICH_DUELL
+    )
     argument = einstellung["gewicht_koennen"] * koennen / skala + einstellung[
         "gewicht_tempo"
     ] * (tempovorteil_kmh - mindestvorteil) / einstellung["tempo_bezug_kmh"]

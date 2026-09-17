@@ -1302,3 +1302,37 @@ je Runde *einen* Überholversuch zu („wer nicht vorbeikommt, hängt fest"),
 die volle Simulation einen an jeder Überholzone — im Schnitt sechs je
 Strecke. Ihn anzugleichen wäre Schritt B; er würde die Ergebnisse aller
 19 KI-Ligen verändern und ist deshalb nicht gebaut.
+
+---
+
+## Nachtrag: die Duellstärke wird wirksam
+
+### 55. Woraus die Erfolgschance beim Überholen kommt
+
+GDD 8 gibt dem Wirkungsbereich `du` sechs Eigenschaften: F8 Bremsanlage,
+D7 Geraden, D8 Bremsen (je Gewicht 1), D10 Überholen und D11 Verteidigen
+(je 3) sowie D15 Nervenstärke (1). Gelesen wurden bisher nur D10 und D11;
+die übrigen vier wurden berechnet und von nichts benutzt. `du` war damit
+der letzte Bereich der Matrix ohne Wirkung — `er` ist seit Punkt 48 scharf.
+
+**Umgesetzt:** `erfolgschance` rechnet mit
+`bereichswert(angreifer, "du") − bereichswert(verteidiger, "du")` statt mit
+`D10(angreifer) − D11(verteidiger)`. D10 und D11 wiegen innerhalb des
+Bereichs weiter am schwersten, wie GDD 8 es vorgibt.
+
+**Gemessen und noch offen:** Ein Bereichswert ist ein gewichtetes Mittel
+und streut deshalb schmaler als ein Einzelwert. Die Streuung des
+Könnens-Terms über alle Paarungen einer Liga:
+
+| Liga | alt (D10 − D11) | neu (du − du) | Verhältnis |
+| --- | --- | --- | --- |
+| 10 | 9.760 | 5.789 | 1,69 |
+| 1 | 16.287 | 10.163 | 1,60 |
+| 20 | 72 | 68 | 1,05 |
+
+Das Können entscheidet damit **weniger** über ein Überholmanöver als
+vorher, das Tempo mehr. `[ueberholen.erfolg] gewicht_koennen` steht bei
+4,0 und wurde laut eigenem Kommentar „in Schritt 4 an einer
+Massensimulation nachgezogen" — also gegen den alten Term. Um dieselbe
+Wirkung zu halten, müsste er auf rund **6,6** steigen. Das ist eine
+Balancing-Entscheidung und wartet auf den Auftraggeber.
