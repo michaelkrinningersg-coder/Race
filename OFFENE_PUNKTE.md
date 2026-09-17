@@ -1334,5 +1334,11 @@ Das Können entscheidet damit **weniger** über ein Überholmanöver als
 vorher, das Tempo mehr. `[ueberholen.erfolg] gewicht_koennen` steht bei
 4,0 und wurde laut eigenem Kommentar „in Schritt 4 an einer
 Massensimulation nachgezogen" — also gegen den alten Term. Um dieselbe
-Wirkung zu halten, müsste er auf rund **6,6** steigen. Das ist eine
-Balancing-Entscheidung und wartet auf den Auftraggeber.
+Wirkung zu halten, müsste er auf rund 6,6 steigen.
+
+| | Variante |
+| --- | --- |
+| **A** | `gewicht_koennen` bleibt bei 4,0 — das Tempo entscheidet mehr |
+| **B** | auf 6,6 anheben — die Wirkung des Könnens bleibt wie vorher |
+
+**Entscheidung: A** (vom Auftraggeber gewählt). Der Wert bleibt bei 4,0.

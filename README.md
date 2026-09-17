@@ -175,6 +175,43 @@ mit der Einzelrunde aus Schritt 3 ueberein, auf 30 Millisekunden genau. Ein
 Test haelt das fest: Ein Auto allein auf der Strecke muss im Rennen so
 schnell sein wie in der Einzelrunde.
 
+### Was die Rennanzeige zeigt
+
+Vier Dinge stehen neben der Streckenansicht, alle aus dem fertigen
+`Rennverlauf` gelesen (GDD 15: die Anzeige rechnet nicht mit):
+
+* **Rangliste** mit Rueckstand zur Spitze *und* Intervall zum Vordermann.
+  Das Intervall rechnet mit dem Tempo des Vordermanns, der Rueckstand mit
+  dem des Fuehrenden - beide Bezuege sind der jeweils richtige, aber weil
+  zwei Autos an verschiedenen Streckenpunkten verschieden schnell sind,
+  summieren sich die Intervalle **nicht** genau zum Rueckstand. Gemessen:
+  fuenf Intervalle 11,6 s, Rueckstand des sechsten Autos 9,0 s. Nur beim
+  Zweiten stimmen beide Zahlen ueberein, weil dort Vordermann und
+  Fuehrender dasselbe Auto sind.
+* **Reifenzustand als Balken** statt als Prozentzahl - im Zeitraffer
+  schneller zu lesen. Die Farbe kommt aus der Statuspalette (gut, Warnung,
+  kritisch), nicht aus einer Serienpalette: Der Balken sagt "kritisch",
+  nicht "Auto Nummer drei".
+* **Zwischenfall-Ticker**: Fehler, Unfaelle und Defekte bis zur laufenden
+  Rennzeit, neueste zuerst.
+* **Rueckstandsdiagramm** als zweiter Reiter neben der Strecke.
+
+#### Warum das Diagramm nur zwei farbige Linien hat
+
+Bei 30 Linien traegt Farbe keine Identitaet mehr - benachbarte Toene sind
+nicht auseinanderzuhalten, fuer Farbenblinde erst gar nicht. Das Feld
+liegt deshalb als duenne graue Linien im Hintergrund; hervorgehoben und
+am Linienende direkt beschriftet sind nur zwei: das Auto des Spielers und
+das in der Rangliste gewaehlte. Gezeichnet wird mit `QPainter` - PySide6
+bringt `QtCharts` nicht mit, und eine zusaetzliche Abhaengigkeit muesste
+in die .exe.
+
+Die Achse skaliert nicht nach Ausgefallenen und Ueberrundeten: GDD 4 kennt
+fuer sie keinen Zeitrueckstand, sondern "+n Rd.", und ihre Kurve bleibt
+beim letzten gueltigen Wert stehen. Dass ein Feld weit auseinanderliegt,
+bleibt dagegen sichtbar - in Liga 20 reicht die Ligastaerke von 0 bis 157,
+und das letzte Auto liegt dort gemessen 328 s hinter dem Sieger.
+
 ## Wetter und Zufall
 
 `rennmanager.kern.wetter` wuerfelt je Session eine Lage, die 0- bis 3-mal

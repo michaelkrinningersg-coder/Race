@@ -242,6 +242,56 @@ def erfolgschance(
     )
 
 
+def rueckstand_in_sekunden(verlauf: Rennverlauf) -> tuple[np.ndarray, np.ndarray]:
+    """Echter Zeitrueckstand jedes Autos auf den Fuehrenden.
+
+    Nicht der Abstand in Metern geteilt durch irgendein Tempo: Gemessen
+    wird, wann ein Auto den Punkt erreicht hat, an dem der Fuehrende gerade
+    ist. Das ist derselbe Rueckstand, den die Seitenleiste zeigt, nur ueber
+    die ganze Renndauer.
+
+        rueckstand_i(t) = t_i(d_fuehrend(t)) - t
+
+    Ein Auto erreicht die Stelle, an der der Fuehrende gerade ist, spaeter
+    als dieser - der Rueckstand ist also die Zeit, die es noch braucht.
+
+    Weil die Distanz jedes Autos monoton waechst, laesst sich ``t_i`` durch
+    Umkehrung der Distanzkurve bestimmen.
+
+    :return: Zeitachse in Sekunden und Rueckstaende der Form
+        ``(Bilder, Autos)``
+    """
+    distanz = verlauf.distanz_m
+    alle_zeiten = verlauf.zeitpunkte_ms / 1000.0
+    vorne_gesamt = distanz.max(axis=1)
+
+    # Gezeichnet wird nur bis zur Ankunft des Siegers - danach stehen die
+    # Autos nach und nach still. Zum Nachschlagen dient aber der ganze
+    # Verlauf: Die uebrigen fahren bis zu ihrer eigenen Zielueberfahrt
+    # weiter und erreichen die Stelle des Siegers tatsaechlich. So wird
+    # nichts extrapoliert.
+    siegerzeit = verlauf.ergebnisse[0].zeit_ms / 1000.0
+    bis = int(np.searchsorted(alle_zeiten, siegerzeit, "right"))
+    zeiten = alle_zeiten[:bis]
+    vorne = vorne_gesamt[:bis]
+
+    rueckstand = np.empty((len(zeiten), verlauf.anzahl))
+    for i in range(verlauf.anzahl):
+        eigene = distanz[:, i]
+        werte = np.interp(vorne, eigene, alle_zeiten) - zeiten
+
+        # Ein ueberrundetes Auto erreicht die Endstelle des Siegers nie.
+        # Dort ist ein Zeitrueckstand nicht mehr definiert - laut GDD 4
+        # heisst es dann "+1 Rd.". Statt einen Randwert zu zeichnen, bleibt
+        # die Linie beim letzten gueltigen Wert stehen.
+        gueltig = vorne <= eigene[-1]
+        if not gueltig.all():
+            letzter = int(np.flatnonzero(gueltig)[-1]) if gueltig.any() else 0
+            werte[letzter + 1 :] = werte[letzter]
+        rueckstand[:, i] = werte
+    return zeiten, rueckstand
+
+
 # ---------------------------------------------------------------------------
 # Simulation
 # ---------------------------------------------------------------------------

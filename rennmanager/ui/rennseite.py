@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSpinBox,
     QSplitter,
+    QTabWidget,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -40,11 +41,22 @@ from rennmanager.kern.zeit import (
 )
 from rennmanager.kern.zufall import Seedquelle
 from rennmanager.konfiguration import Konfiguration
+from rennmanager.ui.rueckstandsansicht import Rueckstandsansicht
 from rennmanager.ui.streckenansicht import Streckenansicht
+from rennmanager.ui.tabellen import Balkenzeichner
 
 # Der Zeitraffer vervielfacht die Rennzeit je Takt, nicht die Zahl der
 # Takte - die Anzeige bleibt damit gleich fluessig, egal wie schnell
 # gerafft wird.
+
+# Spalten der Rangliste.
+SPALTE_INTERVALL = 4
+SPALTE_REIFEN = 5
+SPALTE_STATUS = 6
+# So viele Zwischenfaelle stehen im Ticker; aeltere rollen heraus.
+TICKER_ZEILEN = 12
+# Platz fuer den Reifenbalken samt Prozentzahl daneben.
+BREITE_REIFEN = 96
 
 
 class Rennseite(QWidget):
@@ -70,6 +82,10 @@ class Rennseite(QWidget):
         self._laeuft = False
 
         self._ansicht = Streckenansicht()
+        # Punkt 2: Das Rueckstandsdiagramm liegt als zweiter Reiter neben
+        # der Streckenansicht - beide zeigen denselben Verlauf, einmal
+        # raeumlich und einmal ueber die Zeit.
+        self._rueckstand = Rueckstandsansicht()
         self._takt_ms = konfiguration.wert("zeitraffer", "takt_ms")
         self._uhr = QTimer(self)
         self._uhr.setInterval(self._takt_ms)
@@ -79,8 +95,12 @@ class Rennseite(QWidget):
         spalte.addLayout(self._baue_steuerung())
         spalte.addLayout(self._baue_wiedergabe())
 
+        self._blaetter = QTabWidget()
+        self._blaetter.addTab(self._ansicht, "Strecke")
+        self._blaetter.addTab(self._rueckstand, "Rueckstand")
+
         teiler = QSplitter(Qt.Horizontal)
-        teiler.addWidget(self._ansicht)
+        teiler.addWidget(self._blaetter)
         teiler.addWidget(self._baue_seitenleiste())
         teiler.setStretchFactor(0, 3)
         teiler.setStretchFactor(1, 2)
@@ -174,10 +194,20 @@ class Rennseite(QWidget):
         # GDD 4: Positionen, Gesamtzeit des Fuehrenden, Rueckstand der uebrigen
         self._rangliste = QTreeWidget()
         self._rangliste.setHeaderLabels(
-            ["Pos", "Auto", "Rd", "Zeit / Rueckstand", "Reifen", "Status"]
+            ["Pos", "Auto", "Rd", "Zeit / Rueckstand", "Intervall", "Reifen", "Status"]
         )
         self._rangliste.setRootIsDecorated(False)
         self._rangliste.setAlternatingRowColors(True)
+        # Punkt 3: Der Reifenzustand als Balken - im Zeitraffer schneller
+        # zu lesen als eine Prozentzahl.
+        self._rangliste.setItemDelegateForColumn(
+            SPALTE_REIFEN, Balkenzeichner(self._rangliste)
+        )
+        # Der Balken braucht Platz; auf Inhaltsbreite blieben ihm die
+        # sechs Pixel, die "42 %" uebrig laesst.
+        self._rangliste.setColumnWidth(SPALTE_REIFEN, BREITE_REIFEN)
+        # Wer in der Rangliste gewaehlt ist, tritt im Diagramm hervor.
+        self._rangliste.currentItemChanged.connect(self._auswahl_geaendert)
         kasten = QGroupBox("Rangliste")
         kasten_spalte = QVBoxLayout(kasten)
         kasten_spalte.addWidget(self._rangliste)
@@ -194,6 +224,16 @@ class Rennseite(QWidget):
         monitor_spalte = QVBoxLayout(monitorkasten)
         monitor_spalte.addWidget(self._monitor)
         spalte.addWidget(monitorkasten, stretch=2)
+
+        # Punkt 4: Fehler, Unfaelle und Defekte laufen mit, neueste zuerst.
+        self._ticker = QTreeWidget()
+        self._ticker.setHeaderLabels(["Zeit", "Rd", "Auto", "Was"])
+        self._ticker.setRootIsDecorated(False)
+        self._ticker.setAlternatingRowColors(True)
+        self._tickerkasten = QGroupBox("Zwischenfaelle")
+        ticker_spalte = QVBoxLayout(self._tickerkasten)
+        ticker_spalte.addWidget(self._ticker)
+        spalte.addWidget(self._tickerkasten, stretch=2)
         return seite
 
     # -- Rennen berechnen --------------------------------------------------
@@ -286,6 +326,8 @@ class Rennseite(QWidget):
             self._starten.setText("Rennen berechnen")
 
         self._ansicht.zeige(strecke)
+        self._rueckstand.zeige(self._verlauf)
+        self._auswahl_geaendert(None)
         self._fortschritt.setRange(0, max(self._verlauf.dauer_ms, 1))
         for knopf in (self._abspielen, self._zurueck, self._sofort):
             knopf.setEnabled(True)
@@ -376,6 +418,8 @@ class Rennseite(QWidget):
         )
         self._fuelle_rangliste(verlauf, reihenfolge, distanzen, zeit)
         self._fuelle_monitor(verlauf, reihenfolge)
+        self._fuelle_ticker(verlauf, zeit)
+        self._rueckstand.setze_marke(zeit)
 
     def _fuelle_rangliste(
         self, verlauf: Rennverlauf, reihenfolge: list[int], distanzen, zeit: float
@@ -418,14 +462,20 @@ class Rennseite(QWidget):
                     teilnehmer.kuerzel,
                     str(runde),
                     text,
+                    self._intervall(verlauf, reihenfolge, distanzen, zeit, platz),
                     f"{reifen[i]:.0%}",
                     status,
                 ],
             )
             zeile.setForeground(1, QColor(teilnehmer.farbe))
+            zeile.setData(0, Qt.UserRole, i)
+            zeile.setData(SPALTE_REIFEN, Balkenzeichner.ANTEILSROLLE, float(reifen[i]))
+            # Die Zahl rechts, der Balken links - sonst liegen sie
+            # uebereinander.
+            zeile.setTextAlignment(SPALTE_REIFEN, Qt.AlignRight | Qt.AlignVCenter)
             if bisher:
                 zeile.setToolTip(
-                    5,
+                    SPALTE_STATUS,
                     "\n".join(f"Runde {z.runde}: {z.beschreibung}" for z in bisher),
                 )
             if raus[i]:
@@ -437,7 +487,44 @@ class Rennseite(QWidget):
                 for spalte in range(4):
                     zeile.setFont(spalte, schrift)
         for spalte in range(self._rangliste.columnCount()):
-            self._rangliste.resizeColumnToContents(spalte)
+            if spalte != SPALTE_REIFEN:
+                self._rangliste.resizeColumnToContents(spalte)
+
+    def _intervall(
+        self,
+        verlauf: Rennverlauf,
+        reihenfolge: list[int],
+        distanzen,
+        zeit: float,
+        platz: int,
+    ) -> str:
+        """Abstand zum Auto direkt davor, in Sekunden (Punkt 1).
+
+        Der Rueckstand daneben zaehlt zur Spitze; das Intervall sagt, wie
+        weit der naechste Gegner entfernt ist - die Zahl, an der im Rennen
+        haengt, ob ein Ueberholmanoever ueberhaupt in Reichweite ist.
+
+        Gerechnet wird mit dem Tempo des *Vordermanns*: Das Intervall ist
+        die Zeit, die es braucht, um dort zu sein, wo er gerade ist. Der
+        Rueckstand zur Spitze rechnet entsprechend mit dem Tempo des
+        Fuehrenden. Beide Bezuege sind der jeweils richtige - aber weil
+        zwei Autos an verschiedenen Streckenpunkten verschieden schnell
+        sind, summieren sich die Intervalle **nicht** genau zum
+        Rueckstand. Gemessen lagen fuenf Intervalle bei 11,6 s, der
+        Rueckstand des sechsten Autos bei 9,0 s. Dasselbe gilt fuer echte
+        Zeitmonitore; nur beim Zweiten stimmen beide Zahlen ueberein, weil
+        dort Vordermann und Fuehrender dasselbe Auto sind.
+        """
+        if platz <= 1:
+            return "-"
+        vorne = reihenfolge[platz - 2]
+        hinten = reihenfolge[platz - 1]
+        abstand = float(distanzen[vorne]) - float(distanzen[hinten])
+        laenge = verlauf.strecke.laenge_m
+        if abstand >= laenge:
+            return formatiere_runden_rueckstand(int(abstand // laenge))
+        tempo = self._tempo_naeherung(verlauf, vorne, zeit)
+        return formatiere_rueckstand(int(abstand / max(tempo, 1e-6) * 1000))
 
     @staticmethod
     def _status(zwischenfaelle, ausgefallen: bool) -> str:
@@ -480,7 +567,54 @@ class Rennseite(QWidget):
         for spalte in range(7):
             self._monitor.resizeColumnToContents(spalte)
 
+    def _fuelle_ticker(self, verlauf: Rennverlauf, zeit: float) -> None:
+        """Zwischenfaelle bis zur laufenden Rennzeit, neueste zuerst (Punkt 4)."""
+        bisher = [z for z in verlauf.zwischenfaelle if z.zeit_ms <= zeit]
+        self._tickerkasten.setTitle(f"Zwischenfaelle ({len(bisher)})")
+        self._ticker.clear()
+        for z in sorted(bisher, key=lambda z: -z.zeit_ms)[:TICKER_ZEILEN]:
+            teilnehmer = verlauf.teilnehmer[z.teilnehmer]
+            zeile = QTreeWidgetItem(
+                self._ticker,
+                [
+                    formatiere_dauer(z.zeit_ms),
+                    str(z.runde),
+                    teilnehmer.kuerzel,
+                    z.beschreibung,
+                ],
+            )
+            zeile.setForeground(2, QColor(teilnehmer.farbe))
+            zeile.setData(0, Qt.UserRole, int(z.zeit_ms))
+        for spalte in range(self._ticker.columnCount()):
+            self._ticker.resizeColumnToContents(spalte)
+
+    def _auswahl_geaendert(self, jetzt, _davor=None) -> None:
+        """Hebt Spieler und gewaehltes Auto im Diagramm hervor (Punkt 2)."""
+        if self._verlauf is None:
+            return
+        hervor = [
+            i
+            for i, teilnehmer in enumerate(self._verlauf.teilnehmer)
+            if teilnehmer.ist_spieler
+        ]
+        gewaehlt = jetzt.data(0, Qt.UserRole) if jetzt is not None else None
+        if gewaehlt is not None and gewaehlt not in hervor:
+            hervor.append(int(gewaehlt))
+        self._rueckstand.hebe_hervor(hervor)
+
     # -- Zugriff fuer Tests -------------------------------------------------
+    @property
+    def rueckstandsansicht(self) -> Rueckstandsansicht:
+        return self._rueckstand
+
+    @property
+    def ticker(self) -> QTreeWidget:
+        return self._ticker
+
+    @property
+    def rangliste(self) -> QTreeWidget:
+        return self._rangliste
+
     @property
     def verlauf(self) -> Rennverlauf | None:
         return self._verlauf
