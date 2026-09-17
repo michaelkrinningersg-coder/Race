@@ -245,6 +245,28 @@ class Karriere:
             faktoren[ziel] = faktoren.get(ziel, 1.0) * faktor
         return faktoren
 
+    def rennauto(self, vorlage, session: str = kern_ereignis.RENNEN):
+        """Das Auto des Spielers, wie es in dieser Session faehrt.
+
+        GDD 1 laesst den Spieler bei 0 anfangen und sich entwickeln; GDD 14
+        laesst Ereignisse und Defekte an den Werten ziehen. Beides steht in
+        der Karriere, nicht in der Welt - dieses Auto bringt es ins Rennen.
+
+        :param vorlage: das Auto aus der Welt. Kuerzel und Name kommen von
+            dort: Die Seitenleiste im Rennen zeigt sie (GDD 4), die
+            Karriere kennt sie nicht.
+        """
+        from rennmanager.kern.auto import Auto
+
+        werte = self.fahrwerte(session)
+        matrix = {f.schluessel for f in self.konfiguration.faehigkeiten}
+        return Auto(
+            kuerzel=vorlage.kuerzel,
+            name=vorlage.name,
+            werte={s: w for s, w in werte.items() if s in matrix},
+            wetterwerte={s: w for s, w in werte.items() if s not in matrix},
+        )
+
     def fahrwerte(self, session: str = kern_ereignis.RENNEN) -> dict[str, int]:
         """Die Werte, mit denen gefahren wird - Ereignisse und Defekte drin."""
         faktoren = self.faktoren(session)

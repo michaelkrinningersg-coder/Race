@@ -44,11 +44,15 @@ class Qualifyingseite(QWidget):
         self,
         konfiguration: Konfiguration,
         welt: Welt,
+        karriere=None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._konfiguration = konfiguration
         self._welt = welt
+        # Die entwickelten Werte des Spielers stehen in der Karriere, nicht
+        # in der Welt (GDD 1 und 14); ohne sie faehrt er hier mit Nullen.
+        self._karriere = karriere
         self._strecken: dict[str, kern_strecke.Strecke] = {}
         self._session: Qualifying | None = None
 
@@ -148,12 +152,23 @@ class Qualifyingseite(QWidget):
             self._strecken[name] = kern_strecke.lade(self._konfiguration, name)
         return self._strecken[name]
 
+    def _spielerautos(self, liga: int) -> dict:
+        """Das Auto des Spielers, wenn er in dieser Liga faehrt (GDD 1, 14)."""
+        if self._karriere is None or self._karriere.liga != liga:
+            return {}
+        nummer = self._karriere.fahrernummer
+        return {nummer: self._karriere.rennauto(self._welt.fahrer[nummer].auto)}
+
     def _fahre(self) -> None:
         self._starten.setEnabled(False)
         self._starten.setText("Faehrt ...")
         try:
             strecke = self._lade_strecke(self._auswahl.currentData())
-            feld = kern_welt.starterfeld(self._welt, self._liga.currentData())
+            feld = kern_welt.starterfeld(
+                self._welt,
+                self._liga.currentData(),
+                autos=self._spielerautos(self._liga.currentData()),
+            )
             self._session = kern_qualifying.fahre(
                 self._konfiguration, strecke, feld, Seedquelle(self._seed.value())
             )

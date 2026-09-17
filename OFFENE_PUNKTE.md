@@ -2,7 +2,7 @@
 
 Das GDD nennt an vielen Stellen eine Mechanik, ohne sie zu beziffern.
 Dieses Dokument listet jede solche Lücke, drei Varianten und die getroffene
-Entscheidung. **Stand 2026-09-17: alle 39 Punkte entschieden.**
+Entscheidung. **Stand 2026-09-17: alle 41 Punkte entschieden.**
 
 Die entschiedenen Werte stehen in `konfiguration/balancing.toml`; der
 Abschnitt `[offen]` dort ist leer. Jede Entscheidung lässt sich ändern,
@@ -145,6 +145,13 @@ Gebraucht ab = der Umsetzungsschritt, der den Wert braucht. Die
 | 37 | Profil über die Wirkungsbereiche | **±30 % je Bereich zusätzlich zu GDD 12** | 10 |
 | 38 | Lerntempo je Fahrer | **±60 %, fest über die Karriere** | 10 |
 | 39 | Streckenkenntnis der KI | **fest, einmal gesetzt, ±80 %** | 10 |
+
+### Editor
+
+| Nr. | Punkt | Varianten | Ab |
+| --- | --- | --- | --- |
+| 40 | Sichtbarkeit des Editors | **eigener Reiter** · Schalter im Menü · Startoption | 10 |
+| 41 | Umfang des Editors | Werte und Kenntnis · **zusätzlich Stammdaten** · auch Liga und Team | 10 |
 
 ---
 
@@ -982,3 +989,46 @@ der Fahrer vor Karrierebeginn dort gefahren ist, und streut deshalb breit
 Monza: 152 bis 614 Runden, also 0,23 % bis 0,92 % Tempobonus; derselbe
 Fahrer kennt eine Strecke mit 620 Runden und eine andere mit 73. Sobald
 `[ki] entwicklung` auf `true` steht, lernt die KI wieder mit.
+
+---
+
+## Nachtrag: beim Editor entschieden
+
+### 40. Sichtbarkeit des Editors
+
+**GDD 15** nennt unter den Balancing-Werkzeugen eine „Debug-Ansicht", sagt
+aber nicht, wie erreichbar sie sein soll. Ein Editor kann jede Balance
+kippen.
+
+| | Variante | |
+| --- | --- | --- |
+| **A** | Eigener Reiter | Direkt erreichbar, leicht zu testen |
+| **B** | Schalter im Menü | Standardmäßig versteckt |
+| **C** | Startoption `--editor` | Am weitesten weg vom normalen Spiel |
+
+**Entscheidung: A** (vom Auftraggeber gewählt).
+
+### 41. Umfang des Editors
+
+**Entschieden:** Die 32 Einzelwerte, die sechs Fähigkeiten neben der
+Matrix, die Streckenkenntnis je Strecke **und die Stammdaten** (Vorname,
+Nachname, Land, Geburtstag).
+
+**Nicht änderbar bleiben Liga und Team.** Ein Wechsel dort spränge die
+Ligastärken aus GDD 9 — jede Liga hat feste Kontrollwerte — und die
+Teamgrößen aus GDD 12, wo jedes der 150 Teams genau vier Autos hat. Wer
+das will, braucht eine eigene Mechanik mit Gegenbuchung, wie sie der Auf-
+und Abstieg schon hat.
+
+### Dabei behoben: Die Entwicklung erreichte das Rennen nicht
+
+Beim Bau des Editors kam heraus, dass `Karriere.werte` und
+`welt.spieler.auto.werte` nie zusammengeführt wurden. Der Spieler kaufte
+Upgrades, fuhr aber weiter mit Nullen; ebenso blieben Ereignisse und
+Defekte aus GDD 14 wirkungslos, obwohl `fahrwerte()` sie korrekt
+ausrechnete. Der Kernloop aus GDD 1 war damit seit Schritt 8 ohne Wirkung.
+
+**Behoben** über dieselbe Naht, die der Editor braucht:
+`starterfeld(..., autos=...)` ersetzt einzelne Autos, ohne die Reihenfolge
+des Feldes zu verschieben. Qualifying und Rennen bekommen ein eigenes
+Feld, weil E12 nur im Qualifying wirkt.

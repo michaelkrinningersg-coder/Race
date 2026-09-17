@@ -809,3 +809,145 @@ def test_geladener_stand_laesst_sich_weiterfahren(
     # Die Punkte aus dem geladenen Rennen sind noch da.
     spieler = zweites.welt.spieler
     assert zweites.saisonseite.lauf.tabelle(spieler.liga).eintraege[spieler.nummer].rennen == 2
+
+
+# --- Editor ---------------------------------------------------------------
+def test_editor_zeigt_alle_werte_des_fahrers(qtbot, konfig: kf.Konfiguration) -> None:
+    """GDD 15 nennt eine Debug-Ansicht unter den Balancing-Werkzeugen."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.editorseite
+
+    erwartet = {f.schluessel for f in konfig.faehigkeiten} | set(konfig.zusatzfaehigkeiten)
+    assert set(seite.felder) == erwartet
+    assert set(seite.kenntnisfelder) == {e["name"] for e in konfig.strecken}
+
+    # Der geladene Fahrer steht mit seinen echten Werten in den Feldern.
+    zeile = seite.liste.currentItem()
+    fahrer = fenster.welt.fahrer[zeile.data(0, Qt.UserRole)]
+    if not fahrer.ist_spieler:
+        assert seite.felder["F1"].value() == fahrer.auto.wert("F1")
+        assert seite.felder["regenfahren"].value() == fahrer.auto.wetterwert("regenfahren")
+
+
+def test_editor_sucht_nach_namen(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.editorseite
+
+    seite.liga_auswahl.setCurrentIndex(0)  # alle Ligen
+    ziel = fenster.welt.fahrer[100]
+    seite.suche.setText(ziel.nachname)
+    namen = {
+        seite.liste.topLevelItem(i).text(2) for i in range(seite.liste.topLevelItemCount())
+    }
+    assert ziel.name in namen
+    assert seite.liste.topLevelItemCount() < len(fenster.welt.fahrer)
+
+
+def test_editor_aendert_werte_dauerhaft(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.editorseite
+
+    # Einen KI-Fahrer waehlen, damit die Karriere nicht mitspielt.
+    seite.liga_auswahl.setCurrentIndex(1)
+    zeile = seite.liste.topLevelItem(0)
+    seite.liste.setCurrentItem(zeile)
+    nummer = zeile.data(0, Qt.UserRole)
+    assert not fenster.welt.fahrer[nummer].ist_spieler
+
+    seite.felder["F1"].setValue(77_000)
+    seite.felder["regenfahren"].setValue(66_000)
+    seite.kenntnisfelder["Monza"].setValue(500)
+    seite.knopf_uebernehmen.click()
+
+    assert seite.welt.fahrer[nummer].auto.wert("F1") == 77_000
+    assert seite.welt.fahrer[nummer].auto.wetterwert("regenfahren") == 66_000
+    assert fenster._kenntnis.stand(nummer, "Monza") == 500
+
+
+def test_editor_aendert_stammdaten(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.editorseite
+
+    seite.liga_auswahl.setCurrentIndex(1)
+    zeile = seite.liste.topLevelItem(0)
+    seite.liste.setCurrentItem(zeile)
+    nummer = zeile.data(0, Qt.UserRole)
+
+    vorname, nachname, land, _geburtstag = seite.stammdaten
+    vorname.setText("Ada")
+    nachname.setText("Lovelace")
+    land.setText("Grossbritannien")
+    seite.knopf_uebernehmen.click()
+
+    geaendert = seite.welt.fahrer[nummer]
+    assert geaendert.name == "Ada Lovelace"
+    assert geaendert.land == "Grossbritannien"
+    # Liga, Team und Kuerzel bleiben, wie die Welt sie vergeben hat.
+    assert geaendert.liga == fenster.welt.fahrer[nummer].liga
+    assert geaendert.team == fenster.welt.fahrer[nummer].team
+    assert geaendert.kuerzel == fenster.welt.fahrer[nummer].kuerzel
+
+
+def test_editor_gibt_die_geaenderte_welt_ans_fenster(qtbot, konfig: kf.Konfiguration) -> None:
+    """Beim Verlassen des Reiters uebernimmt das Fenster die neue Welt."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.editorseite
+    reiter = fenster._reiter
+
+    seite.liga_auswahl.setCurrentIndex(1)
+    zeile = seite.liste.topLevelItem(0)
+    seite.liste.setCurrentItem(zeile)
+    nummer = zeile.data(0, Qt.UserRole)
+    seite.felder["F1"].setValue(55_000)
+    seite.knopf_uebernehmen.click()
+    assert fenster.welt.fahrer[nummer].auto.wert("F1") != 55_000
+
+    reiter.setCurrentIndex(reiter.indexOf(fenster.weltseite))
+    assert fenster.welt.fahrer[nummer].auto.wert("F1") == 55_000
+
+
+def test_editor_schreibt_die_werte_des_spielers_in_die_karriere(
+    qtbot, konfig: kf.Konfiguration
+) -> None:
+    """Der Spieler entwickelt sich (GDD 1); seine Werte stehen in der
+    Karriere, nicht in der Welt."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.editorseite
+
+    seite._springe_zum_spieler()
+    spieler = fenster.welt.spieler
+    assert seite.liste.currentItem().data(0, Qt.UserRole) == spieler.nummer
+    assert seite.felder["F1"].value() == fenster.karriereseite.karriere.werte["F1"]
+
+    seite.felder["F1"].setValue(12_345)
+    seite.knopf_uebernehmen.click()
+    assert fenster.karriereseite.karriere.werte["F1"] == 12_345
+
+
+def test_editierte_werte_kommen_im_rennen_an(qtbot, konfig: kf.Konfiguration) -> None:
+    """Der eigentliche Zweck: Was im Editor steht, faehrt auch so."""
+    from rennmanager.kern import welt as kern_welt
+
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.editorseite
+
+    seite.liga_auswahl.setCurrentIndex(1)
+    zeile = seite.liste.topLevelItem(0)
+    seite.liste.setCurrentItem(zeile)
+    nummer = zeile.data(0, Qt.UserRole)
+    for schluessel in seite.felder:
+        seite.felder[schluessel].setValue(90_000)
+    seite.knopf_uebernehmen.click()
+    fenster.uebernimm_welt(seite.welt)
+
+    feld = kern_welt.starterfeld(fenster.welt, fenster.welt.fahrer[nummer].liga)
+    kuerzel = fenster.welt.fahrer[nummer].kuerzel
+    gefahren = next(t for t in feld if t.auto.kuerzel == kuerzel)
+    assert gefahren.auto.wert("F1") == 90_000

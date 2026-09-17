@@ -36,6 +36,7 @@ from rennmanager.kern import streckenkenntnis as kern_streckenkenntnis
 from rennmanager.kern import welt as kern_welt
 from rennmanager.kern.zufall import Seedquelle
 from rennmanager.konfiguration import Konfiguration
+from rennmanager.ui.editorseite import Editorseite
 from rennmanager.ui.karriereseite import Karriereseite
 from rennmanager.ui.karriereseite import beginne as beginne_karriere
 from rennmanager.ui.qualifyingseite import Qualifyingseite
@@ -137,9 +138,11 @@ class Hauptfenster(QMainWindow):
             self._konfiguration, self._karriere, self._seedquelle.zweig("sponsoren")
         )
         self._reiter.addTab(self._sponsorenseite, "Sponsoren")
-        self._qualifyingseite = Qualifyingseite(self._konfiguration, self._welt)
+        self._qualifyingseite = Qualifyingseite(
+            self._konfiguration, self._welt, self._karriere
+        )
         self._reiter.addTab(self._qualifyingseite, "Qualifying")
-        self._rennseite = Rennseite(self._konfiguration, self._welt)
+        self._rennseite = Rennseite(self._konfiguration, self._welt, self._karriere)
         self._reiter.addTab(self._rennseite, "Rennen")
         self._saisonseite = Saisonseite(
             self._konfiguration,
@@ -149,12 +152,18 @@ class Hauptfenster(QMainWindow):
             kenntnis=self._kenntnis,
             tabellen=getattr(self, "_geladene_tabellen", None),
             gefahrene_rennen=getattr(self, "_gefahrene_rennen", 0),
+            karriere=self._karriere,
         )
         self._reiter.addTab(self._saisonseite, "Saison")
         self._statistikseite = Statistikseite(
             self._konfiguration, self._welt, self._statistik
         )
         self._reiter.addTab(self._statistikseite, "Statistik")
+        # GDD 15 nennt eine Debug-Ansicht unter den Balancing-Werkzeugen.
+        self._editorseite = Editorseite(
+            self._konfiguration, self._welt, self._kenntnis, self._karriere
+        )
+        self._reiter.addTab(self._editorseite, "Editor")
         # Die Statistik waechst mit jedem Rennwochenende; beim Aufschlagen
         # der Seite wird sie deshalb neu gelesen.
         self._reiter.currentChanged.connect(self._reiter_gewechselt)
@@ -162,6 +171,13 @@ class Hauptfenster(QMainWindow):
 
     def _reiter_gewechselt(self, stelle: int) -> None:
         seite = self._reiter.widget(stelle)
+        # Der Editor baut die Welt neu auf. Die uebrigen Seiten halten noch
+        # die alte, deshalb wird beim Verlassen des Editors alles neu
+        # aufgebaut - waehrenddessen wuerde sich das Fenster selbst unter
+        # den Fuessen wegziehen.
+        if seite is not self._editorseite and self._editorseite.geaendert:
+            self.uebernimm_welt(self._editorseite.welt)
+            return
         if seite is self._statistikseite:
             self._statistikseite.aktualisiere()
         elif seite is self._sponsorenseite:
@@ -306,6 +322,11 @@ class Hauptfenster(QMainWindow):
         return self._saisonseite
 
     @property
+    def editorseite(self) -> Editorseite:
+        """Die Debug-Ansicht aus GDD 15."""
+        return self._editorseite
+
+    @property
     def sponsorenseite(self) -> Sponsorenseite:
         """Die Seite mit den sechs Sponsorenplaetzen."""
         return self._sponsorenseite
@@ -366,6 +387,18 @@ class Hauptfenster(QMainWindow):
         self.statusBar().showMessage(
             f"Spielstand geladen: {kern_spielstand.beschreibe(pfad)}", 8000
         )
+
+    def uebernimm_welt(self, welt: kern_welt.Welt) -> None:
+        """Uebernimmt eine im Editor geaenderte Welt (GDD 15)."""
+        self._welt = welt
+        # Die Tabellen der laufenden Saison bleiben; nur die Werte aendern
+        # sich, nicht wer in welcher Liga faehrt.
+        self._geladene_tabellen = self._saisonseite.lauf.tabellen
+        self._gefahrene_rennen = self._saisonseite.lauf.gefahren
+        stelle = self._reiter.currentIndex()
+        self.setCentralWidget(self._baue_inhalt())
+        self._reiter.setCurrentIndex(min(stelle, self._reiter.count() - 1))
+        self.statusBar().showMessage("Welt aus dem Editor uebernommen", 8000)
 
     def uebernimm(self, stand: kern_spielstand.Spielstand) -> None:
         """Baut das Fenster auf einen geladenen Spielstand um (GDD 15).

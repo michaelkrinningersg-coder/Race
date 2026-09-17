@@ -4,10 +4,10 @@ Motorsport-Manager mit sichtbarer Rennsimulation. Grundlage ist das
 [Game Design Dokument v1.0](Rennmanager%20%E2%80%93%20Game%20Design%20Dokument%20%28v1.0%29.md);
 die Arbeitsregeln stehen in [CLAUDE.md](CLAUDE.md).
 
-**Stand: Schritt 10 von 10 – Ereignisse, Statistiken, Speichern und Laden.**
-Damit ist die Umsetzungsreihenfolge aus den Arbeitsregeln durchlaufen: Eine
+**Stand: alle zehn Schritte der Umsetzungsreihenfolge sind durch.** Eine
 Karriere laeuft vom 1. Januar bis zum Auf- und Abstieg, mit Ereignissen,
-Rundenrekorden, Historie und Spielstand auf der Platte.
+Rundenrekorden, Historie und Spielstand auf der Platte. Dazu der Editor aus
+GDD 15 (Debug-Ansicht), mit dem sich jeder der 600 Fahrer aendern laesst.
 
 ## Aufbau
 
@@ -17,6 +17,7 @@ Rundenrekorden, Historie und Spielstand auf der Platte.
 | `daten/strecken/` | Die 20 Strecken als CSV (TUMFTM, LGPL-3.0), mitgeliefert |
 | `rennmanager/konfiguration.py` | Laden und Pruefen der Balancing-Dateien |
 | `rennmanager/ui/` | PySide6-Oberflaeche, ein Modul je Reiter |
+| `rennmanager/ui/editorseite.py` | Debug-Ansicht aus GDD 15: Fahrer und Autos aendern |
 | `konfiguration/balancing.toml` | **Alle** Balancing-Werte, zentral an einer Stelle |
 | `konfiguration/hersteller.toml` | Herstellernamen, ausgelagert und austauschbar |
 | `konfiguration/namen.toml` | Fahrer- und Teamnamen, ebenfalls austauschbar |
@@ -447,6 +448,38 @@ GDD 15 es vorgibt - 21 Tabellen, eine Datei je Spielstand, im Menue unter
 Datei. Die Welt wird dabei vollstaendig abgelegt statt aus dem Seed neu
 gewuerfelt: Nach dem ersten Auf- und Abstieg stimmt die gewuerfelte Welt
 nicht mehr mit der gespielten ueberein. Ein Test haelt genau das fest.
+
+## Der Editor
+
+GDD 15 nennt unter den Balancing-Werkzeugen eine Debug-Ansicht. Der Reiter
+**Editor** ist sie: Er aendert je Fahrer alle 32 Einzelwerte aus GDD 5 und
+6, die sechs Faehigkeiten neben der Wirkungsmatrix, die Streckenkenntnis
+je Strecke und die Stammdaten. Unten steht, was die Eingabe bewirkt -
+Bereichsmittel, staerkster und schwaechster Bereich, freie Rundenzeit auf
+einer Probestrecke -, damit man nicht blind schiebt.
+
+Liga und Team bleiben aussen vor: Ein Wechsel dort spraenge die
+Ligastaerken aus GDD 9 und die Teamgroessen aus GDD 12.
+
+```python
+from rennmanager.kern import welt
+
+neu = welt.mit_fahrerwerten(w, {17: (werte, wetterwerte)})
+neu = welt.mit_fahrerdaten(neu, {17: {"vorname": "Ada", "nachname": "Lovelace"}})
+```
+
+### Wo die Werte des Spielers stehen
+
+Nicht in der Welt, sondern in der Karriere: GDD 1 laesst den Spieler bei 0
+anfangen und sich entwickeln, GDD 14 laesst Ereignisse und Defekte an den
+Werten ziehen. Beides fuehrt ``rennmanager.kern.karriere``. Ins Rennen
+kommen sie ueber ``starterfeld(..., autos=...)``, das einzelne Autos
+ersetzt, ohne die Reihenfolge des Feldes zu verschieben - die richtet sich
+weiter nach der Welt, sonst passten die Indizes aus dem Qualifying nicht
+mehr aufs Rennen.
+
+Qualifying und Rennen bekommen dabei ein eigenes Feld, weil E12 aus GDD 14
+nur im Qualifying wirkt.
 
 ## Zwei Regeln, die den Code praegen
 

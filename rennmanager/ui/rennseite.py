@@ -54,11 +54,15 @@ class Rennseite(QWidget):
         self,
         konfiguration: Konfiguration,
         welt: Welt,
+        karriere=None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._konfiguration = konfiguration
         self._welt = welt
+        # Die entwickelten Werte des Spielers stehen in der Karriere, nicht
+        # in der Welt (GDD 1 und 14); ohne sie faehrt er hier mit Nullen.
+        self._karriere = karriere
         self._strecken: dict[str, kern_strecke.Strecke] = {}
         self._verlauf: Rennverlauf | None = None
         self._qualifying = None
@@ -193,6 +197,13 @@ class Rennseite(QWidget):
         return seite
 
     # -- Rennen berechnen --------------------------------------------------
+    def _spielerautos(self, liga: int) -> dict:
+        """Das Auto des Spielers, wenn er in dieser Liga faehrt (GDD 1, 14)."""
+        if self._karriere is None or self._karriere.liga != liga:
+            return {}
+        nummer = self._karriere.fahrernummer
+        return {nummer: self._karriere.rennauto(self._welt.fahrer[nummer].auto)}
+
     def _lade_strecke(self, name: str) -> kern_strecke.Strecke:
         if name not in self._strecken:
             self._strecken[name] = kern_strecke.lade(self._konfiguration, name)
@@ -214,7 +225,9 @@ class Rennseite(QWidget):
 
             # Das Feld kommt aus der Welt: echte Fahrer, Teams und
             # Herstellerzuordnung (GDD 12).
-            feld = kern_welt.starterfeld(self._welt, liga)
+            feld = kern_welt.starterfeld(
+                self._welt, liga, autos=self._spielerautos(liga)
+            )
             if art == "umgedreht":
                 anzahl = len(feld)
                 feld = tuple(

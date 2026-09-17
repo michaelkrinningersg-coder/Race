@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import datetime as dt
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -517,11 +517,80 @@ def _siegpraemie(praemien: dict[int, int], liga: int) -> float:
 # ---------------------------------------------------------------------------
 # Anschluss ans Rennen
 # ---------------------------------------------------------------------------
-def starterfeld(welt: Welt, liga: int, reihenfolge: tuple[int, ...] | None = None):
+def mit_fahrerwerten(
+    welt: Welt, aenderungen: dict[int, tuple[dict[str, int], dict[str, int]]]
+) -> Welt:
+    """Eine neue Welt mit geaenderten Werten einzelner Fahrer.
+
+    ``Welt``, ``Fahrer`` und ``Auto`` sind unveraenderlich; wer Werte
+    aendern will, baut die Welt neu. Genutzt vom Editor (GDD 15:
+    Balancing-Werkzeuge), dessen Aenderungen dauerhaft sind und mit dem
+    Spielstand gespeichert werden.
+
+    :param aenderungen: je Fahrernummer ein Paar aus Werten und
+        Wetterwerten
+    """
+    unbekannt = set(aenderungen) - {f.nummer for f in welt.fahrer}
+    if unbekannt:
+        raise WeltFehler(f"Unbekannte Fahrernummern: {sorted(unbekannt)}")
+
+    fahrer = []
+    for f in welt.fahrer:
+        if f.nummer not in aenderungen:
+            fahrer.append(f)
+            continue
+        werte, wetterwerte = aenderungen[f.nummer]
+        fahrer.append(
+            replace(
+                f,
+                auto=Auto(
+                    kuerzel=f.auto.kuerzel,
+                    name=f.auto.name,
+                    werte=dict(werte),
+                    wetterwerte=dict(wetterwerte),
+                ),
+            )
+        )
+    return Welt(teams=welt.teams, fahrer=tuple(fahrer), seed=welt.seed)
+
+
+def mit_fahrerdaten(welt: Welt, aenderungen: dict[int, dict]) -> Welt:
+    """Eine neue Welt mit geaenderten Stammdaten (Name, Land, Geburtstag).
+
+    Liga und Team bleiben aussen vor: Ein Wechsel dort spraenge die
+    Ligastaerken aus GDD 9 und die Teamgroessen aus GDD 12.
+    """
+    erlaubt = {"vorname", "nachname", "land", "geburtstag"}
+    fahrer = []
+    for f in welt.fahrer:
+        felder = aenderungen.get(f.nummer)
+        if not felder:
+            fahrer.append(f)
+            continue
+        unbekannt = set(felder) - erlaubt
+        if unbekannt:
+            raise WeltFehler(f"Diese Stammdaten lassen sich nicht aendern: {sorted(unbekannt)}")
+        neu = replace(f, **felder)
+        # Der Anzeigename des Autos haengt am Fahrernamen.
+        fahrer.append(replace(neu, auto=replace(neu.auto, name=neu.name)))
+    return Welt(teams=welt.teams, fahrer=tuple(fahrer), seed=welt.seed)
+
+
+def starterfeld(
+    welt: Welt,
+    liga: int,
+    reihenfolge: tuple[int, ...] | None = None,
+    autos: dict[int, Auto] | None = None,
+):
     """Baut aus einer Liga der Welt das Starterfeld fuers Rennen.
 
     :param reihenfolge: Startaufstellung als Fahrernummern, Pole zuerst -
         ueblich das Ergebnis des Qualifyings. Ohne Angabe nach Staerke.
+    :param autos: Autos, die je Fahrernummer an die Stelle des
+        hinterlegten treten. So kommen die entwickelten Werte des
+        Spielers samt Ereignissen und Defekten ins Rennen (GDD 1 und 14),
+        ohne die Reihenfolge des Feldes zu verschieben - die richtet sich
+        weiter nach der Welt.
     """
     from rennmanager.kern.rennen import Teilnehmer
 
@@ -535,9 +604,10 @@ def starterfeld(welt: Welt, liga: int, reihenfolge: tuple[int, ...] | None = Non
             raise WeltFehler(f"Die Aufstellung nennt nicht alle Fahrer der Liga {liga}")
         geordnet = tuple(nach_nummer[nummer] for nummer in reihenfolge)
 
+    ersatz = autos or {}
     return tuple(
         Teilnehmer(
-            auto=f.auto,
+            auto=ersatz.get(f.nummer, f.auto),
             startplatz=platz,
             # GDD 4: Autos als Punkte in Teamfarbe.
             farbe=welt.team_von(f).farbe,

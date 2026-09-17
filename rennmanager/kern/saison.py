@@ -23,6 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
+from rennmanager.kern import ereignis as kern_ereignis
 from rennmanager.kern import qualifying as kern_qualifying
 from rennmanager.kern import reifen as kern_reifen
 from rennmanager.kern import rennen as kern_rennen
@@ -107,9 +108,19 @@ def _ausfuehrlich(
     streckenverschleiss: float,
     meisterschaft: tuple[int, ...] | None,
     kenntnisfaktor: tuple[float, ...],
+    spielerautos: dict[str, dict[int, object]],
 ) -> tuple[Ligawochenende, Rennverlauf, Qualifying]:
-    """Qualifying und Rennen einer Liga in voller Aufloesung (GDD 4)."""
-    feld = kern_welt.starterfeld(welt, liga)
+    """Qualifying und Rennen einer Liga in voller Aufloesung (GDD 4).
+
+    Qualifying und Rennen bekommen ein eigenes Feld: Die entwickelten
+    Werte des Spielers koennen sich zwischen beiden unterscheiden, weil
+    E12 aus GDD 14 nur im Qualifying wirkt. Die *Reihenfolge* des Feldes
+    richtet sich in beiden Faellen nach der Welt, sonst passten die
+    Indizes aus dem Qualifying nicht mehr aufs Rennen.
+    """
+    feld = kern_welt.starterfeld(
+        welt, liga, autos=spielerautos.get(kern_ereignis.QUALIFYING)
+    )
     quali = kern_qualifying.fahre(
         konfiguration,
         strecke,
@@ -119,12 +130,15 @@ def _ausfuehrlich(
         kenntnisfaktor=kenntnisfaktor,
     )
     # Die Startaufstellung kommt aus dem Qualifying; Platz 1 ist die Pole.
+    rennfeld = kern_welt.starterfeld(
+        welt, liga, autos=spielerautos.get(kern_ereignis.RENNEN)
+    )
     gestartet = tuple(
         kern_rennen.Teilnehmer(
-            auto=feld[i].auto,
+            auto=rennfeld[i].auto,
             startplatz=platz,
-            farbe=feld[i].farbe,
-            ist_spieler=feld[i].ist_spieler,
+            farbe=rennfeld[i].farbe,
+            ist_spieler=rennfeld[i].ist_spieler,
         )
         for platz, i in enumerate(quali.aufstellung, start=1)
     )
@@ -195,6 +209,7 @@ def _schnell(
     streckenmittel: float,
     streckenverschleiss: float,
     kenntnisfaktor: tuple[float, ...],
+    spielerautos: dict[str, dict[int, object]],
 ) -> Ligawochenende:
     """Ein Rennwochenende auf Rundenebene (GDD 13).
 
@@ -203,7 +218,9 @@ def _schnell(
     der Lage zu Sessionbeginn, die Reihenfolge der Starts aendert am
     Ergebnis also nichts.
     """
-    feld = kern_welt.starterfeld(welt, liga)
+    feld = kern_welt.starterfeld(
+        welt, liga, autos=spielerautos.get(kern_ereignis.RENNEN)
+    )
     ergebnis = fahre_schnell(
         konfiguration,
         liga,
@@ -245,6 +262,7 @@ class Saisonlauf:
         kenntnis: Streckenkenntnis | None = None,
         tabellen: dict[int, Tabelle] | None = None,
         vorgefahren: int = 0,
+        karriere=None,
     ) -> None:
         self.konfiguration = konfiguration
         self.welt = welt
@@ -279,6 +297,11 @@ class Saisonlauf:
         # (GDD 15). Ihre Wochenenden liegen nicht mehr vor, ihre Punkte
         # stehen aber in den Tabellen.
         self.vorgefahren = vorgefahren
+        # Die Karriere haelt die entwickelten Werte des Spielers samt
+        # Ereignissen und Defekten (GDD 1 und 14). Ohne sie faehrt der
+        # Spieler mit den Werten, die die Welt ihm gegeben hat - bei einem
+        # neuen Spielstand also dauerhaft mit Nullen.
+        self.karriere = karriere
 
     # -- Stand -------------------------------------------------------------
     @property
@@ -309,6 +332,21 @@ class Saisonlauf:
             return self.tabellen[liga]
         except KeyError:
             raise SaisonFehler(f"Liga {liga} gibt es nicht") from None
+
+    def spielerautos(self, liga: int) -> dict[str, dict[int, object]]:
+        """Das Auto des Spielers je Session, wenn er in dieser Liga faehrt.
+
+        Je Session ein eigenes, weil E12 aus GDD 14 nur im Qualifying
+        wirkt.
+        """
+        if self.karriere is None or self.karriere.liga != liga:
+            return {}
+        nummer = self.karriere.fahrernummer
+        vorlage = self.welt.fahrer[nummer].auto
+        return {
+            sitzung: {nummer: self.karriere.rennauto(vorlage, sitzung)}
+            for sitzung in (kern_ereignis.QUALIFYING, kern_ereignis.RENNEN)
+        }
 
     def meisterschaft(self, liga: int, feld: tuple[Fahrer, ...]) -> tuple[int, ...] | None:
         """Meisterschaftsstand als Feldindizes, Erster zuerst (GDD 4).
@@ -371,6 +409,7 @@ class Saisonlauf:
                     verschleiss,
                     self.meisterschaft(liga, fahrer),
                     kenntnis,
+                    self.spielerautos(liga),
                 )
             else:
                 ligen[liga] = _schnell(
@@ -384,6 +423,7 @@ class Saisonlauf:
                     self.streckenmittel,
                     verschleiss,
                     kenntnis,
+                    self.spielerautos(liga),
                 )
             self.tabellen[liga].verbuche(self.konfiguration, ligen[liga].ergebnisse)
             self.statistik.verbuche_wochenende(

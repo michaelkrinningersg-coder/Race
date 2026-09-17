@@ -11,6 +11,8 @@ from __future__ import annotations
 import pytest
 
 from rennmanager import konfiguration as kf
+from rennmanager.kern import ereignis as ev
+from rennmanager.kern import karriere as kk
 from rennmanager.kern import saison as sa
 from rennmanager.kern import strecke as st
 from rennmanager.kern import welt as kw
@@ -238,3 +240,75 @@ def test_ungleicher_wechsel_faellt_auf(welt):
     einzeln = (wt.Wechsel(welt.liga(10)[0].nummer, 10, 9),)
     with pytest.raises(sa.SaisonFehler, match="Liga"):
         sa.wende_wechsel_an(welt, einzeln)
+
+
+# --- Die Werte des Spielers -----------------------------------------------
+def test_die_entwicklung_des_spielers_kommt_im_rennen_an(k, welt, strecken):
+    """GDD 1: Der Spieler faengt bei 0 an und entwickelt sich.
+
+    Seine Werte stehen in der Karriere, gefahren wird aber mit denen der
+    Welt - ohne diese Naht bliebe die ganze Entwicklung aus Schritt 8
+    wirkungslos, der Spieler fuehre dauerhaft mit Nullen.
+    """
+    spieler = welt.spieler
+    karriere = kk.beginne(
+        k, 2026, spieler.liga, fahrernummer=spieler.nummer
+    )
+    karriere.konto = karriere.konto.mit(geld=10_000_000, erfahrung=1_000_000)
+    for _ in range(50):
+        karriere.kaufe("F1")
+    assert karriere.werte["F1"] > 0
+    assert welt.fahrer[spieler.nummer].auto.wert("F1") == 0
+
+    lauf = neuer_lauf(k, welt, strecken)
+    lauf.karriere = karriere
+    autos = lauf.spielerautos(spieler.liga)
+    assert autos[ev.RENNEN][spieler.nummer].wert("F1") == karriere.werte["F1"]
+
+    feld = kw.starterfeld(welt, spieler.liga, autos=autos[ev.RENNEN])
+    eigen = next(t for t in feld if t.ist_spieler)
+    assert eigen.auto.wert("F1") == karriere.werte["F1"]
+    # Kuerzel und Name bleiben - die Seitenleiste im Rennen zeigt sie.
+    assert eigen.auto.kuerzel == spieler.kuerzel
+
+
+def test_ereignisse_und_defekte_wirken_im_rennen(k, welt, strecken):
+    """GDD 14: Sie senken Werte - also muessen sie ins Feld durchschlagen."""
+    spieler = welt.spieler
+    werte = dict.fromkeys([f.schluessel for f in k.faehigkeiten], 20_000)
+    werte.update(dict.fromkeys(k.zusatzfaehigkeiten, 20_000))
+    karriere = kk.beginne(
+        k, 2026, spieler.liga, werte, fahrernummer=spieler.nummer
+    )
+    karriere._loese_ereignis_aus("E1")  # D2 -15 %, D1 -10 %
+    karriere.uebernimm_defekte(("X1",))  # F1 -2,5 %
+
+    lauf = neuer_lauf(k, welt, strecken)
+    lauf.karriere = karriere
+    autos = lauf.spielerautos(spieler.liga)
+    rennen = autos[ev.RENNEN][spieler.nummer]
+    assert rennen.wert("D2") == 17_000
+    assert rennen.wert("F1") == 19_500
+
+
+def test_ein_ereignis_nur_im_qualifying_wirkt_auch_nur_dort(k, welt, strecken):
+    """E12 aus GDD 14 gilt nur im Qualifying - das Rennfeld muss davon
+    unberuehrt bleiben."""
+    spieler = welt.spieler
+    werte = dict.fromkeys([f.schluessel for f in k.faehigkeiten], 20_000)
+    werte.update(dict.fromkeys(k.zusatzfaehigkeiten, 20_000))
+    karriere = kk.beginne(
+        k, 2026, spieler.liga, werte, fahrernummer=spieler.nummer
+    )
+    karriere._loese_ereignis_aus("E12")  # D1 -5 %, nur Qualifying
+
+    lauf = neuer_lauf(k, welt, strecken)
+    lauf.karriere = karriere
+    autos = lauf.spielerautos(spieler.liga)
+    assert autos["qualifying"][spieler.nummer].wert("D1") == 19_000
+    assert autos[ev.RENNEN][spieler.nummer].wert("D1") == 20_000
+
+
+def test_ohne_karriere_faehrt_die_welt_wie_gewuerfelt(k, welt, strecken):
+    lauf = neuer_lauf(k, welt, strecken)
+    assert lauf.spielerautos(welt.spieler.liga) == {}
