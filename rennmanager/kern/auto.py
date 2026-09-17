@@ -60,13 +60,10 @@ def pruefe(konfiguration: Konfiguration, auto: Auto) -> None:
     if unbekannt:
         raise AutoFehler(f"{auto.kuerzel}: unbekannte Faehigkeiten: {sorted(unbekannt)}")
 
-    bekannt = {
-        eintrag["schluessel"] for eintrag in konfiguration.wert("wetter", "faehigkeit", "liste")
-    }
-    unbekanntes_wetter = set(auto.wetterwerte) - bekannt
-    if unbekanntes_wetter:
+    unbekannte_zusatz = set(auto.wetterwerte) - set(konfiguration.zusatzfaehigkeiten)
+    if unbekannte_zusatz:
         raise AutoFehler(
-            f"{auto.kuerzel}: unbekannte Wetterfaehigkeiten: {sorted(unbekanntes_wetter)}"
+            f"{auto.kuerzel}: unbekannte Zusatzfaehigkeiten: {sorted(unbekannte_zusatz)}"
         )
 
     kleinster = konfiguration.wert("skala", "minimum")
@@ -91,10 +88,7 @@ def gleichverteilt(konfiguration: Konfiguration, s: int, kuerzel: str = "REF") -
         kuerzel=kuerzel,
         name=f"Referenz S={s}",
         werte={f.schluessel: int(s) for f in konfiguration.faehigkeiten},
-        wetterwerte={
-            eintrag["schluessel"]: int(s)
-            for eintrag in konfiguration.wert("wetter", "faehigkeit", "liste")
-        },
+        wetterwerte=dict.fromkeys(konfiguration.zusatzfaehigkeiten, int(s)),
     )
 
 

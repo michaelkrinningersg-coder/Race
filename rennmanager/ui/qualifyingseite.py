@@ -25,9 +25,10 @@ from PySide6.QtWidgets import (
 )
 
 from rennmanager.kern import qualifying as kern_qualifying
-from rennmanager.kern import rennen as kern_rennen
 from rennmanager.kern import strecke as kern_strecke
+from rennmanager.kern import welt as kern_welt
 from rennmanager.kern.qualifying import Qualifying
+from rennmanager.kern.welt import Welt
 from rennmanager.kern.zeit import formatiere_dauer, formatiere_rueckstand
 from rennmanager.kern.zufall import Seedquelle
 from rennmanager.konfiguration import Konfiguration
@@ -39,9 +40,15 @@ FARBE_LANGSAMER = QColor("#c62828")
 class Qualifyingseite(QWidget):
     """Faehrt ein Qualifying und zeigt die Live-Einsortierung."""
 
-    def __init__(self, konfiguration: Konfiguration, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        konfiguration: Konfiguration,
+        welt: Welt,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self._konfiguration = konfiguration
+        self._welt = welt
         self._strecken: dict[str, kern_strecke.Strecke] = {}
         self._session: Qualifying | None = None
 
@@ -62,9 +69,10 @@ class Qualifyingseite(QWidget):
             self._auswahl.addItem(f"{eintrag['nummer']:>2}  {eintrag['name']}", eintrag["name"])
 
         self._liga = QComboBox()
-        for kontrolle in self._konfiguration.wert("ligen", "kontrolle"):
-            nummer = kontrolle["liga"]
+        for nummer in range(1, self._konfiguration.wert("ligen", "anzahl") + 1):
             self._liga.addItem(f"Liga {nummer} - {self._konfiguration.ligenname(nummer)}", nummer)
+        spieler = self._welt.spieler
+        self._liga.setCurrentIndex((spieler.liga - 1) if spieler else 0)
 
         self._seed = QSpinBox()
         self._seed.setRange(0, 2**31 - 1)
@@ -145,11 +153,7 @@ class Qualifyingseite(QWidget):
         self._starten.setText("Faehrt ...")
         try:
             strecke = self._lade_strecke(self._auswahl.currentData())
-            feld = kern_rennen.starterfeld(
-                self._konfiguration,
-                self._liga.currentData(),
-                spielerplatz=self._konfiguration.wert("rennen", "autos"),
-            )
+            feld = kern_welt.starterfeld(self._welt, self._liga.currentData())
             self._session = kern_qualifying.fahre(
                 self._konfiguration, strecke, feld, Seedquelle(self._seed.value())
             )

@@ -421,3 +421,71 @@ def test_rennen_kann_aufstellung_aus_dem_qualifying_nehmen(
     kuerzel = seite.qualifying.teilnehmer[pole].kuerzel
     erster = next(t for t in seite.verlauf.teilnehmer if t.startplatz == 1)
     assert erster.kuerzel == kuerzel
+
+
+# -- Weltseite --------------------------------------------------------------
+def test_fenster_erzeugt_eine_welt(qtbot, konfig: kf.Konfiguration) -> None:
+    """GDD 12: 600 Autos, 150 Teams, 20 Ligen."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    welt = fenster.welt
+
+    ligen = konfig.wert("ligen", "anzahl")
+    assert len(welt.fahrer) == ligen * konfig.wert("ligen", "autos_je_liga")
+    assert len(welt.teams) == konfig.wert("teams", "anzahl")
+    assert welt.spieler is not None
+    assert welt.spieler.liga == konfig.wert("ligen", "startliga")
+
+
+def test_weltseite_zeigt_eine_ganze_liga(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.weltseite
+
+    assert seite.liga_auswahl.count() == konfig.wert("ligen", "anzahl")
+    assert seite.liste.topLevelItemCount() == konfig.wert("ligen", "autos_je_liga")
+    # Die Liste beginnt beim staerksten Fahrer.
+    assert seite.liste.topLevelItem(0).text(0) == "1"
+
+
+def test_weltseite_wechselt_die_liga(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.weltseite
+
+    seite.liga_auswahl.setCurrentIndex(0)
+    oben = [seite.liste.topLevelItem(i).text(2) for i in range(5)]
+    seite.liga_auswahl.setCurrentIndex(19)
+    unten = [seite.liste.topLevelItem(i).text(2) for i in range(5)]
+    assert oben != unten
+
+
+def test_weltseite_zeigt_das_profil(qtbot, konfig: kf.Konfiguration) -> None:
+    """Am Profil sieht man Regenspezialisten und Reifenschoner (GDD 12)."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.weltseite
+
+    seite.liste.setCurrentItem(seite.liste.topLevelItem(0))
+    profil = seite._profil
+    bereiche = [profil.topLevelItem(i).text(0) for i in range(profil.topLevelItemCount())]
+    assert len(bereiche) == len(konfig.bereiche) + len(konfig.zusatzfaehigkeiten)
+    assert "Reifenfluesterer".lower() in [b.lower() for b in bereiche]
+
+
+def test_rennen_nutzt_die_fahrer_der_welt(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = _kurzes_rennen(fenster)
+    seite._halte_an()
+
+    liga = seite._liga.currentData()
+    erwartet = {f.kuerzel for f in fenster.welt.liga(liga)}
+    assert {t.kuerzel for t in seite.verlauf.teilnehmer} == erwartet
+
+
+def test_rennen_startet_in_der_liga_des_spielers(qtbot, konfig: kf.Konfiguration) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    assert fenster.rennseite._liga.currentData() == fenster.welt.spieler.liga
+    assert fenster.qualifyingseite._liga.currentData() == fenster.welt.spieler.liga

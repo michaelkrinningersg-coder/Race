@@ -31,7 +31,6 @@ from rennmanager.kern import reifen as kern_reifen
 from rennmanager.kern import wetter as kern_wetter
 from rennmanager.kern import zwischenfall as kern_zwischenfall
 from rennmanager.kern.auto import Auto, bereichswert, gesamtwert
-from rennmanager.kern.reifen import FLUESTERER as REIFENFLUESTERER
 from rennmanager.kern.strecke import Strecke
 from rennmanager.kern.tempo import KMH_JE_MS, geschwindigkeitsprofil, grenzen_aus, leistungsanteil
 from rennmanager.kern.zufall import Seedquelle
@@ -888,9 +887,7 @@ def starterfeld(
 
     # Die zusaetzlichen Fahrereigenschaften ausserhalb der Wirkungsmatrix:
     # die fuenf Wetterfaehigkeiten (GDD 7) und der Reifenfluesterer.
-    zusatz = [
-        eintrag["schluessel"] for eintrag in konfiguration.wert("wetter", "faehigkeit", "liste")
-    ] + [REIFENFLUESTERER]
+    zusatz = list(konfiguration.zusatzfaehigkeiten)
 
     teilnehmer = []
     for nummer in range(1, anzahl + 1):

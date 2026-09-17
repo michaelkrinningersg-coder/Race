@@ -27,12 +27,14 @@ from PySide6.QtWidgets import (
 )
 
 from rennmanager import __version__
+from rennmanager.kern import welt as kern_welt
 from rennmanager.kern.zufall import Seedquelle
 from rennmanager.konfiguration import Konfiguration
 from rennmanager.ui.qualifyingseite import Qualifyingseite
 from rennmanager.ui.rennseite import Rennseite
 from rennmanager.ui.rundenseite import Rundenseite
 from rennmanager.ui.streckenseite import Streckenseite
+from rennmanager.ui.weltseite import Weltseite
 
 # Qt-Spinboxen rechnen mit 32-Bit-Ganzzahlen; der Hauptseed wird in der
 # Oberflaeche deshalb auf diesen Bereich begrenzt.
@@ -46,6 +48,12 @@ class Hauptfenster(QMainWindow):
         super().__init__()
         self._konfiguration = konfiguration
         self._seedquelle = Seedquelle(0)
+        # Eine Welt je Fenster: 600 Autos, 150 Teams, 20 Ligen (GDD 12).
+        self._welt = kern_welt.erzeuge(
+            konfiguration,
+            self._seedquelle.zweig("welt"),
+            spielerliga=konfiguration.wert("ligen", "startliga"),
+        )
 
         self.setWindowTitle(f"Rennmanager {__version__}")
         self.resize(900, 640)
@@ -76,9 +84,11 @@ class Hauptfenster(QMainWindow):
         self._reiter.addTab(self._streckenseite, "Strecke")
         self._rundenseite = Rundenseite(self._konfiguration)
         self._reiter.addTab(self._rundenseite, "Runde")
-        self._qualifyingseite = Qualifyingseite(self._konfiguration)
+        self._weltseite = Weltseite(self._konfiguration, self._welt)
+        self._reiter.addTab(self._weltseite, "Welt")
+        self._qualifyingseite = Qualifyingseite(self._konfiguration, self._welt)
         self._reiter.addTab(self._qualifyingseite, "Qualifying")
-        self._rennseite = Rennseite(self._konfiguration)
+        self._rennseite = Rennseite(self._konfiguration, self._welt)
         self._reiter.addTab(self._rennseite, "Rennen")
         return self._reiter
 
@@ -187,6 +197,15 @@ class Hauptfenster(QMainWindow):
     def rundenseite(self) -> Rundenseite:
         """Die Seite mit Geschwindigkeitsprofil und Rundenzeit."""
         return self._rundenseite
+
+    @property
+    def welt(self) -> kern_welt.Welt:
+        """Die erzeugte Welt dieses Fensters."""
+        return self._welt
+
+    @property
+    def weltseite(self) -> Weltseite:
+        return self._weltseite
 
     @property
     def qualifyingseite(self) -> Qualifyingseite:

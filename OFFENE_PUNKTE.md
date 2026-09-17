@@ -630,3 +630,52 @@ Drei Maßnahmen, gemessen:
 3:00 → 1:47) **plus** 15-Minuten-Fenster und höchstens ein Wechsel. Das
 Wetter bleibt damit spürbar, entscheidet aber nicht mehr das Ergebnis.
 Alle drei Werte stehen in der Konfiguration.
+
+
+---
+
+## Nachtrag: bei Schritt 7 entschieden
+
+### 28. Bildung der Teamnamen
+
+**GDD 12** nennt für Teams die Felder (Name, Herkunftsland, Hersteller,
+Budget, Teamfarbe), nicht aber, wie die 150 Namen entstehen.
+
+| | Variante | |
+| --- | --- | --- |
+| **A** | 150 Namen von Hand in der Konfiguration | Volle Kontrolle, 150 Einträge zu pflegen |
+| **B** | Aus zwei Teilen zusammengesetzt, per Seed | 75 × 10 = 750 mögliche Namen, austauschbar wie die Herstellernamen |
+| **C** | Nach dem Hersteller benannt | Nur 20 Stämme für 150 Teams |
+
+**Entscheidung: B.** Dieselbe Bauweise wie bei den Fahrernamen und aus
+demselben Grund ausgelagert: austauschbar, ohne Handarbeit, und per Seed
+reproduzierbar wie alles andere in GDD 12.
+
+### 29. Teamfarbe neben der Herstellerfarbe
+
+**GDD 12** gibt Hersteller *und* Team je eine Farbe, sagt aber nicht, wie
+sie zusammenhängen. 150 Teams treffen auf 20 Hersteller — nähme man die
+Herstellerfarbe unverändert, führen in einer Liga mehrere Autos in
+derselben Farbe, und GDD 4 verlangt, die Punkte auseinanderhalten zu
+können.
+
+**Entschieden:** Die Teamfarbe leitet sich aus der Herstellerfarbe ab,
+in der Helligkeit verschoben. Die Marke bleibt erkennbar, und in jeder
+Liga kommen mindestens 20 verschiedene Farben auf 30 Autos.
+
+### 30. Altersspanne und Regionenanteil der Fahrer
+
+**GDD 12** nennt ein Geburtsdatum „vorerst ohne Altern" und die Herkunft
+„aus Europa und Nordamerika", ohne Spanne oder Gewichtung.
+
+**Entschieden:** 18 bis 42 Jahre zum Saisonstart, und 10 % der Fahrer aus
+Nordamerika — das entspricht dem Verhältnis der hinterlegten Länder (3 von
+32). Beide Werte stehen in der Konfiguration.
+
+### 31. Ligastärken zwischen den Stützstellen aus GDD 9
+
+Die Kalibriertabelle nennt nur die Ligen 20, 15, 10, 5 und 1. Für die
+übrigen 15 Ligen wird die Stärke über die Tempotabelle bestimmt: Das Tempo
+wächst je Liga um 6,32 km/h, der Wert S ergibt sich durch Umkehren der
+Kalibrierfunktion. Damit liegen alle 20 Ligen auf derselben Kurve, statt
+zwischen den Stützstellen zu springen.

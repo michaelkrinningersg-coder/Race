@@ -29,8 +29,10 @@ from rennmanager.kern import reifen as kern_reifen
 from rennmanager.kern import rennen as kern_rennen
 from rennmanager.kern import strecke as kern_strecke
 from rennmanager.kern import tempo as kern_tempo
+from rennmanager.kern import welt as kern_welt
 from rennmanager.kern import wetter as kern_wetter
 from rennmanager.kern.rennen import Rennverlauf
+from rennmanager.kern.welt import Welt
 from rennmanager.kern.zeit import (
     formatiere_dauer,
     formatiere_rueckstand,
@@ -48,9 +50,15 @@ from rennmanager.ui.streckenansicht import Streckenansicht
 class Rennseite(QWidget):
     """Berechnet ein Rennen und spielt es ab."""
 
-    def __init__(self, konfiguration: Konfiguration, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        konfiguration: Konfiguration,
+        welt: Welt,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self._konfiguration = konfiguration
+        self._welt = welt
         self._strecken: dict[str, kern_strecke.Strecke] = {}
         self._verlauf: Rennverlauf | None = None
         self._qualifying = None
@@ -83,10 +91,10 @@ class Rennseite(QWidget):
             self._auswahl.addItem(f"{eintrag['nummer']:>2}  {eintrag['name']}", eintrag["name"])
 
         self._liga = QComboBox()
-        for zeile_kontrolle in self._konfiguration.wert("ligen", "kontrolle"):
-            nummer = zeile_kontrolle["liga"]
+        for nummer in range(1, self._konfiguration.wert("ligen", "anzahl") + 1):
             self._liga.addItem(f"Liga {nummer} - {self._konfiguration.ligenname(nummer)}", nummer)
-        self._liga.setCurrentIndex(0)
+        spieler = self._welt.spieler
+        self._liga.setCurrentIndex((spieler.liga - 1) if spieler else 0)
 
         self._seed = QSpinBox()
         self._seed.setRange(0, 2**31 - 1)
@@ -202,19 +210,22 @@ class Rennseite(QWidget):
             strecke = self._lade_strecke(self._auswahl.currentData())
             liga = self._liga.currentData()
             art = self._aufstellung.currentData()
-            spielerplatz = self._konfiguration.wert("rennen", "autos")
             haupt = Seedquelle(self._seed.value())
 
-            feld = kern_rennen.starterfeld(
-                self._konfiguration,
-                liga,
-                spielerplatz=spielerplatz,
-                umgedreht=art == "umgedreht",
-                # Mit Seedquelle streuen die Einzelwerte je Auto (GDD 12) -
-                # erst dadurch faehrt nicht jedes Auto die Reifen gleich
-                # schnell ab.
-                seedquelle=haupt.zweig("feld"),
-            )
+            # Das Feld kommt aus der Welt: echte Fahrer, Teams und
+            # Herstellerzuordnung (GDD 12).
+            feld = kern_welt.starterfeld(self._welt, liga)
+            if art == "umgedreht":
+                anzahl = len(feld)
+                feld = tuple(
+                    kern_rennen.Teilnehmer(
+                        auto=t.auto,
+                        startplatz=anzahl + 1 - t.startplatz,
+                        farbe=t.farbe,
+                        ist_spieler=t.ist_spieler,
+                    )
+                    for t in feld
+                )
             if art == "qualifying":
                 # Das Qualifying bestimmt die Startaufstellung (GDD 4).
                 self._qualifying = kern_qualifying.fahre(

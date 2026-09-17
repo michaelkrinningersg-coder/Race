@@ -4,8 +4,8 @@ Motorsport-Manager mit sichtbarer Rennsimulation. Grundlage ist das
 [Game Design Dokument v1.0](Rennmanager%20%E2%80%93%20Game%20Design%20Dokument%20%28v1.0%29.md);
 die Arbeitsregeln stehen in [Claude.md](Claude.md).
 
-**Stand: Schritt 6 von 10 – Fehler, Unfaelle, Defekte, Reifenverschleiss.**
-Ein Rennwochenende laeuft durch; Fahrer, Teams und Ligen folgen in Schritt 7.
+**Stand: Schritt 7 von 10 – Fahrer, Teams, 600 KI-Autos, Ligen.**
+Die Welt steht; Kalender, Upgrades und Einnahmen folgen in Schritt 8.
 
 ## Aufbau
 
@@ -17,6 +17,7 @@ Ein Rennwochenende laeuft durch; Fahrer, Teams und Ligen folgen in Schritt 7.
 | `rennmanager/ui/` | PySide6-Oberflaeche |
 | `konfiguration/balancing.toml` | **Alle** Balancing-Werte, zentral an einer Stelle |
 | `konfiguration/hersteller.toml` | Herstellernamen, ausgelagert und austauschbar |
+| `konfiguration/namen.toml` | Fahrer- und Teamnamen, ebenfalls austauschbar |
 | `werkzeuge/` | Balancing-Werkzeuge, nicht Teil der Auslieferung |
 | `tests/` | Tests fuer Kern, Konfiguration, Oberflaeche und Architektur |
 
@@ -238,6 +239,35 @@ Als Wahrscheinlichkeit je Zeitschritt gelesen fielen bei 50 Schritten je
 Sekunde alle fuenf erlaubten Ausfaelle in der ersten Runde. Die Rate gilt
 deshalb je Sekunde in Reichweite - sonst haengt die Unfallhaeufigkeit an
 der Schrittweite der Simulation statt am Spiel.
+
+## Die Welt
+
+`rennmanager.kern.welt` erzeugt aus einem Seed alles, was eine Karriere
+braucht (GDD 12):
+
+```python
+from rennmanager.kern import welt
+from rennmanager.kern.zufall import Seedquelle
+from rennmanager.konfiguration import lade
+
+k = lade()
+w = welt.erzeuge(k, Seedquelle(4711), spielerliga=20)
+len(w.fahrer)                 # 600 in 20 Ligen zu je 30
+len(w.teams)                  # 150 mit je 4 Autos eines Herstellers
+w.spieler.name                # der Spieler, alle Werte auf 0 (GDD 1)
+w.teamkollegen(w.spieler)     # seine 3 KI-Teamkollegen
+feld = welt.starterfeld(w, liga=10)
+```
+
+Die 4 Autos eines Teams fahren meist in verschiedenen Ligen, wie GDD 12
+es erlaubt. Jedes Auto bekommt ein eigenes Profil: Die Einzelwerte streuen
+um +/- 25 % um die Ligastaerke, es gibt also Regenspezialisten,
+Qualifying-Experten und Reifenschoner.
+
+Ligen ohne Kontrollwert in GDD 9 werden ueber die Tempotabelle bestimmt -
+das Tempo waechst je Liga um 6,32 km/h, der Wert S ergibt sich durch
+Umkehren der Kalibrierfunktion. So liegen alle 20 Ligen auf derselben
+Kurve.
 
 ## Zwei Regeln, die den Code praegen
 

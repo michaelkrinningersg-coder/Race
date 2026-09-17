@@ -1,0 +1,111 @@
+# Rennmanager – Namen fuer Fahrer und Teams (GDD 12)
+#
+# "Fiktive maennliche Vor- und Nachnamen aus Europa und Nordamerika, nicht
+# an echte Rennfahrer angelehnt."
+#
+# Die Listen stehen wie die Herstellernamen ausgelagert, damit sie sich
+# austauschen lassen. Aus 120 Vor- und 200 Nachnamen ergeben sich 24.000
+# Kombinationen - genug fuer die 600 Fahrer einer Welt ohne Wiederholung.
+
+schema_version = 1
+
+[fahrer]
+vornamen = [
+  "Adrian", "Alban", "Alec", "Alois", "Ambros", "Anders", "Anton", "Armin",
+  "Arne", "Arvid", "August", "Balthasar", "Bastian", "Benedikt", "Bernd",
+  "Bjarne", "Boris", "Brendan", "Bruno", "Caspar", "Cedric", "Clemens",
+  "Colin", "Conrad", "Cormac", "Damian", "Declan", "Dennis", "Dietmar",
+  "Dominik", "Duncan", "Eberhard", "Edgar", "Egon", "Eldar", "Emil", "Enno",
+  "Erik", "Ewald", "Fabian", "Falk", "Ferdinand", "Finn", "Florian",
+  "Frederik", "Gaspard", "Gerrit", "Gideon", "Gilles", "Gregor", "Gunnar",
+  "Hagen", "Halvard", "Hendrik", "Hugo", "Ignaz", "Ingmar", "Ivar", "Jarno",
+  "Jasper", "Joris", "Jost", "Julien", "Kai", "Kasimir", "Keenan", "Kenneth",
+  "Kilian", "Konstantin", "Lars", "Laurenz", "Lennart", "Leopold", "Levin",
+  "Linus", "Lorcan", "Lucien", "Ludvig", "Magnus", "Malte", "Marcel",
+  "Marius", "Mathis", "Maurice", "Merlin", "Mikkel", "Milan", "Moritz",
+  "Nevin", "Niklas", "Norbert", "Odin", "Olaf", "Oskar", "Pascal", "Pepijn",
+  "Quentin", "Raimund", "Ragnar", "Remy", "Rene", "Roald", "Rowan", "Rufus",
+  "Sander", "Sebastian", "Severin", "Sigurd", "Silas", "Sinclair", "Steffen",
+  "Sven", "Thibault", "Thorben", "Till", "Torsten", "Ulrich", "Valentin",
+  "Vidar", "Waldemar", "Xaver", "Yannick", "Zeno",
+]
+nachnamen = [
+  "Aalberg", "Achterberg", "Adlerstein", "Ahlgren", "Albrand", "Almqvist",
+  "Ammann", "Andrieux", "Arendt", "Asplund", "Aubertin", "Baldacci",
+  "Bardenhorst", "Bassange", "Beaulieu", "Bechtold", "Behrendt", "Bellamy",
+  "Berghuis", "Bernauer", "Birkheim", "Bjoernson", "Blanchard", "Bockelmann",
+  "Bohnsack", "Bondeau", "Borgstrom", "Bourgeat", "Brackmann", "Brandhorst",
+  "Breitenfeld", "Brennan", "Brockway", "Broekman", "Bruggemann", "Buchholz",
+  "Cadieux", "Calloway", "Carnevale", "Castellane", "Chevalier", "Clairmont",
+  "Cloutier", "Cormier", "Courtenay", "Dahlberg", "Dallmann", "Danneberg",
+  "Delacroix", "Dellwig", "Denecke", "Descamps", "Diederich", "Doernberg",
+  "Dolezal", "Donaghue", "Drexel", "Duclos", "Duvernay", "Eckstein",
+  "Edelmann", "Eichhorst", "Ekdahl", "Elsinger", "Engelbrecht", "Erlandsen",
+  "Eschweiler", "Fahrenkamp", "Falkenrath", "Farnsworth", "Feldkamp",
+  "Fenwick", "Ferrandi", "Fiddler", "Fitzalan", "Flanagan", "Fleischhauer",
+  "Fontanelli", "Forsberg", "Fournier", "Freudenberg", "Gaillard",
+  "Gallagher", "Gassner", "Gauthier", "Gerlinger", "Giraudon", "Goodwin",
+  "Grunewald", "Guillemin", "Haldenby", "Hallstrom", "Hammerschmidt",
+  "Hartwig", "Hauswirth", "Havelock", "Heidrich", "Helmbrecht", "Hennequin",
+  "Hillerman", "Hjalmarsson", "Hochstetter", "Holmberg", "Hufnagel",
+  "Huijsman", "Ingelbrecht", "Isenhart", "Jaeckel", "Janssens", "Jorgensen",
+  "Kaltenbach", "Kelleher", "Kerkhoff", "Kesselring", "Kilbride", "Kinzler",
+  "Klaassen", "Knightley", "Kohlmeier", "Kolberg", "Krahnert", "Kronwall",
+  "Laakkonen", "Lachapelle", "Lamoureux", "Landvogt", "Langendorf",
+  "Larssen", "Lauterbach", "Leclercq", "Lindqvist", "Lohmeyer", "Lundgren",
+  "Maasdorp", "Malinowski", "Marchetti", "Marquardt", "Mattheus",
+  "Meiringen", "Melchior", "Merivale", "Mertens", "Mollenhauer", "Montclair",
+  "Morgenthau", "Mullaney", "Nachtwey", "Nesbitt", "Nieuwenhuis",
+  "Nordhausen", "Oberlander", "Odenkirk", "Olivera", "Ostermann", "Paulsen",
+  "Pelletier", "Petersen", "Pfannkuch", "Piedmont", "Poulsen", "Quintrell",
+  "Radermacher", "Rasmussen", "Rautenberg", "Ravensdale", "Rechsteiner",
+  "Reinholt", "Renaudin", "Rijkaard", "Rinderknecht", "Rochefort",
+  "Rosenlund", "Rothgeber", "Sandoval", "Sattelberg", "Schaffhausen",
+  "Schellenberg", "Schiffbauer", "Schlemmer", "Schoenfeld", "Seewald",
+  "Sellstrom", "Siedlecki", "Sommerfeldt", "Steinmetz", "Stenberg",
+  "Stoffregen", "Sullivant", "Svendsen", "Talbotson", "Terhaar", "Thibodeau",
+  "Thorvaldsen", "Tillmanns", "Trautwein", "Ulvestad", "Vandermeer",
+  "Verheyden", "Vesterlund", "Vogelsang", "Waldheim", "Wendelin",
+  "Westerholt", "Whitlock", "Wiedenbach", "Wollenberg", "Zangerle",
+]
+
+[fahrer.laender]
+# Herkunftslaender aus Europa und Nordamerika (GDD 12)
+europa = [
+  "Deutschland", "Oesterreich", "Schweiz", "Frankreich", "Italien", "Spanien",
+  "Portugal", "Niederlande", "Belgien", "Luxemburg", "Daenemark", "Schweden",
+  "Norwegen", "Finnland", "Island", "Irland", "Grossbritannien", "Polen",
+  "Tschechien", "Slowakei", "Ungarn", "Slowenien", "Kroatien", "Rumaenien",
+  "Bulgarien", "Griechenland", "Estland", "Lettland", "Litauen",
+]
+nordamerika = ["USA", "Kanada", "Mexiko"]
+
+# ---------------------------------------------------------------------------
+# Teamnamen
+#
+# Das GDD nennt fuer Teams nur die Felder (Name, Herkunftsland, Hersteller,
+# Budget, Teamfarbe), nicht die Namensbildung. Entschieden: aus zwei Teilen
+# zusammengesetzt, damit 150 verschiedene Namen ohne Handarbeit entstehen.
+# Begruendung in OFFENE_PUNKTE.md.
+# ---------------------------------------------------------------------------
+[team]
+erste_teile = [
+  "Alpenkamm", "Altmark", "Ardenner", "Baltic", "Bergland", "Blauflug",
+  "Bodensee", "Brandung", "Buchenhain", "Donaustern", "Dornbach", "Eichwald",
+  "Eisenberg", "Elbsturm", "Falkenau", "Feuerstein", "Fjordlicht", "Gletscher",
+  "Granitweg", "Grenzland", "Habichtsberg", "Hafenkante", "Heidefeld",
+  "Hochmoor", "Hornissen", "Inselwind", "Jadeblick", "Kaltenbrunn",
+  "Kiefernhain", "Klippenfels", "Kupferberg", "Lachsbucht", "Lavastrom",
+  "Leuchtturm", "Lindenfeld", "Marschland", "Moorbruch", "Morgenrot",
+  "Nebelhorn", "Nordkap", "Nordwind", "Ostsee", "Polarstern", "Rabenhorst",
+  "Rauhreif", "Rheinfels", "Rosskamp", "Salzgitter", "Sandstrand",
+  "Schilfrohr", "Schneeadler", "Seeadler", "Silberbach", "Sonnenfeld",
+  "Steilhang", "Sternfeld", "Sturmtief", "Taleben", "Tannenberg", "Tiefsee",
+  "Ulmenhof", "Uferlos", "Vogelsang", "Waldkauz", "Wasserfall", "Weissdorn",
+  "Wellenbruch", "Westhafen", "Wetterstein", "Wildbach", "Windroeschen",
+  "Winterhaupt", "Wolkental", "Zederhain", "Zugspitz",
+]
+zweite_teile = [
+  "Racing", "Motorsport", "Rennsport", "Speedworks", "Autosport",
+  "Competition", "Engineering", "Racing Team", "Motors", "Performance",
+]

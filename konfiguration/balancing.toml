@@ -867,11 +867,22 @@ verkleinert_durch = "D12"
 [teams]
 anzahl = 150
 autos_je_team = 4
+# Teamnamen aus zwei Teilen (siehe namen.toml). Das GDD nennt fuer Teams
+# nur die Felder, nicht die Namensbildung; Begruendung in OFFENE_PUNKTE.md.
+namensbildung = "zwei_teile"
+# Budget je Team, nur Anzeige (GDD 10). Es folgt der Siegpraemie der
+# Ligen, in denen die vier Autos des Teams fahren.
+budget_in_siegpraemien = 8.0
+budget_streuung = 0.35
 # Die 4 Autos eines Teams koennen in verschiedenen Ligen fahren
 ligen_gemischt = true
 # Der Spieler faehrt in einem Team mit 3 KI-Fahrern
 ki_teamkollegen = 3
 felder = ["name", "herkunftsland", "hersteller", "budget", "teamfarbe"]
+
+[namen]
+# Fahrer- und Teamnamen stehen ausgelagert, damit sie austauschbar sind.
+datei = "namen.toml"
 
 [hersteller]
 anzahl = 20
@@ -891,6 +902,14 @@ regionen = ["Europa", "Nordamerika"]
 an_echte_fahrer_angelehnt = false
 felder = ["vorname", "nachname", "herkunftsland", "geburtsdatum", "team", "hersteller"]
 altern = false
+# Geburtsjahre der erzeugten Fahrer. Das GDD nennt ein Geburtsdatum
+# "vorerst ohne Altern", aber keine Spanne; gewaehlt ist ein uebliches
+# Rennfahreralter zum Saisonstart.
+alter_min = 18
+alter_max = 42
+# Anteil nordamerikanischer Fahrer. GDD 12 nennt beide Regionen, ohne
+# Gewichtung; gewaehlt nach der Zahl der Laender (3 von 32).
+anteil_nordamerika = 0.1
 
 # ---------------------------------------------------------------------------
 # GDD 13 – Wertung, Auf- und Abstieg
@@ -1452,6 +1471,7 @@ verschleiss_bei_referenz = 0.35
 # Unterschied zu D14 Reifenmanagement: D14 senkt, wie schnell die Reifen
 # abbauen. Der Reifenfluesterer senkt, wie sehr abgebaute Reifen wehtun -
 # er holt aus schlechten Reifen noch Zeit heraus.
+schluessel = "reifenfluesterer"
 name = "Reifenfluesterer"
 waehrung = ["E", "Z"]
 max_daempfung = 0.60

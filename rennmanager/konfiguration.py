@@ -100,6 +100,20 @@ class Konfiguration:
         raise KeyError(f"Unbekannte Faehigkeit: {schluessel}")
 
     @property
+    def zusatzfaehigkeiten(self) -> tuple[str, ...]:
+        """Fahrer-Eigenschaften neben der Wirkungsmatrix.
+
+        Das sind die fuenf Wetterfaehigkeiten aus GDD 7 und der
+        Reifenfluesterer. Sie haben keine Zeile in der Wirkungsmatrix und
+        gehen nicht in den Durchschnitt der Basiseigenschaften ein (GDD 4).
+        """
+        wetter = tuple(
+            eintrag["schluessel"] for eintrag in self.wert("wetter", "faehigkeit", "liste")
+        )
+        weitere = self.wert("reifen", "fluesterer", "schluessel", standard=None)
+        return wetter + ((weitere,) if weitere else ())
+
+    @property
     def bereiche(self) -> tuple[str, ...]:
         return tuple(self.wert("wirkungsmatrix", "bereiche"))
 
