@@ -129,13 +129,22 @@ class Saison:
         )
 
 
-def erstes_rennen(konfiguration: Konfiguration, jahr: int) -> dt.date:
-    """Der erste Sonntag ab dem im Kalender genannten Stichtag (GDD 2)."""
-    stichtag = dt.date(
+def saisonstart(konfiguration: Konfiguration, jahr: int) -> dt.date:
+    """Der Stichtag einer Saison - an ihm wird das Alter gemessen.
+
+    Die Weltseite und die Fahrerkarte nennen sonst zwei verschiedene
+    Alter fuer denselben Fahrer, je nachdem, wo man hinsieht.
+    """
+    return dt.date(
         jahr,
         konfiguration.wert("kalender", "saisonstart_monat"),
         konfiguration.wert("kalender", "saisonstart_tag"),
     )
+
+
+def erstes_rennen(konfiguration: Konfiguration, jahr: int) -> dt.date:
+    """Der erste Sonntag ab dem im Kalender genannten Stichtag (GDD 2)."""
+    stichtag = saisonstart(konfiguration, jahr)
     zielwochentag = konfiguration.wert("kalender", "rennen_wochentag")
     return stichtag + dt.timedelta(days=(zielwochentag - stichtag.weekday()) % 7)
 

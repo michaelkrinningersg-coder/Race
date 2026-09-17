@@ -14,7 +14,7 @@ Drei Ansichten in einer Seite, umschaltbar:
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QComboBox,
@@ -31,6 +31,7 @@ from rennmanager.kern.statistik import Statistik
 from rennmanager.kern.welt import Welt
 from rennmanager.kern.zeit import formatiere_dauer, formatiere_rueckstand
 from rennmanager.konfiguration import Konfiguration
+from rennmanager.ui.tabellen import verbinde_fahrerkarte
 
 REKORDE = "rekorde"
 BESTENLISTE = "bestenliste"
@@ -50,6 +51,9 @@ MERKMALE = (
 
 class Statistikseite(QWidget):
     """Rundenrekorde, Karrierezahlen und Historie."""
+
+    # Doppelklick auf einen Namen: Das Fenster oeffnet die Fahrerkarte.
+    fahrerkarte_gewuenscht = Signal(int)
 
     def __init__(
         self,
@@ -110,6 +114,7 @@ class Statistikseite(QWidget):
         self._tabelle = QTreeWidget()
         self._tabelle.setRootIsDecorated(False)
         self._tabelle.setAlternatingRowColors(True)
+        verbinde_fahrerkarte(self._tabelle, self.fahrerkarte_gewuenscht.emit)
         spalte.addWidget(self._tabelle)
         return self._kasten
 

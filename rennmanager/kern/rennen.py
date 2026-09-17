@@ -46,12 +46,19 @@ BEREICH_DUELL = "du"
 
 @dataclass(frozen=True)
 class Teilnehmer:
-    """Ein Auto am Start, mit Anzeigedaten und Startplatz."""
+    """Ein Auto am Start, mit Anzeigedaten und Startplatz.
+
+    :param nummer: Fahrernummer aus der Welt, damit die Oberflaeche von
+        einer Zeile der Rangliste zum Fahrer zurueckfindet. Die Simulation
+        liest sie nie; ein Feld aus ``starterfeld`` dieses Moduls hat
+        keinen Fahrer dahinter und behaelt die 0.
+    """
 
     auto: Auto
     startplatz: int
     farbe: str
     ist_spieler: bool = False
+    nummer: int = 0
 
     @property
     def kuerzel(self) -> str:

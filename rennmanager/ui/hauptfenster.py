@@ -39,6 +39,7 @@ from rennmanager.kern import welt as kern_welt
 from rennmanager.kern.zufall import Seedquelle
 from rennmanager.konfiguration import Konfiguration
 from rennmanager.ui.editorseite import Editorseite
+from rennmanager.ui.fahrerkarte import Fahrerkarte
 from rennmanager.ui.karriereseite import Karriereseite
 from rennmanager.ui.karriereseite import beginne as beginne_karriere
 from rennmanager.ui.qualifyingseite import Qualifyingseite
@@ -65,6 +66,10 @@ class Hauptfenster(QMainWindow):
         super().__init__()
         self._konfiguration = konfiguration
         self._seedquelle = Seedquelle(0)
+        # Offene Fahrerkarten je Fahrernummer - ein Doppelklick auf
+        # denselben Namen holt die vorhandene nach vorn, ein Neuaufbau des
+        # Fensters schliesst sie.
+        self._karten: dict[int, Fahrerkarte] = {}
         # Eine Welt je Fenster: 600 Autos, 150 Teams, 20 Ligen (GDD 12).
         self._welt = kern_welt.erzeuge(
             konfiguration,
@@ -131,13 +136,17 @@ class Hauptfenster(QMainWindow):
         hilfe.addAction(ueber)
 
     def _baue_inhalt(self) -> QWidget:
+        # Ein Neuaufbau ersetzt die Welt - offene Karten zeigten sonst
+        # Fahrer, die es so nicht mehr gibt (Saisonwechsel, Editor,
+        # geladener Spielstand).
+        self._schliesse_fahrerkarten()
         self._reiter = QTabWidget()
         self._reiter.addTab(self._baue_uebersichtsseite(), "Uebersicht")
         self._streckenseite = Streckenseite(self._konfiguration)
         self._reiter.addTab(self._streckenseite, "Strecke")
         self._rundenseite = Rundenseite(self._konfiguration)
         self._reiter.addTab(self._rundenseite, "Runde")
-        self._weltseite = Weltseite(self._konfiguration, self._welt)
+        self._weltseite = Weltseite(self._konfiguration, self._welt, jahr=self._jahr)
         self._reiter.addTab(self._weltseite, "Welt")
         if getattr(self, "_karriere", None) is None:
             self._karriere = beginne_karriere(
@@ -191,7 +200,58 @@ class Hauptfenster(QMainWindow):
         # Die Statistik waechst mit jedem Rennwochenende; beim Aufschlagen
         # der Seite wird sie deshalb neu gelesen.
         self._reiter.currentChanged.connect(self._reiter_gewechselt)
+        self._verbinde_fahrerkarten()
         return self._reiter
+
+    def _schliesse_fahrerkarten(self) -> None:
+        for karte in getattr(self, "_karten", {}).values():
+            karte.close()
+        self._karten = {}
+
+    def _verbinde_fahrerkarten(self) -> None:
+        """Jede Liste mit Fahrernamen oeffnet dieselbe Karte.
+
+        Die Seiten kennen die Karte nicht - sie melden nur eine
+        Fahrernummer. Das Fenster oeffnet sie, weil nur es Statistik,
+        Streckenkenntnis, Tabelle und Popularitaet zusammen hat.
+        """
+        for seite in (
+            self._weltseite,
+            self._qualifyingseite,
+            self._rennseite,
+            self._saisonseite,
+            self._statistikseite,
+        ):
+            seite.fahrerkarte_gewuenscht.connect(self.oeffne_fahrerkarte)
+
+    def oeffne_fahrerkarte(self, nummer: int) -> Fahrerkarte:
+        """Oeffnet die Karte eines Fahrers - nicht modal, mehrere zugleich.
+
+        Eine schon offene Karte desselben Fahrers wird nach vorn geholt,
+        statt sie ein zweites Mal zu bauen.
+        """
+        offen = self._karten.get(nummer)
+        if offen is not None and offen.isVisible():
+            offen.raise_()
+            offen.activateWindow()
+            return offen
+
+        lauf = self._saisonseite.lauf
+        karte = Fahrerkarte(
+            self._konfiguration,
+            self._welt,
+            nummer,
+            statistik=self._statistik,
+            kenntnis=self._kenntnis,
+            tabelle=lauf.tabelle(self._welt.fahrer[nummer].liga),
+            strecken=lauf.strecken,
+            popularitaet=self._popularitaet,
+            jahr=lauf.jahr,
+            parent=self,
+        )
+        self._karten[nummer] = karte
+        karte.show()
+        return karte
 
     def _reiter_gewechselt(self, stelle: int) -> None:
         seite = self._reiter.widget(stelle)

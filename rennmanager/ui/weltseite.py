@@ -10,7 +10,7 @@ die Stammdaten oder zusaetzlich jeden Einzelwert als eigene Spalte.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -27,10 +27,12 @@ from PySide6.QtWidgets import (
 )
 
 from rennmanager.kern import charakter as kern_charakter
+from rennmanager.kern import kalender as kern_kalender
 from rennmanager.kern import karriere as kern_karriere
 from rennmanager.kern.auto import bereichswerte
 from rennmanager.kern.welt import Welt
 from rennmanager.konfiguration import Konfiguration
+from rennmanager.ui.tabellen import verbinde_fahrerkarte
 
 # Spalten, die unabhaengig von der Eigenschaftsansicht immer stehen.
 STAMMSPALTEN = ("#", "Kuerzel", "Fahrer", "Land", "Alter", "Team", "Hersteller", "Staerke")
@@ -45,12 +47,22 @@ def _zahl(wert: float) -> str:
 class Weltseite(QWidget):
     """Zeigt die 20 Ligen mit ihren 30 Fahrern und die Teams."""
 
+    # Doppelklick auf einen Namen: Das Fenster oeffnet die Fahrerkarte.
+    fahrerkarte_gewuenscht = Signal(int)
+
     def __init__(
-        self, konfiguration: Konfiguration, welt: Welt, parent: QWidget | None = None
+        self,
+        konfiguration: Konfiguration,
+        welt: Welt,
+        jahr: int | None = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._konfiguration = konfiguration
         self._welt = welt
+        # Das Alter wird am Stichtag der laufenden Saison gemessen; ohne
+        # Jahr am Startjahr aus der Konfiguration.
+        self._jahr = jahr
 
         spalte = QVBoxLayout(self)
         spalte.addLayout(self._baue_kopf())
@@ -113,6 +125,7 @@ class Weltseite(QWidget):
         self._liste.setRootIsDecorated(False)
         self._liste.setAlternatingRowColors(True)
         self._liste.currentItemChanged.connect(self._zeige_fahrer)
+        verbinde_fahrerkarte(self._liste, self.fahrerkarte_gewuenscht.emit)
         spalte.addWidget(self._liste)
         return self._listenkasten
 
@@ -220,13 +233,8 @@ class Weltseite(QWidget):
         }
 
     def _saisonstart(self):
-        import datetime as dt
-
-        return dt.date(
-            kern_karriere.startjahr(self._konfiguration),
-            self._konfiguration.wert("kalender", "saisonstart_monat"),
-            self._konfiguration.wert("kalender", "saisonstart_tag"),
-        )
+        jahr = self._jahr or kern_karriere.startjahr(self._konfiguration)
+        return kern_kalender.saisonstart(self._konfiguration, jahr)
 
     def _zeige_fahrer(self, jetzt, _davor=None) -> None:
         self._leere(self._steckbrief)

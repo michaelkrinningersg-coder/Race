@@ -37,6 +37,7 @@ from rennmanager.kern.zeit import formatiere_dauer
 from rennmanager.kern.zufall import Seedquelle
 from rennmanager.konfiguration import Konfiguration
 from rennmanager.ui.punkteansicht import Punkteansicht
+from rennmanager.ui.tabellen import verbinde_fahrerkarte
 
 FARBE_AUFSTIEG = QColor("#2e7d32")
 FARBE_ABSTIEG = QColor("#c62828")
@@ -49,6 +50,8 @@ class Saisonseite(QWidget):
     # uebernehmen. Als Signal, weil die Seite sich sonst waehrend ihres
     # eigenen Klicks selbst abbauen wuerde.
     saison_gewechselt = Signal()
+    # Doppelklick auf einen Namen: Das Fenster oeffnet die Fahrerkarte.
+    fahrerkarte_gewuenscht = Signal(int)
 
     def __init__(
         self,
@@ -175,6 +178,7 @@ class Saisonseite(QWidget):
         self._tabelle.setRootIsDecorated(False)
         self._tabelle.setAlternatingRowColors(True)
         self._tabelle.currentItemChanged.connect(self._auswahl_geaendert)
+        verbinde_fahrerkarte(self._tabelle, self.fahrerkarte_gewuenscht.emit)
         kasten.addWidget(self._tabelle)
         spalte.addWidget(self._tabellenkasten, stretch=3)
 
@@ -199,6 +203,7 @@ class Saisonseite(QWidget):
         self._rennliste.setHeaderLabels(["#", "Fahrer", "Quali", "Punkte"])
         self._rennliste.setRootIsDecorated(False)
         self._rennliste.setAlternatingRowColors(True)
+        verbinde_fahrerkarte(self._rennliste, self.fahrerkarte_gewuenscht.emit)
         rennspalte.addWidget(self._rennliste)
         spalte.addWidget(self._rennkasten, stretch=1)
 
@@ -480,6 +485,7 @@ class Saisonseite(QWidget):
                 ],
             )
             zeile.setForeground(0, QColor(self._welt.team_von(fahrer).farbe))
+            zeile.setData(0, Qt.UserRole, fahrer.nummer)
             if fahrer.ist_spieler:
                 schrift = zeile.font(1)
                 schrift.setBold(True)

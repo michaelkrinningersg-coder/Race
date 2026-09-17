@@ -206,6 +206,7 @@ def _ausfuehrlich(
             startplatz=platz,
             farbe=rennfeld[i].farbe,
             ist_spieler=rennfeld[i].ist_spieler,
+            nummer=rennfeld[i].nummer,
         )
         for platz, i in enumerate(quali.aufstellung, start=1)
     )

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QStyledItemDelegate, QTreeWidgetItem
+from PySide6.QtWidgets import QMenu, QStyledItemDelegate, QTreeWidgetItem
 
 
 class SortierbareZeile(QTreeWidgetItem):
@@ -81,3 +81,41 @@ class Balkenzeichner(QStyledItemDelegate):
             flaeche.x(), flaeche.y(), int(breite * anteil), flaeche.height(), 2, 2
         )
         maler.restore()
+
+
+def fahrernummer(zeile: QTreeWidgetItem) -> int | None:
+    """Die Fahrernummer, die an einer Zeile haengt - Spalte 0, UserRole."""
+    return zeile.data(0, Qt.UserRole)
+
+
+def verbinde_fahrerkarte(liste, oeffne, nummer_von=fahrernummer) -> None:
+    """Doppelklick und Rechtsklick auf eine Zeile oeffnen die Fahrerkarte.
+
+    Der **Einfachklick** bleibt frei: Er waehlt die Zeile aus und steuert
+    damit den Steckbrief der Weltseite und die hervorgehobene Linie im
+    Punkteverlauf. Der Doppelklick kommt oben drauf, und weil man einen
+    Doppelklick nicht sieht, steht dasselbe im Rechtsklick-Menue.
+
+    :param oeffne: bekommt die Fahrernummer
+    :param nummer_von: liest sie aus einer Zeile; ohne Angabe aus
+        Spalte 0 unter ``Qt.UserRole``. Die Rangliste im Rennen fuehrt
+        dort die Startnummer im Feld und braucht deshalb eine eigene.
+    """
+
+    def doppelklick(zeile, _spalte: int = 0) -> None:
+        nummer = nummer_von(zeile)
+        if nummer:
+            oeffne(int(nummer))
+
+    def menue(stelle) -> None:
+        zeile = liste.itemAt(stelle)
+        if zeile is None or not nummer_von(zeile):
+            return
+        klappe = QMenu(liste)
+        eintrag = klappe.addAction("Fahrerkarte oeffnen")
+        if klappe.exec(liste.viewport().mapToGlobal(stelle)) is eintrag:
+            doppelklick(zeile)
+
+    liste.itemDoubleClicked.connect(doppelklick)
+    liste.setContextMenuPolicy(Qt.CustomContextMenu)
+    liste.customContextMenuRequested.connect(menue)

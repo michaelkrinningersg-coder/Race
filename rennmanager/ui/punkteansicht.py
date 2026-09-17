@@ -6,8 +6,10 @@ entschieden war und wann sie kippte.
 
 Wie im Rueckstandsdiagramm gilt **Fokus und Kontext**: Bei 30 Linien
 traegt Farbe keine Identitaet mehr, deshalb liegt das Feld grau im
-Hintergrund und hervorgehoben sind hoechstens zwei - der Spieler und der
-in der Tabelle gewaehlte Fahrer, beide am Linienende beschriftet.
+Hintergrund und hervorgehoben sind hoechstens zwei, am Linienende direkt
+beschriftet. Wer das ist, haengt am Ort: auf der Saisonseite der Spieler
+und der in der Tabelle gewaehlte Fahrer, auf der Fahrerkarte der eine,
+um den es dort geht. Der Hinweis ueber dem Bild sagt es jeweils.
 
 Gezeichnet wird der Verlauf der **laufenden** Saison; er kommt aus
 ``statistik.Statistik.punktestand``. Beim Saisonwechsel wird er geleert,
@@ -41,11 +43,16 @@ RAND_UNTEN = 26
 class Punkteansicht(QWidget):
     """Zeichnet den Punktestand aller Fahrer einer Liga ueber die Saison."""
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    HINWEIS = "Punktestand je Rennwochenende - grau das Feld, farbig Spieler und Auswahl"
+
+    def __init__(self, hinweis: str | None = None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         # Je Fahrer: Kuerzel, Farbe und der aufsummierte Stand je Rennen.
         self._reihen: list[tuple[str, str, tuple[int, ...]]] = []
         self._hervorgehoben: list[int] = []
+        # Wer hervorgehoben ist, haengt am Ort: Auf der Saisonseite sind es
+        # Spieler und Auswahl, auf der Fahrerkarte nur dieser eine Fahrer.
+        self._hinweis = hinweis if hinweis is not None else self.HINWEIS
         self.setMinimumHeight(160)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
@@ -109,11 +116,7 @@ class Punkteansicht(QWidget):
             )
 
         maler.setPen(QPen(TEXT_ZWEITRANGIG))
-        maler.drawText(
-            int(flaeche.left()),
-            int(flaeche.top() - 6),
-            "Punktestand je Rennwochenende - grau das Feld, farbig Spieler und Auswahl",
-        )
+        maler.drawText(int(flaeche.left()), int(flaeche.top() - 6), self._hinweis)
 
     def _punkte(self, flaeche, hoechster: int, stand: tuple[int, ...]):
         """Die Linie eines Fahrers als zwei Listen von Bildpunkten."""

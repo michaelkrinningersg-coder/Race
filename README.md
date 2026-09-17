@@ -327,6 +327,46 @@ das Tempo waechst je Liga um 6,32 km/h, der Wert S ergibt sich durch
 Umkehren der Kalibrierfunktion. So liegen alle 20 Ligen auf derselben
 Kurve.
 
+### Die Fahrerkarte
+
+Ein **Doppelklick** auf einen Fahrernamen - in der Welt, der Saisonwertung,
+dem letzten Rennwochenende, der Renn-Rangliste, dem Zwischenfall-Ticker,
+dem Qualifying oder der Statistik - oeffnet die Karte dieses Fahrers. Ein
+Rechtsklick tut dasselbe ueber ein Menue, weil man einen Doppelklick nicht
+sieht. Der **Einfachklick** bleibt, was er war: Er waehlt die Zeile aus
+und steuert damit den Steckbrief der Weltseite und die hervorgehobene
+Linie im Punkteverlauf.
+
+Die Karte ist ein eigenes, nicht modales Fenster - zwei Fahrer lassen sich
+nebeneinanderlegen, und waehrend ein Rennen laeuft kann sie offen bleiben.
+Fuenf Reiter:
+
+| Reiter | Was darin steht |
+| --- | --- |
+| Steckbrief | Person, Team, Teamkollegen, Staerke und Platz in der Liga, Popularitaet, der Charaktersatz mit Staerken und Schwaechen einzeln |
+| Werte | die 11 Wirkungsbereiche aus GDD 8 als Balken, dann alle 32 Einzelwerte und die 11 Eigenschaften neben der Matrix |
+| Saison | die Zeile der laufenden Saison und der Punkteverlauf der Liga, in dem nur dieser Fahrer farbig ist |
+| Laufbahn | Karrierezahlen ueber alle Saisons, Meisterschaften, Liga je Jahr als Linie, gehaltene Rundenrekorde |
+| Strecken | Streckenkenntnis je Strecke mit Tempogewinn; Heimstrecken hervorgehoben (Punkt 49) |
+
+Sie **rechnet nichts**: Gelesen wird nur, was Welt, Auto, Statistik,
+Streckenkenntnis und Popularitaet ohnehin fuehren, und sie ist rein
+lesend - Werte aendern geht weiter nur ueber den Editor. Fuer alle 600
+Fahrer zeigt sie dasselbe; Konto, Sponsoren und Werkstatt des Spielers
+bleiben auf ihren eigenen Seiten.
+
+#### Warum die Balken gegen den eigenen Hoechstwert messen
+
+Die Skala reicht von 0 bis 100.000, ein Fahrer aus Liga 20 steht bei 150.
+Gegen die Skala waere jeder seiner Balken unsichtbar. Zu sehen ist hier
+ohnehin die **Form** seines Profils, nicht sein Platz auf der Skala -
+deshalb misst jeder Ast gegen seinen eigenen groessten Wert, und die Zahl
+steht daneben. Es ist dieselbe Ueberlegung wie beim Charaktersatz, der
+gegen den eigenen Durchschnitt misst.
+
+Ein Neuaufbau des Fensters - Saisonwechsel, Editor, geladener Spielstand -
+schliesst offene Karten: Die Welt ist danach eine andere.
+
 ### Der Charakter in einem Satz
 
 38 Zahlen sagen alles und zeigen nichts. `rennmanager.kern.charakter`

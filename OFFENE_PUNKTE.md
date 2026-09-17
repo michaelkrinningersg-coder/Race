@@ -1380,3 +1380,43 @@ Renndistanz.**
 | Wie stoppt die KI? | **Ein Fenster mit Streuung** — der eine kommt zu früh, der andere zu spät. Fensterbreite 6 Runden |
 | Zahl der Stopps | **1 bis 3, je nach Mischungswahl; mindestens 1.** Keine Stopps in den ersten und letzten drei Runden |
 | Mischungsregel | **Zwei Mischungen müssen verwendet werden.** Auch zweimal die weichere und dann die härtere ist erlaubt; die Stintlänge folgt der Mischung, die Wahl der KI streut |
+
+---
+
+## Nachtrag: die Fahrerkarte
+
+### 59. Wie die Fahrerkarte aufgeht und was darin steht
+
+Der Auftraggeber wollte eine persönliche Karte je Fahrer, „mit allen
+Details, Charakter und Statistiken, auch gerne über mehrere Tabs
+verteilt". Dazu entschieden:
+
+| Frage | Entscheidung |
+| --- | --- |
+| Öffnen per Einfach- oder Doppelklick? | **Doppelklick** — der Einfachklick ist schon vergeben (Auswahl steuert Steckbrief und Punkteverlauf). Dazu ein Rechtsklick-Menü, weil man einen Doppelklick nicht sieht |
+| Eigenes Fenster oder Reiter? | **Eigenes, nicht modales Fenster** — zwei Fahrer nebeneinander, und während eines Rennens offen zu halten |
+| Wann gebaut? | **Vor Block 3** |
+
+Fünf Reiter: Steckbrief, Werte, Saison, Laufbahn, Strecken.
+
+**Zwei Annahmen**, vom Auftraggeber nicht widersprochen: Die Karte zeigt
+für alle 600 Fahrer dasselbe — Konto, Sponsoren und Werkstatt des Spielers
+bleiben auf ihren eigenen Seiten, sonst gäbe es sie zweimal. Und sie ist
+rein lesend; Werte ändern geht weiter nur über den Editor.
+
+### Dabei behoben: Zwei Seiten nannten zwei Alter
+
+Die Weltseite maß das Alter am 1. März des **Startjahrs**, fest verdrahtet.
+Nach drei Saisonwechseln stand dort noch immer dasselbe Alter, während die
+Fahrerkarte am laufenden Jahr gemessen hätte. `kern.kalender.saisonstart`
+ist jetzt der eine Stichtag, und die Weltseite bekommt das laufende Jahr
+gereicht — beide nennen dieselbe Zahl.
+
+### Dabei behoben: Die Rangliste im Rennen fand ihren Fahrer nicht
+
+`rennen.Teilnehmer` trug Auto, Startplatz, Farbe und die Spielerkennung,
+aber nicht die Fahrernummer aus der Welt — eine Rangliste kennt keine
+Fahrer, nur Autos. Ein Doppelklick dort hätte nicht sagen können, wessen
+Karte zu öffnen ist. Der Teilnehmer trägt die Nummer jetzt als reines
+Anzeigefeld mit; die Simulation liest sie nie, und ein Feld aus
+`rennen.starterfeld` hat keinen Fahrer dahinter und behält die 0.

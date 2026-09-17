@@ -7,7 +7,7 @@ groesseren Schritten aus dem fertigen Verlauf gelesen.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QComboBox,
@@ -43,7 +43,7 @@ from rennmanager.kern.zufall import Seedquelle
 from rennmanager.konfiguration import Konfiguration
 from rennmanager.ui.rueckstandsansicht import Rueckstandsansicht
 from rennmanager.ui.streckenansicht import Streckenansicht
-from rennmanager.ui.tabellen import Balkenzeichner
+from rennmanager.ui.tabellen import Balkenzeichner, verbinde_fahrerkarte
 
 # Der Zeitraffer vervielfacht die Rennzeit je Takt, nicht die Zahl der
 # Takte - die Anzeige bleibt damit gleich fluessig, egal wie schnell
@@ -61,6 +61,11 @@ BREITE_REIFEN = 96
 
 class Rennseite(QWidget):
     """Berechnet ein Rennen und spielt es ab."""
+
+    # Doppelklick auf eine Zeile: Das Fenster oeffnet die Fahrerkarte. Die
+    # Listen hier fuehren die Startnummer im Feld, nicht die des Fahrers -
+    # ``_fahrernummer`` uebersetzt.
+    fahrerkarte_gewuenscht = Signal(int)
 
     def __init__(
         self,
@@ -208,6 +213,9 @@ class Rennseite(QWidget):
         self._rangliste.setColumnWidth(SPALTE_REIFEN, BREITE_REIFEN)
         # Wer in der Rangliste gewaehlt ist, tritt im Diagramm hervor.
         self._rangliste.currentItemChanged.connect(self._auswahl_geaendert)
+        verbinde_fahrerkarte(
+            self._rangliste, self.fahrerkarte_gewuenscht.emit, self._fahrernummer_in(0)
+        )
         kasten = QGroupBox("Rangliste")
         kasten_spalte = QVBoxLayout(kasten)
         kasten_spalte.addWidget(self._rangliste)
@@ -230,6 +238,9 @@ class Rennseite(QWidget):
         self._ticker.setHeaderLabels(["Zeit", "Rd", "Auto", "Was"])
         self._ticker.setRootIsDecorated(False)
         self._ticker.setAlternatingRowColors(True)
+        verbinde_fahrerkarte(
+            self._ticker, self.fahrerkarte_gewuenscht.emit, self._fahrernummer_in(2)
+        )
         self._tickerkasten = QGroupBox("Zwischenfaelle")
         ticker_spalte = QVBoxLayout(self._tickerkasten)
         ticker_spalte.addWidget(self._ticker)
@@ -276,6 +287,7 @@ class Rennseite(QWidget):
                         startplatz=anzahl + 1 - t.startplatz,
                         farbe=t.farbe,
                         ist_spieler=t.ist_spieler,
+                        nummer=t.nummer,
                     )
                     for t in feld
                 )
@@ -290,6 +302,7 @@ class Rennseite(QWidget):
                         startplatz=platz,
                         farbe=feld[i].farbe,
                         ist_spieler=feld[i].ist_spieler,
+                        nummer=feld[i].nummer,
                     )
                     for platz, i in enumerate(self._qualifying.aufstellung, start=1)
                 )
@@ -584,9 +597,33 @@ class Rennseite(QWidget):
                 ],
             )
             zeile.setForeground(2, QColor(teilnehmer.farbe))
+            # Spalte 0 sortiert nach Zeit, Spalte 2 traegt das Auto - dort
+            # steht die Startnummer, damit der Doppelklick sie findet.
             zeile.setData(0, Qt.UserRole, int(z.zeit_ms))
+            zeile.setData(2, Qt.UserRole, z.teilnehmer)
         for spalte in range(self._ticker.columnCount()):
             self._ticker.resizeColumnToContents(spalte)
+
+    def _fahrernummer_in(self, spalte: int):
+        """Liefert den Uebersetzer von einer Zeile zum Fahrer der Welt.
+
+        Die Listen im Rennen fuehren die Startnummer im Feld, nicht die
+        des Fahrers - eine Rangliste kennt keine Welt, nur Autos. Der
+        Teilnehmer traegt die Fahrernummer mit; ein Feld aus
+        ``rennen.starterfeld`` hat keinen Fahrer dahinter und liefert 0.
+        In welcher Spalte die Startnummer steht, ist je Liste verschieden:
+        Der Ticker braucht Spalte 0 zum Sortieren nach Zeit.
+        """
+
+        def nummer_von(zeile) -> int | None:
+            stelle = zeile.data(spalte, Qt.UserRole)
+            if stelle is None or self._verlauf is None:
+                return None
+            if not 0 <= int(stelle) < len(self._verlauf.teilnehmer):
+                return None
+            return self._verlauf.teilnehmer[int(stelle)].nummer or None
+
+        return nummer_von
 
     def _auswahl_geaendert(self, jetzt, _davor=None) -> None:
         """Hebt Spieler und gewaehltes Auto im Diagramm hervor (Punkt 2)."""

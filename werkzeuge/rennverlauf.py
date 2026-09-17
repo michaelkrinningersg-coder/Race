@@ -64,7 +64,7 @@ def fahre_wochenende(konfiguration, streckenname: str, liga: int, seed: int, run
     gestartet = tuple(
         kern_rennen.Teilnehmer(
             auto=feld[i].auto, startplatz=platz, farbe=feld[i].farbe,
-            ist_spieler=feld[i].ist_spieler,
+            ist_spieler=feld[i].ist_spieler, nummer=feld[i].nummer,
         )
         for platz, i in enumerate(session.aufstellung, start=1)
     )

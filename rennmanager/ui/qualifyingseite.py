@@ -7,7 +7,7 @@ jeweils aktuelle Bestzeit: schneller in Gruen, langsamer in Rot.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QComboBox,
@@ -32,6 +32,7 @@ from rennmanager.kern.welt import Welt
 from rennmanager.kern.zeit import formatiere_dauer, formatiere_rueckstand
 from rennmanager.kern.zufall import Seedquelle
 from rennmanager.konfiguration import Konfiguration
+from rennmanager.ui.tabellen import verbinde_fahrerkarte
 
 FARBE_SCHNELLER = QColor("#2e7d32")
 FARBE_LANGSAMER = QColor("#c62828")
@@ -39,6 +40,9 @@ FARBE_LANGSAMER = QColor("#c62828")
 
 class Qualifyingseite(QWidget):
     """Faehrt ein Qualifying und zeigt die Live-Einsortierung."""
+
+    # Doppelklick auf eine Zeile: Das Fenster oeffnet die Fahrerkarte.
+    fahrerkarte_gewuenscht = Signal(int)
 
     def __init__(
         self,
@@ -123,6 +127,7 @@ class Qualifyingseite(QWidget):
         )
         self._rangliste.setRootIsDecorated(False)
         self._rangliste.setAlternatingRowColors(True)
+        verbinde_fahrerkarte(self._rangliste, self.fahrerkarte_gewuenscht.emit)
         spalte.addWidget(self._rangliste)
         return kasten
 
@@ -140,6 +145,7 @@ class Qualifyingseite(QWidget):
         self._aufstellung.setHeaderLabels(["Startplatz", "Auto", "Zeit"])
         self._aufstellung.setRootIsDecorated(False)
         self._aufstellung.setAlternatingRowColors(True)
+        verbinde_fahrerkarte(self._aufstellung, self.fahrerkarte_gewuenscht.emit)
         kasten = QGroupBox("Startaufstellung fuers Rennen")
         kasten_spalte = QVBoxLayout(kasten)
         kasten_spalte.addWidget(self._aufstellung)
@@ -214,6 +220,7 @@ class Qualifyingseite(QWidget):
 
             zeile = QTreeWidgetItem(self._rangliste, spalten)
             zeile.setForeground(1, QColor(teilnehmer.farbe))
+            zeile.setData(0, Qt.UserRole, teilnehmer.nummer)
             # Sektorzeiten mit +/- in Gruen und Rot gegen die Bestzeit (GDD 4).
             for nummer, wert in enumerate(fahrt.sektoren_ms):
                 spalte = 4 + nummer
@@ -255,6 +262,7 @@ class Qualifyingseite(QWidget):
                 [str(platz), teilnehmer.kuerzel, formatiere_dauer(fahrt.zeit_ms)],
             )
             zeile.setForeground(1, QColor(teilnehmer.farbe))
+            zeile.setData(0, Qt.UserRole, teilnehmer.nummer)
         for spalte in range(3):
             self._aufstellung.resizeColumnToContents(spalte)
 

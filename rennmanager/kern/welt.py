@@ -612,6 +612,7 @@ def starterfeld(
             # GDD 4: Autos als Punkte in Teamfarbe.
             farbe=welt.team_von(f).farbe,
             ist_spieler=f.ist_spieler,
+            nummer=f.nummer,
         )
         for platz, f in enumerate(geordnet, start=1)
     )
