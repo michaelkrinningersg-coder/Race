@@ -24,6 +24,7 @@ Tabelle                Inhalt
 ``rekord``             Rundenrekorde je Strecke und Liga (GDD 13)
 ``karrierezahl``       Siege, Podien, Poles, ... je Fahrer
 ``saisonpunkt``        Gesamtpunkte je Saison, Liga und Fahrer
+``saisonverlauf``      Punkte je Rennwochenende der laufenden Saison
 ``historie``           Saison und Liga, deren Abschluss vorliegt
 ``historiezeile``      die Abschlusstabelle dazu, Platz fuer Platz
 ``kenntnis``           Streckenkenntnis je Fahrer und Strecke (GDD 6)
@@ -67,9 +68,13 @@ if TYPE_CHECKING:  # pragma: no cover
 # Version 3: Die Popularitaet je Fahrer (Punkt 5) in der Tabelle
 # ``popularitaet``. Aeltere Staende werden gelesen; die Popularitaet ist
 # dort leer und wird beim naechsten Start neu gewuerfelt.
-SPIELSTAND_VERSION = 3
+# Version 4: Der Punkteverlauf der laufenden Saison (Tabelle
+# ``saisonverlauf``, Punkt 9). Aeltere Staende werden gelesen; ihr Verlauf
+# beginnt dann beim naechsten gefahrenen Rennen.
+SPIELSTAND_VERSION = 4
 HISTORIE_AB_VERSION = 2
 POPULARITAET_AB_VERSION = 3
+VERLAUF_AB_VERSION = 4
 
 SCHEMA = """
 CREATE TABLE kopf (
@@ -192,6 +197,13 @@ CREATE TABLE saisonpunkt (
     fahrer INTEGER NOT NULL,
     punkte INTEGER NOT NULL,
     PRIMARY KEY (saison, liga, fahrer)
+);
+CREATE TABLE saisonverlauf (
+    liga INTEGER NOT NULL,
+    rennen INTEGER NOT NULL,
+    fahrer INTEGER NOT NULL,
+    punkte INTEGER NOT NULL,
+    PRIMARY KEY (liga, rennen, fahrer)
 );
 CREATE TABLE historie (
     saison INTEGER NOT NULL,
@@ -471,6 +483,10 @@ def _schreibe_statistik(
         [(s, li, f, p) for (s, li, f), p in statistik.saisonpunkte.items()],
     )
     verbindung.executemany(
+        "INSERT INTO saisonverlauf VALUES (?, ?, ?, ?)",
+        [(li, r, f, p) for (li, r, f), p in statistik.saisonverlauf.items()],
+    )
+    verbindung.executemany(
         "INSERT INTO historie VALUES (?, ?)",
         [(a.saison, a.liga) for a in statistik.historie],
     )
@@ -747,6 +763,11 @@ def _lies_statistik(
         )
     for z in verbindung.execute("SELECT * FROM saisonpunkt"):
         statistik.saisonpunkte[(z["saison"], z["liga"], z["fahrer"])] = z["punkte"]
+    if version >= VERLAUF_AB_VERSION:
+        statistik.saisonverlauf = {
+            (z["liga"], z["rennen"], z["fahrer"]): z["punkte"]
+            for z in verbindung.execute("SELECT * FROM saisonverlauf")
+        }
     statistik.historie = _lies_historie(verbindung, version)
     return statistik
 

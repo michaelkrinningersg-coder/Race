@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from rennmanager.kern import charakter as kern_charakter
 from rennmanager.kern import karriere as kern_karriere
 from rennmanager.kern.auto import bereichswerte
 from rennmanager.kern.welt import Welt
@@ -246,6 +247,9 @@ class Weltseite(QWidget):
             ("Hersteller:", team.hersteller),
             ("Teambudget:", f"{team.budget:,} €".replace(",", ".")),
             ("Teamkollegen:", kollegen),
+            # Punkt 32: ein Satz aus den vorhandenen Werten - 38 Zahlen
+            # sagen alles und zeigen nichts.
+            ("Charakter:", kern_charakter.profil(self._konfiguration, fahrer.auto)),
         ):
             marke = QLabel(wert)
             marke.setWordWrap(True)

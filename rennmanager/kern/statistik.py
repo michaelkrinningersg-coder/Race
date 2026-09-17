@@ -12,6 +12,8 @@ Saisonende abgeschlossen ist. Drei Dinge werden gefuehrt:
   (die Einheit des ganzen Projekts).
 * **Karrierezahlen** je Fahrer: Rennen, Siege, Podien, Poles, schnellste
   Runden, Ausfaelle und Punkte.
+* **Saisonverlauf**: die Punkte je Rennwochenende der *laufenden* Saison,
+  damit sich zeichnen laesst, wer wann gefuehrt hat (Punkt 9).
 * **Historie**: je Saison und Liga die vollstaendige Abschlusstabelle -
   Platz, Punkte, Siege, Podien, Poles, schnellste Runden, Ausfaelle und
   Rennen je Fahrer. Vollstaendig, weil die Tabelle der Saison beim
@@ -140,6 +142,12 @@ class Statistik:
     # Punkte je (Saison, Liga, Fahrer) - GDD 13: "Gesamtpunkte je Liga und
     # Saison".
     saisonpunkte: dict[tuple[int, int, int], int] = field(default_factory=dict)
+    # Punkte je (Liga, Rennen, Fahrer) der *laufenden* Saison (Punkt 9).
+    # Nur daraus laesst sich zeichnen, wer wann gefuehrt hat. Beim
+    # Saisonwechsel wird die Sammlung geleert: Der Endstand steht dann in
+    # der Historie, und 600 Fahrer mal 20 Rennen mal beliebig viele
+    # Saisons waere ein Spielstand, der nur noch waechst.
+    saisonverlauf: dict[tuple[int, int, int], int] = field(default_factory=dict)
 
     # -- Rundenrekorde -----------------------------------------------------
     def rekord(self, strecke: str, liga: int) -> Rekord | None:
@@ -213,9 +221,9 @@ class Statistik:
         for ergebnis in ergebnisse:
             self.zahlen(ergebnis.fahrer).verbuche(self.konfiguration, ergebnis)
             schluessel = (saison, liga, ergebnis.fahrer)
-            self.saisonpunkte[schluessel] = self.saisonpunkte.get(schluessel, 0) + punkte_fuer(
-                self.konfiguration, ergebnis
-            )
+            punkte = punkte_fuer(self.konfiguration, ergebnis)
+            self.saisonpunkte[schluessel] = self.saisonpunkte.get(schluessel, 0) + punkte
+            self.saisonverlauf[(liga, rennen, ergebnis.fahrer)] = punkte
 
         schnellster = next((e.fahrer for e in ergebnisse if e.schnellste_runde), None)
         if schnellster is None or schnellste_runde_ms <= 0:
@@ -229,6 +237,9 @@ class Statistik:
         Saisonwechsel sind die Tabellen leer, und was dann nicht in der
         Historie steht, ist fort.
         """
+        # Der Verlauf gehoert zur abgelaufenen Saison; was bleiben soll,
+        # steht jetzt in der Historie.
+        self.saisonverlauf.clear()
         for liga in sorted(tabellen):
             stand = tabellen[liga].stand()
             self.historie.append(
@@ -267,6 +278,24 @@ class Statistik:
 
     def punkte_in(self, saison: int, liga: int, fahrer: int) -> int:
         return self.saisonpunkte.get((saison, liga, fahrer), 0)
+
+    # -- Verlauf der laufenden Saison (Punkt 9) ----------------------------
+    def gefahrene_rennen(self, liga: int) -> tuple[int, ...]:
+        """Die Rennnummern, die diese Liga in der laufenden Saison hat."""
+        return tuple(sorted({rennen for (li, rennen, _) in self.saisonverlauf if li == liga}))
+
+    def punktestand(self, liga: int, fahrer: int) -> tuple[int, ...]:
+        """Der aufsummierte Punktestand eines Fahrers, Rennen fuer Rennen.
+
+        Die Liste ist so lang wie die Zahl der gefahrenen Rennen; ein
+        Fahrer ohne Punkte in einem Rennen behaelt seinen Stand.
+        """
+        stand = 0
+        verlauf = []
+        for rennen in self.gefahrene_rennen(liga):
+            stand += self.saisonverlauf.get((liga, rennen, fahrer), 0)
+            verlauf.append(stand)
+        return tuple(verlauf)
 
 
 def zeile_aus(eintrag: Eintrag, platz: int) -> Saisonzeile:

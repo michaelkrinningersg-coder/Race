@@ -32,6 +32,7 @@ from rennmanager.kern.kalender import Tagesart
 from rennmanager.kern.karriere import FAHRERPLATZ, WERKSTATTPLATZ, Karriere, KarriereFehler
 from rennmanager.kern.zufall import Seedquelle
 from rennmanager.konfiguration import Konfiguration
+from rennmanager.ui.kalenderstreifen import Kalenderstreifen
 
 FARBE_RENNEN = QColor("#c62828")
 FARBE_QUALIFYING = QColor("#eda100")
@@ -65,6 +66,13 @@ class Karriereseite(QWidget):
 
         spalte = QVBoxLayout(self)
         spalte.addLayout(self._baue_kopf())
+        # Punkt 7: Das Jahr als Band - wo Luecken bleiben, ist Zeit
+        # liegen geblieben (GDD 2).
+        self._streifen = Kalenderstreifen()
+        streifenkasten = QGroupBox("Kalender")
+        streifen_spalte = QVBoxLayout(streifenkasten)
+        streifen_spalte.addWidget(self._streifen)
+        spalte.addWidget(streifenkasten)
 
         teiler = QSplitter(Qt.Horizontal)
         teiler.addWidget(self._baue_entwicklung())
@@ -244,6 +252,7 @@ class Karriereseite(QWidget):
 
     # -- Anzeige -----------------------------------------------------------
     def _zeichne(self) -> None:
+        self._streifen.zeige(self._karriere)
         tag = self._karriere.tag
         self._datum.setText(
             f"{kern_kalender.wochentag(tag.datum)} {tag.datum:%d.%m.%Y} — {tag.art.bezeichnung}"
@@ -447,6 +456,11 @@ class Karriereseite(QWidget):
                 self._liste.setCurrentItem(eintrag)
                 return
         raise KeyError(schluessel)
+
+
+    @property
+    def kalenderstreifen(self) -> Kalenderstreifen:
+        return self._streifen
 
 
 def beginne(

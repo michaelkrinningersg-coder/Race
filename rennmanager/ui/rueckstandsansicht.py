@@ -17,29 +17,30 @@ beschriftet sind nur zwei: das Auto des Spielers und das in der Rangliste
 gewaehlte. Beide tragen ihre Teamfarbe, und weil sie beschriftet sind,
 haengt die Identitaet nicht an der Farbe allein.
 
-Flaeche, Schrift und Gitter sind dieselben Toene, die auch
-``werkzeuge/rennverlauf.py`` benutzt - damit sehen das Werkzeug und die
-Oberflaeche gleich aus.
+Toene, Raender und das Ziehen einer Linie kommen aus ``ui/diagramm.py``;
+dasselbe Bild zeichnet ``werkzeuge/rennverlauf.py`` mit matplotlib.
 """
 
 from __future__ import annotations
 
 import numpy as np
-from PySide6.QtCore import QRectF, Qt
+from PySide6.QtCore import QRectF
 from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPen
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from rennmanager.kern.rennen import Rennverlauf, rueckstand_in_sekunden
-
-# Toene aus der Referenzpalette des Diagrammleitfadens.
-FLAECHE = QColor("#fcfcfb")
-TEXT = QColor("#0b0b0b")
-TEXT_ZWEITRANGIG = QColor("#52514e")
-GITTER = QColor("#dedcd6")
-# Das Feld im Hintergrund: eine Stufe dunkler als das Gitter, damit die
-# Linien noch zu erkennen sind, ohne mit den beiden Hauptlinien zu
-# konkurrieren.
-FELD = QColor("#c4c1b8")
+from rennmanager.ui.diagramm import (
+    BREITE_FELD,
+    BREITE_FOKUS,
+    FELD,
+    FLAECHE,
+    GITTER,
+    HOECHSTENS_FOKUS,
+    TEXT_ZWEITRANGIG,
+    flaeche_in,
+    zeichne_hinweis,
+    zeichne_linie,
+)
 
 RAND_LINKS = 56
 RAND_RECHTS = 64
@@ -78,7 +79,7 @@ class Rueckstandsansicht(QWidget):
 
     def hebe_hervor(self, teilnehmer: list[int]) -> None:
         """Welche Autos als Linie hervortreten - hoechstens zwei."""
-        self._hervorgehoben = list(teilnehmer)[:2]
+        self._hervorgehoben = list(teilnehmer)[:HOECHSTENS_FOKUS]
         self.update()
 
     def setze_marke(self, zeit_ms: float | None) -> None:
@@ -93,14 +94,11 @@ class Rueckstandsansicht(QWidget):
         maler.fillRect(self.rect(), FLAECHE)
 
         if self._zeiten is None or self._rueckstand is None or not len(self._zeiten):
-            self._zeichne_hinweis(maler)
+            zeichne_hinweis(maler, self.rect(), "Noch kein Rennen gefahren.")
             return
 
-        flaeche = QRectF(
-            RAND_LINKS,
-            RAND_OBEN,
-            max(self.width() - RAND_LINKS - RAND_RECHTS, 1.0),
-            max(self.height() - RAND_OBEN - RAND_UNTEN, 1.0),
+        flaeche = flaeche_in(
+            self.width(), self.height(), RAND_LINKS, RAND_RECHTS, RAND_OBEN, RAND_UNTEN
         )
         dauer = float(self._zeiten[-1]) or 1.0
         groesster = self._achsenmaximum()
@@ -145,25 +143,12 @@ class Rueckstandsansicht(QWidget):
         y = flaeche.top() + anteil * flaeche.height()
         return x, y
 
-    def _zeichne_linie(self, maler: QPainter, x, y, farbe: QColor, breite: float) -> None:
-        maler.setPen(QPen(farbe, breite, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
-        # Bei 30.000 Bildpunkten je Linie bringt jeder zweite Punkt nichts
-        # mehr aufs Bild; ausgeduennt bleibt die Anzeige fluessig.
-        schritt = max(1, len(x) // max(int(maler.device().width()), 1))
-        punkte = [
-            (float(x[stelle]), float(y[stelle])) for stelle in range(0, len(x), schritt)
-        ]
-        if len(x) and (len(x) - 1) % schritt:
-            punkte.append((float(x[-1]), float(y[-1])))
-        for (x1, y1), (x2, y2) in zip(punkte, punkte[1:], strict=False):
-            maler.drawLine(int(x1), int(y1), int(x2), int(y2))
-
     def _zeichne_feld(self, maler, flaeche, dauer, groesster) -> None:
         for i in range(self._rueckstand.shape[1]):
             if i in self._hervorgehoben:
                 continue
             x, y = self._stelle(flaeche, dauer, groesster, i)
-            self._zeichne_linie(maler, x, y, FELD, 1.0)
+            zeichne_linie(maler, x, y, FELD, BREITE_FELD)
 
     def _zeichne_hervorgehobene(self, maler, flaeche, dauer, groesster) -> None:
         masse = QFontMetrics(maler.font())
@@ -173,7 +158,7 @@ class Rueckstandsansicht(QWidget):
             teilnehmer = self._verlauf.teilnehmer[i]
             farbe = QColor(teilnehmer.farbe)
             x, y = self._stelle(flaeche, dauer, groesster, i)
-            self._zeichne_linie(maler, x, y, farbe, 2.0)
+            zeichne_linie(maler, x, y, farbe, BREITE_FOKUS)
             # Direkt am Linienende beschriftet - so haengt die Identitaet
             # nicht an der Farbe allein.
             maler.setPen(QPen(farbe))
@@ -219,7 +204,3 @@ class Rueckstandsansicht(QWidget):
             "Rueckstand auf den Fuehrenden in Sekunden - grau das Feld, "
             "farbig Spieler und Auswahl; Ueberrundete liegen am unteren Rand",
         )
-
-    def _zeichne_hinweis(self, maler: QPainter) -> None:
-        maler.setPen(QPen(TEXT))
-        maler.drawText(self.rect(), Qt.AlignCenter, "Noch kein Rennen gefahren.")

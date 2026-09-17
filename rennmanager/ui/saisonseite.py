@@ -36,6 +36,7 @@ from rennmanager.kern.welt import Welt
 from rennmanager.kern.zeit import formatiere_dauer
 from rennmanager.kern.zufall import Seedquelle
 from rennmanager.konfiguration import Konfiguration
+from rennmanager.ui.punkteansicht import Punkteansicht
 
 FARBE_AUFSTIEG = QColor("#2e7d32")
 FARBE_ABSTIEG = QColor("#c62828")
@@ -84,6 +85,8 @@ class Saisonseite(QWidget):
             popularitaet=popularitaet,
         )
         self._letztes: Wochenende | None = None
+        # Welcher Fahrer in welcher Linie des Punktediagramms steckt.
+        self._fahrernummern: list[int] = []
 
         spalte = QVBoxLayout(self)
         spalte.addLayout(self._baue_kopf())
@@ -154,16 +157,33 @@ class Saisonseite(QWidget):
         return self._kalender
 
     def _baue_tabelle(self) -> QWidget:
+        """Links die Tabelle, darunter der Punkteverlauf derselben Liga.
+
+        Die Tabelle sagt, wie es steht; das Diagramm darunter sagt, wie es
+        dazu kam - und beides gehoert zusammen, deshalb eine Spalte.
+        """
+        seite = QWidget()
+        spalte = QVBoxLayout(seite)
+        spalte.setContentsMargins(0, 0, 0, 0)
+
         self._tabellenkasten = QGroupBox("Saisonwertung")
-        spalte = QVBoxLayout(self._tabellenkasten)
+        kasten = QVBoxLayout(self._tabellenkasten)
         self._tabelle = QTreeWidget()
         self._tabelle.setHeaderLabels(
             ["#", "Fahrer", "Team", "Punkte", "Siege", "Podien", "Poles", "SR", "DNF"]
         )
         self._tabelle.setRootIsDecorated(False)
         self._tabelle.setAlternatingRowColors(True)
-        spalte.addWidget(self._tabelle)
-        return self._tabellenkasten
+        self._tabelle.currentItemChanged.connect(self._auswahl_geaendert)
+        kasten.addWidget(self._tabelle)
+        spalte.addWidget(self._tabellenkasten, stretch=3)
+
+        self._verlaufkasten = QGroupBox("Punkteverlauf")
+        verlaufspalte = QVBoxLayout(self._verlaufkasten)
+        self._punkteansicht = Punkteansicht()
+        verlaufspalte.addWidget(self._punkteansicht)
+        spalte.addWidget(self._verlaufkasten, stretch=2)
+        return seite
 
     def _baue_seitenspalte(self) -> QWidget:
         seite = QWidget()
@@ -258,6 +278,7 @@ class Saisonseite(QWidget):
     def _aktualisiere(self, *_) -> None:
         liga = self._liga.currentData()
         self._zeige_tabelle(liga)
+        self._zeige_verlauf(liga)
         self._zeige_rennen(liga)
         self._zeige_wechsel()
         self._zeige_kalender()
@@ -378,6 +399,7 @@ class Saisonseite(QWidget):
                 ],
             )
             zeile.setForeground(0, QColor(team.farbe))
+            zeile.setData(0, Qt.UserRole, fahrer.nummer)
             # Wer am Saisonende auf- oder absteigt, ist farbig markiert.
             if platz <= aufsteiger and liga > 1:
                 zeile.setForeground(1, FARBE_AUFSTIEG)
@@ -390,6 +412,44 @@ class Saisonseite(QWidget):
                     zeile.setFont(spalte, schrift)
         for spalte in range(self._tabelle.columnCount()):
             self._tabelle.resizeColumnToContents(spalte)
+
+    def _zeige_verlauf(self, liga: int) -> None:
+        """Fuellt das Punktediagramm mit dem Stand jedes Fahrers (Punkt 9).
+
+        Gezeichnet wird die Reihenfolge der Tabelle, damit die
+        hervorgehobene Linie zu der Zeile passt, die daneben gewaehlt ist.
+        """
+        stand = self._lauf.tabelle(liga).stand()
+        statistik = self._lauf.statistik
+        reihen = []
+        self._fahrernummern = []
+        for eintrag in stand:
+            fahrer = self._welt.fahrer[eintrag.fahrer]
+            team = self._welt.team_von(fahrer)
+            reihen.append(
+                (fahrer.kuerzel, team.farbe, statistik.punktestand(liga, fahrer.nummer))
+            )
+            self._fahrernummern.append(fahrer.nummer)
+        self._punkteansicht.zeige(reihen)
+        self._verlaufkasten.setTitle(
+            f"Punkteverlauf - Liga {liga}, {self._punkteansicht.rennen} Rennen"
+        )
+        self._auswahl_geaendert(self._tabelle.currentItem())
+
+    def _auswahl_geaendert(self, jetzt, _davor=None) -> None:
+        """Hebt Spieler und gewaehlte Zeile im Diagramm hervor (Punkt 9)."""
+        if not self._fahrernummern:
+            return
+        spieler = self._welt.spieler
+        hervor = []
+        if spieler is not None and spieler.nummer in self._fahrernummern:
+            hervor.append(self._fahrernummern.index(spieler.nummer))
+        gewaehlt = jetzt.data(0, Qt.UserRole) if jetzt is not None else None
+        if gewaehlt in self._fahrernummern:
+            stelle = self._fahrernummern.index(gewaehlt)
+            if stelle not in hervor:
+                hervor.append(stelle)
+        self._punkteansicht.hebe_hervor(hervor)
 
     def _zeige_rennen(self, liga: int) -> None:
         self._rennliste.clear()
@@ -486,3 +546,7 @@ class Saisonseite(QWidget):
     @property
     def abschlusstext(self) -> QLabel:
         return self._abschluss
+
+    @property
+    def punkteansicht(self) -> Punkteansicht:
+        return self._punkteansicht

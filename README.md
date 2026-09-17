@@ -327,6 +327,28 @@ das Tempo waechst je Liga um 6,32 km/h, der Wert S ergibt sich durch
 Umkehren der Kalibrierfunktion. So liegen alle 20 Ligen auf derselben
 Kurve.
 
+### Der Charakter in einem Satz
+
+38 Zahlen sagen alles und zeigen nichts. `rennmanager.kern.charakter`
+macht daraus einen Satz fuer den Steckbrief:
+
+```python
+from rennmanager.kern import charakter
+
+charakter.profil(k, w.fahrer[401].auto)
+# "Stark in Gerade und Beschleunigen, schwach in Verschleiss/Defekte und
+#  Ermuedung, dazu Anpassungsfaehigkeit und Windschattennutzung."
+```
+
+Gelesen wird nur, was schon da ist - die elf Wirkungsbereiche aus GDD 8
+und die Eigenschaften daneben; es entsteht kein Wert, der irgendwo wirkt.
+Gemessen wird gegen den **eigenen** Durchschnitt, nicht gegen die Skala:
+Ein Fahrer aus Liga 20 hat lauter niedrige Werte und trotzdem ein Profil.
+Genannt werden hoechstens zwei Staerken und zwei Schwaechen, und nur ab
+6 % Abweichung. Gemessen bekommen in Liga 1 27 von 30 Fahrern ein Profil,
+in den Ligen 5, 10 und 20 alle 30; der Spieler steht am ersten Tag auf
+lauter Nullen (GDD 1) und liest "Noch kein Profil".
+
 ## Kalender und Zeitmodell
 
 `rennmanager.kern.kalender` baut die Saison (GDD 2): Das erste Rennen ist
@@ -350,6 +372,15 @@ c.kaufe("F1")          # Motorleistung, nur Geld - ohne Tag
 c.bis_zum_rennen()
 c.verbuche_rennen(platz=12, ueberholmanoever=4)
 ```
+
+### Das Jahr als Band
+
+Zeit ist eine Kapazitaet - in einer Liste von 365 Zeilen sieht man das
+nicht. Die Karriereseite zeigt das Jahr deshalb als Band aus
+Tagesstreifen, eine Spalte je Woche: Renntag, Qualifying, Reise,
+verlorene Tage aus E29 Reisechaos, voll belegt, halb belegt, frei. Die
+Legende zaehlt mit, und ein Mouseover nennt Datum und Zustand. Wo Luecken
+im Band bleiben, ist Zeit liegen geblieben - das ist die ganze Aussage.
 
 ### Was ein Upgrade kostet
 
@@ -486,6 +517,26 @@ Sekunden fuer 20 Rennen mal 20 Ligen): Konto 12.180 EUR nach der ersten,
 21.420 nach der zweiten, 34.000 nach der dritten; Streckenkenntnis in
 Sakhir 19,6 / 36,4 / 52,2 Runden; nach jedem Wechsel stehen in jeder der
 20 Ligen wieder genau 30 Fahrer.
+
+### Der Punkteverlauf der laufenden Saison
+
+Die Statistik fuehrt neben dem Endstand den Weg dorthin: `punktestand`
+liefert den aufsummierten Stand eines Fahrers Rennen fuer Rennen.
+
+```python
+lauf.statistik.gefahrene_rennen(20)     # (1, 2, 3)
+lauf.statistik.punktestand(20, 401)     # (0, 12, 27) - aufsummiert
+```
+
+Die Saisonseite zeichnet daraus ein Liniendiagramm unter der Tabelle: Man
+sieht, wann eine Meisterschaft entschieden war und wann sie kippte. Es
+gilt dieselbe Regel wie beim Rueckstandsdiagramm - das Feld liegt grau im
+Hintergrund, hervorgehoben und am Linienende beschriftet sind nur der
+Spieler und der in der Tabelle gewaehlte Fahrer.
+
+Beim Saisonwechsel wird der Verlauf geleert; der Endstand steht dann in
+der Historie. Er liegt im Spielstand (Version 4) in der Tabelle
+`saisonverlauf`.
 
 ### Warum es zwei Rennmodelle gibt
 

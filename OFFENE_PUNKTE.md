@@ -1342,3 +1342,41 @@ Wirkung zu halten, müsste er auf rund 6,6 steigen.
 | **B** | auf 6,6 anheben — die Wirkung des Könnens bleibt wie vorher |
 
 **Entscheidung: A** (vom Auftraggeber gewählt). Der Wert bleibt bei 4,0.
+
+---
+
+## Nachtrag: Entscheidungen zu den Listenpunkten
+
+Der Auftraggeber hat 17 Punkte gewählt und dazu entschieden:
+
+### 56. Oberfläche und Bedienung
+
+| Frage | Entscheidung |
+| --- | --- |
+| Diagramme mit `QtCharts` oder `QPainter`? | **`QPainter`** — keine zusätzliche Abhängigkeit für die .exe |
+| Startliga im Startdialog frei wählbar? | **Nein, immer Liga 20.** Freie Wahl wäre der Schwierigkeitsgrad durch die Hintertür |
+| Geführtes Rennwochenende: neuer Reiter oder Ersatz? | **Die drei Reiter Qualifying, Rennen und Saison werden ersetzt** |
+| Wetterbilanz: ganzer Verlauf je Rennen oder eine Lage? | **Die vorherrschende Lage** — eine Spalte je Ergebnis |
+
+### 57. KI-Entwicklung, Newgens und Rücktritt (Punkt 35)
+
+| Frage | Entscheidung |
+| --- | --- |
+| Wächst die KI absolut oder im Korridor? | **Die Ligen dürfen nicht auseinanderlaufen.** Die Ligastärke bleibt der Korridor aus GDD 9; gewachsen wird innerhalb einer Liga |
+| Rücktrittsalter | **Gestreut zwischen 34 und 42** |
+| Newgens | **Einer je Rücktritt.** Newgens steigen ganz unten ein (Liga 20); die vorhandenen Fahrer füllen nach oben auf — es gibt dadurch mehr Aufsteiger |
+| Altert der Spieler? Endet seine Karriere? | **Sein Alter bleibt fest, die Karriere endet nicht** |
+
+### 58. Boxenstopps (Punkt 39)
+
+Grundsatz: **Der Reifenverschleiß wird je Strecke kalibriert, nicht über die
+Renndistanz.**
+
+| Frage | Entscheidung |
+| --- | --- |
+| Stopps Pflicht oder Wahl? | **Wahl** — aber mindestens einer, weil zwei Mischungen verwendet werden müssen |
+| Reifenmischungen? | **Ja.** Verschleiß und Zeitgewinn je Mischung müssen kalibriert werden |
+| Boxengassenzeit | **Aus den Streckendaten ableitbar.** Limiter 80 km/h von der Einfahrt bis zur Ausfahrt, danach wird beschleunigt |
+| Wie stoppt die KI? | **Ein Fenster mit Streuung** — der eine kommt zu früh, der andere zu spät. Fensterbreite 6 Runden |
+| Zahl der Stopps | **1 bis 3, je nach Mischungswahl; mindestens 1.** Keine Stopps in den ersten und letzten drei Runden |
+| Mischungsregel | **Zwei Mischungen müssen verwendet werden.** Auch zweimal die weichere und dann die härtere ist erlaubt; die Stintlänge folgt der Mischung, die Wahl der KI streut |
