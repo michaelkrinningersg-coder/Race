@@ -143,6 +143,12 @@ ueberholzone_mindestlaenge_m = 100.0
 sektoren = 4
 quelle = "TUMFTM/racetrack-database"
 lizenz = "LGPL-3.0"
+# Die CSV-Dateien liegen unter daten/strecken/ und werden mitgepackt.
+verzeichnis = "daten/strecken"
+# Die Autos fahren auf der Ideallinie (GDD 3).
+linie = "ideallinie"
+# Segmenttypen rein nach Radius, ohne Mindestlaenge - das GDD nennt keine.
+mindestsegmentlaenge_m = 0.0
 
 # Die 20 Strecken der Saison (GDD 3). Monaco, Imola und Mugello fehlen im Datensatz.
 [[strecke.liste]]
@@ -150,120 +156,140 @@ nummer = 1
 name = "Sakhir"
 land = "Bahrain"
 charakter = "Traktion, harte Bremszonen"
+datei = "Sakhir"
 
 [[strecke.liste]]
 nummer = 2
 name = "Melbourne"
 land = "Australien"
 charakter = "Halbstadtkurs"
+datei = "Melbourne"
 
 [[strecke.liste]]
 nummer = 3
 name = "Shanghai"
 land = "China"
 charakter = "Lange Gerade, enge Schnecke"
+datei = "Shanghai"
 
 [[strecke.liste]]
 nummer = 4
 name = "Catalunya"
 land = "Spanien"
 charakter = "Ausgewogen, Reifenverschleiss"
+datei = "Catalunya"
 
 [[strecke.liste]]
 nummer = 5
 name = "Montreal"
 land = "Kanada"
 charakter = "Schikanen, Bremsen"
+datei = "Montreal"
 
 [[strecke.liste]]
 nummer = 6
 name = "Spielberg"
 land = "Oesterreich"
 charakter = "Kurz, Bergauf-Bremszonen"
+datei = "Spielberg"
 
 [[strecke.liste]]
 nummer = 7
 name = "Silverstone"
 land = "Grossbritannien"
 charakter = "Schnelle Kurven"
+datei = "Silverstone"
 
 [[strecke.liste]]
 nummer = 8
 name = "Budapest"
 land = "Ungarn"
 charakter = "Eng, kaum Ueberholen"
+datei = "Budapest"
 
 [[strecke.liste]]
 nummer = 9
 name = "Spa"
 land = "Belgien"
 charakter = "Lang und schnell"
+datei = "Spa"
 
 [[strecke.liste]]
 nummer = 10
 name = "Zandvoort"
 land = "Niederlande"
 charakter = "Steilkurven, eng"
+datei = "Zandvoort"
 
 [[strecke.liste]]
 nummer = 11
 name = "Monza"
 land = "Italien"
 charakter = "Hoechstgeschwindigkeit"
+datei = "Monza"
 
 [[strecke.liste]]
 nummer = 12
 name = "Hockenheim"
 land = "Deutschland"
 charakter = "Lange Geraden"
+datei = "Hockenheim"
 
 [[strecke.liste]]
 nummer = 13
 name = "Nuerburgring"
 land = "Deutschland"
 charakter = "Technisch"
+datei = "Nuerburgring"
 
 [[strecke.liste]]
 nummer = 14
 name = "Norisring"
 land = "Deutschland"
 charakter = "Kurzer Stadtkurs, Haarnadeln"
+datei = "Norisring"
 
 [[strecke.liste]]
 nummer = 15
 name = "Oschersleben"
 land = "Deutschland"
 charakter = "Kurvig, eng"
+datei = "Oschersleben"
 
 [[strecke.liste]]
 nummer = 16
 name = "Suzuka"
 land = "Japan"
 charakter = "Achterform, Fahrerstrecke"
+datei = "Suzuka"
 
 [[strecke.liste]]
 nummer = 17
 name = "Austin"
 land = "USA"
 charakter = "Vielseitig"
+datei = "Austin"
 
 [[strecke.liste]]
 nummer = 18
 name = "Mexiko-Stadt"
 land = "Mexiko"
 charakter = "Lange Gerade"
+datei = "MexicoCity"
 
 [[strecke.liste]]
 nummer = 19
 name = "Sao Paulo"
 land = "Brasilien"
 charakter = "Gegen den Uhrzeigersinn"
+datei = "SaoPaulo"
 
 [[strecke.liste]]
 nummer = 20
 name = "Yas Marina"
 land = "Abu Dhabi"
 charakter = "Geraden und enge Kurven"
+datei = "YasMarina"
 
 # ---------------------------------------------------------------------------
 # GDD 4 – Rennsimulation
@@ -1213,6 +1239,7 @@ defekt_wahrscheinlichkeit = "GDD 4: 'selten, aber haeufiger als Unfaelle' - Basi
 reparatur_liga_faktor = "GDD 14: Reparaturkosten = Stufe x Liga-Faktor - Liga-Faktor nicht genannt."
 reifenverschleiss_kurve = "GDD 4: Verschleiss senkt Tempo und erhoeht Fehlerquote - Verlauf nicht genannt."
 ueberholen_erfolgsformel = "GDD 4: Erfolgschance aus Ueberholen/Verteidigen, Streckenfaktor und Tempovorteil - Formel nicht genannt."
+mindestsegmentlaenge = "GDD 3: Segmenttyp rein aus dem Radius - eine Mindestlaenge je Segment ist nicht genannt. Ohne sie entstehen einzelne Segmente von 5 bis 20 m. Gemessen: das Zusammenfassen solcher Fragmente aendert die Zahl der Ueberholzonen nur auf 2 von 20 Strecken, weil die 100-m-Regel sie ohnehin filtert."
 ueberholschwierigkeit_formel = "GDD 3: 'Ueberholschwierigkeit (aus Geradenanteil)' - Formel nicht genannt."
 reifenverschleiss_faktor_strecke = "GDD 3: Kennwert je Strecke - Herleitung nicht genannt."
 streckennaesse_verzoegerung = "GDD 7: 'Streckennaesse folgt dem Wetter verzoegert (Vorschlag)' - Verzoegerung nicht genannt."

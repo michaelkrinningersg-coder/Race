@@ -4,14 +4,15 @@ Motorsport-Manager mit sichtbarer Rennsimulation. Grundlage ist das
 [Game Design Dokument v1.0](Rennmanager%20%E2%80%93%20Game%20Design%20Dokument%20%28v1.0%29.md);
 die Arbeitsregeln stehen in [Claude.md](Claude.md).
 
-**Stand: Schritt 1 von 10 – Projektgeruest, Konfigurationsdatei, Build-Workflow.**
-Es wird noch nichts simuliert.
+**Stand: Schritt 2 von 10 – Streckenimport, Segmenttypen, Sektoren, Darstellung.**
+Es wird noch nicht gefahren; die Strecken sind eingelesen und ausgewertet.
 
 ## Aufbau
 
 | Pfad | Inhalt |
 | --- | --- |
 | `rennmanager/kern/` | Simulationskern, reines Python, kennt die Oberflaeche nicht |
+| `daten/strecken/` | Die 20 Strecken als CSV (TUMFTM, LGPL-3.0), mitgeliefert |
 | `rennmanager/konfiguration.py` | Laden und Pruefen der Balancing-Dateien |
 | `rennmanager/ui/` | PySide6-Oberflaeche |
 | `konfiguration/balancing.toml` | **Alle** Balancing-Werte, zentral an einer Stelle |
@@ -58,6 +59,34 @@ Lokal:
 pyinstaller --clean --noconfirm rennmanager.spec
 ```
 
+## Das Streckenmodell
+
+`rennmanager.kern.strecke` macht aus einer Ideallinie eine fahrbare Strecke
+(GDD 3): neu abtasten auf rund 5 m, Kruemmungsradius je Punkt, daraus der
+Segmenttyp (enge Kurve unter 60 m, Gerade ab 300 m), Geraden ab 100 m als
+Ueberholzonen, vier Sektoren gleicher Laenge.
+
+```python
+from rennmanager.kern import strecke
+from rennmanager.konfiguration import lade
+
+monza = strecke.lade(lade(), "Monza")
+monza.laenge_m            # 5758.0
+len(monza.ueberholzonen)  # 7, laengste 1240 m
+monza.geradenanteil       # 0.79
+```
+
+Die Rechnung ist gegen erzeugte Formen geprueft: Ein Kreis mit Radius R
+liefert ueberall R zurueck, ein Oval aus zwei Geraden und zwei Halbkreisen
+genau vier Segmente. Der Abgleich mit der Wirklichkeit stimmt ebenfalls -
+die laengste Gerade in Shanghai misst 1.155 m, real sind es rund 1.170 m.
+
+Die Segmentgrenzen laufen rein ueber den Radius, ohne Mindestlaenge, weil
+das GDD keine nennt. Dabei entstehen einzelne Segmente von 5 bis 20 m. Das
+ist gemessen und unkritisch: Sie zu verschmelzen aendert die Zahl der
+Ueberholzonen nur auf 2 von 20 Strecken, weil die 100-m-Regel sie ohnehin
+filtert. Die Frage steht unter den offenen Punkten.
+
 ## Zwei Regeln, die den Code praegen
 
 **Zeiten sind ganze Millisekunden.** Im Kern gibt es keine Sekunden als
@@ -91,4 +120,6 @@ werden kann.
 ## Datenquellen
 
 Streckendaten: [TUMFTM/racetrack-database](https://github.com/TUMFTM/racetrack-database),
-Lizenz LGPL-3.0. Der Import folgt in Schritt 2.
+Lizenz LGPL-3.0. Die 20 Strecken der Saison liegen unveraendert unter
+`daten/strecken/` und werden in die .exe gepackt; Herkunft, Format und
+Datenqualitaet beschreibt `daten/strecken/HERKUNFT.md`.

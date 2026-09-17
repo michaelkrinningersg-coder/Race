@@ -10,7 +10,11 @@ analyse = Analysis(
     ["rennmanager/__main__.py"],
     pathex=["."],
     binaries=[],
-    datas=[("konfiguration", "konfiguration")],
+    datas=[
+        ("konfiguration", "konfiguration"),
+        # Streckendaten (TUMFTM, LGPL-3.0) werden mitgepackt.
+        ("daten", "daten"),
+    ],
     hiddenimports=[],
     hookspath=[],
     runtime_hooks=[],

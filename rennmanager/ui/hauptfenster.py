@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSpinBox,
+    QTabWidget,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -28,6 +29,7 @@ from PySide6.QtWidgets import (
 from rennmanager import __version__
 from rennmanager.kern.zufall import Seedquelle
 from rennmanager.konfiguration import Konfiguration
+from rennmanager.ui.streckenseite import Streckenseite
 
 # Qt-Spinboxen rechnen mit 32-Bit-Ganzzahlen; der Hauptseed wird in der
 # Oberflaeche deshalb auf diesen Bereich begrenzt.
@@ -65,12 +67,19 @@ class Hauptfenster(QMainWindow):
         hilfe.addAction(ueber)
 
     def _baue_inhalt(self) -> QWidget:
-        inhalt = QWidget()
-        spalte = QVBoxLayout(inhalt)
+        self._reiter = QTabWidget()
+        self._reiter.addTab(self._baue_uebersichtsseite(), "Uebersicht")
+        self._streckenseite = Streckenseite(self._konfiguration)
+        self._reiter.addTab(self._streckenseite, "Strecke")
+        return self._reiter
+
+    def _baue_uebersichtsseite(self) -> QWidget:
+        seite = QWidget()
+        spalte = QVBoxLayout(seite)
         spalte.addWidget(self._baue_uebersicht())
         spalte.addWidget(self._baue_seedbereich())
         spalte.addWidget(self._baue_offene_punkte(), stretch=1)
-        return inhalt
+        return seite
 
     def _baue_uebersicht(self) -> QGroupBox:
         k = self._konfiguration
@@ -85,7 +94,10 @@ class Hauptfenster(QMainWindow):
                 f"je {k.wert('ligen', 'autos_je_liga')} Autos"
             ),
         )
-        formular.addRow("Strecken:", QLabel(str(len(k.strecken))))
+        formular.addRow(
+            "Strecken:",
+            QLabel(f"{len(k.strecken)} (TUMFTM, LGPL-3.0, mitgeliefert)"),
+        )
         formular.addRow(
             "Fahrzeug-Upgrades:", QLabel(f"{len(k.fahrzeug)} (F1 bis F16)")
         )
@@ -156,6 +168,11 @@ class Hauptfenster(QMainWindow):
 
     def _wuerfle_seed(self) -> None:
         self._seed_eingabe.setValue(Seedquelle.zufaellig().seed % (SEED_MAX + 1))
+
+    @property
+    def streckenseite(self) -> Streckenseite:
+        """Die Seite mit der Streckendarstellung."""
+        return self._streckenseite
 
     @property
     def seedquelle(self) -> Seedquelle:

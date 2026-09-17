@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 
 from rennmanager import __version__
+from rennmanager.kern import strecke as kern_strecke
 from rennmanager.konfiguration import KonfigurationsFehler, lade
 
 # Prueft nur, ob die Konfiguration gefunden und gelesen werden kann, und
@@ -29,6 +30,18 @@ def pruefe() -> int:
         f"{len(konfiguration.strecken)} Strecken, "
         f"{len(konfiguration.faehigkeiten)} Faehigkeiten, "
         f"{len(konfiguration.hersteller)} Hersteller"
+    )
+    try:
+        strecken = kern_strecke.lade_alle(konfiguration)
+    except kern_strecke.StreckenFehler as fehler:
+        print(f"Streckendaten fehlerhaft: {fehler}", file=sys.stderr)
+        return 3
+
+    gesamt = sum(s.laenge_m for s in strecken)
+    zonen = sum(len(s.ueberholzonen) for s in strecken)
+    print(
+        f"Strecken:      {len(strecken)} ausgewertet, {gesamt / 1000:.1f} km, "
+        f"{zonen} Ueberholzonen"
     )
     print(f"Offene Punkte: {len(konfiguration.offene_punkte)}")
     return 0
