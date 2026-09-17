@@ -242,13 +242,18 @@ def fahre_runde(
     strecke: Strecke,
     auto: Auto,
     grip: np.ndarray | float = 1.0,
+    grenzen: Grenzen | None = None,
 ) -> Rundenergebnis:
     """Faehrt eine Runde ohne Zufall und liefert Zeit und Profil.
 
     :param grip: Grip-Faktor aus dem Wetter (GDD 7), je Punkt oder fuer die
         ganze Runde
+    :param grenzen: fertige Grenzen statt der aus den Werten abgeleiteten.
+        Der Schnellmodus bildet damit die Runde mit der Bremse des
+        Rennendes (Punkt 20).
     """
-    grenzen = grenzen_aus(konfiguration, auto)
+    if grenzen is None:
+        grenzen = grenzen_aus(konfiguration, auto)
     profil = geschwindigkeitsprofil(strecke, grenzen, grip)
     zeit = rundenzeit_ms(strecke, profil)
     return Rundenergebnis(

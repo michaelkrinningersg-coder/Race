@@ -23,7 +23,7 @@ Gewicht nur fuer die gezeitete Runde").
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -33,7 +33,7 @@ from rennmanager.kern import wetter as kern_wetter
 from rennmanager.kern.auto import bereichswert, gesamtwert
 from rennmanager.kern.rennen import Teilnehmer
 from rennmanager.kern.strecke import Strecke
-from rennmanager.kern.tempo import fahre_runde, leistungsanteil
+from rennmanager.kern.tempo import fahre_runde, grenzen_aus, leistungsanteil
 from rennmanager.kern.zufall import Seedquelle
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -156,6 +156,7 @@ def fahre(
     meisterschaft: tuple[int, ...] | None = None,
     kenntnisfaktor: tuple[float, ...] | None = None,
     tagesformbonus: tuple[float, ...] | None = None,
+    rhythmusfaktor: tuple[float, ...] | None = None,
 ) -> Qualifying:
     """Faehrt ein ganzes Qualifying und liefert die Startaufstellung.
 
@@ -164,6 +165,8 @@ def fahre(
     :param tagesformbonus: Zuschlag auf den Tagesform-Mittelwert je Auto
         (E3 Motivationsschub aus GDD 14). Ohne Angabe faehrt jedes Auto
         ohne Zuschlag.
+    :param rhythmusfaktor: Faktor auf die Querbeschleunigung in Kurven je
+        Auto (Punkt 15). Ohne Angabe faehrt jedes Auto ohne Vorteil.
     """
     if not teilnehmer:
         raise ValueError("Ohne Teilnehmer gibt es kein Qualifying")
@@ -179,6 +182,13 @@ def fahre(
     elif len(tagesformbonus) != len(teilnehmer):
         raise ValueError(
             f"Tagesformbonus fuer {len(tagesformbonus)} Autos, "
+            f"im Feld stehen {len(teilnehmer)}"
+        )
+    if rhythmusfaktor is None:
+        rhythmusfaktor = (1.0,) * len(teilnehmer)
+    elif len(rhythmusfaktor) != len(teilnehmer):
+        raise ValueError(
+            f"Rhythmusfaktor fuer {len(rhythmusfaktor)} Autos, "
             f"im Feld stehen {len(teilnehmer)}"
         )
 
@@ -220,16 +230,24 @@ def fahre(
 
         # Aufwaermrunde: ungezeitet, verbraucht aber Zeit.
         kenntnis = kenntnisfaktor[i]
+        # Der Rhythmus aus Punkt 15 haengt an der Quergrenze, nicht an der
+        # Zeit - deshalb faehrt das Qualifying mit fertigen Grenzen.
+        grenzen = replace(
+            grenzen_aus(konfiguration, auto),
+            quer=grenzen_aus(konfiguration, auto).quer * rhythmusfaktor[i],
+        )
         for _ in range(aufwaermrunden):
             grip = _grip_je_punkt(strecke, verlauf, konfiguration, auto, uhr)
-            uhr += fahre_runde(konfiguration, strecke, auto, grip).zeit_ms / kenntnis
+            uhr += fahre_runde(
+                konfiguration, strecke, auto, grip, grenzen
+            ).zeit_ms / kenntnis
 
         # Gezeitete Runde. Zustand und Grip gelten fuer den Beginn der
         # Runde - danach kann das Wetter schon gewechselt haben.
         beginn_runde = uhr
         zustand = verlauf.zustand_zu(beginn_runde)
         grip = _grip_je_punkt(strecke, verlauf, konfiguration, auto, beginn_runde)
-        runde = fahre_runde(konfiguration, strecke, auto, grip)
+        runde = fahre_runde(konfiguration, strecke, auto, grip, grenzen)
 
         # Rundenform, der Bonus aus der Q-Spalte und die Streckenkenntnis
         # wirken auf die Zeit.

@@ -31,10 +31,13 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from rennmanager.kern import ereignis as kern_ereignis
+from rennmanager.kern import heimstrecke as kern_heimstrecke
 from rennmanager.kern import karriere as kern_karriere
+from rennmanager.kern import popularitaet as kern_popularitaet
 from rennmanager.kern import qualifying as kern_qualifying
 from rennmanager.kern import reifen as kern_reifen
 from rennmanager.kern import rennen as kern_rennen
+from rennmanager.kern import rhythmus as kern_rhythmus
 from rennmanager.kern import statistik as kern_statistik
 from rennmanager.kern import strecke as kern_strecke
 from rennmanager.kern import streckenkenntnis as kern_streckenkenntnis
@@ -165,6 +168,7 @@ def _ausfuehrlich(
     kenntnisfaktor: tuple[float, ...],
     spielerautos: dict[str, dict[int, object]],
     tagesformbonus: tuple[float, ...],
+    rhythmusfaktor: tuple[float, ...],
 ) -> tuple[Ligawochenende, Rennverlauf, Qualifying]:
     """Qualifying und Rennen einer Liga in voller Aufloesung (GDD 4).
 
@@ -185,6 +189,7 @@ def _ausfuehrlich(
         meisterschaft,
         kenntnisfaktor=kenntnisfaktor,
         tagesformbonus=tagesformbonus,
+        rhythmusfaktor=rhythmusfaktor,
     )
     # Die Startaufstellung kommt aus dem Qualifying; Platz 1 ist die Pole.
     rennfeld = kern_welt.starterfeld(
@@ -223,6 +228,7 @@ def _ausfuehrlich(
         # Werten eines anderen.
         kenntnisfaktor=tuple(kenntnisfaktor[i] for i in quali.aufstellung),
         tagesformbonus=tuple(tagesformbonus[i] for i in quali.aufstellung),
+        rhythmusfaktor=tuple(rhythmusfaktor[i] for i in quali.aufstellung),
     )
 
     # ``Ergebnis.teilnehmer`` zaehlt in der Startaufstellung, also ist der
@@ -300,6 +306,7 @@ def _schnell(
     kenntnisfaktor: tuple[float, ...],
     spielerautos: dict[str, dict[int, object]],
     tagesformbonus: tuple[float, ...],
+    rhythmusfaktor: tuple[float, ...],
 ) -> Ligawochenende:
     """Ein Rennwochenende auf Rundenebene (GDD 13).
 
@@ -322,6 +329,7 @@ def _schnell(
         streckenverschleiss,
         kenntnisfaktor=kenntnisfaktor,
         tagesformbonus=tagesformbonus,
+        rhythmusfaktor=rhythmusfaktor,
     )
     return Ligawochenende(
         liga=liga,
@@ -371,6 +379,7 @@ class Saisonlauf:
         tabellen: dict[int, Tabelle] | None = None,
         vorgefahren: int = 0,
         karriere=None,
+        popularitaet: kern_popularitaet.Popularitaet | None = None,
     ) -> None:
         self.konfiguration = konfiguration
         self.welt = welt
@@ -383,6 +392,9 @@ class Saisonlauf:
         self.kenntnis = kenntnis or kern_streckenkenntnis.Streckenkenntnis(
             konfiguration, seedquelle=seedquelle.zweig("lerntempo")
         )
+        # Die Popularitaet ueberdauert die Saison wie die Streckenkenntnis
+        # (Punkt 5).
+        self.popularitaet = popularitaet or kern_popularitaet.Popularitaet(konfiguration)
 
         anzahl = konfiguration.wert("kalender", "rennen_je_saison")
         if len(self.strecken) < anzahl:
@@ -396,6 +408,9 @@ class Saisonlauf:
             konfiguration, self.strecken
         )
         self._querbeschleunigung = kern_reifen.mittlere_querbeschleunigung(self.strecken)
+        # Bezugsgroesse des Rhythmus aus Punkt 15: der Kurvenfolgenanteil
+        # gegen den Schnitt aller 20 Strecken.
+        self._kurvenmittel = kern_rhythmus.mittlerer_kurvenfolgenanteil(self.strecken)
 
         self.tabellen: dict[int, Tabelle] = tabellen or {
             liga: Tabelle(liga) for liga in range(1, konfiguration.wert("ligen", "anzahl") + 1)
@@ -473,6 +488,57 @@ class Saisonlauf:
             bonus if f.nummer == self.karriere.fahrernummer else 0.0 for f in feld
         )
 
+    def rhythmusfaktoren(
+        self, strecke: Strecke, feld: tuple[Fahrer, ...], autos: dict[int, object]
+    ) -> tuple[float, ...]:
+        """Faktor auf die Querbeschleunigung je Feldplatz (Punkt 15).
+
+        Gerechnet wird mit dem Auto, das wirklich faehrt - beim Spieler
+        also mit dem entwickelten aus der Karriere.
+        """
+        return tuple(
+            kern_rhythmus.faktor(
+                self.konfiguration,
+                autos.get(f.nummer, f.auto),
+                strecke,
+                self._kurvenmittel,
+            )
+            for f in feld
+        )
+
+    def sessionautos(
+        self,
+        liga: int,
+        strecke: Strecke,
+        fahrer: tuple[Fahrer, ...],
+        seedquelle: Seedquelle,
+    ) -> dict[str, dict[int, object]]:
+        """Die Autos, mit denen dieses Feld faehrt, je Session.
+
+        Zwei Dinge treten an die Stelle des Autos aus der Welt: die
+        entwickelten Werte des Spielers (GDD 1 und 14) und der Heimbonus
+        aus Punkt 2. Beide zusammen - wer im eigenen Land faehrt und der
+        Spieler ist, bekommt beides.
+
+        Die fuenf Eigenschaften des Heimbonus werden je Rennwochenende
+        einmal gezogen und gelten fuer Qualifying und Rennen.
+        """
+        autos = self.spielerautos(liga)
+        daheim = kern_heimstrecke.heimfahrer(fahrer, strecke)
+        if not daheim:
+            return autos
+
+        heimseed = seedquelle.zweig("heimstrecke")
+        for sitzung in (kern_ereignis.QUALIFYING, kern_ereignis.RENNEN):
+            je_sitzung = dict(autos.get(sitzung, {}))
+            for f in daheim:
+                basis = je_sitzung.get(f.nummer, f.auto)
+                je_sitzung[f.nummer] = kern_heimstrecke.mit_bonus(
+                    self.konfiguration, basis, heimseed.zweig("fahrer", f.nummer)
+                )
+            autos[sitzung] = je_sitzung
+        return autos
+
     def meisterschaft(self, liga: int, feld: tuple[Fahrer, ...]) -> tuple[int, ...] | None:
         """Meisterschaftsstand als Feldindizes, Erster zuerst (GDD 4).
 
@@ -528,6 +594,10 @@ class Saisonlauf:
             seed = wochenende.zweig("liga", liga)
             kenntnis = self.kenntnis.tempofaktoren(nummern, strecke.name)
             tagesform = self.tagesformbonus(liga, fahrer)
+            autos = self.sessionautos(liga, strecke, fahrer, seed)
+            rhythmus = self.rhythmusfaktoren(
+                strecke, fahrer, autos.get(kern_ereignis.RENNEN, {})
+            )
             if liga == ausfuehrliche_liga:
                 ligen[liga], verlauf, quali = _ausfuehrlich(
                     self.konfiguration,
@@ -541,8 +611,9 @@ class Saisonlauf:
                     verschleiss,
                     self.meisterschaft(liga, fahrer),
                     kenntnis,
-                    self.spielerautos(liga),
+                    autos,
                     tagesform,
+                    rhythmus,
                 )
             else:
                 ligen[liga] = _schnell(
@@ -556,10 +627,13 @@ class Saisonlauf:
                     self.streckenmittel,
                     verschleiss,
                     kenntnis,
-                    self.spielerautos(liga),
+                    autos,
                     tagesform,
+                    rhythmus,
                 )
             self.tabellen[liga].verbuche(self.konfiguration, ligen[liga].ergebnisse)
+            # Siege, Podien und Poles machen bekannt (Punkt 5).
+            self.popularitaet.verbuche_wochenende(ligen[liga].ergebnisse)
             self.statistik.verbuche_wochenende(
                 saison=self.jahr,
                 rennen=nummer,
@@ -735,6 +809,7 @@ class Saisonlauf:
         * **Statistik** - Rundenrekorde, Karrierezahlen und die
           vollstaendige Historie aller bisherigen Saisons,
         * **Streckenkenntnis** aller 600 Fahrer (GDD 6),
+        * die **Popularitaet** aller 600 Fahrer (Punkt 5),
         * aus der Karriere Konto, Werte, Sponsorenvertraege, offene
           Defekte und laufende Ereignisse (GDD 10 und 14).
 
@@ -759,6 +834,7 @@ class Saisonlauf:
             statistik=self.statistik,
             kenntnis=self.kenntnis,
             karriere=self.karriere,
+            popularitaet=self.popularitaet,
         )
 
 

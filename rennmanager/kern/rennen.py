@@ -21,17 +21,19 @@ Regeln aus GDD 4:
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 
 import numpy as np
 
 from rennmanager.kern import form as kern_form
 from rennmanager.kern import reifen as kern_reifen
+from rennmanager.kern import tempoverlauf as kern_tempoverlauf
 from rennmanager.kern import wetter as kern_wetter
+from rennmanager.kern import windschatten as kern_windschatten
 from rennmanager.kern import zwischenfall as kern_zwischenfall
 from rennmanager.kern.auto import Auto, bereichswert, gesamtwert
-from rennmanager.kern.strecke import Strecke
+from rennmanager.kern.strecke import Segmentart, Strecke
 from rennmanager.kern.tempo import KMH_JE_MS, geschwindigkeitsprofil, grenzen_aus, leistungsanteil
 from rennmanager.kern.zufall import Seedquelle
 
@@ -246,6 +248,7 @@ class _Lauf:
         streckenverschleiss: float = 1.0,
         kenntnisfaktor: tuple[float, ...] | None = None,
         tagesformbonus: tuple[float, ...] | None = None,
+        rhythmusfaktor: tuple[float, ...] | None = None,
     ) -> None:
         self.k = konfiguration
         self.strecke = strecke
@@ -288,7 +291,20 @@ class _Lauf:
             self.autos = [form.auto for form in formen]
             self.tagesform = tuple(form.tagesform for form in formen)
 
+        # Der Rhythmus aus Punkt 15 wirkt auf die Querbeschleunigung in
+        # Kurven, bevor das Profil gebildet wird - der Vorteil faellt damit
+        # von selbst dort an, wo wirklich Kurven liegen.
+        if rhythmusfaktor is not None and len(rhythmusfaktor) != self.anzahl:
+            raise ValueError(
+                f"Rhythmusfaktor fuer {len(rhythmusfaktor)} Autos, "
+                f"im Feld stehen {self.anzahl}"
+            )
         grenzen = [grenzen_aus(konfiguration, auto) for auto in self.autos]
+        if rhythmusfaktor is not None and not ohne_zufall:
+            grenzen = [
+                replace(g, quer=g.quer * faktor)
+                for g, faktor in zip(grenzen, rhythmusfaktor, strict=True)
+            ]
         self.profile = np.array([geschwindigkeitsprofil(strecke, g) for g in grenzen])
         # Grip je Auto und Sektor, gegen die Wetterfaehigkeiten gerechnet.
         # Er wird beim Rundenwechsel neu gesetzt, weil sich das Wetter
@@ -305,6 +321,15 @@ class _Lauf:
         for zone in strecke.ueberholzonen:
             indizes = (zone.von + np.arange(zone.punkte)) % self.punkte
             self.ist_zone[indizes] = True
+        # Nummer der Geraden je Streckenpunkt, -1 ausserhalb. Der
+        # Windschatten wirkt nur auf Geraden und je Gerade nur einmal
+        # (Punkt 7), dafuer muss die Simulation sie auseinanderhalten.
+        self.geradennummer = np.full(self.punkte, -1, dtype=int)
+        geraden = [seg for seg in strecke.segmente if seg.art is Segmentart.GERADE]
+        for nummer, segment in enumerate(geraden):
+            indizes = (segment.von + np.arange(segment.punkte)) % self.punkte
+            self.geradennummer[indizes] = nummer
+        self.geraden_je_runde = max(len(geraden), 1)
 
         self.distanz = np.array(
             [startdistanz_m(konfiguration, t.startplatz) for t in teilnehmer]
@@ -359,6 +384,67 @@ class _Lauf:
         self.verschleiss = np.zeros(self.anzahl)
         self.reifen_tempo = np.ones(self.anzahl)
         self.reifen_fehler = np.ones(self.anzahl)
+
+        # --- Ueber die Distanz (Punkte 9, 11 und 20) ------------------
+        # Ermuedung, kalte Reifen und nachlassende Bremsen haengen alle an
+        # der schon gefahrenen Distanz. Die Betraege je Auto stehen fest;
+        # sie werden hier einmal geholt, damit die Schleife nur noch
+        # rechnet. Wie Reifen und Streckenkenntnis fallen sie im
+        # zufallsfreien Modus weg - GDD 9 kalibriert die blanke Runde.
+        self.renndistanz = float(renndistanz)
+        self.ermuedung_beginn = konfiguration.wert("ermuedung", "beginn_anteil_distanz")
+        self.aufwaermstrecke = (
+            konfiguration.wert("kaltreifen", "aufwaermstrecke_runden") * self.laenge
+        )
+        self.ermuedung_verlust = np.zeros(self.anzahl)
+        self.kaltreifen_verlust = np.zeros(self.anzahl)
+        # Zweites Profil mit der Bremsgrenze des Rennendes. Die
+        # Bremskuehlung senkt die *Grenze*, nicht das Tempo: Was sie
+        # kostet, haengt davon ab, wie viel auf der Strecke gebremst wird.
+        # Zwischen beiden Profilen wird nach gefahrener Distanz gemischt.
+        self.profil_ende = self.profile
+        if not ohne_zufall:
+            self.ermuedung_verlust = np.array(
+                [
+                    kern_tempoverlauf.ermuedungsverlust(konfiguration, auto)
+                    for auto in self.autos
+                ]
+            )
+            self.kaltreifen_verlust = np.array(
+                [
+                    kern_tempoverlauf.kaltreifenverlust(konfiguration, auto)
+                    for auto in self.autos
+                ]
+            )
+            self.profil_ende = np.array(
+                [
+                    geschwindigkeitsprofil(
+                        strecke,
+                        replace(
+                            g,
+                            brems=kern_tempoverlauf.bremsgrenze_am_ende(
+                                konfiguration, auto, g.brems
+                            ),
+                        ),
+                    )
+                    for auto, g in zip(self.autos, grenzen, strict=True)
+                ]
+            )
+
+        # --- Windschatten (Punkt 7) -----------------------------------
+        # Der Sog haengt am Abstand zum Vordermann und gilt je Gerade
+        # einmal. ``sog_verbraucht`` merkt sich, auf welcher Geraden
+        # welcher Runde ein Auto ihn schon aufgebraucht hat - das ist der
+        # Fall, sobald es einmal auf gleicher Hoehe war, also vorbeikam.
+        # Wie Reifen und Streckenkenntnis faellt er im zufallsfreien Modus
+        # weg: GDD 9 kalibriert das einzelne Auto auf freier Strecke.
+        self.sog_gewinn = np.zeros(self.anzahl)
+        if not ohne_zufall:
+            self.sog_gewinn = np.array(
+                [kern_windschatten.gewinn(konfiguration, auto) for auto in self.autos]
+            )
+        self.sog_fenster = kern_windschatten.fenster_m(konfiguration)
+        self.sog_verbraucht = np.full(self.anzahl, -1, dtype=int)
 
         # --- Zwischenfaelle (GDD 4 und 14) ----------------------------
         self.zwischenfaelle: list[kern_zwischenfall.Zwischenfall] = []
@@ -469,6 +555,33 @@ class _Lauf:
         self.index = index
         hier = self.profile[self.laufende_nummer, index]
         dort = self.profile[self.laufende_nummer, danach]
+
+        # Anteil der Renndistanz - daran haengen die drei Verlaeufe aus
+        # kern.tempoverlauf.
+        anteil = (
+            np.clip(self.distanz / self.renndistanz, 0.0, 1.0)
+            if self.renndistanz > 0.0
+            else np.zeros(self.anzahl)
+        )
+        if self.profil_ende is not self.profile:
+            # Die Bremsen lassen ueber die Distanz nach (Punkt 20).
+            ende_hier = self.profil_ende[self.laufende_nummer, index]
+            ende_dort = self.profil_ende[self.laufende_nummer, danach]
+            hier = hier + anteil * (ende_hier - hier)
+            dort = dort + anteil * (ende_dort - dort)
+
+        # Ermuedung ab der halben Distanz (GDD 8, Bereich er) und kalte
+        # Reifen in der ersten Runde (Punkt 48).
+        offen = max(1.0 - self.ermuedung_beginn, 1e-9)
+        fortschritt = np.clip((anteil - self.ermuedung_beginn) / offen, 0.0, 1.0)
+        ermuedung_tempo = 1.0 - self.ermuedung_verlust * fortschritt
+        kalt = (
+            np.clip(1.0 - np.maximum(self.distanz, 0.0) / self.aufwaermstrecke, 0.0, 1.0)
+            if self.aufwaermstrecke > 0.0
+            else np.zeros(self.anzahl)
+        )
+        kaltreifen_tempo = 1.0 - self.kaltreifen_verlust * kalt
+
         # Grip aus dem Wetter, Rundenform, Reifenzustand, aktive Defekte
         # und die Streckenkenntnis wirken alle als Faktor aufs Tempo.
         frei = (
@@ -478,6 +591,8 @@ class _Lauf:
             * self.reifen_tempo
             * self.defekt_tempo
             * self.kenntnis_tempo
+            * ermuedung_tempo
+            * kaltreifen_tempo
         )
         ziel = np.where(faehrt, frei, 0.0)
 
@@ -488,6 +603,29 @@ class _Lauf:
         hinten = reihenfolge[1:]
 
         abstand_m = self.distanz[vorne] - self.distanz[hinten]
+
+        # --- Windschatten (Punkt 7) -----------------------------------
+        # Im Fenster von 30 m bis auf gleiche Hoehe steigt das moegliche
+        # Tempo des Verfolgers, dicht dahinter am staerksten. Nur auf
+        # Geraden, und je Gerade nur einmal: Wer einmal auf gleicher Hoehe
+        # war, ist aus dem Sog heraus.
+        #
+        # Der Sog wirkt auf ``ziel``, bevor die Folgeregel greift. Damit
+        # waechst der Tempovorteil, mit dem gleich das Ueberholen
+        # gewuerfelt wird - genau dafuer ist er da.
+        if self.sog_fenster > 0.0:
+            gerade = self.geradennummer[index[hinten]]
+            im_fenster = (
+                faehrt[hinten]
+                & faehrt[vorne]
+                & (abstand_m > 0.0)
+                & (abstand_m < self.sog_fenster)
+                & (gerade >= 0)
+                & (self._gerade_id(hinten, gerade) != self.sog_verbraucht[hinten])
+            )
+            if im_fenster.any():
+                anteil = np.where(im_fenster, 1.0 - abstand_m / self.sog_fenster, 0.0)
+                ziel[hinten] = ziel[hinten] * (1.0 + self.sog_gewinn[hinten] * anteil)
 
         # Unfaelle haengen allein am Abstand (GDD 4: unter 30 m), nicht am
         # engeren Fenster fuers Ueberholen.
@@ -526,12 +664,27 @@ class _Lauf:
                 and self._versucht_ueberholen(i, j, vorteil, zeit_ms)
             ):
                 getauscht.update((i, j))
+                # Vorbei heisst: einmal auf gleicher Hoehe gewesen. Damit
+                # ist der Sog auf dieser Geraden aufgebraucht (Punkt 7).
+                nummer = int(self.geradennummer[index[i]])
+                if nummer >= 0:
+                    self.sog_verbraucht[i] = int(self._gerade_id(i, nummer))
                 continue
             # Sonst bleibt das schnellere Auto dahinter und faehrt dessen
             # Tempo (GDD 4).
             if ziel[j] < ziel[i]:
                 ziel[i] = ziel[j]
         return ziel
+
+    def _gerade_id(self, autos, gerade):
+        """Eindeutige Kennung einer Geraden in einer Runde.
+
+        Die Geradennummer allein genuegt nicht: Dieselbe Gerade kommt in
+        jeder Runde wieder, und der Sog steht je Gerade *und Runde* einmal
+        zu. Eine Gerade, die ueber die Start/Ziel-Linie laeuft, zaehlt
+        dabei als zwei - das betrifft je Strecke hoechstens eine.
+        """
+        return self.runden_gefahren[autos] * self.geraden_je_runde + gerade
 
     def _prueft_unfall(self, hinten: int, vorne: int, zeit_ms: int) -> bool:
         """Wuerfelt einen Unfall zwischen zwei nahen Autos (GDD 4).
@@ -792,6 +945,7 @@ def simuliere(
     streckenverschleiss: float = 1.0,
     kenntnisfaktor: tuple[float, ...] | None = None,
     tagesformbonus: tuple[float, ...] | None = None,
+    rhythmusfaktor: tuple[float, ...] | None = None,
     hoechstdauer_ms: int | None = None,
 ) -> Rennverlauf:
     """Faehrt ein ganzes Rennen und liefert den fertigen Verlauf.
@@ -808,6 +962,9 @@ def simuliere(
     :param tagesformbonus: Zuschlag auf den Tagesform-Mittelwert je Auto
         (E3 Motivationsschub aus GDD 14). Ohne Angabe faehrt jedes Auto
         ohne Zuschlag.
+    :param rhythmusfaktor: Faktor auf die Querbeschleunigung in Kurven je
+        Auto (Punkt 15), aus rennmanager.kern.rhythmus. Ohne Angabe faehrt
+        jedes Auto ohne Rhythmusvorteil.
     :param ohne_zufall: laesst Tagesform, Eigenschafts-Zufall, Rundenform,
         Fehler, Unfaelle, Defekte, Reifenverschleiss und Streckenkenntnis
         weg - also
@@ -824,6 +981,7 @@ def simuliere(
     lauf = _Lauf(
         konfiguration, strecke, teilnehmer, runden, seedquelle, streckenmittel,
         wetter, ohne_zufall, streckenverschleiss, kenntnisfaktor, tagesformbonus,
+        rhythmusfaktor,
     )
     schritt_ms = konfiguration.wert("simulation", "zeitschritt_ms")
     bild_ms = konfiguration.wert("simulation", "bildschritt_ms")

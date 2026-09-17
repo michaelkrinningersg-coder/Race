@@ -117,10 +117,11 @@ def wuerfle(
         schluessel: gewuerfelt(schluessel, wert, schluessel.startswith(FAHRER_PRAEFIX))
         for schluessel, wert in auto.werte.items()
     }
-    # Die Wetterfaehigkeiten gehoeren dem Fahrer, also traegt sie die
-    # Tagesform ebenfalls.
+    # Neben der Matrix stehen Fahrer- und Fahrzeugeigenschaften. Die
+    # Tagesform traegt nur die des Fahrers (GDD 11).
+    fahrzeug = konfiguration.fahrzeugzusatz
     wetterwerte = {
-        schluessel: gewuerfelt(schluessel, wert, True)
+        schluessel: gewuerfelt(schluessel, wert, schluessel not in fahrzeug)
         for schluessel, wert in auto.wetterwerte.items()
     }
     return Sessionform(

@@ -68,6 +68,7 @@ class Editorseite(QWidget):
         konfiguration: Konfiguration,
         welt: Welt,
         kenntnis: kern_kenntnis.Streckenkenntnis,
+        popularitaet=None,
         karriere=None,
         parent: QWidget | None = None,
     ) -> None:
@@ -75,6 +76,7 @@ class Editorseite(QWidget):
         self._konfiguration = konfiguration
         self._welt = welt
         self._kenntnis = kenntnis
+        self._popularitaet = popularitaet
         self._karriere = karriere
         self._strecken = tuple(e["name"] for e in konfiguration.strecken)
         self._geladen: int | None = None
@@ -254,6 +256,23 @@ class Editorseite(QWidget):
         formular.addRow("Land:", self._land)
         formular.addRow("Geburtstag:", self._geburtstag)
 
+        # Punkt 5: Bekanntheit. Sie ist kein Fahrwert, sondern eine Zahl
+        # neben der Welt - wie die Streckenkenntnis.
+        self._popularitaetsfeld = QSpinBox()
+        self._popularitaetsfeld.setRange(
+            self._konfiguration.wert("skala", "minimum"),
+            self._konfiguration.wert("skala", "maximum"),
+        )
+        self._popularitaetsfeld.setSingleStep(1_000)
+        self._popularitaetsfeld.setLocale(DEUTSCH)
+        self._popularitaetsfeld.setGroupSeparatorShown(True)
+        self._popularitaetsfeld.setEnabled(self._popularitaet is not None)
+        self._popularitaetsfeld.setToolTip(
+            "Bewegt den Grundbetrag der Sponsorenangebote um bis zu 25 Prozent "
+            "(GDD 10). Waechst aus Siegen, Podien und Poles."
+        )
+        formular.addRow("Popularitaet:", self._popularitaetsfeld)
+
         self._unveraenderlich = QLabel()
         self._unveraenderlich.setWordWrap(True)
         formular.addRow("Fest:", self._unveraenderlich)
@@ -278,13 +297,10 @@ class Editorseite(QWidget):
         return zeile
 
     def _zusatznamen(self) -> dict[str, str]:
-        namen = {
+        return {
             e["schluessel"]: e.get("name", e["schluessel"])
-            for e in self._konfiguration.wert("wetter", "faehigkeit", "liste")
+            for e in self._konfiguration.zusatzeintraege
         }
-        fluesterer = self._konfiguration.wert("reifen", "fluesterer")
-        namen[fluesterer["schluessel"]] = fluesterer.get("name", fluesterer["schluessel"])
-        return namen
 
     # -- Liste -------------------------------------------------------------
     def _fahrerauswahl(self) -> tuple:
@@ -428,6 +444,8 @@ class Editorseite(QWidget):
         self._nachname.setText(fahrer.nachname)
         self._land.setText(fahrer.land)
         self._geburtstag.setDate(fahrer.geburtstag)
+        if self._popularitaet is not None:
+            self._popularitaetsfeld.setValue(int(round(self._popularitaet.stand(nummer))))
         team = self._welt.team_von(fahrer)
         self._unveraenderlich.setText(
             f"Liga {fahrer.liga} · Team {team.name} · Hersteller {team.hersteller} · "
@@ -484,6 +502,8 @@ class Editorseite(QWidget):
 
         for name, feld in self._kenntnisfelder.items():
             self._kenntnis.setze(nummer, name, feld.value())
+        if self._popularitaet is not None:
+            self._popularitaet.setze(nummer, self._popularitaetsfeld.value())
         # Ein editierter Fahrer behaelt seinen Stand; sonst schriebe die
         # naechste Session ihn sofort wieder hoch (GDD 12 fuer die KI).
         if self._karriere is not None and nummer == self._karriere.fahrernummer:

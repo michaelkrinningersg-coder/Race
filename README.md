@@ -482,6 +482,62 @@ Jahr dasselbe Raster, verankert am Tag nach dem ersten Rennen: Jeder
 Zyklus endet genau auf einem Renntag, das Ausloesefenster faellt in die
 freien Tage danach. Macht 27 Zyklen und 21 bis 33 Ereignisse je Saison.
 
+## Neun Eigenschaften ueber das GDD hinaus
+
+Aus einer Liste von 20 Vorschlaegen hat der Auftraggeber neun gewaehlt.
+Alle Entscheidungen dazu stehen in OFFENE_PUNKTE.md (Punkte 48 bis 53).
+
+| Was | Wirkung | Wo |
+| --- | --- | --- |
+| **Ermuedung** (GDD 8, Bereich `er`) | bis -2,0 % Tempo am Rennende, ab halber Distanz | `kern.tempoverlauf` |
+| **Kaltreifen** | bis -3,0 % Tempo, abgebaut ueber die erste Runde | `kern.tempoverlauf` |
+| **Bremskuehlung** | bis -4,0 % Bremsgrenze am Rennende | `kern.tempoverlauf` |
+| **Windschatten** | bis +2,5 % Tempo, 30 m bis auf gleiche Hoehe, einmal je Gerade | `kern.windschatten` |
+| **Rhythmus** | +/- 1,5 % Querbeschleunigung, je nach Kurvenanteil der Strecke | `kern.rhythmus` |
+| **Materialgefuehl** | Defektrate mal 1,0 bis 0,6 | `kern.zwischenfall` |
+| **Heimstrecke** | +0,5 bis +1,0 % auf fuenf je Wochenende gezogene Eigenschaften | `kern.heimstrecke` |
+| **Popularitaet** | +/- 25 % auf den Grundbetrag der Sponsorenangebote | `kern.popularitaet` |
+| **Ueberrunden** | war schon richtig - siehe unten | `kern.rennen` |
+
+Fuenf davon brauchen eine neue Eigenschaft. Sie stehen **neben der
+Wirkungsmatrix** aus GDD 8, wie die Wetterfaehigkeiten aus GDD 7 und der
+Reifenfluesterer:
+
+```toml
+[[zusatzfaehigkeit.liste]]
+schluessel = "bremskuehlung"
+name = "Bremskuehlung"
+traeger = "fahrzeug"     # Fahrerwerte traegt die Tagesform, Fahrzeugwerte nicht
+waehrung = ["G", "E"]
+```
+
+So bleiben Gesamtwert, Bereichswerte und damit die Kalibriertabelle aus
+GDD 9 unberuehrt - gemessen liegt Zandvoort weiter bei +0.00. Dafuer
+sorgt auch, dass **alle neuen Wirkungen hinter `ohne_zufall` liegen**:
+GDD 9 kalibriert die freie Einzelrunde, und die kennt weder Ermuedung noch
+kalte Reifen noch Windschatten.
+
+### Warum die Bremskuehlung ein zweites Profil bekommt
+
+Die anderen Verlaeufe sind Faktoren aufs Tempo. Die Bremskuehlung senkt
+dagegen die *Bremsgrenze* - und was das kostet, haengt davon ab, wie viel
+auf einer Strecke gebremst wird. Deshalb wird das Geschwindigkeitsprofil
+zweimal gebildet, einmal mit voller Bremse und einmal mit der Bremse des
+Rennendes; dazwischen wird nach gefahrener Distanz gemischt. Das kostet
+einmal je Rennen doppelte Rechenzeit fuers Profil und trifft dafuer
+Monza anders als Zandvoort.
+
+### Warum Punkt 12 nichts zu tun gab
+
+"Beim Ueberrunden darf der Ueberrundende nicht aufgehalten werden" - das
+war schon so. Die Folgeregel aus GDD 4 haengt an der *zurueckgelegten
+Distanz*, nicht an der Position auf der Strecke; ein ueberrundetes Auto
+liegt damit eine ganze Rundenlaenge zurueck und kommt nie ins
+0,05-Sekunden-Fenster. Gemessen mit einem 98.000er Auto gegen neun
+10.000er ueber 12 Runden: neun Autos fuenfmal ueberrundet, und die
+Rundenzeiten des Schnellen im Verkehr sind auf die Millisekunde identisch
+mit seiner Alleinfahrt. Zwei Tests halten das jetzt fest.
+
 ## Streckenkenntnis
 
 `rennmanager.kern.streckenkenntnis` setzt GDD 6 um: Der Kenntniswert

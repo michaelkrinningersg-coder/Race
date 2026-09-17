@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
 
 from rennmanager import __version__
 from rennmanager.kern import karriere as kern_karriere
+from rennmanager.kern import popularitaet as kern_popularitaet
 from rennmanager.kern import spielstand as kern_spielstand
 from rennmanager.kern import statistik as kern_statistik
 from rennmanager.kern import streckenkenntnis as kern_streckenkenntnis
@@ -79,6 +80,12 @@ class Hauptfenster(QMainWindow):
         self._statistik = kern_statistik.Statistik(konfiguration)
         self._kenntnis = kern_streckenkenntnis.Streckenkenntnis(
             konfiguration, seedquelle=self._seedquelle.zweig("lerntempo")
+        )
+        # Punkt 5: Bekanntheit, gestreut aber nicht nach Ligastaerke.
+        self._popularitaet = kern_popularitaet.Popularitaet(konfiguration)
+        self._popularitaet.anfang(
+            tuple(f.nummer for f in self._welt.fahrer),
+            self._seedquelle.zweig("popularitaet"),
         )
         # Die KI bekommt ihre Streckenkenntnis einmal fest (GDD 12).
         kern_streckenkenntnis.setze_ki_anfang(
@@ -142,7 +149,10 @@ class Hauptfenster(QMainWindow):
         self._karriereseite = Karriereseite(self._konfiguration, self._karriere)
         self._reiter.addTab(self._karriereseite, "Karriere")
         self._sponsorenseite = Sponsorenseite(
-            self._konfiguration, self._karriere, self._seedquelle.zweig("sponsoren")
+            self._konfiguration,
+            self._karriere,
+            self._seedquelle.zweig("sponsoren"),
+            self._popularitaet,
         )
         self._reiter.addTab(self._sponsorenseite, "Sponsoren")
         self._qualifyingseite = Qualifyingseite(
@@ -161,6 +171,7 @@ class Hauptfenster(QMainWindow):
             gefahrene_rennen=getattr(self, "_gefahrene_rennen", 0),
             karriere=self._karriere,
             jahr=self._jahr,
+            popularitaet=self._popularitaet,
         )
         self._saisonseite.saison_gewechselt.connect(self._saison_gewechselt)
         self._reiter.addTab(self._saisonseite, "Saison")
@@ -170,7 +181,11 @@ class Hauptfenster(QMainWindow):
         self._reiter.addTab(self._statistikseite, "Statistik")
         # GDD 15 nennt eine Debug-Ansicht unter den Balancing-Werkzeugen.
         self._editorseite = Editorseite(
-            self._konfiguration, self._welt, self._kenntnis, self._karriere
+            self._konfiguration,
+            self._welt,
+            self._kenntnis,
+            popularitaet=self._popularitaet,
+            karriere=self._karriere,
         )
         self._reiter.addTab(self._editorseite, "Editor")
         # Die Statistik waechst mit jedem Rennwochenende; beim Aufschlagen
@@ -355,6 +370,11 @@ class Hauptfenster(QMainWindow):
         return self._karriere
 
     @property
+    def popularitaet(self):
+        """Der Bekanntheitsgrad aller Fahrer (Punkt 5)."""
+        return self._popularitaet
+
+    @property
     def jahr(self) -> int:
         """Das Jahr der laufenden Saison (GDD 13)."""
         return self._jahr
@@ -376,6 +396,7 @@ class Hauptfenster(QMainWindow):
             statistik=self._statistik,
             kenntnis=self._kenntnis,
             gefahrene_rennen=self._saisonseite.lauf.gefahren,
+            popularitaet=self._popularitaet,
         )
 
     def _speichere(self) -> None:
@@ -457,6 +478,15 @@ class Hauptfenster(QMainWindow):
         self._jahr = stand.saisonjahr
         self._statistik = stand.statistik
         self._kenntnis = stand.kenntnis
+        if stand.popularitaet is not None and stand.popularitaet.werte:
+            self._popularitaet = stand.popularitaet
+        else:
+            # Ein Stand vor Version 3 kennt sie noch nicht.
+            self._popularitaet = kern_popularitaet.Popularitaet(self._konfiguration)
+            self._popularitaet.anfang(
+                tuple(f.nummer for f in stand.welt.fahrer),
+                Seedquelle(stand.seed).zweig("popularitaet"),
+            )
         self._geladene_tabellen = stand.tabellen
         self._gefahrene_rennen = stand.gefahrene_rennen
 

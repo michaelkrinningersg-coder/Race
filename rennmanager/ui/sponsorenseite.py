@@ -47,12 +47,15 @@ class Sponsorenseite(QWidget):
         konfiguration: Konfiguration,
         karriere: Karriere,
         seedquelle: Seedquelle,
+        popularitaet=None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._konfiguration = konfiguration
         self._karriere = karriere
         self._seedquelle = seedquelle
+        # Punkt 5: Wie bekannt der Spieler ist, bewegt die Angebote.
+        self._popularitaet = popularitaet
         self._angebote: dict[str, tuple[kern_sponsoren.Angebot, ...]] = {}
 
         spalte = QVBoxLayout(self)
@@ -129,8 +132,13 @@ class Sponsorenseite(QWidget):
     def wuerfle_angebote(self) -> None:
         """Zieht die Angebote der laufenden Woche (GDD 10)."""
         woche = self._karriere.heute.isocalendar().week
+        faktor = (
+            self._popularitaet.faktor(self._karriere.fahrernummer)
+            if self._popularitaet is not None
+            else 1.0
+        )
         self._angebote = kern_sponsoren.wuerfle_angebote(
-            self._konfiguration, self._karriere.liga, woche, self._seedquelle
+            self._konfiguration, self._karriere.liga, woche, self._seedquelle, faktor
         )
         self.zeichne()
 

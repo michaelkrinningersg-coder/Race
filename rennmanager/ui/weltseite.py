@@ -213,13 +213,10 @@ class Weltseite(QWidget):
 
     def _zusatznamen(self) -> dict[str, str]:
         """Namen der Faehigkeiten ausserhalb der Wirkungsmatrix."""
-        namen = {
+        return {
             e["schluessel"]: e.get("name", e["schluessel"])
-            for e in self._konfiguration.wert("wetter", "faehigkeit", "liste")
+            for e in self._konfiguration.zusatzeintraege
         }
-        fluesterer = self._konfiguration.wert("reifen", "fluesterer")
-        namen[fluesterer["schluessel"]] = fluesterer.get("name", fluesterer["schluessel"])
-        return namen
 
     def _saisonstart(self):
         import datetime as dt

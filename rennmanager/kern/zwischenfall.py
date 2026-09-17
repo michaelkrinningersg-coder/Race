@@ -27,6 +27,10 @@ if TYPE_CHECKING:  # pragma: no cover
     from rennmanager.konfiguration import Konfiguration
 
 
+# Eigenschaft neben der Wirkungsmatrix (Punkt 13).
+MATERIALGEFUEHL = "materialgefuehl"
+
+
 class Art:
     """Die drei Arten von Zwischenfaellen."""
 
@@ -100,12 +104,32 @@ def zeitverlust_ms(konfiguration: Konfiguration, wuerfel) -> int:
 # ---------------------------------------------------------------------------
 # Defekte
 # ---------------------------------------------------------------------------
+def materialgefuehl(konfiguration: Konfiguration, auto: Auto) -> float:
+    """Faktor auf die Defektrate aus der Eigenschaft ``materialgefuehl``.
+
+    Die Fahrerseite der Zuverlaessigkeit (Punkt 13): F14 bestimmt, wie oft
+    ein Auto kaputtgeht, dieser Wert senkt es zusaetzlich - wer das
+    Material spuert, faehrt es nicht kaputt. Die Eigenschaft steht neben
+    der Wirkungsmatrix aus GDD 8; fehlt sie, gilt 0 (GDD 1).
+    """
+    einstellung = konfiguration.wert("materialgefuehl")
+    anteil = min(
+        leistungsanteil(
+            auto.wetterwert(MATERIALGEFUEHL), konfiguration.wert("skala", "referenz")
+        ),
+        1.0,
+    )
+    bei_null = einstellung["faktor_bei_null"]
+    return bei_null + anteil * (einstellung["faktor_bei_maximum"] - bei_null)
+
+
 def defektrate_je_runde(konfiguration: Konfiguration, auto: Auto, runden: int) -> float:
     """Wahrscheinlichkeit eines Defekts je Runde (GDD 4).
 
     Die Entscheidung nennt eine Rate je Auto und Rennen; sie wird hier auf
     die Runden verteilt. Getragen wird sie vom Bereich ``ve``, also vor
-    allem von F14 Zuverlaessigkeit.
+    allem von F14 Zuverlaessigkeit - und seit Punkt 13 zusaetzlich vom
+    Materialgefuehl des Fahrers.
     """
     einstellung = konfiguration.wert("defekte", "rate")
     anteil = min(
@@ -118,7 +142,7 @@ def defektrate_je_runde(konfiguration: Konfiguration, auto: Auto, runden: int) -
         einstellung["je_auto_und_rennen_bei_maximum"]
         - einstellung["je_auto_und_rennen_bei_null"]
     )
-    return je_rennen / max(runden, 1)
+    return je_rennen * materialgefuehl(konfiguration, auto) / max(runden, 1)
 
 
 def waehle_defekt(konfiguration: Konfiguration, wuerfel) -> dict:

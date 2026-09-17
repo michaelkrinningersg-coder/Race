@@ -133,6 +133,27 @@ def pruefe() -> int:
     )
     # Streckenkenntnis (GDD 6) und Spielstand (GDD 15).
     voll = konfiguration.wert("streckenkenntnis", "volle_kenntnis_runden")
+    # Was neben der Wirkungsmatrix aus GDD 8 steht (Punkt 48).
+    neben = konfiguration.zusatzfaehigkeiten
+    print(
+        f"Eigenschaften: {len(neben)} neben der Matrix, davon "
+        f"{len(konfiguration.fahrzeugzusatz)} am Fahrzeug"
+    )
+    print(
+        "Ueber Distanz: Ermuedung bis "
+        f"{konfiguration.wert('ermuedung', 'tempoverlust_am_ende_bei_null') * 100:.1f} %, "
+        "Kaltreifen bis "
+        f"{konfiguration.wert('kaltreifen', 'tempoverlust_bei_null') * 100:.1f} %, "
+        "Bremse bis "
+        f"{konfiguration.wert('bremskuehlung', 'verlust_am_ende_bei_null') * 100:.1f} %"
+    )
+    print(
+        "Verkehr:       Windschatten bis "
+        f"{konfiguration.wert('windschatten', 'gewinn_bei_maximum') * 100:.1f} % "
+        f"innerhalb {konfiguration.wert('windschatten', 'fenster_m'):.0f} m, "
+        "Rhythmus +/- "
+        f"{konfiguration.wert('rhythmus', 'max_anteil_quer') * 100:.1f} % quer"
+    )
     print(
         f"Kenntnis:      bis {kern_kenntnis.bonus(konfiguration, voll) * 100:.2f} % Tempo "
         f"nach {voll} Runden"

@@ -1151,3 +1151,109 @@ nicht in der Historie steht, ist fort.
 Das Jahr 2026 stand an vier Stellen im Code. **Entschieden:** Es steht
 jetzt als `[kalender] startjahr` in der Konfiguration, wie jeder andere
 Balancing-Wert auch. Jeder Saisonwechsel zählt eines hoch.
+
+---
+
+## Nachtrag: die neun Eigenschaften aus Punkt 48
+
+Aus der Liste mit 20 Vorschlägen hat der Auftraggeber neun gewählt: **2, 5,
+7, 9, 11, 12, 13, 15 und 20**. Alles davon steht über GDD v1.0 hinaus; die
+Entscheidungen dazu stehen hier.
+
+### 48. Wo die neuen Eigenschaften leben
+
+Fünf der neun brauchen eine neue Eigenschaft: Windschattennutzung,
+Kaltreifen, Materialgefühl, Rhythmus und Bremskühlung.
+
+| | Variante | |
+| --- | --- | --- |
+| **A** | Neben der Wirkungsmatrix, wie die Wetterfähigkeiten aus GDD 7 | GDD 8 und die Kalibriertabelle aus GDD 9 bleiben unberührt |
+| **B** | Neue Zeilen D17–D20 und F17 in der Matrix | Änderte Gesamtwert, Bereichswerte und alle Kontrollwerte aus GDD 9 |
+
+**Entscheidung: A** (vom Auftraggeber gewählt). Die Konfiguration hat dafür
+einen eigenen Abschnitt `[[zusatzfaehigkeit.liste]]`; jeder Eintrag nennt
+seinen `traeger`. Fahrereigenschaften trägt die Tagesform aus GDD 11 und
+sie belegen den Fahrerplatz aus GDD 2, Fahrzeugeigenschaften gehören der
+Werkstatt. Gemessen: Die Kalibrierung liegt weiter bei ±0.00.
+
+**Alle neuen Wirkungen liegen hinter `ohne_zufall`** — genau wie Reifen,
+Fehler und Streckenkenntnis. GDD 9 kalibriert die freie Einzelrunde, und
+die kennt weder Ermüdung noch kalte Reifen noch Windschatten.
+
+### 49. Wen die Heimstrecke trifft
+
+Von 600 Fahrern haben nur **212** ein Land, in dem auch eine Strecke liegt:
+Die 20 Strecken verteilen sich auf 17 Länder, die Fahrer kommen aus 32.
+
+| | Variante |
+| --- | --- |
+| **A** | Wer kein Land mit Strecke hat, bekommt eine aus dem Seed zugelost |
+| **B** | Nur die 212 mit passendem Land bekommen eine |
+| **C** | Ersatzland über Nachbarschaft |
+
+**Entscheidung: B** (vom Auftraggeber gewählt).
+
+**Wie der Bonus wirkt:** 0,5 bis 1,0 Prozent auf **fünf Eigenschaften**,
+die **jedes Rennwochenende neu** gezogen werden (Entscheidung des
+Auftraggebers gegen eine feste Auswahl je Fahrer) — aus den 32 der Matrix
+**und** denen daneben. Er greift über `welt.starterfeld(..., autos=...)`,
+dieselbe Naht, über die auch die entwickelten Werte des Spielers ins
+Rennen kommen.
+
+### 50. Wann der Windschatten verbraucht ist
+
+Abgestimmt: Er wirkt **von 30 m bis auf gleiche Höhe**, nur auf Geraden,
+und **einmal je Gerade**.
+
+| | Variante |
+| --- | --- |
+| **A** | Einmal auf gleicher Höhe gewesen heißt: auf dieser Geraden vorbei |
+| **B** | Der Sog gilt je Gerade nur eine begrenzte Zeit |
+
+**Entscheidung: A** (vom Auftraggeber gewählt). In der Simulation heißt
+„auf gleicher Höhe gewesen" konkret: Das Überholmanöver ist gelungen.
+Danach ist der Sog auf dieser Geraden dieser Runde aufgebraucht.
+
+Gemessen an der Kurzprobe aus `--pruefe`: Die Überholmanöver stiegen mit
+demselben Seed von 435 auf 486.
+
+### 51. Popularität: gestreut, aber nicht nach Ligastärke
+
+**Entschieden** (vom Auftraggeber): Der Anfangswert streut breit, hängt
+aber ausdrücklich **nicht** an der Ligastärke — Bekanntheit ist nicht
+dasselbe wie Schnelligkeit. Sie wächst aus Siegen, Podien und Poles und
+bewegt den Grundbetrag der Sponsorenangebote um bis zu **±25 %**.
+
+**Dabei entschieden:** Bezugspunkt des Faktors ist der *Mittelwert*, nicht
+das Skalenende. Sonst läge das ganze Feld unter 1,0 und die
+Sponsorenbeträge aus GDD 10 fielen auf einen Schlag um ein Fünftel.
+
+**Sie sinkt nicht wieder.** Wer eine Karriere lang dominiert, erreicht die
+Obergrenze — bei 20 Siegen von der Pole je Saison nach gut einer Saison.
+Ein Abbau war nicht Teil der Abstimmung und ist deshalb nicht gebaut.
+
+### 52. Ermüdung: zwei Entscheidungen zusammengeführt
+
+Punkt 11 hatte 2026-09-17 schon entschieden, dass die Ermüdung **erst ab
+der halben Distanz** wirkt. Die abgestimmte Tabelle zu Punkt 48 nannte
+dagegen 2,0 % bei Wert 0 und 0,3 % bei vollem Wert — vorher standen dort
+2,0 % und 0,0 %.
+
+**Zusammengeführt:** Der Beginn bei der halben Distanz bleibt (er war
+eigens begründet), die Beträge kommen aus der neuen Tabelle. Ohne den Rest
+von 0,3 % wäre der Bereich `er` aus GDD 8 für starke Fahrer wirkungslos.
+
+### 53. Punkt 12 war schon richtig
+
+„Beim Überrunden darf der Überrundende nicht aufgehalten werden."
+
+**Gemessen statt gebaut:** Die Folgeregel aus GDD 4 hängt an der
+*zurückgelegten Distanz*, nicht an der Position auf der Strecke. Ein
+überrundetes Auto liegt damit eine ganze Rundenlänge zurück und kommt dem
+Überrundenden nie in das 0,05-Sekunden-Fenster.
+
+Gemessen mit einem 98.000er Auto gegen neun 10.000er über 12 Runden: neun
+Autos fünfmal überrundet, und die Rundenzeiten des Schnellen im Verkehr
+sind **auf die Millisekunde identisch** mit seiner Alleinfahrt. Zwei Tests
+halten das jetzt fest, damit eine spätere Änderung an der Reihenfolge es
+nicht still kaputtmacht.

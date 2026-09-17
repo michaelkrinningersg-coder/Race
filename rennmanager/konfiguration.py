@@ -31,6 +31,10 @@ ANZAHL_WETTERZUSTAENDE = 5          # GDD 7
 ANZAHL_PUNKTERAENGE = 20            # GDD 13
 WAEHRUNGEN = {"G", "E", "Z"}        # Geld, Erfahrung, Zeit
 
+# Wem eine Eigenschaft neben der Wirkungsmatrix gehoert.
+TRAEGER_FAHRER = "fahrer"
+TRAEGER_FAHRZEUG = "fahrzeug"
+
 
 class KonfigurationsFehler(Exception):
     """Die Konfiguration widerspricht den Vorgaben des GDD."""
@@ -113,19 +117,54 @@ class Konfiguration:
         mittel = sum(summen.values()) / len(summen)
         return {schluessel: summe / mittel for schluessel, summe in summen.items()}
 
+    @cached_property
+    def zusatzeintraege(self) -> tuple[dict[str, Any], ...]:
+        """Alle Eigenschaften neben der Wirkungsmatrix, mit ihren Angaben.
+
+        Drei Quellen, eine Liste: die fuenf Wetterfaehigkeiten aus GDD 7,
+        der Reifenfluesterer und die Eigenschaften aus
+        ``[[zusatzfaehigkeit.liste]]``. Keine von ihnen hat eine Zeile in
+        der Wirkungsmatrix; sie gehen deshalb nicht in den Durchschnitt
+        der Basiseigenschaften ein (GDD 4) und lassen die Kalibrierung aus
+        GDD 9 unberuehrt.
+
+        ``traeger`` steht in jedem Eintrag, auch wenn die Quelle ihn nicht
+        nennt: Wetterfaehigkeiten und Reifenfluesterer gehoeren dem Fahrer.
+        """
+        eintraege = list(self.wert("wetter", "faehigkeit", "liste"))
+        fluesterer = self.wert("reifen", "fluesterer", standard=None)
+        if fluesterer and fluesterer.get("schluessel"):
+            eintraege.append(fluesterer)
+        eintraege.extend(self.wert("zusatzfaehigkeit", "liste", standard=[]))
+        return tuple(
+            {**eintrag, "traeger": eintrag.get("traeger", TRAEGER_FAHRER)}
+            for eintrag in eintraege
+        )
+
     @property
     def zusatzfaehigkeiten(self) -> tuple[str, ...]:
-        """Fahrer-Eigenschaften neben der Wirkungsmatrix.
+        """Die Schluessel aller Eigenschaften neben der Wirkungsmatrix."""
+        return tuple(eintrag["schluessel"] for eintrag in self.zusatzeintraege)
 
-        Das sind die fuenf Wetterfaehigkeiten aus GDD 7 und der
-        Reifenfluesterer. Sie haben keine Zeile in der Wirkungsmatrix und
-        gehen nicht in den Durchschnitt der Basiseigenschaften ein (GDD 4).
+    def zusatzeintrag(self, schluessel: str) -> dict[str, Any]:
+        """Die Angaben zu einer Eigenschaft neben der Matrix."""
+        for eintrag in self.zusatzeintraege:
+            if eintrag["schluessel"] == schluessel:
+                return eintrag
+        raise KeyError(schluessel)
+
+    @cached_property
+    def fahrzeugzusatz(self) -> frozenset[str]:
+        """Die Eigenschaften neben der Matrix, die dem Fahrzeug gehoeren.
+
+        Sie traegt die Tagesform nicht (GDD 11 nennt nur Fahrerwerte) und
+        sie belegen den Werkstattplatz, nicht den Fahrerplatz (GDD 2).
         """
-        wetter = tuple(
-            eintrag["schluessel"] for eintrag in self.wert("wetter", "faehigkeit", "liste")
+        return frozenset(
+            eintrag["schluessel"]
+            for eintrag in self.zusatzeintraege
+            if eintrag["traeger"] == TRAEGER_FAHRZEUG
         )
-        weitere = self.wert("reifen", "fluesterer", "schluessel", standard=None)
-        return wetter + ((weitere,) if weitere else ())
 
     @property
     def bereiche(self) -> tuple[str, ...]:

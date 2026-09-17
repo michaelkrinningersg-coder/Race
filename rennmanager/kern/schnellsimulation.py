@@ -16,20 +16,22 @@ volle Simulation braeuchte dafuer Minuten, diese Sekunden.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 import numpy as np
 
 from rennmanager.kern import form as kern_form
 from rennmanager.kern import reifen as kern_reifen
+from rennmanager.kern import tempoverlauf as kern_tempoverlauf
 from rennmanager.kern import wetter as kern_wetter
+from rennmanager.kern import windschatten as kern_windschatten
 from rennmanager.kern import zwischenfall as kern_zwischenfall
 from rennmanager.kern.auto import gesamtwert
 from rennmanager.kern.qualifying import qualifyingbonus
 from rennmanager.kern.rennen import Teilnehmer, erfolgschance, streckenfaktor
 from rennmanager.kern.strecke import Strecke
-from rennmanager.kern.tempo import fahre_runde
+from rennmanager.kern.tempo import fahre_runde, grenzen_aus
 from rennmanager.kern.wertung import Rennergebnis
 from rennmanager.kern.zufall import Seedquelle
 
@@ -61,10 +63,24 @@ class Schnellergebnis:
     kilometer_je_wetter: tuple[dict[str, float], ...] = ()
 
 
-def _grundrunden(konfiguration: Konfiguration, strecke: Strecke, autos) -> np.ndarray:
+def _grenzen(konfiguration, auto, rhythmus: float):
+    """Die Grenzen eines Autos, mit dem Rhythmusvorteil aus Punkt 15."""
+    grenzen = grenzen_aus(konfiguration, auto)
+    return replace(grenzen, quer=grenzen.quer * rhythmus) if rhythmus != 1.0 else grenzen
+
+
+def _grundrunden(
+    konfiguration: Konfiguration, strecke: Strecke, autos, rhythmusfaktor=None
+) -> np.ndarray:
     """Rundenzeit jedes Autos ohne Wetter, Zufall und Verschleiss."""
+    faktoren = rhythmusfaktor if rhythmusfaktor is not None else (1.0,) * len(autos)
     return np.array(
-        [fahre_runde(konfiguration, strecke, auto).zeit_ms for auto in autos],
+        [
+            fahre_runde(
+                konfiguration, strecke, auto, grenzen=_grenzen(konfiguration, auto, faktor)
+            ).zeit_ms
+            for auto, faktor in zip(autos, faktoren, strict=True)
+        ],
         dtype=float,
     )
 
@@ -80,6 +96,7 @@ def fahre_wochenende(
     streckenverschleiss: float = 1.0,
     kenntnisfaktor: tuple[float, ...] | None = None,
     tagesformbonus: tuple[float, ...] | None = None,
+    rhythmusfaktor: tuple[float, ...] | None = None,
 ) -> Schnellergebnis:
     """Faehrt Qualifying und Rennen einer Liga im Schnellmodus (GDD 13).
 
@@ -88,6 +105,8 @@ def fahre_wochenende(
     :param tagesformbonus: Zuschlag auf den Tagesform-Mittelwert je Auto
         (E3 Motivationsschub aus GDD 14). Ohne Angabe faehrt jedes Auto
         ohne Zuschlag.
+    :param rhythmusfaktor: Faktor auf die Querbeschleunigung in Kurven je
+        Auto (Punkt 15). Ohne Angabe faehrt jedes Auto ohne Vorteil.
     """
     if not teilnehmer:
         raise ValueError("Ohne Teilnehmer gibt es kein Rennwochenende")
@@ -105,6 +124,13 @@ def fahre_wochenende(
             f"Tagesformbonus fuer {len(tagesformbonus)} Autos, "
             f"im Feld stehen {len(teilnehmer)}"
         )
+    if rhythmusfaktor is None:
+        rhythmusfaktor = (1.0,) * len(teilnehmer)
+    elif len(rhythmusfaktor) != len(teilnehmer):
+        raise ValueError(
+            f"Rhythmusfaktor fuer {len(rhythmusfaktor)} Autos, "
+            f"im Feld stehen {len(teilnehmer)}"
+        )
 
     anzahl = len(teilnehmer)
     nummern = np.arange(anzahl)
@@ -117,7 +143,7 @@ def fahre_wochenende(
         for i, t in enumerate(teilnehmer)
     ]
     quali_autos = [f.auto for f in quali_formen]
-    quali_runden = _grundrunden(konfiguration, strecke, quali_autos)
+    quali_runden = _grundrunden(konfiguration, strecke, quali_autos, rhythmusfaktor)
     quali_wetter = kern_wetter.wuerfle(
         konfiguration,
         strecke.name,
@@ -157,7 +183,30 @@ def fahre_wochenende(
         for i, t in enumerate(teilnehmer)
     ]
     autos = [f.auto for f in formen]
-    grundrunde = _grundrunden(konfiguration, strecke, autos)
+    grundrunde = _grundrunden(konfiguration, strecke, autos, rhythmusfaktor)
+    # Dieselbe Runde mit der Bremse des Rennendes (Punkt 20). Zwischen
+    # beiden wird nach gefahrener Distanz gemischt - so wie die volle
+    # Simulation zwischen zwei Geschwindigkeitsprofilen mischt.
+    grundrunde_ende = np.array(
+        [
+            fahre_runde(
+                konfiguration,
+                strecke,
+                auto,
+                grenzen=replace(
+                    _grenzen(konfiguration, auto, faktor),
+                    brems=kern_tempoverlauf.bremsgrenze_am_ende(
+                        konfiguration, auto, _grenzen(konfiguration, auto, faktor).brems
+                    ),
+                ),
+            ).zeit_ms
+            for auto, faktor in zip(autos, rhythmusfaktor, strict=True)
+        ],
+        dtype=float,
+    )
+    sog_gewinn = np.array(
+        [kern_windschatten.gewinn(konfiguration, auto) for auto in autos]
+    )
 
     wetter = kern_wetter.wuerfle(
         konfiguration,
@@ -221,8 +270,17 @@ def fahre_wochenende(
                 konfiguration, auto, seedquelle.zweig("rundenform", i), runde
             )
             reifen = kern_reifen.tempofaktor(konfiguration, auto, float(verschleiss[i]))
-            zeit = grundrunde[i] * streuung / (
-                grip * reifen * defekt_tempo[i] * kenntnisfaktor[i]
+            # Ueber die Distanz (Punkte 9, 11 und 20): Die Bremse laesst
+            # nach, die Ermuedung waechst, die kalten Reifen kosten die
+            # erste Runde. Der Anteil gilt zu Rundenbeginn.
+            anteil = (runde - 1) / runden
+            basis = grundrunde[i] + anteil * (grundrunde_ende[i] - grundrunde[i])
+            ermuedung = kern_tempoverlauf.ermuedungsfaktor(konfiguration, auto, anteil)
+            kalt = kern_tempoverlauf.kaltreifenfaktor_runde(
+                konfiguration, auto, runde, strecke.laenge_m
+            )
+            zeit = basis * streuung / (
+                grip * reifen * defekt_tempo[i] * kenntnisfaktor[i] * ermuedung * kalt
             )
 
             # Fehler kosten einmalig Zeit (GDD 4).
@@ -276,8 +334,12 @@ def fahre_wochenende(
                 key=lambda i: -stelle_vorher[i],
             )
             for vorne in ueberholt:
+                # Windschatten (Punkt 7): Wer angreift, sitzt im
+                # entscheidenden Moment dicht dahinter auf einer Geraden -
+                # also mit dem vollen Sog. Der Schnellmodus fuehrt keine
+                # Positionen, mehr laesst sich hier nicht abbilden.
                 vorteil_kmh = (
-                    strecke.laenge_m / grundrunde[hinten]
+                    strecke.laenge_m / grundrunde[hinten] * (1.0 + sog_gewinn[hinten])
                     - strecke.laenge_m / grundrunde[vorne]
                 ) * 3600.0
                 chance = erfolgschance(

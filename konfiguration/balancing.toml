@@ -1516,6 +1516,116 @@ name = "Reifenfluesterer"
 waehrung = ["E", "Z"]
 max_daempfung = 0.60
 
+# ---------------------------------------------------------------------------
+# Eigenschaften neben der Wirkungsmatrix
+# ---------------------------------------------------------------------------
+# Fuenf Eigenschaften, die das GDD nicht kennt; entschieden mit dem
+# Auftraggeber (OFFENE_PUNKTE.md, Punkt 48). Sie stehen bewusst *neben* der
+# Wirkungsmatrix aus GDD 8 - wie die Wetterfaehigkeiten aus GDD 7 und der
+# Reifenfluesterer. So bleiben Gesamtwert, Bereichswerte und damit die
+# Kalibriertabelle aus GDD 9 unberuehrt.
+#
+# ``traeger`` sagt, wem eine Eigenschaft gehoert: Fahrerwerte traegt die
+# Tagesform aus GDD 11, und sie belegen den Fahrerplatz aus GDD 2;
+# Fahrzeugwerte gehoeren der Werkstatt. Ohne Angabe gilt "fahrer".
+[[zusatzfaehigkeit.liste]]
+schluessel = "windschatten"
+name = "Windschattennutzung"
+traeger = "fahrer"
+waehrung = ["E"]
+
+[[zusatzfaehigkeit.liste]]
+schluessel = "kaltreifen"
+name = "Kaltreifen"
+traeger = "fahrer"
+waehrung = ["E", "Z"]
+
+[[zusatzfaehigkeit.liste]]
+schluessel = "materialgefuehl"
+name = "Materialgefuehl"
+traeger = "fahrer"
+waehrung = ["E"]
+
+[[zusatzfaehigkeit.liste]]
+schluessel = "rhythmus"
+name = "Rhythmus"
+traeger = "fahrer"
+waehrung = ["E", "Z"]
+
+[[zusatzfaehigkeit.liste]]
+schluessel = "bremskuehlung"
+name = "Bremskuehlung"
+traeger = "fahrzeug"
+waehrung = ["G", "E"]
+
+# --- Punkt 5: Popularitaet -------------------------------------------------
+[popularitaet]
+# Wie bekannt ein Fahrer ist. Sie bewegt den Grundbetrag der
+# Sponsorenangebote aus GDD 10 um bis zu 25 Prozent.
+#
+# Der Anfangswert ist gestreut, aber ausdruecklich *nicht* nach
+# Ligastaerke - so mit dem Auftraggeber abgestimmt: Bekanntheit ist nicht
+# dasselbe wie Schnelligkeit. Ein Liga-20-Fahrer kann bekannter sein als
+# ein Liga-1-Fahrer.
+# ``mittelwert`` ist zweierlei: der Mittelwert der Anfangsverteilung und
+# der Punkt, an dem der Sponsorenfaktor genau 1,0 ist. Ohne diesen Bezug
+# laege das ganze Feld unter 1,0, und die Sponsorenbetraege aus GDD 10
+# fielen auf einen Schlag.
+mittelwert = 30000
+anfang_streuung = 0.80
+max_anteil_sponsor = 0.25
+# Was ein Rennwochenende einbringt. Sieg, Podium und Pole zaehlen
+# nebeneinander: Ein Sieg von der Pole bringt alle drei.
+je_sieg = 1200
+je_podium = 500
+je_pole = 300
+
+# --- Punkt 2: Heimstrecke --------------------------------------------------
+[heimstrecke]
+# Auf einer Strecke im eigenen Land bekommt ein Fahrer einen kleinen Bonus
+# auf fuenf Eigenschaften. Welche fuenf, wird jedes Rennwochenende neu
+# gezogen - aus den 32 der Wirkungsmatrix und denen daneben.
+#
+# Abgestimmt mit dem Auftraggeber: Wer kein Land mit Strecke im Kalender
+# hat, geht leer aus. Das betrifft 388 der 600 Fahrer; die Laender der 20
+# Strecken decken 212 ab.
+eigenschaften = 5
+bonus_min = 0.005
+bonus_max = 0.010
+
+# --- Punkt 15: Rhythmus ----------------------------------------------------
+[rhythmus]
+# Vorteil auf Strecken mit vielen aufeinanderfolgenden Kurven. Er wirkt auf
+# die Querbeschleunigung in normalen Kurven, nicht auf enge - Kurvenfolgen
+# sind fliessende Passagen.
+#
+# Zwei Terme, beide auf -1 bis +1 gebracht:
+#   * Strecke: Kurvenfolgenanteil gegen den Mittelwert aller 20 Strecken.
+#     Zandvoort liegt bei 1,77x, Monza bei 0,23x.
+#   * Fahrer: -1 bei Wert 0, 0 bei der Haelfte des Leistungsanteils, +1 bei
+#     vollem Wert. Wer den Rhythmus nicht hat, verliert dort also.
+max_anteil_quer = 0.015
+
+# --- Punkt 13: Materialgefuehl ---------------------------------------------
+[materialgefuehl]
+# Die Fahrerseite der Zuverlaessigkeit: F14 senkt, wie oft ein Auto kaputt
+# geht, dieser Wert senkt es zusaetzlich. Faktor auf die Defektrate.
+faktor_bei_null = 1.00
+faktor_bei_maximum = 0.60
+
+# --- Punkt 7: Windschatten -------------------------------------------------
+[windschatten]
+# Der Sog hinter einem anderen Auto. Er wirkt nur auf Geraden und nur im
+# Fenster von 30 m bis auf gleiche Hoehe; dicht dahinter am staerksten,
+# bei 30 m gar nicht mehr.
+#
+# Je Gerade gibt es ihn einmal: Wer einmal auf gleicher Hoehe war, ist aus
+# dem Sog heraus und bekommt ihn auf dieser Geraden nicht wieder. So
+# abgestimmt mit dem Auftraggeber (OFFENE_PUNKTE.md, Punkt 48).
+fenster_m = 30.0
+gewinn_bei_null = 0.010
+gewinn_bei_maximum = 0.025
+
 [reifen.streckenfaktor]
 # Entscheidung A: aus der Querbeschleunigung, also der Summe von 1/Radius
 # ueber die Runde, normiert auf den Mittelwert aller 20 Strecken. Trennt
@@ -1528,9 +1638,34 @@ normieren_auf_mittelwert = true
 [ermuedung]
 # Entscheidung B: wirkt erst ab der halben Distanz, damit das Rennende
 # gepraegt wird und nicht der Start.
+#
+# Die Betraege sind mit Punkt 48 nachgezogen worden: Bei vollem Wert
+# bleibt ein kleiner Rest, sonst waere der Bereich ``er`` aus GDD 8 fuer
+# starke Fahrer wirkungslos. Gerechnet wird gegen den Leistungsanteil
+# p = sqrt(S / referenz), wie ueberall in GDD 9.
 beginn_anteil_distanz = 0.5
-tempoverlust_am_ende_bei_null = 0.02
-tempoverlust_am_ende_bei_maximum = 0.0
+tempoverlust_am_ende_bei_null = 0.020
+tempoverlust_am_ende_bei_maximum = 0.003
+
+# --- Punkt 48: Kaltreifen und Bremskuehlung -------------------------------
+# Zwei Verlaeufe ueber die Renndistanz, aufgebaut wie die Ermuedung: Der
+# eine fehlt am Anfang, der andere laesst gegen Ende nach.
+[kaltreifen]
+# Tempoverlust beim Start, abgebaut ueber die erste Runde. Gilt nur fuer
+# den Rennstart, nicht nach jedem Halt - so steht es in der abgestimmten
+# Tabelle zu Punkt 48.
+tempoverlust_bei_null = 0.030
+tempoverlust_bei_maximum = 0.005
+aufwaermstrecke_runden = 1.0
+
+[bremskuehlung]
+# Verlust der *Bremsgrenze* am Rennende, nicht des Tempos: Was er kostet,
+# haengt davon ab, wie viel auf der Strecke gebremst wird. Das
+# Geschwindigkeitsprofil wird deshalb zweimal gebildet - einmal mit voller
+# Bremse, einmal mit der Bremse des Rennendes - und dazwischen linear nach
+# gefahrener Distanz gemischt.
+verlust_am_ende_bei_null = 0.040
+verlust_am_ende_bei_maximum = 0.005
 
 # --- Punkte 12 bis 19: Geld (GDD 9, 10, 14) -------------------------------
 [preisgeld.interpolation]

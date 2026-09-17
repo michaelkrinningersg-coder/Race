@@ -60,6 +60,7 @@ class Saisonseite(QWidget):
         gefahrene_rennen: int = 0,
         karriere=None,
         jahr: int | None = None,
+        popularitaet=None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -80,6 +81,7 @@ class Saisonseite(QWidget):
             # Damit die entwickelten Werte des Spielers im Rennen ankommen
             # (GDD 1) und Ereignisse wie Defekte daran ziehen (GDD 14).
             karriere=karriere,
+            popularitaet=popularitaet,
         )
         self._letztes: Wochenende | None = None
 

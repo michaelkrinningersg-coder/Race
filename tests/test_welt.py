@@ -148,9 +148,11 @@ def test_alle_autos_sind_gueltig(welt, k) -> None:
         pruefe(k, fahrer.auto)
 
 
-def test_wetterfaehigkeiten_und_fluesterer_sind_gesetzt(welt, k) -> None:
-    erwartet = {e["schluessel"] for e in k.wert("wetter", "faehigkeit", "liste")}
-    erwartet.add("reifenfluesterer")
+def test_alle_eigenschaften_neben_der_matrix_sind_gesetzt(welt, k) -> None:
+    """Die Wetterfaehigkeiten, der Reifenfluesterer und die fuenf aus Punkt 48."""
+    erwartet = set(k.zusatzfaehigkeiten)
+    assert {e["schluessel"] for e in k.wert("wetter", "faehigkeit", "liste")} <= erwartet
+    assert "reifenfluesterer" in erwartet
     for fahrer in welt.fahrer:
         assert set(fahrer.auto.wetterwerte) == erwartet
 

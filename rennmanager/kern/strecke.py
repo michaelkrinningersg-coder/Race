@@ -133,6 +133,31 @@ class Strecke:
         return sum(zone.laenge_m for zone in self.ueberholzonen) / self.laenge_m
 
     @cached_property
+    def kurvenfolgenanteil(self) -> float:
+        """Anteil der Runde, der in Kurvenfolgen liegt (Punkt 15).
+
+        Eine Kurvenfolge sind mindestens zwei Kurven hintereinander, ohne
+        Gerade dazwischen - das, was die Eigenschaft ``rhythmus`` belohnt.
+        Eine einzelne Kurve zwischen zwei Geraden zaehlt nicht mit.
+
+        Gezaehlt wird auf der offenen Runde: Eine Folge, die ueber die
+        Start/Ziel-Linie laeuft, faellt damit in zwei Teile. Das ist bei
+        den 20 Strecken hoechstens eine und aendert den Anteil kaum.
+        """
+        laenge = 0.0
+        lauf: list[Segment] = []
+        for segment in self.segmente:
+            if segment.art is Segmentart.GERADE:
+                if len(lauf) >= 2:
+                    laenge += sum(teil.laenge_m for teil in lauf)
+                lauf = []
+            else:
+                lauf.append(segment)
+        if len(lauf) >= 2:
+            laenge += sum(teil.laenge_m for teil in lauf)
+        return laenge / self.laenge_m
+
+    @cached_property
     def kurzsegmente(self) -> tuple[Segment, ...]:
         """Segmente unter 25 m, als Hinweis auf die Datenqualitaet."""
         return tuple(segment for segment in self.segmente if segment.laenge_m < 25.0)

@@ -27,6 +27,7 @@ Tabelle                Inhalt
 ``historie``           Saison und Liga, deren Abschluss vorliegt
 ``historiezeile``      die Abschlusstabelle dazu, Platz fuer Platz
 ``kenntnis``           Streckenkenntnis je Fahrer und Strecke (GDD 6)
+``popularitaet``       Bekanntheitsgrad je Fahrer (Punkt 5)
 =====================  ===================================================
 
 Die Welt wird vollstaendig abgelegt statt aus dem Seed neu gewuerfelt:
@@ -44,6 +45,7 @@ from typing import TYPE_CHECKING
 
 from rennmanager.kern import ereignis as kern_ereignis
 from rennmanager.kern import karriere as kern_karriere
+from rennmanager.kern import popularitaet as kern_popularitaet
 from rennmanager.kern import sponsoren as kern_sponsoren
 from rennmanager.kern import statistik as kern_statistik
 from rennmanager.kern import streckenkenntnis as kern_streckenkenntnis
@@ -62,8 +64,12 @@ if TYPE_CHECKING:  # pragma: no cover
 # Abschlusstabelle (Tabelle ``historiezeile``) statt nur Reihenfolge und
 # Punkte. Staende der Version 1 werden weiter gelesen; die Zahlen, die es
 # dort nicht gab, bleiben auf 0.
-SPIELSTAND_VERSION = 2
+# Version 3: Die Popularitaet je Fahrer (Punkt 5) in der Tabelle
+# ``popularitaet``. Aeltere Staende werden gelesen; die Popularitaet ist
+# dort leer und wird beim naechsten Start neu gewuerfelt.
+SPIELSTAND_VERSION = 3
 HISTORIE_AB_VERSION = 2
+POPULARITAET_AB_VERSION = 3
 
 SCHEMA = """
 CREATE TABLE kopf (
@@ -206,6 +212,10 @@ CREATE TABLE historiezeile (
     rennen INTEGER NOT NULL,
     PRIMARY KEY (saison, liga, fahrer)
 );
+CREATE TABLE popularitaet (
+    fahrer INTEGER PRIMARY KEY,
+    wert REAL NOT NULL
+);
 CREATE TABLE kenntnis (
     fahrer INTEGER NOT NULL,
     strecke TEXT NOT NULL,
@@ -231,6 +241,7 @@ class Spielstand:
     statistik: kern_statistik.Statistik
     kenntnis: kern_streckenkenntnis.Streckenkenntnis
     gefahrene_rennen: int = 0
+    popularitaet: kern_popularitaet.Popularitaet | None = None
 
     @property
     def spielerliga(self) -> int:
@@ -273,6 +284,11 @@ def speichere(stand: Spielstand, pfad: Path | str) -> Path:
             "INSERT INTO kenntnis VALUES (?, ?, ?)",
             [(f, s, r) for (f, s), r in stand.kenntnis.runden.items()],
         )
+        if stand.popularitaet is not None:
+            verbindung.executemany(
+                "INSERT INTO popularitaet VALUES (?, ?)",
+                list(stand.popularitaet.werte.items()),
+            )
     return pfad
 
 
@@ -513,6 +529,12 @@ def lade(konfiguration: Konfiguration, pfad: Path | str) -> Spielstand:
                 },
             )
             karriere.kenntnis = kenntnis
+            popular = kern_popularitaet.Popularitaet(konfiguration)
+            if kopf["version"] >= POPULARITAET_AB_VERSION:
+                popular.werte = {
+                    z["fahrer"]: z["wert"]
+                    for z in verbindung.execute("SELECT * FROM popularitaet")
+                }
             gefahren = verbindung.execute("SELECT * FROM saisonstand").fetchone()
     except sqlite3.Error as fehler:
         # Eine gueltige SQLite-Datei, die kein Spielstand ist, faellt hier
@@ -528,6 +550,7 @@ def lade(konfiguration: Konfiguration, pfad: Path | str) -> Spielstand:
         statistik=statistik,
         kenntnis=kenntnis,
         gefahrene_rennen=gefahren["gefahrene_rennen"] if gefahren else 0,
+        popularitaet=popular,
     )
 
 
@@ -807,6 +830,7 @@ def aus_teilen(
     statistik: kern_statistik.Statistik,
     kenntnis: kern_streckenkenntnis.Streckenkenntnis,
     gefahrene_rennen: int = 0,
+    popularitaet: kern_popularitaet.Popularitaet | None = None,
 ) -> Spielstand:
     """Baut einen Spielstand aus den Teilen, die das Fenster haelt.
 
@@ -822,4 +846,5 @@ def aus_teilen(
         statistik=statistik,
         kenntnis=kenntnis,
         gefahrene_rennen=gefahrene_rennen,
+        popularitaet=popularitaet,
     )

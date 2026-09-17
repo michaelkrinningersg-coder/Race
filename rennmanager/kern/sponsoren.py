@@ -92,9 +92,19 @@ def grundbetrag_je_platz(konfiguration: Konfiguration, liga: int, platz: str) ->
 
 
 def wuerfle_angebote(
-    konfiguration: Konfiguration, liga: int, woche: int, seedquelle: Seedquelle
+    konfiguration: Konfiguration,
+    liga: int,
+    woche: int,
+    seedquelle: Seedquelle,
+    popularitaet: float = 1.0,
 ) -> dict[str, tuple[Angebot, ...]]:
-    """Wuerfelt die aktuell vorliegenden Angebote je Platz (GDD 10)."""
+    """Wuerfelt die aktuell vorliegenden Angebote je Platz (GDD 10).
+
+    :param popularitaet: Faktor auf den Grundbetrag (Punkt 5), aus
+        ``rennmanager.kern.popularitaet``. 1,0 heisst durchschnittlich
+        bekannt - dann stehen genau die Betraege da, die GDD 10 fuer diese
+        Liga vorsieht.
+    """
     namen = lade_namen(konfiguration)["sponsor"]
     einstellung = konfiguration.wert("sponsoren")
     praemien = einstellung["betraege"]
@@ -108,7 +118,7 @@ def wuerfle_angebote(
                 einstellung["angebote_je_platz_min"], einstellung["angebote_je_platz_max"] + 1
             )
         )
-        grundlage = grundbetrag_je_platz(konfiguration, liga, platz)
+        grundlage = grundbetrag_je_platz(konfiguration, liga, platz) * popularitaet
         liste = []
         for _ in range(anzahl):
             while True:

@@ -358,8 +358,14 @@ class Karriere:
         """Ob eine Faehigkeit den Fahrer- oder den Werkstattplatz belegt."""
         faehigkeit = self._faehigkeit(schluessel)
         if faehigkeit is None:
-            # Wetterfaehigkeiten und Reifenfluesterer gehoeren dem Fahrer.
-            return FAHRERPLATZ
+            # Neben der Matrix entscheidet der Traeger: Wetterfaehigkeiten,
+            # Reifenfluesterer und die vier neuen Fahrereigenschaften
+            # gehoeren dem Fahrer, die Bremskuehlung der Werkstatt.
+            return (
+                WERKSTATTPLATZ
+                if schluessel in self.konfiguration.fahrzeugzusatz
+                else FAHRERPLATZ
+            )
         return (
             FAHRERPLATZ
             if kern_entwicklung.ist_fahrertraining(faehigkeit)
@@ -423,7 +429,12 @@ class Karriere:
                 for f in self.konfiguration.faehigkeiten
                 if kern_entwicklung.ist_fahrertraining(f)
             )
-            sperren.update(self.konfiguration.zusatzfaehigkeiten)
+            # Nur was dem Fahrer gehoert - die Werkstatt arbeitet weiter.
+            sperren.update(
+                schluessel
+                for schluessel in self.konfiguration.zusatzfaehigkeiten
+                if schluessel not in self.konfiguration.fahrzeugzusatz
+            )
         return frozenset(sperren)
 
     def _pruefe_sperre(self, schluessel: str) -> None:
@@ -480,17 +491,15 @@ class Karriere:
     def zusatz_eintrag(self, schluessel: str) -> dict:
         """Der Konfigurationseintrag einer Faehigkeit ausserhalb der Matrix.
 
-        Die Wetterfaehigkeiten aus GDD 7 und der Reifenfluesterer stehen
-        nicht in der Wirkungsmatrix; Name und Waehrung kommen deshalb aus
-        ihrem eigenen Abschnitt der Konfiguration.
+        Die Wetterfaehigkeiten aus GDD 7, der Reifenfluesterer und die
+        fuenf Eigenschaften aus Punkt 48 stehen nicht in der
+        Wirkungsmatrix; Name und Waehrung kommen deshalb aus ihrem eigenen
+        Abschnitt der Konfiguration.
         """
-        for eintrag in self.konfiguration.wert("wetter", "faehigkeit", "liste"):
-            if eintrag["schluessel"] == schluessel:
-                return eintrag
-        fluesterer = self.konfiguration.wert("reifen", "fluesterer")
-        if fluesterer.get("schluessel") == schluessel:
-            return fluesterer
-        raise KarriereFehler(f"Unbekannte Faehigkeit: {schluessel}")
+        try:
+            return self.konfiguration.zusatzeintrag(schluessel)
+        except KeyError:
+            raise KarriereFehler(f"Unbekannte Faehigkeit: {schluessel}") from None
 
     # -- Rennwochenende ----------------------------------------------------
     def verbuche_rennen(
