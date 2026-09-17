@@ -24,7 +24,8 @@ Tabelle                Inhalt
 ``rekord``             Rundenrekorde je Strecke und Liga (GDD 13)
 ``karrierezahl``       Siege, Podien, Poles, ... je Fahrer
 ``saisonpunkt``        Gesamtpunkte je Saison, Liga und Fahrer
-``historie``           Endstaende aller Saisons
+``historie``           Saison und Liga, deren Abschluss vorliegt
+``historiezeile``      die Abschlusstabelle dazu, Platz fuer Platz
 ``kenntnis``           Streckenkenntnis je Fahrer und Strecke (GDD 6)
 =====================  ===================================================
 
@@ -56,7 +57,13 @@ if TYPE_CHECKING:  # pragma: no cover
     from rennmanager.konfiguration import Konfiguration
 
 # Wird mitgeschrieben, damit sich aeltere Staende erkennen lassen.
-SPIELSTAND_VERSION = 1
+#
+# Version 2: Die Historie traegt je Saison und Liga die vollstaendige
+# Abschlusstabelle (Tabelle ``historiezeile``) statt nur Reihenfolge und
+# Punkte. Staende der Version 1 werden weiter gelesen; die Zahlen, die es
+# dort nicht gab, bleiben auf 0.
+SPIELSTAND_VERSION = 2
+HISTORIE_AB_VERSION = 2
 
 SCHEMA = """
 CREATE TABLE kopf (
@@ -183,9 +190,21 @@ CREATE TABLE saisonpunkt (
 CREATE TABLE historie (
     saison INTEGER NOT NULL,
     liga INTEGER NOT NULL,
-    reihenfolge TEXT NOT NULL,
-    punkte TEXT NOT NULL,
     PRIMARY KEY (saison, liga)
+);
+CREATE TABLE historiezeile (
+    saison INTEGER NOT NULL,
+    liga INTEGER NOT NULL,
+    platz INTEGER NOT NULL,
+    fahrer INTEGER NOT NULL,
+    punkte INTEGER NOT NULL,
+    siege INTEGER NOT NULL,
+    podien INTEGER NOT NULL,
+    poles INTEGER NOT NULL,
+    schnellste_runden INTEGER NOT NULL,
+    ausfaelle INTEGER NOT NULL,
+    rennen INTEGER NOT NULL,
+    PRIMARY KEY (saison, liga, fahrer)
 );
 CREATE TABLE kenntnis (
     fahrer INTEGER NOT NULL,
@@ -436,10 +455,27 @@ def _schreibe_statistik(
         [(s, li, f, p) for (s, li, f), p in statistik.saisonpunkte.items()],
     )
     verbindung.executemany(
-        "INSERT INTO historie VALUES (?, ?, ?, ?)",
+        "INSERT INTO historie VALUES (?, ?)",
+        [(a.saison, a.liga) for a in statistik.historie],
+    )
+    verbindung.executemany(
+        "INSERT INTO historiezeile VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
-            (a.saison, a.liga, _text(a.reihenfolge), _text(a.punkte))
+            (
+                a.saison,
+                a.liga,
+                z.platz,
+                z.fahrer,
+                z.punkte,
+                z.siege,
+                z.podien,
+                z.poles,
+                z.schnellste_runden,
+                z.ausfaelle,
+                z.rennen,
+            )
             for a in statistik.historie
+            for z in a.zeilen
         ],
     )
 
@@ -468,7 +504,7 @@ def lade(konfiguration: Konfiguration, pfad: Path | str) -> Spielstand:
             welt = _lies_welt(verbindung, kopf["seed"])
             karriere = _lies_karriere(konfiguration, verbindung, kopf["saisonjahr"])
             tabellen = _lies_wertung(konfiguration, verbindung)
-            statistik = _lies_statistik(konfiguration, verbindung)
+            statistik = _lies_statistik(konfiguration, verbindung, kopf["version"])
             kenntnis = kern_streckenkenntnis.Streckenkenntnis(
                 konfiguration,
                 {
@@ -663,7 +699,7 @@ def _lies_wertung(
 
 
 def _lies_statistik(
-    konfiguration: Konfiguration, verbindung: sqlite3.Connection
+    konfiguration: Konfiguration, verbindung: sqlite3.Connection, version: int
 ) -> kern_statistik.Statistik:
     statistik = kern_statistik.Statistik(konfiguration)
     for z in verbindung.execute("SELECT * FROM rekord"):
@@ -688,16 +724,59 @@ def _lies_statistik(
         )
     for z in verbindung.execute("SELECT * FROM saisonpunkt"):
         statistik.saisonpunkte[(z["saison"], z["liga"], z["fahrer"])] = z["punkte"]
-    statistik.historie = [
+    statistik.historie = _lies_historie(verbindung, version)
+    return statistik
+
+
+def _lies_historie(
+    verbindung: sqlite3.Connection, version: int
+) -> list[kern_statistik.Saisonabschluss]:
+    """Die Abschlusstabellen aller Saisons (GDD 13).
+
+    Staende bis Version 1 kannten nur Reihenfolge und Punkte; die uebrigen
+    Zahlen bleiben dort auf 0.
+    """
+    if version < HISTORIE_AB_VERSION:
+        return [
+            kern_statistik.Saisonabschluss(
+                saison=z["saison"],
+                liga=z["liga"],
+                zeilen=tuple(
+                    kern_statistik.Saisonzeile(fahrer=fahrer, platz=platz, punkte=punkte)
+                    for platz, (fahrer, punkte) in enumerate(
+                        zip(_zahlen(z["reihenfolge"]), _zahlen(z["punkte"]), strict=True),
+                        start=1,
+                    )
+                ),
+            )
+            for z in verbindung.execute("SELECT * FROM historie ORDER BY saison, liga")
+        ]
+
+    zeilen: dict[tuple[int, int], list[kern_statistik.Saisonzeile]] = {}
+    for z in verbindung.execute(
+        "SELECT * FROM historiezeile ORDER BY saison, liga, platz"
+    ):
+        zeilen.setdefault((z["saison"], z["liga"]), []).append(
+            kern_statistik.Saisonzeile(
+                fahrer=z["fahrer"],
+                platz=z["platz"],
+                punkte=z["punkte"],
+                siege=z["siege"],
+                podien=z["podien"],
+                poles=z["poles"],
+                schnellste_runden=z["schnellste_runden"],
+                ausfaelle=z["ausfaelle"],
+                rennen=z["rennen"],
+            )
+        )
+    return [
         kern_statistik.Saisonabschluss(
             saison=z["saison"],
             liga=z["liga"],
-            reihenfolge=_zahlen(z["reihenfolge"]),
-            punkte=_zahlen(z["punkte"]),
+            zeilen=tuple(zeilen.get((z["saison"], z["liga"]), ())),
         )
         for z in verbindung.execute("SELECT * FROM historie ORDER BY saison, liga")
     ]
-    return statistik
 
 
 def beschreibe(pfad: Path | str) -> str:

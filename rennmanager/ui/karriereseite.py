@@ -450,11 +450,16 @@ class Karriereseite(QWidget):
 
 
 def beginne(
-    konfiguration: Konfiguration, welt, seedquelle: Seedquelle | None = None
+    konfiguration: Konfiguration,
+    welt,
+    seedquelle: Seedquelle | None = None,
+    jahr: int | None = None,
 ) -> Karriere:
     """Startet die Karriere des Spielers in seiner Liga.
 
     :param seedquelle: bestimmt die Ereignisse der Saison (GDD 14)
+    :param jahr: Jahr der ersten Saison; ohne Angabe das Startjahr aus der
+        Konfiguration (GDD 2)
     """
     spieler = welt.spieler
     liga = spieler.liga if spieler else konfiguration.wert("ligen", "startliga")
@@ -463,7 +468,7 @@ def beginne(
         werte.update(spieler.auto.wetterwerte)
     return kern_karriere.beginne(
         konfiguration,
-        2026,
+        jahr if jahr is not None else kern_karriere.startjahr(konfiguration),
         liga,
         werte,
         seedquelle=seedquelle,

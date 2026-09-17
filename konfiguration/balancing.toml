@@ -151,6 +151,9 @@ bis_liga = 20
 # GDD 2 – Kalender und Zeitmodell
 # ---------------------------------------------------------------------------
 [kalender]
+# Jahr der ersten Saison. Danach zaehlt jeder Saisonwechsel eines hoch;
+# die Karriere ist endlos (GDD 13).
+startjahr = 2026
 # Erstes Rennen am ersten Sonntag ab dem 01.03.
 saisonstart_monat = 3
 saisonstart_tag = 1

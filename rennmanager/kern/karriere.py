@@ -549,9 +549,52 @@ class Karriere:
         """
         return self.lage.tagesformbonus()
 
+    # -- Saisonwechsel (GDD 13) --------------------------------------------
+    def naechste_saison(
+        self, jahr: int, liga: int, seedquelle: Seedquelle | None = None
+    ) -> None:
+        """Traegt die Karriere in die naechste Saison (GDD 2 und 13).
+
+        Der Saisonwechsel liegt laut GDD 2 am 31.12./01.01.; die Karriere
+        laeuft endlos weiter.
+
+        Es bleiben: Konto, Werte, Sponsorenvertraege, offene Defekte,
+        laufende Ereignisse, Streckenkenntnis und das Karrierelog aus
+        Buchungen und Meldungen.
+
+        Neu sind Kalender und Ereignisplan - und nach Auf- oder Abstieg
+        die Liga. Die verlorenen Tage bleiben nicht: Sie sind Daten des
+        alten Kalenders und haetten im neuen keine Bedeutung.
+        """
+        if jahr <= self.saison.jahr:
+            raise KarriereFehler(
+                f"Die Saison {jahr} liegt nicht nach {self.saison.jahr}"
+            )
+        self.saison = kern_kalender.erzeuge(self.konfiguration, jahr)
+        self.heute = self.saison.tage[0].datum
+        self.liga = liga
+        self.belegt.clear()
+        self.verlorene_tage.clear()
+        self.ereignisplan = (
+            kern_ereignis.plane_saison(
+                self.konfiguration, self.saison, seedquelle.zweig("ereignisse")
+            )
+            if seedquelle is not None
+            else {}
+        )
+        # Wie beim Karrierestart: Der 1. Januar wird nie "weitergeschaltet",
+        # was auf ihn faellt, muesste sonst ausfallen.
+        for schluessel in self.ereignisplan.get(self.heute, ()):
+            self._loese_ereignis_aus(schluessel)
+
     def unterschreibe(self, angebot: kern_sponsoren.Angebot) -> None:
         """Nimmt ein Sponsorenangebot an; ein Platz traegt einen Vertrag."""
         self.vertraege[angebot.platz] = kern_sponsoren.unterschreibe(angebot)
+
+
+def startjahr(konfiguration: Konfiguration) -> int:
+    """Das Jahr der ersten Saison (GDD 2)."""
+    return int(konfiguration.wert("kalender", "startjahr"))
 
 
 def beginne(

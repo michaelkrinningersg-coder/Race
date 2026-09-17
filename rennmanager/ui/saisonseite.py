@@ -9,7 +9,7 @@ aber einen abspielbaren Rennverlauf.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QApplication,
@@ -44,6 +44,11 @@ FARBE_ABSTIEG = QColor("#c62828")
 class Saisonseite(QWidget):
     """Faehrt die Saison und zeigt Wertung sowie Auf- und Abstieg."""
 
+    # Nach dem Saisonwechsel: Die Welt ist eine neue, das Fenster muss sie
+    # uebernehmen. Als Signal, weil die Seite sich sonst waehrend ihres
+    # eigenen Klicks selbst abbauen wuerde.
+    saison_gewechselt = Signal()
+
     def __init__(
         self,
         konfiguration: Konfiguration,
@@ -54,6 +59,7 @@ class Saisonseite(QWidget):
         tabellen=None,
         gefahrene_rennen: int = 0,
         karriere=None,
+        jahr: int | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -65,6 +71,7 @@ class Saisonseite(QWidget):
             konfiguration,
             welt,
             Seedquelle(seed),
+            jahr=jahr,
             strecken=kern_strecke.lade_alle(konfiguration),
             statistik=statistik,
             kenntnis=kenntnis,
@@ -114,6 +121,13 @@ class Saisonseite(QWidget):
         self._ein_rennen.clicked.connect(self._fahre_eines)
         self._ganze_saison = QPushButton("Restliche Saison")
         self._ganze_saison.clicked.connect(self._fahre_rest)
+        self._naechste_saison = QPushButton("Naechste Saison")
+        self._naechste_saison.setToolTip(
+            "Auf- und Abstieg vollziehen und ins naechste Jahr wechseln. "
+            "Statistik, Streckenkenntnis und die Karriere wandern mit (GDD 13)."
+        )
+        self._naechste_saison.clicked.connect(self._wechsle_saison)
+        self._naechste_saison.setEnabled(False)
 
         self._stand = QLabel()
 
@@ -122,6 +136,7 @@ class Saisonseite(QWidget):
         zeile.addWidget(self._ausfuehrlich)
         zeile.addWidget(self._ein_rennen)
         zeile.addWidget(self._ganze_saison)
+        zeile.addWidget(self._naechste_saison)
         zeile.addWidget(self._stand, stretch=1)
         return zeile
 
@@ -174,6 +189,14 @@ class Saisonseite(QWidget):
         wechselspalte.addWidget(self._wechselliste)
         self._wechselkasten.setVisible(False)
         spalte.addWidget(self._wechselkasten, stretch=1)
+
+        self._abschlusskasten = QGroupBox("Saisonabschluss")
+        abschlussspalte = QVBoxLayout(self._abschlusskasten)
+        self._abschluss = QLabel()
+        self._abschluss.setWordWrap(True)
+        abschlussspalte.addWidget(self._abschluss)
+        self._abschlusskasten.setVisible(False)
+        spalte.addWidget(self._abschlusskasten)
         return seite
 
     # -- Fahren ------------------------------------------------------------
@@ -209,6 +232,26 @@ class Saisonseite(QWidget):
                 knopf.setEnabled(not self._lauf.ist_fertig)
         self._aktualisiere()
 
+    def _wechsle_saison(self) -> None:
+        """Vollzieht Auf- und Abstieg und beginnt das naechste Jahr (GDD 13)."""
+        if not self._lauf.ist_fertig:
+            return
+        try:
+            self._lauf = self._lauf.naechste_saison()
+        except (kern_saison.SaisonFehler, kern_wertung.WertungsFehler) as fehler:
+            QMessageBox.warning(self, "Saisonwechsel", str(fehler))
+            return
+        self._welt = self._lauf.welt
+        self._letztes = None
+        # Nach einem Auf- oder Abstieg faehrt der Spieler woanders.
+        spieler = self._welt.spieler
+        if spieler is not None:
+            self._liga.blockSignals(True)
+            self._liga.setCurrentIndex(spieler.liga - 1)
+            self._liga.blockSignals(False)
+        self._aktualisiere()
+        self.saison_gewechselt.emit()
+
     # -- Anzeige -----------------------------------------------------------
     def _aktualisiere(self, *_) -> None:
         liga = self._liga.currentData()
@@ -216,6 +259,10 @@ class Saisonseite(QWidget):
         self._zeige_rennen(liga)
         self._zeige_wechsel()
         self._zeige_kalender()
+        self._zeige_abschluss()
+        self._naechste_saison.setEnabled(self._lauf.ist_fertig)
+        for knopf in (self._ein_rennen, self._ganze_saison):
+            knopf.setEnabled(not self._lauf.ist_fertig)
         if self._lauf.ist_fertig:
             self._stand.setText(
                 f"Saison {self._lauf.jahr} beendet - {self._lauf.gefahren} Rennen gefahren."
@@ -225,6 +272,46 @@ class Saisonseite(QWidget):
                 f"Rennen {self._lauf.gefahren} von {self._lauf.rennen_je_saison} gefahren; "
                 f"als naechstes {self._lauf.strecke_zu(self._lauf.naechstes_rennen).name}."
             )
+
+    def _zeige_abschluss(self) -> None:
+        """Die Bilanz der beendeten Saison (GDD 13).
+
+        Sichtbar erst nach Rennen 20; der Knopf daneben bestaetigt den
+        Wechsel ins naechste Jahr.
+        """
+        if not self._lauf.ist_fertig:
+            self._abschlusskasten.setVisible(False)
+            return
+        self._abschlusskasten.setVisible(True)
+        self._abschlusskasten.setTitle(f"Saisonabschluss {self._lauf.jahr}")
+
+        zeilen = []
+        for liga in sorted(self._lauf.tabellen):
+            stand = self._lauf.tabelle(liga).stand()
+            if not stand:
+                continue
+            meister = self._welt.fahrer[stand[0].fahrer]
+            zeilen.append(
+                f"Liga {liga} ({self._konfiguration.ligenname(liga)}): "
+                f"<b>{meister.name}</b>, {stand[0].punkte} Punkte"
+            )
+
+        spieler = self._welt.spieler
+        eigen = ""
+        if spieler is not None:
+            tabelle = self._lauf.tabelle(spieler.liga)
+            eintrag = tabelle.eintraege.get(spieler.nummer)
+            if eintrag is not None:
+                eigen = (
+                    f"<br><br><b>{spieler.name}</b> - Liga {spieler.liga}, "
+                    f"Platz {tabelle.platz_von(spieler.nummer)} von "
+                    f"{len(tabelle.eintraege)}<br>"
+                    f"{eintrag.punkte} Punkte · {eintrag.siege} Siege · "
+                    f"{eintrag.podien} Podien · {eintrag.poles} Poles · "
+                    f"{eintrag.schnellste_runden} schnellste Runden · "
+                    f"{eintrag.ausfaelle} Ausfaelle"
+                )
+        self._abschluss.setText("Meister:<br>" + "<br>".join(zeilen) + eigen)
 
     def _zeige_kalender(self) -> None:
         """Kalenderstand und die Tage, die ein Rennen jetzt kosten wuerde.
@@ -389,3 +476,11 @@ class Saisonseite(QWidget):
     @property
     def kalenderzeile(self) -> QLabel:
         return self._kalender
+
+    @property
+    def knopf_naechste_saison(self) -> QPushButton:
+        return self._naechste_saison
+
+    @property
+    def abschlusstext(self) -> QLabel:
+        return self._abschluss

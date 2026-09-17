@@ -10,6 +10,7 @@ import pytest
 
 from rennmanager import __version__
 from rennmanager import konfiguration as kf
+from rennmanager.kern import wertung as wt
 
 pytest.importorskip("PySide6")
 
@@ -674,6 +675,86 @@ def test_saisonseite_wechselt_die_liga(qtbot, konfig: kf.Konfiguration) -> None:
     seite.liga_auswahl.setCurrentIndex(9)
     namen_liga10 = {seite.tabelle.topLevelItem(i).text(1) for i in range(20)}
     assert not namen_liga1 & namen_liga10
+
+
+def test_saisonseite_zeigt_den_kalenderstand(qtbot, konfig: kf.Konfiguration) -> None:
+    """GDD 2: Das Rennen findet an seinem Renntag statt."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.saisonseite
+
+    renntag = seite.lauf.renntag(1)
+    text = seite.kalenderzeile.text()
+    assert f"{renntag:%d.%m.%Y}" in text
+    assert "verfallen" in text
+
+    seite.knopf_rennwochenende.click()
+    assert fenster.karriere.heute > renntag
+    assert f"{seite.lauf.renntag(2):%d.%m.%Y}" in seite.kalenderzeile.text()
+
+
+def fahre_saison_zu_ende(konfig, seite) -> None:
+    """Setzt die Saison auf beendet, ohne 400 Rennen zu fahren."""
+    lauf = seite.lauf
+    lauf.tabellen = {
+        liga: wt.Tabelle(liga) for liga in range(1, konfig.wert("ligen", "anzahl") + 1)
+    }
+    for liga, tabelle in lauf.tabellen.items():
+        tabelle.verbuche(
+            konfig,
+            [
+                wt.Rennergebnis(fahrer=f.nummer, rennplatz=platz, qualifyingplatz=platz)
+                for platz, f in enumerate(lauf.welt.liga(liga), start=1)
+            ],
+        )
+    lauf.vorgefahren = konfig.wert("kalender", "rennen_je_saison")
+    seite._aktualisiere()
+
+
+def test_saisonseite_zeigt_den_abschluss(qtbot, konfig: kf.Konfiguration) -> None:
+    """Nach Rennen 20: Meister, eigene Bilanz und der Knopf zum Wechsel."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.saisonseite
+    assert not seite.knopf_naechste_saison.isEnabled()
+
+    fahre_saison_zu_ende(konfig, seite)
+    assert seite.knopf_naechste_saison.isEnabled()
+    assert not seite.knopf_rennwochenende.isEnabled()
+    text = seite.abschlusstext.text()
+    assert fenster.welt.spieler.name in text
+    assert f"Liga {fenster.welt.spieler.liga}" in text
+    # Alle 20 Ligen haben einen Meister.
+    assert text.count("Punkte") >= konfig.wert("ligen", "anzahl")
+    assert seite.wechselliste.topLevelItemCount() > 0
+
+
+def test_saisonseite_wechselt_ins_naechste_jahr(qtbot, konfig: kf.Konfiguration) -> None:
+    """GDD 13: Auf- und Abstieg, dann beginnt die naechste Saison."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.saisonseite
+    jahr = seite.lauf.jahr
+    fahre_saison_zu_ende(konfig, seite)
+
+    seite.knopf_naechste_saison.click()
+    # Das Fenster baut sich erst nach der Rueckkehr in die Ereignisschleife
+    # neu auf - sonst riss es sich die Seite unter dem Klick weg.
+    qtbot.wait(20)
+
+    neue = fenster.saisonseite
+    assert neue.lauf.jahr == jahr + 1
+    assert neue.lauf.gefahren == 0
+    assert fenster.karriere.saison.jahr == jahr + 1
+    assert fenster.karriere.heute.year == jahr + 1
+    # Die Welt ist eine neue; jede Liga ist weiter voll besetzt.
+    groessen = {}
+    for f in fenster.welt.fahrer:
+        groessen[f.liga] = groessen.get(f.liga, 0) + 1
+    assert set(groessen.values()) == {konfig.wert("ligen", "autos_je_liga")}
+    # Die Statistik hat die abgeschlossene Saison behalten.
+    assert fenster.statistik.saisons == (jahr,)
+    assert neue.liga_auswahl.currentData() == fenster.welt.spieler.liga
 
 
 # --- Sponsoren ------------------------------------------------------------

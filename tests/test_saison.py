@@ -566,3 +566,128 @@ def test_ohne_karriere_gibt_es_keinen_kalender(k, welt, strecken):
     assert lauf.offene_tage_vor_dem_rennen == 0
     lauf.fahre_rennen()
     assert lauf.gefahren == 1
+
+
+# --- Saisonwechsel (GDD 13) -----------------------------------------------
+def abgeschlossener_lauf(k, welt, strecken, karriere=None, jahr=None) -> sa.Saisonlauf:
+    """Ein Saisonlauf, dessen 20 Rennen als gefahren gelten.
+
+    Die 20 mal 20 Rennen wirklich zu fahren dauert anderthalb Minuten je
+    Saison; fuer den Wechsel selbst zaehlt allein, dass die Tabellen voll
+    sind und der Stand am Saisonende steht.
+    """
+    lauf = sa.Saisonlauf(
+        k,
+        welt,
+        Seedquelle(SEED),
+        jahr=jahr,
+        strecken=strecken,
+        tabellen=volle_tabellen(k, welt),
+        vorgefahren=k.wert("kalender", "rennen_je_saison"),
+        karriere=karriere,
+    )
+    assert lauf.ist_fertig
+    return lauf
+
+
+def test_der_saisonwechsel_zaehlt_das_jahr_hoch(k, welt, strecken):
+    lauf = abgeschlossener_lauf(k, welt, strecken)
+    assert lauf.jahr == k.wert("kalender", "startjahr")
+    neu = lauf.naechste_saison()
+    assert neu.jahr == lauf.jahr + 1
+    assert neu.gefahren == 0
+    assert not neu.ist_fertig
+    # Frische Tabellen, aber dieselbe Statistik und Streckenkenntnis.
+    assert all(not t.eintraege for t in neu.tabellen.values())
+    assert neu.statistik is lauf.statistik
+    assert neu.kenntnis is lauf.kenntnis
+
+
+def test_drei_saisons_lassen_jede_liga_voll_besetzt(k, welt, strecken):
+    """GDD 13: Jeder Aufsteiger ersetzt einen Absteiger."""
+    je_liga = k.wert("ligen", "autos_je_liga")
+    lauf = abgeschlossener_lauf(k, welt, strecken)
+    for _ in range(3):
+        lauf = lauf.naechste_saison()
+        groessen = {}
+        for f in lauf.welt.fahrer:
+            groessen[f.liga] = groessen.get(f.liga, 0) + 1
+        assert set(groessen.values()) == {je_liga}
+        assert len(lauf.welt.fahrer) == k.wert("ligen", "anzahl") * je_liga
+        lauf.tabellen = volle_tabellen(k, lauf.welt)
+        lauf.vorgefahren = k.wert("kalender", "rennen_je_saison")
+
+
+def test_die_historie_traegt_jede_saison_vollstaendig(k, welt, strecken):
+    """Die Tabelle wird geleert - was bleiben soll, steht in der Historie."""
+    lauf = abgeschlossener_lauf(k, welt, strecken)
+    erste = lauf.jahr
+    stand = lauf.tabelle(LIGA).stand()
+    neu = lauf.naechste_saison()
+
+    abschluss = neu.statistik.abschluss(erste, LIGA)
+    assert abschluss is not None
+    assert len(abschluss.zeilen) == len(stand)
+    for platz, (zeile, eintrag) in enumerate(
+        zip(abschluss.zeilen, stand, strict=True), start=1
+    ):
+        assert zeile.platz == platz
+        assert zeile.fahrer == eintrag.fahrer
+        assert zeile.punkte == eintrag.punkte
+        assert zeile.siege == eintrag.siege
+        assert zeile.podien == eintrag.podien
+        assert zeile.poles == eintrag.poles
+        assert zeile.rennen == eintrag.rennen
+    assert abschluss.reihenfolge == tuple(e.fahrer for e in stand)
+    assert abschluss.platz_von(abschluss.meister) == 1
+
+
+def test_die_karriere_nimmt_alles_mit_was_ueberdauert(k, welt, strecken):
+    """GDD 10 und 14: Konto, Werte, Vertraege, Defekte und Ereignisse."""
+    karriere = spielerkarriere(k, welt)
+    karriere.konto = karriere.konto.mit(geld=5_000, erfahrung=800)
+    karriere.uebernimm_defekte(("X1",))
+    karriere._loese_ereignis_aus("E5")  # F14 +10 %, drei Rennwochenenden
+    karriere.verlorene_tage.add(karriere.heute)
+    karriere.werte["F1"] = 33_000
+
+    lauf = abgeschlossener_lauf(k, welt, strecken, karriere)
+    kenntnis_vorher = dict(lauf.kenntnis.runden)
+    lauf.naechste_saison()
+
+    assert karriere.konto.geld == 6_000  # Startkapital 1.000 plus 5.000
+    assert karriere.konto.erfahrung == 800
+    assert karriere.werte["F1"] == 33_000
+    assert [d["schluessel"] for d in karriere.defekte] == ["X1"]
+    assert [a.schluessel for a in karriere.lage.aktive] == ["E5"]
+    assert lauf.kenntnis.runden == kenntnis_vorher
+    # Neu sind Kalender und Jahr; die verlorenen Tage gehoerten zum alten.
+    assert karriere.saison.jahr == lauf.jahr + 1
+    assert karriere.heute == dt.date(lauf.jahr + 1, 1, 1)
+    assert karriere.verlorene_tage == set()
+
+
+def test_der_spieler_wechselt_mit_seiner_liga(k, strecken):
+    """Nach dem Aufstieg faehrt die Karriere in der neuen Liga."""
+    welt = kw.erzeuge(k, Seedquelle(SEED).zweig("welt"), spielerliga=5)
+    karriere = spielerkarriere(k, welt)
+    lauf = abgeschlossener_lauf(k, welt, strecken, karriere)
+    # Die Tabelle ist nach Staerke geordnet; der Spieler steht mit lauter
+    # Nullen hinten und steigt ab.
+    assert lauf.tabelle(5).platz_von(karriere.fahrernummer) > 27
+
+    neu = lauf.naechste_saison()
+    assert neu.welt.spieler.liga == 6
+    assert karriere.liga == 6
+
+
+def test_ein_sprung_zurueck_faellt_auf(k, welt):
+    karriere = spielerkarriere(k, welt)
+    with pytest.raises(kk.KarriereFehler, match="liegt nicht nach"):
+        karriere.naechste_saison(karriere.saison.jahr, karriere.liga)
+
+
+def test_der_wechsel_braucht_eine_gefahrene_saison(k, welt, strecken):
+    lauf = neuer_lauf(k, welt, strecken)
+    with pytest.raises(sa.SaisonFehler, match="Auf- und Abstieg"):
+        lauf.naechste_saison()

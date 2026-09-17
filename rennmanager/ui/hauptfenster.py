@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 from rennmanager import __version__
+from rennmanager.kern import karriere as kern_karriere
 from rennmanager.kern import spielstand as kern_spielstand
 from rennmanager.kern import statistik as kern_statistik
 from rennmanager.kern import streckenkenntnis as kern_streckenkenntnis
@@ -72,6 +73,9 @@ class Hauptfenster(QMainWindow):
         # Statistik und Streckenkenntnis ueberdauern die Saison (GDD 6 und
         # 13) und gehoeren deshalb dem Fenster, nicht dem Saisonlauf.
         self._karriere = None
+        # Das Jahr der laufenden Saison; jeder Saisonwechsel zaehlt es
+        # eines hoch (GDD 13).
+        self._jahr = kern_karriere.startjahr(konfiguration)
         self._statistik = kern_statistik.Statistik(konfiguration)
         self._kenntnis = kern_streckenkenntnis.Streckenkenntnis(
             konfiguration, seedquelle=self._seedquelle.zweig("lerntempo")
@@ -130,7 +134,10 @@ class Hauptfenster(QMainWindow):
         self._reiter.addTab(self._weltseite, "Welt")
         if getattr(self, "_karriere", None) is None:
             self._karriere = beginne_karriere(
-                self._konfiguration, self._welt, self._seedquelle.zweig("karriere")
+                self._konfiguration,
+                self._welt,
+                self._seedquelle.zweig("karriere", self._jahr),
+                self._jahr,
             )
         self._karriereseite = Karriereseite(self._konfiguration, self._karriere)
         self._reiter.addTab(self._karriereseite, "Karriere")
@@ -153,7 +160,9 @@ class Hauptfenster(QMainWindow):
             tabellen=getattr(self, "_geladene_tabellen", None),
             gefahrene_rennen=getattr(self, "_gefahrene_rennen", 0),
             karriere=self._karriere,
+            jahr=self._jahr,
         )
+        self._saisonseite.saison_gewechselt.connect(self._saison_gewechselt)
         self._reiter.addTab(self._saisonseite, "Saison")
         self._statistikseite = Statistikseite(
             self._konfiguration, self._welt, self._statistik
@@ -341,6 +350,16 @@ class Hauptfenster(QMainWindow):
         return self._statistik
 
     @property
+    def karriere(self):
+        """Der Karrierestand des Spielers - er ueberdauert den Saisonwechsel."""
+        return self._karriere
+
+    @property
+    def jahr(self) -> int:
+        """Das Jahr der laufenden Saison (GDD 13)."""
+        return self._jahr
+
+    @property
     def seedquelle(self) -> Seedquelle:
         """Der aktuell eingestellte Hauptseed."""
         return self._seedquelle
@@ -388,6 +407,28 @@ class Hauptfenster(QMainWindow):
             f"Spielstand geladen: {kern_spielstand.beschreibe(pfad)}", 8000
         )
 
+    def _saison_gewechselt(self) -> None:
+        """Uebernimmt die Welt der neuen Saison (GDD 13).
+
+        Auf- und Abstieg haben die Ligen umgestellt; alle Seiten halten
+        noch die alte Welt.
+        """
+        lauf = self._saisonseite.lauf
+        self._welt = lauf.welt
+        self._jahr = lauf.jahr
+        self._geladene_tabellen = lauf.tabellen
+        self._gefahrene_rennen = lauf.gefahren
+        # Der Neuaufbau ersetzt die Seite, die dieses Signal gerade
+        # gesendet hat - deshalb erst nach der Rueckkehr in die
+        # Ereignisschleife.
+        QTimer.singleShot(0, self._baue_neu_auf)
+
+    def _baue_neu_auf(self) -> None:
+        stelle = self._reiter.currentIndex()
+        self.setCentralWidget(self._baue_inhalt())
+        self._reiter.setCurrentIndex(min(stelle, self._reiter.count() - 1))
+        self.statusBar().showMessage(f"Saison {self._jahr} begonnen", 8000)
+
     def uebernimm_welt(self, welt: kern_welt.Welt) -> None:
         """Uebernimmt eine im Editor geaenderte Welt (GDD 15)."""
         self._welt = welt
@@ -413,6 +454,7 @@ class Hauptfenster(QMainWindow):
 
         self._welt = stand.welt
         self._karriere = stand.karriere
+        self._jahr = stand.saisonjahr
         self._statistik = stand.statistik
         self._kenntnis = stand.kenntnis
         self._geladene_tabellen = stand.tabellen

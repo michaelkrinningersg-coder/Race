@@ -12,8 +12,11 @@ Saisonende abgeschlossen ist. Drei Dinge werden gefuehrt:
   (die Einheit des ganzen Projekts).
 * **Karrierezahlen** je Fahrer: Rennen, Siege, Podien, Poles, schnellste
   Runden, Ausfaelle und Punkte.
-* **Historie**: je Saison und Liga der Endstand, damit sich spaeter
-  nachschlagen laesst, wer wann Meister war.
+* **Historie**: je Saison und Liga die vollstaendige Abschlusstabelle -
+  Platz, Punkte, Siege, Podien, Poles, schnellste Runden, Ausfaelle und
+  Rennen je Fahrer. Vollstaendig, weil die Tabelle der Saison beim
+  Saisonwechsel geleert wird: Was dann nicht in der Historie steht, ist
+  fort.
 """
 
 from __future__ import annotations
@@ -76,21 +79,54 @@ class Karrierezahlen:
 
 
 @dataclass(frozen=True)
+class Saisonzeile:
+    """Eine Zeile der Abschlusstabelle, mit allen Zahlen des Fahrers.
+
+    Die Tabelle einer Saison wird beim Wechsel geleert; was von ihr
+    bleiben soll, steht hier. Deshalb traegt die Zeile dieselben Zahlen
+    wie ``wertung.Eintrag`` - Punkte allein liessen sich spaeter nicht
+    mehr nach Siegen oder Ausfaellen aufschluesseln.
+    """
+
+    fahrer: int
+    platz: int
+    punkte: int
+    siege: int = 0
+    podien: int = 0
+    poles: int = 0
+    schnellste_runden: int = 0
+    ausfaelle: int = 0
+    rennen: int = 0
+
+
+@dataclass(frozen=True)
 class Saisonabschluss:
     """Der Endstand einer Liga in einer Saison (GDD 13: Historie)."""
 
     saison: int
     liga: int
-    # Fahrernummern in der Reihenfolge der Abschlusstabelle.
-    reihenfolge: tuple[int, ...]
-    punkte: tuple[int, ...]
+    # Die Abschlusstabelle, Bester zuerst.
+    zeilen: tuple[Saisonzeile, ...]
+
+    @property
+    def reihenfolge(self) -> tuple[int, ...]:
+        """Fahrernummern in der Reihenfolge der Abschlusstabelle."""
+        return tuple(z.fahrer for z in self.zeilen)
+
+    @property
+    def punkte(self) -> tuple[int, ...]:
+        return tuple(z.punkte for z in self.zeilen)
 
     @property
     def meister(self) -> int:
-        return self.reihenfolge[0]
+        return self.zeilen[0].fahrer
+
+    def zeile_von(self, fahrer: int) -> Saisonzeile | None:
+        return next((z for z in self.zeilen if z.fahrer == fahrer), None)
 
     def platz_von(self, fahrer: int) -> int | None:
-        return self.reihenfolge.index(fahrer) + 1 if fahrer in self.reihenfolge else None
+        zeile = self.zeile_von(fahrer)
+        return zeile.platz if zeile else None
 
 
 @dataclass
@@ -187,15 +223,22 @@ class Statistik:
         return self.melde_runde(strecke, liga, schnellste_runde_ms, schnellster, saison, rennen)
 
     def schliesse_saison(self, saison: int, tabellen: dict[int, Tabelle]) -> None:
-        """Schreibt den Endstand aller Ligen in die Historie (GDD 13)."""
+        """Schreibt den Endstand aller Ligen in die Historie (GDD 13).
+
+        Vollstaendig, nicht nur Reihenfolge und Punkte: Nach dem
+        Saisonwechsel sind die Tabellen leer, und was dann nicht in der
+        Historie steht, ist fort.
+        """
         for liga in sorted(tabellen):
             stand = tabellen[liga].stand()
             self.historie.append(
                 Saisonabschluss(
                     saison=saison,
                     liga=liga,
-                    reihenfolge=tuple(e.fahrer for e in stand),
-                    punkte=tuple(e.punkte for e in stand),
+                    zeilen=tuple(
+                        zeile_aus(eintrag, platz)
+                        for platz, eintrag in enumerate(stand, start=1)
+                    ),
                 )
             )
 
@@ -224,6 +267,21 @@ class Statistik:
 
     def punkte_in(self, saison: int, liga: int, fahrer: int) -> int:
         return self.saisonpunkte.get((saison, liga, fahrer), 0)
+
+
+def zeile_aus(eintrag: Eintrag, platz: int) -> Saisonzeile:
+    """Macht aus einer Saisonzeile der Tabelle eine Zeile der Historie."""
+    return Saisonzeile(
+        fahrer=eintrag.fahrer,
+        platz=platz,
+        punkte=eintrag.punkte,
+        siege=eintrag.siege,
+        podien=eintrag.podien,
+        poles=eintrag.poles,
+        schnellste_runden=eintrag.schnellste_runden,
+        ausfaelle=eintrag.ausfaelle,
+        rennen=eintrag.rennen,
+    )
 
 
 def aus_tabelle(eintrag: Eintrag) -> Karrierezahlen:

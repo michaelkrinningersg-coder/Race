@@ -1098,3 +1098,56 @@ Verteilung (σ 3 %, begrenzt auf ±8 %, schlechte Seite durch D16 gedämpft).
 
 **Entschieden: A.** GDD 14 sagt *Mittelwert*, nicht Spanne. Gemessen über
 2.000 Würfe: Mittelwert +0,030, Streuung unverändert.
+
+---
+
+## Nachtrag: beim Saisonwechsel entschieden
+
+### 45. Kalender und Rennwochenende liefen nebeneinander her
+
+GDD 2 beschreibt eine Schleife: „Nach jedem Rennen plant der Spieler, wie
+er Zeit, Erfahrung und Geld bis zum nächsten Rennwochenende einsetzt."
+Gebaut waren beide Hälften, verbunden waren sie nicht — die Saisonseite
+fuhr Rennen, der Karrierekalender blieb stehen. Nach drei Rennen stand
+als Datum immer noch der 01.01.2026.
+
+| | Variante | |
+| --- | --- | --- |
+| **A** | `fahre_rennen()` schaltet den Kalender bis zum Renntag vor | Keine neue Fehlermeldung, ungenutzte Tage verfallen wie in GDD 2 |
+| **B** | Das Rennen verweigert sich, solange der Kalender nicht auf dem Renntag steht | Sauber, aber der Spieler muss zwei Reiter in der richtigen Reihenfolge bedienen |
+| **C** | Der Renntag schaltet automatisch ins Rennen | Nähme dem Spieler die Entscheidung, wann er fährt |
+
+**Entschieden: A.** GDD 2 sagt ohnehin, dass ein ungenutzter Tag verloren
+ist. Das Vorschalten passiert **vor** dem Rennen, damit die Ereignisse der
+übersprungenen Tage noch auf es wirken; danach geht es einen Tag weiter,
+sonst fände das nächste Rennwochenende am selben Tag statt. Die
+Saisonseite warnt vorher in Rot, wie viele nutzbare Tage ein Rennen jetzt
+kosten würde.
+
+### 46. Was der Saisonwechsel mitnimmt
+
+**GDD 13** nennt Auf- und Abstieg und eine „Historie aller Saisons und
+Ligen", sagt aber nicht, was von einer Karriere ins nächste Jahr wandert.
+
+**Entschieden** (vom Auftraggeber gewählt): Sponsorenverträge, offene
+Defekte, laufende Ereignisse und Streckenkenntnis wandern mit; die
+Statistiken werden komplett je Saison abgelegt. Dieselben 600 Fahrer, keine
+Zu- und Abgänge. Die Karriere ist endlos. Nach Rennen 20 zeigt die
+Saisonseite eine Abschlussansicht; ein Knopf „Nächste Saison" bestätigt
+den Wechsel.
+
+Daraus folgt, was **nicht** mitwandert: die Saisontabellen, der Kalender
+und der Ereignisplan — und die verlorenen Tage aus E29, weil sie Daten des
+alten Kalenders sind.
+
+**„Statistiken komplett ablegen"** heißt konkret: `Saisonabschluss` trägt
+je Fahrer dieselben Zahlen wie die Saisontabelle — Platz, Punkte, Siege,
+Podien, Poles, schnellste Runden, Ausfälle und Rennen. Vorher waren es nur
+Reihenfolge und Punkte. Die Tabelle wird beim Wechsel geleert; was dann
+nicht in der Historie steht, ist fort.
+
+### 47. Startjahr der ersten Saison
+
+Das Jahr 2026 stand an vier Stellen im Code. **Entschieden:** Es steht
+jetzt als `[kalender] startjahr` in der Konfiguration, wie jeder andere
+Balancing-Wert auch. Jeder Saisonwechsel zählt eines hoch.

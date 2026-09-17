@@ -9,6 +9,7 @@ from rennmanager.kern import auto as kern_auto
 from rennmanager.kern import einnahmen as kern_einnahmen
 from rennmanager.kern import ereignis as kern_ereignis
 from rennmanager.kern import kalender as kern_kalender
+from rennmanager.kern import karriere as kern_karriere
 from rennmanager.kern import rennen as kern_rennen
 from rennmanager.kern import schnellsimulation as kern_schnell
 from rennmanager.kern import spielstand as kern_spielstand
@@ -109,7 +110,8 @@ def pruefe() -> int:
         f"{feld[bester.fahrer].kuerzel} in {formatiere_dauer(schnell.siegerzeit_ms)}, "
         f"{bester.punkte} Punkte, {schnell.ueberholmanoever} Ueberholmanoever"
     )
-    saison = kern_kalender.erzeuge(konfiguration, 2026)
+    jahr = kern_karriere.startjahr(konfiguration)
+    saison = kern_kalender.erzeuge(konfiguration, jahr)
     print(
         f"Kalender:      {len(saison.renntage)} Rennen vom "
         f"{saison.erstes_rennen:%d.%m.} bis {saison.letztes_rennen:%d.%m.}, "
@@ -126,7 +128,7 @@ def pruefe() -> int:
     gezogen = sum(len(liste) for liste in plan.values())
     print(
         f"Ereignisse:    {len(kern_ereignis.liste(konfiguration))} moeglich, "
-        f"{gezogen} in der Saison 2026 mit Seed 3, "
+        f"{gezogen} in der Saison {jahr} mit Seed 3, "
         f"{len(kern_ereignis.zyklen(konfiguration, saison))} Zyklen"
     )
     # Streckenkenntnis (GDD 6) und Spielstand (GDD 15).

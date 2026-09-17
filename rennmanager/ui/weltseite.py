@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from rennmanager.kern import karriere as kern_karriere
 from rennmanager.kern.auto import bereichswerte
 from rennmanager.kern.welt import Welt
 from rennmanager.konfiguration import Konfiguration
@@ -224,7 +225,7 @@ class Weltseite(QWidget):
         import datetime as dt
 
         return dt.date(
-            2026,
+            kern_karriere.startjahr(self._konfiguration),
             self._konfiguration.wert("kalender", "saisonstart_monat"),
             self._konfiguration.wert("kalender", "saisonstart_tag"),
         )

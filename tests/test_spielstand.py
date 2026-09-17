@@ -262,3 +262,129 @@ def test_ein_geladener_stand_laesst_sich_weiterspielen(k, datei, strecken):
     # Die Punkte aus dem geladenen Stand sind noch da und es kam etwas dazu.
     for eintrag in lauf.tabelle(LIGA).stand():
         assert eintrag.rennen == 2
+
+
+# --- Saisonwechsel (GDD 13) -----------------------------------------------
+def mit_historie(k, welt, strecken, jahre: int = 2) -> sp.Spielstand:
+    """Ein Stand, in dem schon Saisons abgeschlossen sind."""
+    haupt = Seedquelle(SEED)
+    spieler = welt.spieler
+    werte = dict(spieler.auto.werte)
+    werte.update(spieler.auto.wetterwerte)
+    karriere = kk.beginne(
+        k, 2026, spieler.liga, werte, fahrernummer=spieler.nummer
+    )
+    lauf = sa.Saisonlauf(k, welt, haupt, jahr=2026, strecken=strecken, karriere=karriere)
+    for _ in range(jahre):
+        lauf.tabellen = {
+            liga: gefuellte_tabelle(k, lauf.welt, liga)
+            for liga in range(1, k.wert("ligen", "anzahl") + 1)
+        }
+        lauf.vorgefahren = k.wert("kalender", "rennen_je_saison")
+        lauf = lauf.naechste_saison()
+
+    return sp.aus_teilen(
+        seed=SEED,
+        saisonjahr=lauf.jahr,
+        welt=lauf.welt,
+        karriere=karriere,
+        tabellen=lauf.tabellen,
+        statistik=lauf.statistik,
+        kenntnis=lauf.kenntnis,
+        gefahrene_rennen=lauf.gefahren,
+    )
+
+
+def gefuellte_tabelle(k, welt, liga: int) -> wt.Tabelle:
+    tabelle = wt.Tabelle(liga)
+    tabelle.verbuche(
+        k,
+        [
+            wt.Rennergebnis(
+                fahrer=f.nummer,
+                rennplatz=platz,
+                qualifyingplatz=platz,
+                schnellste_runde=(platz == 2),
+                ausgefallen=(platz > 28),
+            )
+            for platz, f in enumerate(welt.liga(liga), start=1)
+        ],
+    )
+    return tabelle
+
+
+@pytest.fixture(scope="module")
+def nach_zwei_saisons(k, strecken) -> sp.Spielstand:
+    welt = kw.erzeuge(k, Seedquelle(SEED).zweig("welt"), spielerliga=LIGA)
+    return mit_historie(k, welt, strecken)
+
+
+def test_die_historie_kommt_vollstaendig_zurueck(k, nach_zwei_saisons, tmp_path):
+    """Version 2: je Saison und Liga die ganze Abschlusstabelle."""
+    geladen = sp.lade(k, sp.speichere(nach_zwei_saisons, tmp_path / "saisons.sqlite"))
+    assert geladen.saisonjahr == 2028
+    assert geladen.statistik.saisons == (2026, 2027)
+    assert geladen.statistik.historie == nach_zwei_saisons.statistik.historie
+
+    abschluss = geladen.statistik.abschluss(2026, LIGA)
+    assert len(abschluss.zeilen) == k.wert("ligen", "autos_je_liga")
+    assert abschluss.zeilen[0].siege == 1
+    assert abschluss.zeilen[1].schnellste_runden == 1
+    assert abschluss.zeilen[-1].ausfaelle == 1
+
+
+def test_der_kalender_des_dritten_jahres_kommt_zurueck(k, nach_zwei_saisons, tmp_path):
+    geladen = sp.lade(k, sp.speichere(nach_zwei_saisons, tmp_path / "jahr.sqlite"))
+    assert geladen.karriere.saison.jahr == 2028
+    assert geladen.karriere.heute.year == 2028
+
+
+def mache_zu_version_1(pfad) -> None:
+    """Baut einen Stand auf das Schema der Version 1 zurueck.
+
+    Damit laesst sich pruefen, dass aeltere Staende weiter lesbar sind -
+    und nicht nur, dass der Code eine Fallunterscheidung hat.
+    """
+    with sqlite3.connect(pfad) as verbindung:
+        verbindung.row_factory = sqlite3.Row
+        zeilen = list(
+            verbindung.execute(
+                "SELECT saison, liga, fahrer, punkte FROM historiezeile "
+                "ORDER BY saison, liga, platz"
+            )
+        )
+        alt: dict[tuple[int, int], tuple[list[int], list[int]]] = {}
+        for z in zeilen:
+            fahrer, punkte = alt.setdefault((z["saison"], z["liga"]), ([], []))
+            fahrer.append(z["fahrer"])
+            punkte.append(z["punkte"])
+
+        verbindung.execute("DROP TABLE historiezeile")
+        verbindung.execute("DROP TABLE historie")
+        verbindung.execute(
+            "CREATE TABLE historie (saison INTEGER NOT NULL, liga INTEGER NOT NULL, "
+            "reihenfolge TEXT NOT NULL, punkte TEXT NOT NULL, PRIMARY KEY (saison, liga))"
+        )
+        verbindung.executemany(
+            "INSERT INTO historie VALUES (?, ?, ?, ?)",
+            [
+                (saison, liga, ",".join(map(str, f)), ",".join(map(str, p)))
+                for (saison, liga), (f, p) in alt.items()
+            ],
+        )
+        verbindung.execute("UPDATE kopf SET version = 1")
+
+
+def test_ein_stand_der_version_1_bleibt_lesbar(k, nach_zwei_saisons, tmp_path):
+    pfad = sp.speichere(nach_zwei_saisons, tmp_path / "alt.sqlite")
+    mache_zu_version_1(pfad)
+
+    geladen = sp.lade(k, pfad)
+    neu = nach_zwei_saisons.statistik.abschluss(2026, LIGA)
+    alt = geladen.statistik.abschluss(2026, LIGA)
+    assert alt.reihenfolge == neu.reihenfolge
+    assert alt.punkte == neu.punkte
+    assert alt.platz_von(alt.meister) == 1
+    # Die Zahlen, die es in Version 1 nicht gab, bleiben auf 0.
+    assert alt.zeilen[0].siege == 0
+    assert alt.zeilen[0].rennen == 0

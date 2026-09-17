@@ -11,6 +11,10 @@ die letzten drei ab (GDD 13). Der Wechsel gilt fuer einzelne Fahrer; die
 Teams bleiben bestehen und haben danach ihre vier Autos gegebenenfalls in
 anderen Ligen als zuvor.
 
+``naechste_saison()`` macht daraus den Saisonwechsel: Statistik,
+Streckenkenntnis und die Karriere des Spielers wandern mit, Tabellen und
+Kalender beginnen neu. Die Karriere ist damit endlos.
+
 Alle Wuerfe haengen am Hauptseed: Der Zweig eines Rennens heisst
 ``saison/<jahr>/rennen/<nummer>/liga/<liga>``. Dieselbe Saison mit
 demselben Seed laeuft deshalb genau gleich ab, gleich ob die Liga des
@@ -27,6 +31,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from rennmanager.kern import ereignis as kern_ereignis
+from rennmanager.kern import karriere as kern_karriere
 from rennmanager.kern import qualifying as kern_qualifying
 from rennmanager.kern import reifen as kern_reifen
 from rennmanager.kern import rennen as kern_rennen
@@ -359,7 +364,7 @@ class Saisonlauf:
         konfiguration: Konfiguration,
         welt: Welt,
         seedquelle: Seedquelle,
-        jahr: int = 2026,
+        jahr: int | None = None,
         strecken: tuple[Strecke, ...] | None = None,
         statistik: Statistik | None = None,
         kenntnis: Streckenkenntnis | None = None,
@@ -369,7 +374,7 @@ class Saisonlauf:
     ) -> None:
         self.konfiguration = konfiguration
         self.welt = welt
-        self.jahr = jahr
+        self.jahr = jahr if jahr is not None else kern_karriere.startjahr(konfiguration)
         self.seedquelle = seedquelle
         self.strecken = strecken or kern_strecke.lade_alle(konfiguration)
         # Statistik und Streckenkenntnis ueberdauern die Saison (GDD 6 und
@@ -719,6 +724,42 @@ class Saisonlauf:
     def naechste_welt(self) -> Welt:
         """Die Welt der Folgesaison, mit vollzogenen Ligawechseln (GDD 13)."""
         return wende_wechsel_an(self.welt, self.schliesse_ab())
+
+    def naechste_saison(self) -> Saisonlauf:
+        """Der Saisonlauf des Folgejahres (GDD 13).
+
+        Schliesst die laufende Saison ab, vollzieht Auf- und Abstieg und
+        traegt die Karriere ins neue Jahr. Was die Saison ueberdauert,
+        wandert unveraendert mit:
+
+        * **Statistik** - Rundenrekorde, Karrierezahlen und die
+          vollstaendige Historie aller bisherigen Saisons,
+        * **Streckenkenntnis** aller 600 Fahrer (GDD 6),
+        * aus der Karriere Konto, Werte, Sponsorenvertraege, offene
+          Defekte und laufende Ereignisse (GDD 10 und 14).
+
+        Neu sind Tabellen, Kalender und Ereignisplan. Dieselben 600 Fahrer
+        bleiben; es gibt keine Zu- und Abgaenge.
+        """
+        welt = self.naechste_welt()
+        jahr = self.jahr + 1
+        if self.karriere is not None:
+            spieler = welt.spieler
+            self.karriere.naechste_saison(
+                jahr,
+                spieler.liga if spieler is not None else self.karriere.liga,
+                self.seedquelle.zweig("karriere", jahr),
+            )
+        return Saisonlauf(
+            self.konfiguration,
+            welt,
+            self.seedquelle,
+            jahr,
+            strecken=self.strecken,
+            statistik=self.statistik,
+            kenntnis=self.kenntnis,
+            karriere=self.karriere,
+        )
 
 
 # ---------------------------------------------------------------------------

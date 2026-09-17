@@ -381,6 +381,38 @@ Liga 1 kennt keinen Auf-, Liga 20 keinen Abstieg. Der Wechsel gilt fuer
 Fahrer, nicht fuer Teams - ein Team hat danach seine vier Autos
 gegebenenfalls in anderen Ligen.
 
+### Der Saisonwechsel
+
+`naechste_saison()` macht aus dem Saisonende den Anfang des naechsten
+Jahres. Die Karriere ist endlos; dieselben 600 Fahrer bleiben, es gibt
+keine Zu- und Abgaenge.
+
+```python
+neu = lauf.naechste_saison()   # schliesst ab, wechselt die Ligen, zaehlt das Jahr hoch
+neu.jahr                       # 2027
+neu.welt.spieler.liga          # nach Auf- oder Abstieg eine andere
+neu.statistik.abschluss(2026, 20).zeilen[0]
+# Saisonzeile(fahrer=51, platz=1, punkte=809, siege=12, podien=19,
+#             poles=8, schnellste_runden=10, ausfaelle=0, rennen=20)
+```
+
+| Wandert mit | Beginnt neu |
+| --- | --- |
+| Statistik: Rundenrekorde, Karrierezahlen, Historie | Saisontabellen aller 20 Ligen |
+| Streckenkenntnis aller 600 Fahrer (GDD 6) | Kalender und Ereignisplan (GDD 2 und 14) |
+| Konto, Werte, Sponsorenvertraege, offene Defekte, laufende Ereignisse (GDD 10 und 14) | Liga des Spielers nach Auf- oder Abstieg |
+
+Die Historie traegt dabei jede Saison **vollstaendig**: Platz, Punkte,
+Siege, Podien, Poles, schnellste Runden, Ausfaelle und Rennen je Fahrer.
+Die Tabelle der Saison wird geleert - was dann nicht in der Historie
+steht, ist fort.
+
+Gemessen ueber drei voll gefahrene Saisons in Liga 20 (je rund 90
+Sekunden fuer 20 Rennen mal 20 Ligen): Konto 12.180 EUR nach der ersten,
+21.420 nach der zweiten, 34.000 nach der dritten; Streckenkenntnis in
+Sakhir 19,6 / 36,4 / 52,2 Runden; nach jedem Wechsel stehen in jeder der
+20 Ligen wieder genau 30 Fahrer.
+
 ### Warum es zwei Rennmodelle gibt
 
 Ein volles Rennwochenende in allen 20 Ligen wuerde mit
@@ -481,10 +513,16 @@ statistik.punkte_in(2026, 10, fahrer)   # Gesamtpunkte je Liga und Saison
 ```
 
 `rennmanager.kern.spielstand` schreibt alles in eine SQLite-Datei, wie
-GDD 15 es vorgibt - 21 Tabellen, eine Datei je Spielstand, im Menue unter
+GDD 15 es vorgibt - 22 Tabellen, eine Datei je Spielstand, im Menue unter
 Datei. Die Welt wird dabei vollstaendig abgelegt statt aus dem Seed neu
 gewuerfelt: Nach dem ersten Auf- und Abstieg stimmt die gewuerfelte Welt
 nicht mehr mit der gespielten ueberein. Ein Test haelt genau das fest.
+
+Der Stand traegt seine **Version**. Version 2 legt die Historie je Saison
+und Liga vollstaendig ab (Tabelle `historiezeile`) statt nur Reihenfolge
+und Punkte; Staende der Version 1 bleiben lesbar, die Zahlen, die es dort
+nicht gab, stehen auf 0. Auch das haelt ein Test fest - er baut einen
+gespeicherten Stand auf das alte Schema zurueck und laedt ihn.
 
 ## Der Editor
 
