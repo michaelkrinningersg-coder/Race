@@ -64,6 +64,40 @@ class SaisonFehler(Exception):
 
 
 @dataclass(frozen=True)
+class Wochenendrahmen:
+    """Was an einem Rennwochenende fuer alle 20 Ligen gleich ist."""
+
+    nummer: int
+    strecke: Strecke
+    verschleiss: float
+    seedquelle: Seedquelle
+
+
+@dataclass(frozen=True)
+class Ligadaten:
+    """Was eine Liga an einem Rennwochenende mitbringt.
+
+    Einmal gezogen, von Qualifying und Rennen gemeinsam benutzt: Der
+    Heimbonus aus Punkt 2 wird je Wochenende **einmal** gewuerfelt, und
+    die Streckenkenntnis gilt fuer beide Sessions (GDD 6).
+    """
+
+    liga: int
+    fahrer: tuple[Fahrer, ...]
+    runden: int
+    seedquelle: Seedquelle
+    kenntnis: tuple[float, ...]
+    tagesform: tuple[float, ...]
+    autos: dict[str, dict[int, object]]
+    rhythmus: tuple[float, ...]
+    meisterschaft: tuple[int, ...] | None
+
+    @property
+    def nummern(self) -> tuple[int, ...]:
+        return tuple(f.nummer for f in self.fahrer)
+
+
+@dataclass(frozen=True)
 class Ligawochenende:
     """Was eine Liga an einem Rennwochenende gefahren ist.
 
@@ -159,34 +193,30 @@ def _kilometer_je_wetter(verlauf: Rennverlauf) -> tuple[dict[str, float], ...]:
     return tuple(ergebnis)
 
 
-def _ausfuehrlich(
+def _fahre_qualifying(
     konfiguration: Konfiguration,
     welt: Welt,
     liga: int,
-    fahrer: tuple[Fahrer, ...],
     strecke: Strecke,
-    runden: int,
     seedquelle: Seedquelle,
-    streckenmittel: float,
-    streckenverschleiss: float,
     meisterschaft: tuple[int, ...] | None,
     kenntnisfaktor: tuple[float, ...],
     spielerautos: dict[str, dict[int, object]],
     tagesformbonus: tuple[float, ...],
     rhythmusfaktor: tuple[float, ...],
-) -> tuple[Ligawochenende, Rennverlauf, Qualifying]:
-    """Qualifying und Rennen einer Liga in voller Aufloesung (GDD 4).
+) -> Qualifying:
+    """Das Qualifying einer Liga (GDD 4).
 
-    Qualifying und Rennen bekommen ein eigenes Feld: Die entwickelten
-    Werte des Spielers koennen sich zwischen beiden unterscheiden, weil
-    E12 aus GDD 14 nur im Qualifying wirkt. Die *Reihenfolge* des Feldes
-    richtet sich in beiden Faellen nach der Welt, sonst passten die
-    Indizes aus dem Qualifying nicht mehr aufs Rennen.
+    Eigene Funktion, weil das gefuehrte Rennwochenende dazwischen anhaelt
+    (Punkt 12): Der Spieler sieht erst sein Qualifying, dann sein Rennen.
+    Der Seedzweig heisst ``qualifying`` und haengt nicht an der
+    Aufrufreihenfolge - derselbe Seed ergibt dasselbe Qualifying, ob am
+    Stueck gefahren oder in zwei Etappen.
     """
     feld = kern_welt.starterfeld(
         welt, liga, autos=spielerautos.get(kern_ereignis.QUALIFYING)
     )
-    quali = kern_qualifying.fahre(
+    return kern_qualifying.fahre(
         konfiguration,
         strecke,
         feld,
@@ -196,6 +226,32 @@ def _ausfuehrlich(
         tagesformbonus=tagesformbonus,
         rhythmusfaktor=rhythmusfaktor,
     )
+
+
+def _fahre_rennen(
+    konfiguration: Konfiguration,
+    welt: Welt,
+    liga: int,
+    fahrer: tuple[Fahrer, ...],
+    strecke: Strecke,
+    runden: int,
+    seedquelle: Seedquelle,
+    streckenmittel: float,
+    streckenverschleiss: float,
+    kenntnisfaktor: tuple[float, ...],
+    spielerautos: dict[str, dict[int, object]],
+    tagesformbonus: tuple[float, ...],
+    rhythmusfaktor: tuple[float, ...],
+    quali: Qualifying,
+) -> tuple[Ligawochenende, Rennverlauf]:
+    """Das Rennen einer Liga auf ein gefahrenes Qualifying (GDD 4).
+
+    Rennen und Qualifying bekommen ein eigenes Feld: Die entwickelten
+    Werte des Spielers koennen sich zwischen beiden unterscheiden, weil
+    E12 aus GDD 14 nur im Qualifying wirkt. Die *Reihenfolge* des Feldes
+    richtet sich in beiden Faellen nach der Welt, sonst passten die
+    Indizes aus dem Qualifying nicht mehr aufs Rennen.
+    """
     # Die Startaufstellung kommt aus dem Qualifying; Platz 1 ist die Pole.
     rennfeld = kern_welt.starterfeld(
         welt, liga, autos=spielerautos.get(kern_ereignis.RENNEN)
@@ -301,6 +357,59 @@ def _ausfuehrlich(
         manoever_je_fahrer=manoever_je_fahrer,
         defekte_je_fahrer=defekte_je_fahrer,
         kilometer_je_fahrer=kilometer_je_fahrer,
+    )
+    return wochenende, verlauf
+
+
+def _ausfuehrlich(
+    konfiguration: Konfiguration,
+    welt: Welt,
+    liga: int,
+    fahrer: tuple[Fahrer, ...],
+    strecke: Strecke,
+    runden: int,
+    seedquelle: Seedquelle,
+    streckenmittel: float,
+    streckenverschleiss: float,
+    meisterschaft: tuple[int, ...] | None,
+    kenntnisfaktor: tuple[float, ...],
+    spielerautos: dict[str, dict[int, object]],
+    tagesformbonus: tuple[float, ...],
+    rhythmusfaktor: tuple[float, ...],
+) -> tuple[Ligawochenende, Rennverlauf, Qualifying]:
+    """Qualifying und Rennen einer Liga am Stueck (GDD 4).
+
+    Der Weg fuer die Saison, die 20 Ligen hintereinander faehrt. Das
+    gefuehrte Rennwochenende ruft stattdessen die beiden Etappen einzeln
+    auf und haelt dazwischen an (Punkt 12) - herauskommen muss dasselbe.
+    """
+    quali = _fahre_qualifying(
+        konfiguration,
+        welt,
+        liga,
+        strecke,
+        seedquelle,
+        meisterschaft,
+        kenntnisfaktor,
+        spielerautos,
+        tagesformbonus,
+        rhythmusfaktor,
+    )
+    wochenende, verlauf = _fahre_rennen(
+        konfiguration,
+        welt,
+        liga,
+        fahrer,
+        strecke,
+        runden,
+        seedquelle,
+        streckenmittel,
+        streckenverschleiss,
+        kenntnisfaktor,
+        spielerautos,
+        tagesformbonus,
+        rhythmusfaktor,
+        quali,
     )
     return wochenende, verlauf, quali
 
@@ -570,6 +679,155 @@ class Saisonlauf:
         return tuple(geordnet)
 
     # -- Fahren ------------------------------------------------------------
+    def beginne_wochenende(self, nummer: int | None = None) -> Wochenendrahmen:
+        """Ruestet das naechste Rennwochenende zu, ohne es zu fahren.
+
+        Strecke, Reifenverschleiss und der Seedzweig gelten fuer alle 20
+        Ligen; sie einmal zu bilden ist die halbe Arbeit. Der Kalender der
+        Karriere wird dabei auf den Renntag vorgeschaltet (GDD 2) - vor dem
+        Rennen, damit die Ereignisse dieser Tage noch auf es wirken.
+        """
+        if nummer is None:
+            nummer = self.naechstes_rennen
+        if nummer is None:
+            raise SaisonFehler(f"Die Saison {self.jahr} ist zu Ende")
+        # Eine Karriere kann auch nach dem Aufbau gesetzt worden sein.
+        self._teile_kenntnis()
+        self._stelle_auf_renntag(nummer)
+        strecke = self.strecke_zu(nummer)
+        return Wochenendrahmen(
+            nummer=nummer,
+            strecke=strecke,
+            verschleiss=kern_reifen.streckenfaktor(
+                self.konfiguration, strecke, self._querbeschleunigung
+            ),
+            seedquelle=self.seedquelle.zweig("saison", self.jahr).zweig(
+                "rennen", nummer
+            ),
+        )
+
+    def ligadaten(self, rahmen: Wochenendrahmen, liga: int) -> Ligadaten:
+        """Alles, was eine Liga an diesem Wochenende mitbringt.
+
+        Qualifying und Rennen brauchen dasselbe; das gefuehrte Wochenende
+        haelt dazwischen an (Punkt 12) und darf es nicht zweimal ziehen -
+        der Heimbonus etwa wird je Wochenende **einmal** gewuerfelt.
+        """
+        fahrer = self.welt.liga(liga)
+        seed = rahmen.seedquelle.zweig("liga", liga)
+        autos = self.sessionautos(liga, rahmen.strecke, fahrer, seed)
+        return Ligadaten(
+            liga=liga,
+            fahrer=fahrer,
+            runden=kern_rennen.rundenzahl(self.konfiguration, rahmen.strecke, liga),
+            seedquelle=seed,
+            kenntnis=self.kenntnis.tempofaktoren(
+                tuple(f.nummer for f in fahrer), rahmen.strecke.name
+            ),
+            tagesform=self.tagesformbonus(liga, fahrer),
+            autos=autos,
+            rhythmus=self.rhythmusfaktoren(
+                rahmen.strecke, fahrer, autos.get(kern_ereignis.RENNEN, {})
+            ),
+            meisterschaft=self.meisterschaft(liga, fahrer),
+        )
+
+    def _fahre_liga(
+        self, rahmen: Wochenendrahmen, daten: Ligadaten, ausfuehrlich: bool
+    ) -> tuple[Ligawochenende, Rennverlauf | None, Qualifying | None]:
+        """Eine Liga an diesem Wochenende, voll oder im Schnellmodus."""
+        if ausfuehrlich:
+            wochenende, verlauf, quali = _ausfuehrlich(
+                self.konfiguration,
+                self.welt,
+                daten.liga,
+                daten.fahrer,
+                rahmen.strecke,
+                daten.runden,
+                daten.seedquelle,
+                self.streckenmittel,
+                rahmen.verschleiss,
+                daten.meisterschaft,
+                daten.kenntnis,
+                daten.autos,
+                daten.tagesform,
+                daten.rhythmus,
+            )
+            return wochenende, verlauf, quali
+        return (
+            _schnell(
+                self.konfiguration,
+                self.welt,
+                daten.liga,
+                daten.fahrer,
+                rahmen.strecke,
+                daten.runden,
+                daten.seedquelle,
+                self.streckenmittel,
+                rahmen.verschleiss,
+                daten.kenntnis,
+                daten.autos,
+                daten.tagesform,
+                daten.rhythmus,
+            ),
+            None,
+            None,
+        )
+
+    def verbuche_liga(
+        self, rahmen: Wochenendrahmen, daten: Ligadaten, ergebnis: Ligawochenende
+    ) -> None:
+        """Traegt ein gefahrenes Ligawochenende ueberall ein.
+
+        Tabelle, Popularitaet, Statistik, Streckenkenntnis und - nur in der
+        Liga des Spielers - die Karriere. Jede Liga bucht fuer sich, mit
+        eigenem Seedzweig: Die Reihenfolge, in der die 20 Ligen gebucht
+        werden, aendert am Ergebnis nichts. Nur deshalb darf das gefuehrte
+        Wochenende (Punkt 12) mit der Liga des Spielers anfangen.
+        """
+        liga = daten.liga
+        self.tabellen[liga].verbuche(self.konfiguration, ergebnis.ergebnisse)
+        # Siege, Podien und Poles machen bekannt (Punkt 5).
+        self.popularitaet.verbuche_wochenende(ergebnis.ergebnisse)
+        self.statistik.verbuche_wochenende(
+            saison=self.jahr,
+            rennen=rahmen.nummer,
+            liga=liga,
+            strecke=rahmen.strecke.name,
+            ergebnisse=ergebnis.ergebnisse,
+            schnellste_runde_ms=ergebnis.schnellste_runde_ms,
+        )
+        # Qualifying und Rennen zaehlen beide fuer die Kenntnis (GDD 6).
+        quali_runden = self.konfiguration.wert(
+            "qualifying", "aufwaermrunden"
+        ) + self.konfiguration.wert("qualifying", "gezeitete_runden")
+        gefahrene = daten.runden + quali_runden
+        kenntnisseed = daten.seedquelle.zweig("kenntnis")
+        spieler = self._spielernummer(liga)
+        # Der Spieler bucht ueber die Karriere, weil E10 Testfahrt
+        # geglueckt seinen Zuwachs hebt (GDD 14). Sein Seedzweig ist
+        # derselbe wie im Feld, damit derselbe Seed dieselbe Saison
+        # ergibt (GDD 15).
+        self.kenntnis.verbuche_feld(
+            tuple(n for n in daten.nummern if n != spieler),
+            rahmen.strecke.name,
+            gefahrene,
+            kenntnisseed,
+        )
+        if spieler is not None:
+            self.karriere.verbuche_runden(
+                rahmen.strecke.name, gefahrene, kenntnisseed.zweig("fahrer", spieler)
+            )
+            self._verbuche_karriere(ergebnis, spieler)
+
+    def schliesse_wochenende_ab(self, ergebnis: Wochenende) -> Wochenende:
+        """Haengt das gefahrene Wochenende an und beendet den Renntag."""
+        self.wochenenden.append(ergebnis)
+        # Der Renntag ist vorbei; der naechste Tag gehoert schon wieder
+        # der Planung (GDD 2).
+        self._schliesse_renntag_ab()
+        return ergebnis
+
     def fahre_rennen(self, ausfuehrliche_liga: int | None = None) -> Wochenende:
         """Faehrt das naechste Rennwochenende in allen 20 Ligen (GDD 13).
 
@@ -577,119 +835,33 @@ class Saisonlauf:
             die des Spielers. Ohne Angabe laufen alle Ligen im
             Schnellmodus.
         """
-        nummer = self.naechstes_rennen
-        if nummer is None:
-            raise SaisonFehler(f"Die Saison {self.jahr} ist zu Ende")
         if ausfuehrliche_liga is not None and ausfuehrliche_liga not in self.tabellen:
             raise SaisonFehler(f"Liga {ausfuehrliche_liga} gibt es nicht")
 
-        # Eine Karriere kann auch nach dem Aufbau gesetzt worden sein.
-        self._teile_kenntnis()
-        # GDD 2: Das Rennen findet an seinem Renntag statt. Der Kalender
-        # der Karriere wird deshalb bis dorthin vorgeschaltet - vor dem
-        # Rennen, damit die Ereignisse dieser Tage noch auf es wirken.
-        self._stelle_auf_renntag(nummer)
-        strecke = self.strecke_zu(nummer)
-        verschleiss = kern_reifen.streckenfaktor(
-            self.konfiguration, strecke, self._querbeschleunigung
-        )
-        wochenende = self.seedquelle.zweig("saison", self.jahr).zweig("rennen", nummer)
-
+        rahmen = self.beginne_wochenende()
         ligen: dict[int, Ligawochenende] = {}
         verlauf: Rennverlauf | None = None
         quali: Qualifying | None = None
 
         for liga in sorted(self.tabellen):
-            fahrer = self.welt.liga(liga)
-            nummern = tuple(f.nummer for f in fahrer)
-            runden = kern_rennen.rundenzahl(self.konfiguration, strecke, liga)
-            seed = wochenende.zweig("liga", liga)
-            kenntnis = self.kenntnis.tempofaktoren(nummern, strecke.name)
-            tagesform = self.tagesformbonus(liga, fahrer)
-            autos = self.sessionautos(liga, strecke, fahrer, seed)
-            rhythmus = self.rhythmusfaktoren(
-                strecke, fahrer, autos.get(kern_ereignis.RENNEN, {})
+            daten = self.ligadaten(rahmen, liga)
+            ligen[liga], gefahren, gequalt = self._fahre_liga(
+                rahmen, daten, liga == ausfuehrliche_liga
             )
             if liga == ausfuehrliche_liga:
-                ligen[liga], verlauf, quali = _ausfuehrlich(
-                    self.konfiguration,
-                    self.welt,
-                    liga,
-                    fahrer,
-                    strecke,
-                    runden,
-                    seed,
-                    self.streckenmittel,
-                    verschleiss,
-                    self.meisterschaft(liga, fahrer),
-                    kenntnis,
-                    autos,
-                    tagesform,
-                    rhythmus,
-                )
-            else:
-                ligen[liga] = _schnell(
-                    self.konfiguration,
-                    self.welt,
-                    liga,
-                    fahrer,
-                    strecke,
-                    runden,
-                    seed,
-                    self.streckenmittel,
-                    verschleiss,
-                    kenntnis,
-                    autos,
-                    tagesform,
-                    rhythmus,
-                )
-            self.tabellen[liga].verbuche(self.konfiguration, ligen[liga].ergebnisse)
-            # Siege, Podien und Poles machen bekannt (Punkt 5).
-            self.popularitaet.verbuche_wochenende(ligen[liga].ergebnisse)
-            self.statistik.verbuche_wochenende(
-                saison=self.jahr,
-                rennen=nummer,
-                liga=liga,
-                strecke=strecke.name,
-                ergebnisse=ligen[liga].ergebnisse,
-                schnellste_runde_ms=ligen[liga].schnellste_runde_ms,
-            )
-            # Qualifying und Rennen zaehlen beide fuer die Kenntnis (GDD 6).
-            quali_runden = self.konfiguration.wert(
-                "qualifying", "aufwaermrunden"
-            ) + self.konfiguration.wert("qualifying", "gezeitete_runden")
-            gefahrene = runden + quali_runden
-            kenntnisseed = seed.zweig("kenntnis")
-            spieler = self._spielernummer(liga)
-            # Der Spieler bucht ueber die Karriere, weil E10 Testfahrt
-            # geglueckt seinen Zuwachs hebt (GDD 14). Sein Seedzweig ist
-            # derselbe wie im Feld, damit derselbe Seed dieselbe Saison
-            # ergibt (GDD 15).
-            self.kenntnis.verbuche_feld(
-                tuple(n for n in nummern if n != spieler),
-                strecke.name,
-                gefahrene,
-                kenntnisseed,
-            )
-            if spieler is not None:
-                self.karriere.verbuche_runden(
-                    strecke.name, gefahrene, kenntnisseed.zweig("fahrer", spieler)
-                )
-                self._verbuche_karriere(ligen[liga], spieler)
+                verlauf, quali = gefahren, gequalt
+            self.verbuche_liga(rahmen, daten, ligen[liga])
 
-        ergebnis = Wochenende(
-            nummer=nummer,
-            strecke=strecke.name,
-            ligen=ligen,
-            verlauf=verlauf,
-            qualifying=quali,
-            ausfuehrliche_liga=ausfuehrliche_liga,
+        return self.schliesse_wochenende_ab(
+            Wochenende(
+                nummer=rahmen.nummer,
+                strecke=rahmen.strecke.name,
+                ligen=ligen,
+                verlauf=verlauf,
+                qualifying=quali,
+                ausfuehrliche_liga=ausfuehrliche_liga,
+            )
         )
-        self.wochenenden.append(ergebnis)
-        # Der Renntag ist vorbei; der naechste Tag gehoert schon wieder
-        # der Planung (GDD 2).
-        self._schliesse_renntag_ab()
-        return ergebnis
 
     # -- Kalender (GDD 2) --------------------------------------------------
     def renntag(self, nummer: int) -> dt.date | None:
