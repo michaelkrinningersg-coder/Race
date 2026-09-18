@@ -838,6 +838,29 @@ def notstopp(
     return seit_letztem_stopp >= einstellung["abstand_min_runden"]
 
 
+def notstopp_verschleiss(
+    konfiguration: Konfiguration, restprofil: float, seit_letztem_stopp: int
+) -> bool:
+    """Ob ein Auto wegen **abgefahrener Reifen** hereinkommen muss.
+
+    Entscheidung des Auftraggebers, nachdem der Messlauf ueber fuenf
+    Strecken zeigte, was sonst passiert: Ein Auto, dessen Satz lange vor
+    der geplanten Stopprunde durch ist, erreicht diese Runde nie. Es
+    schleicht auf blankem Gummi weiter - gemessen 16 km/h statt 150 - und
+    beendet das Rennen ohne den vorgeschriebenen Mischungswechsel.
+
+    Der Mindestabstand zwischen zwei Stopps gilt auch hier: Ein Auto mit
+    sehr hohem Verschleiss soll nicht Runde um Runde hereinkommen.
+
+    Wann **nicht** gestoppt wird - in den letzten Runden -, entscheidet
+    der Aufrufer ueber dieselbe Sperre wie bei jedem anderen Stopp.
+    """
+    einstellung = konfiguration.wert("boxenstopp", "strategie")
+    if restprofil >= einstellung["notstopp_ab_restprofil"]:
+        return False
+    return seit_letztem_stopp >= einstellung["abstand_min_runden"]
+
+
 def vorhersage(
     konfiguration: Konfiguration, wetter, runden: int, rundenzeit_ms: float
 ) -> tuple[float, ...]:

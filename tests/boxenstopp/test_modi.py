@@ -17,14 +17,21 @@ from tests.boxenstopp.hilfen import (
     LIGA,
     RUNDEN,
     TROCKEN,
+    VERSCHLEISS_PLANSTOPP,
     rennwetter,
     strategie_mit,
 )
 
 
 def test_beide_modi_fahren_dieselbe_strategie(k, monza, feld, umgebung):
-    """Dieselbe Strategie, dieselben Stopprunden und Mischungen."""
-    mittel, verschleiss = umgebung
+    """Dieselbe Strategie, dieselben Stopprunden und Mischungen.
+
+    Hier zaehlt der **Plan**, also der mildere Streckenverschleiss: Mit dem
+    sonst ueblichen Faktor kaemen beide Modelle schon in Runde 6 wegen
+    abgefahrener Reifen herein, und die geplanten Runden rutschten.
+    """
+    mittel, _verschleiss = umgebung
+    verschleiss = VERSCHLEISS_PLANSTOPP
     strategien = tuple(strategie_mit(k, (8, 16)) for _ in feld)
     voll = rn.simuliere(
         k, monza, feld, RUNDEN, Seedquelle(TROCKEN), mittel,
@@ -110,7 +117,11 @@ def test_der_falsche_reifen_zwingt_zum_notstopp(k, monza, feld, strecken, umgebu
             sg.Strategie(mischungen=(trocken, trocken), stopps=(18,)) for _ in range(4)
         ),
     )
-    notstopps = [b for b in verlauf.boxenstopps if b.notstopp]
+    # Nur die Stopps, die wirklich die Mischung wechseln: Ein Reifen, der
+    # sich unter 30 % abfaehrt, zwingt seit dem Zwangsstopp ebenfalls
+    # herein - der wechselt aber Regen gegen Regen und hat mit der Frist
+    # fuer den falschen Reifen nichts zu tun.
+    notstopps = [b for b in verlauf.boxenstopps if b.notstopp and b.von != b.nach]
     assert notstopps, "Im Starkregen muss auf Regenreifen gewechselt werden"
     abstand = k.wert("boxenstopp", "strategie", "abstand_min_runden")
     for b in notstopps:

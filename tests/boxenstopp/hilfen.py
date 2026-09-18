@@ -18,8 +18,15 @@ RUNDEN = 24
 # entgegennehmen - also wird es hier ausgesucht statt gesetzt.
 TROCKEN = 0
 # Streckenverschleiss der Tests: hoch genug, dass ein Satz bis zur
-# geplanten Stopprunde unter die Verschiebeschwelle faellt.
+# geplanten Stopprunde unter die Verschiebeschwelle faellt - und seit dem
+# Zwangsstopp bei 30 % Restprofil auch hoch genug, dass dieser greift.
 VERSCHLEISS = 3.0
+# Dazwischen liegt ein schmales Fenster: Wer pruefen will, dass ein
+# **geplanter** Stopp wirklich in seiner Runde gefahren wird, braucht
+# einen Satz, der bis dahin unter 75 % faellt (sonst wird der Stopp
+# verschoben), aber ueber 30 % bleibt (sonst kommt vorher der
+# Zwangsstopp). Gemessen: 1,5 trifft das, 1,0 und 2,0 nicht.
+VERSCHLEISS_PLANSTOPP = 1.5
 
 
 def strategie_mit(k, stopps):

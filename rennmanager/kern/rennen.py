@@ -1005,11 +1005,12 @@ class _Lauf:
         self.runde_letzter_stopp[i] = int(self.runden_gefahren[i])
 
     def _pruefe_boxenstopp(self, i: int, ueberfahrt: float) -> None:
-        """Geplanter Stopp oder Notstopp wegen Wetterwechsels (Punkt 39).
+        """Geplanter Stopp oder Notstopp (Punkt 39).
 
         Laeuft bei jeder Ueberfahrt der Ziellinie - dort steht die Box.
-        Ist das Fenster offen, wird gewechselt; sonst wird geprueft, ob das
-        Wetter einen ausserplanmaessigen Stopp erzwingt. Der wird fuer die
+        Ist das Fenster offen, wird gewechselt; sonst wird geprueft, ob
+        abgefahrene Reifen oder ein Wetterwechsel einen
+        ausserplanmaessigen Stopp erzwingen. Der wird fuer die
         **naechste** Runde angesetzt, nicht fuer diese: Der Fahrer merkt
         es auf der Strecke und kommt eine Runde spaeter herein - vorher
         haette das Auto die Boxengasse schon mit vollem Tempo passiert.
@@ -1032,22 +1033,34 @@ class _Lauf:
         # dann doch daran vorbei.
         if self._verschiebt_planstopp(i, runde):
             return
-        # Der Auftraggeber hat die Frist gesetzt: hoechstens drei Runden
-        # auf dem falschen Reifen, und mindestens drei Runden zwischen
-        # zwei Stopps. Das gilt auch, wenn noch ein geplanter Stopp
-        # aussteht: Der Notstopp geht vor und schiebt den geplanten nach
-        # hinten - sonst faehrt ein Auto mit drei Planstopps das ganze
-        # Rennen auf Trockenreifen durch den Regen.
-        if self.wetter is None or self.box_notstopp[i]:
+        # Zwei Gruende zwingen ausserplanmaessig herein: das Wetter und
+        # der abgefahrene Reifen. Beide gehen einem geplanten Stopp vor
+        # und schieben ihn nach hinten - sonst faehrt ein Auto mit drei
+        # Planstopps das ganze Rennen auf Trockenreifen durch den Regen,
+        # oder es erreicht seine Stopprunde nie, weil es auf blankem
+        # Gummi schleicht.
+        if self.box_notstopp[i]:
+            return
+        seit = runde - int(self.runde_letzter_stopp[i])
+        if runde + 1 > self.runden - self.k.wert("boxenstopp", "strategie", "sperre_runden"):
+            # So kurz vor Schluss wird durchgefahren - fuer beide Gruende.
+            return
+
+        # Der Reifen ist durch (Entscheidung des Auftraggebers): Hier
+        # zaehlt allein das Restprofil. Ob die Mischung zur Lage passt,
+        # spielt keine Rolle - gebraucht wird ein **frischer** Satz.
+        restprofil = float(np.clip(1.0 - self.verschleiss[i], 0.0, 1.0))
+        if kern_strategie.notstopp_verschleiss(self.k, restprofil, seit):
+            self._setze_fenster(i, runde + 1, True)
+            return
+
+        # Das Wetter: hoechstens drei Runden auf dem falschen Reifen.
+        if self.wetter is None:
             return
         naesse = kern_reifen.naesse_von(self.k, self.wetter.zustand_zu(ueberfahrt))
-        seit = runde - int(self.runde_letzter_stopp[i])
         if not kern_strategie.notstopp(self.k, self.mischungen[i], naesse, seit):
             return
         if kern_strategie.passende_mischung(self.k, naesse).kuerzel == self.mischungen[i].kuerzel:
-            return
-        if runde + 1 > self.runden - self.k.wert("boxenstopp", "strategie", "sperre_runden"):
-            # So kurz vor Schluss wird durchgefahren.
             return
         self._setze_fenster(i, runde + 1, True)
 

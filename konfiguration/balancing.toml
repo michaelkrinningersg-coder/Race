@@ -1221,6 +1221,23 @@ planstopp_ab_restprofil = 0.75
 # bleibt nur die beste.
 variantenschwelle_sockel_s = 15.0
 variantenschwelle_je_100km_s = 15.0
+# Zwangsstopp bei abgefahrenem Reifen (Entscheidung des Auftraggebers).
+# Frueher zwang nur das Wetter herein. Ein Auto, dessen Satz lange vor
+# der geplanten Stopprunde durch war, kam nie zu seinem Stopp: Es schlich
+# auf blankem Gummi weiter, erreichte die geplante Runde nicht mehr und
+# beendete das Rennen ohne den vorgeschriebenen Mischungswechsel.
+# Gemessen ueber fuenf Strecken: drei bis vier Autos je Rennen, immer die
+# schwaechsten des Feldes - sie kamen nach 11 bis 19 von 51 bis 69 Runden
+# ins Ziel, weil sie auf blankem Gummi nur noch 16 km/h fuhren. Mit der
+# Regel faehrt keines von ihnen mehr ohne Stopp.
+#
+# Faellt das Restprofil darunter, kommt das Auto in der naechsten Runde
+# herein - aber nicht mehr in den letzten Runden, dafuer gilt dieselbe
+# Sperre wie fuer jeden anderen Stopp (sperre_runden oben). Es ist
+# dieselbe Zahl wie mindest_restprofil weiter oben, und zwar absichtlich:
+# Der Planer laesst jeden Stint mit 30 Prozent enden, wer darunter faellt,
+# ist aus dem Plan gefallen.
+notstopp_ab_restprofil = 0.30
 # Wetterwechsel: Hoechstens so viele Runden faehrt ein Auto auf dem
 # falschen Reifen, bevor es hereinkommt.
 falscher_reifen_max_runden = 3

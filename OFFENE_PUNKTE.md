@@ -1831,3 +1831,81 @@ Welt nur niemandem auffielen:
   `kosten.startkapital_erfahrung` neben dem Startkapital. Das trägt eine
   Handvoll erster Schritte; ab dem ersten Rennen spielt er keine Rolle
   mehr (Platz 12 bringt 243 EP, ein Sieg 775).
+
+### 78. Wer seine Reifen aufbraucht, muss herein
+
+Der Messlauf über fünf Strecken sollte nur zeigen, wie sich ein Feld der
+Liga 1 auf Mischungen und Stintlängen verteilt. Er zeigte etwas anderes:
+In jedem Rennen kamen drei bis vier Autos **ohne einen einzigen Stopp**
+ins Ziel — obwohl bei Trockenheit ein Pflichtstopp mit Mischungswechsel
+gilt.
+
+**Der Plan war nicht das Problem.** Verfolgt man ein solches Auto —
+Zandvoort, VE1, das schwächste des Feldes —, dann hatte es sehr wohl drei
+Stopps geplant: Runden 16, 33, 50, Folge M‑H‑M‑H. Es erreichte Runde 16
+nie. Sein Satz stand ab Runde 9 bei 0,000 Restprofil, und auf blankem
+Gummi sank das Tempo auf **16 km/h**. In 57 Minuten legte es 15 Kilometer
+zurück; das Rennen war vorbei, bevor die geplante Stopprunde kam.
+
+Die Regel dahinter: `notstopp()` fragte ausschließlich nach dem Wetter.
+Ein Reifen, der sich selbst zerstörte, war kein Grund hereinzukommen.
+
+**Entscheidung des Auftraggebers:** unter 30 Prozent Restprofil herein,
+aber nicht mehr in den letzten drei Runden. Das steht als
+`boxenstopp.strategie.notstopp_ab_restprofil = 0.30` in der
+Konfiguration — dieselbe Zahl wie `mindest_restprofil`, und das ist kein
+Zufall: Der Planer legt die Stints so, dass am Stintende noch 30 Prozent
+übrig sind. Wer darunter fällt, ist aus dem Plan gefallen.
+
+`notstopp_verschleiss()` in `strategie.py` prüft nur zwei Dinge — das
+Restprofil und den Mindestabstand von drei Runden zum letzten Stopp. Die
+Mischung spielt keine Rolle: Gebraucht wird ein **frischer** Satz, nicht
+ein passender. Die Sperre der letzten Runden hält der Aufrufer ein; sie
+stand vorher als letzte Bedingung in der Wetterprüfung und steht jetzt
+davor, damit sie für beide Gründe gilt.
+
+**Der Schnellmodus musste mit.** `schnellsimulation.py` führt dieselbe
+Rechnung getrennt, und nur die Liga des Spielers wird voll gefahren — die
+anderen neunzehn laufen schnell. Stünde die Regel nur in `rennen.py`,
+führen zwanzig Ligen nach zwei verschiedenen Regelwerken. Drei Tests in
+`test_modi.py` fielen genau deshalb durch, und das war der richtige
+Alarm: Sie prüfen, dass beide Modelle dasselbe Rennen fahren.
+
+**Gemessen danach**, wieder Liga 1, 30 Autos, Weltseed 1, nur trocken
+oder heiß:
+
+| Strecke | Faktor | Runden | Stopps | davon Zwang | je Auto | Restprofil beim Stopp (25/Median/75 %) | Ohne Stopp im Ziel |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Zandvoort | 1,263 | 69 | 107 | 26 | 2–5 | 25,0 / **35,4** / 58,8 | 0 |
+| Sao Paulo | 1,132 | 69 | 75 | 6 | 1–3 | 35,8 / **46,8** / 58,1 | 0 |
+| Nürburgring | 1,074 | 58 | 90 | 13 | 1–5 | 31,9 / **36,0** / 52,2 | 0 |
+| Silverstone | 0,890 | 51 | 78 | 6 | 2–3 | 35,6 / **43,1** / 54,2 | 0 |
+| Monza | 0,537 | 51 | 49 | 3 | 1–2 | 47,5 / **55,1** / 69,9 | 0 |
+
+Die letzte Spalte ist der Punkt: vorher drei bis vier je Rennen, jetzt
+keiner. Die vier schwächsten Autos in Monza stoppen jetzt in Runde 6 bis
+12 statt gar nicht. Und die Zahl der Zwangsstopps folgt sauber dem
+Streckenfaktor — 26 auf der härtesten Strecke, 3 auf der mildesten.
+
+**Was dabei auffiel und nicht entschieden ist.** Auf einen Zwangsstopp
+folgt sechs bis neun Runden später oft der ohnehin geplante Stopp — und
+der wirft dann einen Satz weg, auf dem noch 72 Prozent Profil sind:
+
+| Strecke | Stopps | verworfene Sätze | davon ohne Mischungswechsel |
+| --- | --- | --- | --- |
+| Zandvoort | 107 | 22 | 14 |
+| Nürburgring | 90 | 9 | 5 |
+| Silverstone | 78 | 2 | 0 |
+| Sao Paulo | 75 | 1 | 1 |
+| Monza | 49 | 0 | — |
+
+Gegen genau das gibt es schon eine Regel: `planstopp_ab_restprofil = 0.75`
+verschiebt einen geplanten Stopp, solange der Satz besser als 75 Prozent
+ist. Ein Satz, der nach sieben Runden bei 72 Prozent steht, rutscht knapp
+darunter durch. Auf Zandvoort sind das 22 von 107 Stopps, 14 davon ohne
+jeden Mischungswechsel — also rund 25 Sekunden für nichts.
+
+**Das ist ein Balancing-Wert und deshalb eine Frage an den Auftraggeber**,
+keine eigene Entscheidung. Drei Wege stehen offen: die Schwelle anheben,
+einen Zwangsstopp den nächsten geplanten streichen lassen, oder es so
+belassen — dann kostet ein abgefahrener Reifen eben doppelt.

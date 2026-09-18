@@ -547,12 +547,26 @@ Drei Dinge halten sich nicht an den Plan:
 * **Die Verschleissstreuung.** Je Fahrer und Mischung wird ein Betrag von
   hoechstens 0,002 auf den Verschleissfaktor gewuerfelt, jedes Rennen neu.
   Die Vorausberechnung kennt ihn nicht - geplant wird auf den Sollwerten.
-* **Der Notstopp.** Dreht sich das Wetter, kommt ein Auto hoechstens drei
-  Runden spaeter herein und wechselt auf den Reifen, der zur Lage passt.
-  Der geplante Stopp rutscht dahinter.
+* **Der Notstopp.** Zwei Lagen zwingen ausserplanmaessig herein, beide
+  gehen dem geplanten Stopp vor und schieben ihn nach hinten. Dreht sich
+  das **Wetter**, kommt ein Auto hoechstens drei Runden spaeter herein und
+  wechselt auf den Reifen, der zur Lage passt. Faellt das **Restprofil
+  unter 30 Prozent**, kommt es in der naechsten Runde herein und holt
+  sich einen frischen Satz - egal welcher Mischung. Fuer beide gilt der
+  Mindestabstand von drei Runden zum letzten Stopp und dieselbe Sperre
+  der letzten drei Runden wie fuer jeden anderen Stopp.
 * **Der Planstopp selbst.** Passt der geplante Reifen nicht mehr zur Lage,
   kommt der auf, der passt. Ohne das zoege ein Auto im Regen Slicks auf
   und muesste zwei Runden spaeter wieder herein.
+
+**Nachsehen, was dabei herauskommt.** `python -m werkzeuge.boxenstopps`
+faehrt fuenf Rennen der Liga 1 und schreibt je Fahrer auf, auf welcher
+Mischung er startet, in welcher Runde er stoppt und wieviel Profil dann
+noch drauf war. Die fuenf Strecken sind nicht ausgesucht, sondern nach
+dem Streckenfaktor gezogen - Maximum, 75er Perzentil, Median, 25er
+Perzentil, Minimum -, und das Wetter wird so lange neu gewuerfelt, bis
+kein Abschnitt nass ist. Das ist ein Balancing-Werkzeug, kein Test: Es
+sagt nichts richtig oder falsch, es zeigt nur, was die Strategie tut.
 
 ### Die Reifenwahl des Spielers
 

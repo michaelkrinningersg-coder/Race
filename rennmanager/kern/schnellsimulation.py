@@ -433,17 +433,26 @@ def fahre_wochenende(
                     )
                     continue
             if not (geplant or notstopp_faellig[i]):
-                # Zwingt das Wetter zum ausserplanmaessigen Stopp? Der
-                # Fahrer merkt es auf der Strecke und kommt eine Runde
-                # spaeter herein - genau wie in der vollen Simulation.
+                # Zwei Gruende zwingen ausserplanmaessig herein - dieselben
+                # wie in der vollen Simulation, sonst faehrt die Liga des
+                # Spielers ein anderes Rennen als die neunzehn anderen.
+                # Der Fahrer merkt es auf der Strecke und kommt eine Runde
+                # spaeter herein.
                 naesse = kern_reifen.naesse_von(konfiguration, zustand)
                 seit = runde - int(runde_letzter_stopp[i])
                 sperre = konfiguration.wert("boxenstopp", "strategie", "sperre_runden")
+                if runde + 1 > runden - sperre:
+                    continue
+                # Der Reifen ist durch: Hier zaehlt allein das Restprofil.
+                if kern_strategie.notstopp_verschleiss(
+                    konfiguration, 1.0 - float(verschleiss[i]), seit
+                ):
+                    notstopp_faellig[i] = True
+                    continue
                 if (
                     kern_strategie.notstopp(konfiguration, gefahrene[i], naesse, seit)
                     and kern_strategie.passende_mischung(konfiguration, naesse).kuerzel
                     != gefahrene[i].kuerzel
-                    and runde + 1 <= runden - sperre
                 ):
                     notstopp_faellig[i] = True
                 continue
