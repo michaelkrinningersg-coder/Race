@@ -35,7 +35,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSpinBox,
     QTreeWidget,
-    QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -45,7 +44,7 @@ from rennmanager.kern import talent as kern_talent
 from rennmanager.kern import transfer as kern_transfer
 from rennmanager.kern.auto import gesamtwert
 from rennmanager.konfiguration import Konfiguration
-from rennmanager.ui.tabellen import verbinde_fahrerkarte
+from rennmanager.ui.tabellen import SortierbareZeile, verbinde_fahrerkarte
 
 SPALTEN = (
     "Fahrer",
@@ -192,12 +191,13 @@ class Transferseite(QWidget):
             rest = kern_transfer.restlaufzeit(self._konfiguration, nummer, quelle, jahr)
             luecke = talent.gipfelstaerke / koennen if koennen > 0 else 0.0
 
-            zeile = QTreeWidgetItem(
+            alter = fahrer.alter_am(stichtag)
+            zeile = SortierbareZeile(
                 self._liste,
                 [
                     fahrer.name,
                     str(fahrer.liga),
-                    str(fahrer.alter_am(stichtag)),
+                    str(alter),
                     f"{koennen:.0f}",
                     f"{talent.gipfelstaerke:.0f}",
                     f"{luecke:.1f}x" if koennen > 0 else "-",
@@ -207,6 +207,20 @@ class Transferseite(QWidget):
                 ],
             )
             zeile.setData(0, Qt.UserRole, nummer)
+            # Sortiert wird nach der Zahl, nicht nach ihrer Schreibweise:
+            # Sonst stuende "1.200 EUR" vor "900 EUR" und Liga 10 vor
+            # Liga 2.
+            for spalte, wert in (
+                (1, fahrer.liga),
+                (2, alter),
+                (3, koennen),
+                (4, talent.gipfelstaerke),
+                (5, luecke),
+                (6, angebot.gehalt),
+                (7, angebot.abloese),
+                (8, rest),
+            ):
+                zeile.setze_sortierwert(spalte, wert)
             for spalte in (1, 2, 3, 4, 5, 6, 7):
                 zeile.setTextAlignment(spalte, Qt.AlignRight | Qt.AlignVCenter)
 

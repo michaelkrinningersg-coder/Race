@@ -18,6 +18,10 @@ from PySide6.QtCore import Qt  # noqa: E402
 from rennmanager.kern import rennen as rn  # noqa: E402
 from rennmanager.ui.diagramm import HOECHSTENS_FOKUS  # noqa: E402
 from rennmanager.ui.hauptfenster import Hauptfenster  # noqa: E402
+from rennmanager.ui.rennseite import (  # noqa: E402
+    SPALTE_MISCHUNG,
+    SPALTE_REIFEN,
+)
 from rennmanager.ui.rueckstandsansicht import Rueckstandsansicht  # noqa: E402
 from rennmanager.ui.tabellen import Balkenzeichner  # noqa: E402
 
@@ -89,11 +93,114 @@ def test_die_reifenspalte_traegt_einen_anteil(gefahren) -> None:
     _fenster, seite = gefahren
     for stelle in range(seite.rangliste.topLevelItemCount()):
         zeile = seite.rangliste.topLevelItem(stelle)
-        anteil = zeile.data(5, Balkenzeichner.ANTEILSROLLE)
+        anteil = zeile.data(SPALTE_REIFEN, Balkenzeichner.ANTEILSROLLE)
         assert anteil is not None
         assert 0.0 <= anteil <= 1.0
         # Die Zahl bleibt daneben lesbar.
-        assert zeile.text(5).endswith("%")
+        assert zeile.text(SPALTE_REIFEN).endswith("%")
+
+
+# --- Punkt 39: Mischung und Mischungspflicht -------------------------------
+def _mit_stopps(qtbot, konfig, pflicht: bool):
+    """Ein kurzes Rennen, in dem wirklich gewechselt wird."""
+    from rennmanager.kern import reifen as kern_reifen
+    from rennmanager.kern import strategie as kern_strategie
+    from rennmanager.kern import strecke as kern_strecke
+    from rennmanager.kern import welt as kern_welt
+    from rennmanager.kern.zufall import Seedquelle
+
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    strecke = kern_strecke.lade(konfig, konfig.strecken[0]["name"])
+    feld = kern_welt.starterfeld(fenster.welt, fenster.welt.spieler.liga)[:6]
+    weich = kern_reifen.mischung(konfig, "weich")
+    hart = kern_reifen.mischung(konfig, "hart")
+    strategie = kern_strategie.Strategie(mischungen=(weich, hart), stopps=(6,))
+    verlauf = rn.simuliere(
+        konfig,
+        strecke,
+        feld,
+        12,
+        Seedquelle(4711).zweig("rennen"),
+        rn.mittlerer_ueberholzonenanteil(konfig, (strecke,)),
+        strategien=tuple(strategie for _ in feld),
+        mischungspflicht=pflicht,
+    )
+    seite = fenster.rennseite
+    seite.zeige_verlauf(verlauf, strecke)
+    seite._halte_an()
+    return fenster, seite, verlauf
+
+
+def test_die_rangliste_hat_eine_mischungsspalte(gefahren) -> None:
+    _fenster, seite = gefahren
+    kopf = seite.rangliste.headerItem().text(SPALTE_MISCHUNG)
+    assert kopf == "Mischung"
+
+
+def test_ohne_strategie_bleibt_die_mischungsspalte_leer(gefahren) -> None:
+    """Ohne Strategie faehrt jedes Auto einen Satz - da gibt es nichts zu zeigen."""
+    _fenster, seite = gefahren
+    if seite.verlauf.mischungen:
+        pytest.skip("Dieser Verlauf traegt Mischungen")
+    for stelle in range(seite.rangliste.topLevelItemCount()):
+        assert seite.rangliste.topLevelItem(stelle).text(SPALTE_MISCHUNG) == "-"
+
+
+def _spalte_je_auto(seite, spalte):
+    """Die Spalte, aufgeschluesselt nach der Nummer im Feld statt nach Platz."""
+    werte = {}
+    for stelle in range(seite.rangliste.topLevelItemCount()):
+        zeile = seite.rangliste.topLevelItem(stelle)
+        werte[zeile.data(0, Qt.UserRole)] = zeile.text(spalte)
+    return werte
+
+
+def test_die_spalte_zeigt_mischung_und_stoppzahl(qtbot, konfig) -> None:
+    _fenster, seite, verlauf = _mit_stopps(qtbot, konfig, pflicht=True)
+    stopp = verlauf.boxenstopps[0]
+
+    seite._springe(stopp.zeit_ms - 20_000)
+    for text in _spalte_je_auto(seite, SPALTE_MISCHUNG).values():
+        assert text.startswith("W (0)"), text
+
+    # Am Ende zaehlt nur, wer wirklich gestoppt hat: Wer vorher ausfaellt,
+    # steht weiter auf seinem Startsatz.
+    seite._springe(verlauf.dauer_ms)
+    werte = _spalte_je_auto(seite, SPALTE_MISCHUNG)
+    gestoppt = {b.teilnehmer for b in verlauf.boxenstopps}
+    assert gestoppt, "Ohne Stopp prueft der Test nichts"
+    for i, text in werte.items():
+        erwartet = "H (1)" if i in gestoppt else "W (0)"
+        assert text.startswith(erwartet), f"Auto {i}: {text}"
+
+
+def test_die_offene_mischungspflicht_steht_in_warnfarbe(qtbot, konfig) -> None:
+    from rennmanager.ui.rennseite import FARBE_PFLICHT_ERFUELLT, FARBE_PFLICHT_OFFEN, HAKEN
+
+    _fenster, seite, verlauf = _mit_stopps(qtbot, konfig, pflicht=True)
+    stopp = verlauf.boxenstopps[0]
+
+    seite._springe(stopp.zeit_ms - 20_000)
+    zeile = seite.rangliste.topLevelItem(0)
+    assert zeile.foreground(SPALTE_MISCHUNG).color().name() == FARBE_PFLICHT_OFFEN
+    assert HAKEN not in zeile.text(SPALTE_MISCHUNG)
+
+    seite._springe(verlauf.dauer_ms)
+    zeile = seite.rangliste.topLevelItem(0)
+    assert zeile.foreground(SPALTE_MISCHUNG).color().name() == FARBE_PFLICHT_ERFUELLT
+    assert zeile.text(SPALTE_MISCHUNG).endswith(HAKEN)
+
+
+def test_ohne_pflicht_steht_die_spalte_von_anfang_an_auf_gruen(qtbot, konfig) -> None:
+    """Bei Regen, Starkregen und wechselhaft ist die Pflicht aufgehoben."""
+    from rennmanager.ui.rennseite import FARBE_PFLICHT_ERFUELLT, HAKEN
+
+    _fenster, seite, verlauf = _mit_stopps(qtbot, konfig, pflicht=False)
+    seite._springe(0)
+    zeile = seite.rangliste.topLevelItem(0)
+    assert zeile.foreground(SPALTE_MISCHUNG).color().name() == FARBE_PFLICHT_ERFUELLT
+    assert zeile.text(SPALTE_MISCHUNG).endswith(HAKEN)
 
 
 def test_der_balken_faerbt_nach_zustand(konfig) -> None:

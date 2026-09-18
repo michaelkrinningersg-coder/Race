@@ -9,6 +9,15 @@ Ueberholen, aber keinen Sog. Er ist mit dem Auftraggeber abgestimmt
   dahinter am staerksten und bei 30 m gar nicht mehr.
 * Er wirkt **einmal je Gerade**. Wer einmal auf gleicher Hoehe war, ist
   aus dem Sog heraus und bekommt ihn auf dieser Geraden nicht wieder.
+* Er **laeuft nach**: Der Ueberschuss gilt noch 50 m in voller Hoehe und
+  danach zur Haelfte bis zum Ende derselben Geraden, also bis zum
+  Anbremsen. Ohne das faellt ein Auto in dem Augenblick, in dem es vorbei
+  ist, auf sein freies Tempo zurueck - und der Ueberholte klebt wieder
+  dran.
+* Der **Ueberholte** bekommt auf derselben Geraden die Haelfte dessen,
+  was der Ueberholende in der zweiten Stufe hat - und das auch erst dann,
+  waehrend der ersten 50 m gar nichts. Er haengt sich also an, statt im
+  vollen Sog sofort zurueckzuschlagen.
 
 Wie stark er ausfaellt, haengt an der Eigenschaft ``windschatten``. Sie
 steht neben der Wirkungsmatrix aus GDD 8, damit Gesamtwert, Bereichswerte
@@ -49,6 +58,21 @@ def gewinn(konfiguration: Konfiguration, auto: Auto) -> float:
 def fenster_m(konfiguration: Konfiguration) -> float:
     """Ab welchem Abstand es keinen Sog mehr gibt."""
     return float(konfiguration.wert("windschatten", "fenster_m"))
+
+
+def nachlauf_m(konfiguration: Konfiguration) -> float:
+    """Wie weit der Ueberschuss nach dem Vorbeifahren voll weiterwirkt."""
+    return float(konfiguration.wert("windschatten", "nachlauf_m"))
+
+
+def nachlauf_anteil(konfiguration: Konfiguration) -> float:
+    """Welcher Teil des Ueberschusses danach bis zum Anbremsen bleibt."""
+    return float(konfiguration.wert("windschatten", "nachlauf_anteil"))
+
+
+def nachlauf_anteil_ueberholter(konfiguration: Konfiguration) -> float:
+    """Welchen Teil davon der Ueberholte abbekommt - und erst dann."""
+    return float(konfiguration.wert("windschatten", "nachlauf_anteil_ueberholter"))
 
 
 def faktor(konfiguration: Konfiguration, auto: Auto, abstand_m: float) -> float:

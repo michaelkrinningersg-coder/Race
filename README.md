@@ -340,12 +340,239 @@ Die Streckenwirkung kommt aus der Querbeschleunigung der Runde: In
 Zandvoort enden die Reifen einer Liga-10-Session bei 11 bis 19 %, in
 Monza bei 62 bis 66 %.
 
+## Boxenstopps und Reifenstrategie (Punkt 39)
+
+Vier Module tragen das: `boxenstopp` rechnet, was ein Stopp kostet,
+`reifen` haelt die fuenf Mischungen und die Gripkurve, `strategie` sucht
+die beste Stoppverteilung, `wettersaison` gibt jeder Saison ihr eigenes
+Wetter.
+
+**Die Boxengasse steht in keiner Streckendatei.** Sie wird aus der
+Geometrie abgeleitet: die Gerade um Start und Ziel, 500 bis 750 Meter
+lang, und ihre Durchfahrt darf hoechstens 50 Prozent der Rundenzeit
+kosten. Diese Grenze trifft nur den Norisring (2260 m Runde, 515 m Gasse,
+49,6 Prozent); die uebrigen 19 Strecken bleiben unberuehrt.
+
+**Der 80er-Deckel gilt nur, wo die Strecke schneller waere.** Wo sie
+ohnehin langsamer ist, gilt ihr eigenes Tempo minus 5 Prozent. In Liga 1
+kommt das nie vor - die Gasse liegt auf der Geraden, dort werden 89 bis
+385 km/h gefahren. In Liga 20 schon: Das schwaechste Auto kommt dort
+stellenweise nur auf 29 km/h, und ohne den Abzug waere die Boxengasse
+fuer es kostenlos.
+
+Ein Stopp kostet vier Dinge: die langsame **Durchfahrt**, das **Bremsen**
+bis zum Stillstand, die **Standzeit** (6 bis 12 Sekunden, gewuerfelt) und
+das **Anfahren** aus dem Stand. Bremsen und Anfahren kommen aus den
+Grenzen dieses Autos: In Liga 1 zusammen 1,8 Sekunden, in Liga 20 gut 17 -
+ein schwaches Auto kommt aus der Box eben nicht heraus. Im Zeitraffer
+faehrt das Auto die Gasse wirklich langsam ab und steht wirklich, der
+Schnellmodus bucht dieselbe Summe.
+
+**Die Strategie steht vor dem Start fest.** Einmal je Rennen werden alle
+zulaessigen Mischungsfolgen durchgerechnet - als Minimum-Plus-Faltung
+ueber die Stints, exakt und nicht geraten. Was mehr als die Schwelle
+hinter der besten liegt, faellt heraus (60 s bei 300 km, 30 s bei 100 km);
+unter den ueberlebenden waehlt jedes Auto zufaellig. Deshalb faehrt nicht
+das ganze Feld dasselbe, und trotzdem faehrt niemand offensichtlichen
+Unsinn.
+
+Die Vorausberechnung rechnet mit **9 Sekunden** Standzeit, der Mitte der
+Spanne: Sie kennt die einzelnen Wuerfe noch nicht, und die Mitte
+bevorzugt keine Strategie.
+
+Der teurere Stopp - im Mittel 31,5 statt 23,3 Sekunden - und die
+haerteren Mischungen haben die Stoppzahl sichtbar gesenkt: Zwei-Stopp-
+Strategien sind von 10 auf 23 von 100 Strecke-Liga-Kombinationen
+gestiegen. Ohne die Drei-Stopp-Grenze waeren frueher 4 bis 6 Stopps in
+76 Faellen optimal gewesen, jetzt 2 bis 3 in 79; fuenf oder mehr kommen
+gar nicht mehr vor. Die Grenze bindet damit nur noch in 19 statt in 76
+Faellen - die Reifenwahl steuert die Stoppzahl endlich selbst.
+
+### Die Gripkurve
+
+Tempo und Fehlerquote sind **keine eigenen Kurven**: Beide sind der
+Grip, auf sein Optimum normiert::
+
+    grip(zustand)  = lineare Interpolation ueber die Stuetzstellen
+    tempofaktor    = 1 - (1 - grip/bestgrip) * (1 - daempfung)
+    fehlerfaktor   = dieselbe Kurve, nur als Aufschlag statt Abzug
+
+``daempfung`` ist der Reifenfluesterer: Er aendert die Kurve nicht, nur
+ihre Wirkung, um bis zu 60 Prozent. Fuer ein Auto mit dem
+Referenzwert heisst das:
+
+```
+Restprofil   100 %   95 %   90 %   85 %   80 %   65 %   50 %   30 %    0 %
+Grip         0.880  0.970  0.992  1.000  0.998  0.978  0.925  0.790  0.235
+Tempofaktor  0.952  0.988  0.997  1.000  0.999  0.991  0.970  0.916  0.694
+Fehlerfaktor 1.063  1.016  1.004  1.000  1.001  1.012  1.039  1.110  1.400
+```
+
+Der frische Reifen steht also bei 95,2 Prozent Tempo und 6,3 Prozent
+erhoehter Fehlerquote - in der Runde nach dem Start wie in der Runde
+nach jedem Stopp.
+
+**Der Gipfel wird frueh passiert.** In Zandvoort steht ein weicher Satz
+nach zwei Runden bei 80 Prozent, ein harter nach neun; der Reifen ist
+also in der ersten Runde auf dem Punkt und verbringt den Rest des Stints
+im Abstieg. Runden bis 80 / 50 / 30 / 0 Prozent, bestes Auto der Liga 1,
+trocken:
+
+```
+                      Monza (0,54)   Nuerburgring (1,07)   Zandvoort (1,26)
+  Weich              8/ 20/ 29/ 41       4/ 11/ 16/ 23       4/ 12/ 16/ 24
+  Mittel            12/ 30/ 42/ 60       6/ 17/ 24/ 34       6/ 17/ 24/ 34
+  Hart              16/ 41/ 58/ 83       9/ 23/ 33/ 47       9/ 24/ 33/ 48
+  Intermediate       5/ 14/ 20/ 29       3/  8/ 11/ 16       3/  8/ 11/ 17
+  Regen              5/ 12/ 17/ 25       2/  7/  9/ 14       2/  7/ 10/ 14
+```
+
+**Kein Stint faellt unter 30 Prozent Restprofil**, auch der letzte nicht -
+und auch nicht, nachdem das Zufallsfenster die Stopprunden verschoben hat.
+Das war lange anders: Die Vorausberechnung hielt die Regel ein, das
+Fenster hebelte sie wieder aus. In Zandvoort kamen so 23 von 30 Autos
+darunter, eines mit 9 Prozent ins Ziel.
+
+### Warum die Strategie das ganze Wetter kennt
+
+Das Rennwetter steht vor dem Start fest (GDD 7) - also darf die Strategie
+es kennen. Frueher plante sie nur gegen die **Startlage**: Ein Rennen, das
+trocken beginnt und nass endet, wurde als Trockenrennen geplant, und das
+ganze Feld kam auf abgefahrenen Reifen ins Ziel.
+
+Jetzt geht die Naesse **je Runde** in die Rechnung. Solange sie gleich
+bleibt, kostet ein Stint ueberall dasselbe, und aus einer Rechnung werden
+alle Reihenfolgen. Sobald sie wechselt, ist das nicht mehr wahr - ein
+weicher Satz vor dem Regen ist etwas anderes als derselbe Satz danach -,
+und jede Reihenfolge wird einzeln gerechnet. Das kostet Zeit, betrifft
+aber nur die 21 bis 23 Prozent der Rennen, in denen sich das Wetter
+ueberhaupt dreht.
+
+### Was im Rennen davon abweicht
+
+Drei Dinge halten sich nicht an den Plan:
+
+* **Die Verschleissstreuung.** Je Fahrer und Mischung wird ein Betrag von
+  hoechstens 0,002 auf den Verschleissfaktor gewuerfelt, jedes Rennen neu.
+  Die Vorausberechnung kennt ihn nicht - geplant wird auf den Sollwerten.
+* **Der Notstopp.** Dreht sich das Wetter, kommt ein Auto hoechstens drei
+  Runden spaeter herein und wechselt auf den Reifen, der zur Lage passt.
+  Der geplante Stopp rutscht dahinter.
+* **Der Planstopp selbst.** Passt der geplante Reifen nicht mehr zur Lage,
+  kommt der auf, der passt. Ohne das zoege ein Auto im Regen Slicks auf
+  und muesste zwei Runden spaeter wieder herein.
+
+### Die Reifenwahl des Spielers
+
+Nach dem Qualifying und **vor** dem Start zeigt das gefuehrte
+Rennwochenende, was zur Wahl steht: das Wetter des Rennens, ob zwei
+Mischungen Pflicht sind, und die zwoelf besten der tragfaehigen
+Strategien mit Folge, Stoppzahl und Rueckstand auf die schnellste. Fuer
+jeden der vier eigenen Fahrer laesst sich eine davon waehlen; wer nichts
+waehlt, faehrt das, was das Team ihm zuteilt.
+
+``Wochenendlauf.strategiewahl()`` rechnet Wetter und Varianten vor, ohne
+das Rennen zu fahren - beides haengt allein am Seed, der Blick darauf
+aendert also nichts. ``waehle_reifen()`` prueft die Wahl gegen die Regeln
+und weist sie sonst ab.
+
+**Waehrend des Rennens geht es nicht mehr.** Der Verlauf wird in einem
+Stueck gerechnet und danach nur noch abgespielt (GDD 15); ein Eingriff
+mitten im Rennen muesste ihn ab dieser Stelle neu rechnen.
+
+Im **Qualifying** gibt es nichts zu waehlen: Dort gilt eine feste Regel -
+immer die weichste Trockenmischung, bei wechselhaftem Wetter
+Intermediates, bei Regen und Starkregen Regenreifen. Ueber eine einzige
+gezeitete Runde nimmt jeder den schnellsten Satz.
+
+### Was die Rangliste dazu zeigt
+
+Eine Spalte **Mischung** mit dem Kuerzel und der Zahl der bisherigen
+Stopps, etwa `M (1)`. Solange die Pflicht zu zwei Mischungen offen ist,
+steht sie in Warnfarbe; sobald sie erfuellt ist, gruen mit Haken. Bei
+Regen, Starkregen und wechselhaftem Wetter gilt die Pflicht nicht - dann
+steht die Spalte von Anfang an auf gruen, weil nichts zu erfuellen ist.
+
 ### Warum die Unfallrate je Sekunde gilt
 
 Als Wahrscheinlichkeit je Zeitschritt gelesen fielen bei 50 Schritten je
 Sekunde alle fuenf erlaubten Ausfaelle in der ersten Runde. Die Rate gilt
 deshalb je Sekunde in Reichweite - sonst haengt die Unfallhaeufigkeit an
 der Schrittweite der Simulation statt am Spiel.
+
+## Der Spieler ist Teamchef
+
+Das GDD kannte einen Spielerfahrer. Der Auftraggeber hat daraus etwas
+anderes gemacht: **Der Spieler fuehrt ein Team mit vier Fahrern**, alle
+beginnen bei null, alle vier in Liga 20. Live angesehen werden die Rennen
+der Ligen, in denen seine Fahrer stehen; alle uebrigen laufen im
+Schnellmodus, aber vollstaendig - Erfahrung, Streckenkenntnis und
+Statistik entstehen auch dort.
+
+Daraus folgen drei Dinge, die vorher nicht im Modell standen:
+
+* **Jedes Auto wird einzeln entwickelt.** Es gibt keine
+  Teameigenschaft mehr; wer einen neuen Fahrer holt, bekommt ein
+  **leeres, nicht aufgeruestetes Auto** dazu. Die Karriere fuehrt
+  deshalb vier Autos statt einem (`karriere.autos`).
+* **Die Einnahmen gehoeren dem Team**: vier Preisgelder, vier
+  Sponsorensaetze, ein Konto.
+* **Der Spieler altert wie alle anderen.** Seine vier Fahrer haben ein
+  gewuerfeltes Ruecktrittsalter wie jeder Gegner.
+
+### Der Transfermarkt
+
+`rennmanager.kern.transfer` - nicht im GDD, komplett aus der Abstimmung.
+Das Fenster liegt im **Winter**. Ein Vertrag laeuft ein bis vier Saisons
+und wird nicht gespeichert, sondern aus dem Seed abgeleitet: So ist in
+jedem Winter ein Teil des Feldes frei, ohne dass irgendwo eine Liste
+gefuehrt wuerde.
+
+Ein Wechsel kostet **Gehalt plus Abloese** - die Abloese nur, solange der
+Vertrag laeuft. Und der Fahrer **waegt ab**: Liga gegen Auto gegen Geld,
+gewichtet, gegen eine Schwelle, die mit seiner Bekanntheit steigt
+(Punkt 5). Weil ein neuer Fahrer sein leeres Auto mitbringt, ist der
+Autoteil beim Spieler fast immer ein Minus - Geld muss es ausgleichen.
+Sagt er ab, nennt die Antwort den schwaechsten der drei Punkte.
+
+## Talente und Generationen
+
+`rennmanager.kern.talent` und `rennmanager.kern.generationen` (Punkt 35).
+
+**Jeder Fahrer hat sein eigenes Potential**, gewuerfelt auf jede einzelne
+Eigenschaft - auch auf die Wetterfaehigkeiten und die Streckenkenntnis.
+Dazu ein eigenes Entwicklungstempo, ein eigenes Gipfelalter und ein
+eigenes Alter, ab dem es wieder abwaerts geht. Das gilt fuer die KI wie
+fuer die Fahrer des Spielers; es gibt keinen Sonderweg mehr.
+
+Entwickelt wird ueber **Lueckenschluss**: Jedes Jahr holt ein Wert einen
+Anteil des Abstands zu seinem Potential auf. Das ist skalenfrei - ein
+Fahrer bei 5000 und einer bei 90000 machen denselben *relativen* Schritt.
+
+Das Talent haengt an **(Fahrernummer, Geburtstag)**, nicht an der Nummer
+allein. Sonst erbte ein Newgen das Talent seines Vorgaengers, denn er
+uebernimmt dessen Nummer und Teamplatz - so bleiben die Teams bei vier
+Autos.
+
+### Was das die Ligatabelle gekostet hat
+
+Der Ligakorridor aus GDD 9 gilt seither **nur noch beim Weltstart**.
+Danach sortieren sich die Ligen ueber Auf- und Abstieg. Gemessen ueber
+dreissig Saisons mit echtem Rennbetrieb, Ist gegen Soll:
+
+```
+Liga      1     5    10    15      20
+         84%   59%   88%  149%   5182%
+```
+
+Der Grund ist strukturell: Ein Newgen-Jahrgang traegt im Schnitt ein
+Potential von rund 33000 - Liga-10-Niveau -, steigt aber geschlossen in
+Liga 20 ein, deren Soll bei 82 liegt. Liga 20 ist damit kein schwaches
+Feld mehr, sondern der Talentpool der ganzen Welt.
+
+**Der Auftraggeber hat das so entschieden**, nachdem ihm die Zahlen und
+drei Gegenmassnahmen vorlagen. Die Ligen sind ab jetzt Leistungsklassen,
+nicht mehr Altersklassen.
 
 ## Die Welt
 

@@ -175,7 +175,9 @@ class Hauptfenster(QMainWindow):
         self._reiter.addTab(self._streckenseite, "Strecke")
         self._rundenseite = Rundenseite(self._konfiguration)
         self._reiter.addTab(self._rundenseite, "Runde")
-        self._weltseite = Weltseite(self._konfiguration, self._welt, jahr=self._jahr)
+        self._weltseite = Weltseite(
+            self._konfiguration, self.anzeigewelt, jahr=self._jahr
+        )
         self._reiter.addTab(self._weltseite, "Welt")
         if getattr(self, "_karriere", None) is None:
             self._karriere = beginne_karriere(
@@ -185,6 +187,11 @@ class Hauptfenster(QMainWindow):
                 self._jahr,
             )
         self._karriereseite = Karriereseite(self._konfiguration, self._karriere)
+        # Die Welt kennt die Werte der eigenen Autos nicht - die stehen in
+        # der Karriere (GDD 1). Jede Aenderung dort muss in der Anzeige
+        # ankommen, sonst bleibt der Steckbrief auf dem Anfangsstand.
+        self._karriereseite.werte_geaendert.connect(self._ziehe_werte_nach)
+        self._ziehe_werte_nach()
         # Die Auswahl der vier eigenen Autos soll Namen tragen, nicht
         # Nummern - die kennt nur die Welt.
         self._karriereseite.zeige_namen(
@@ -253,7 +260,7 @@ class Hauptfenster(QMainWindow):
         rahmen = QWidget()
         spalte = QVBoxLayout(rahmen)
         spalte.setContentsMargins(6, 4, 6, 0)
-        self._suche = Fahrersuche(self._konfiguration, self._welt)
+        self._suche = Fahrersuche(self._konfiguration, self.anzeigewelt)
         self._suche.fahrer_gewaehlt.connect(self.oeffne_fahrerkarte)
         spalte.addWidget(self._suche)
         spalte.addWidget(self._reiter, stretch=1)
@@ -294,7 +301,7 @@ class Hauptfenster(QMainWindow):
         lauf = self._saisonseite.lauf
         karte = Fahrerkarte(
             self._konfiguration,
-            self._welt,
+            self.anzeigewelt,
             nummer,
             statistik=self._statistik,
             kenntnis=self._kenntnis,
@@ -449,6 +456,25 @@ class Hauptfenster(QMainWindow):
     def welt(self) -> kern_welt.Welt:
         """Die erzeugte Welt dieses Fensters."""
         return self._welt
+
+    @property
+    def anzeigewelt(self) -> kern_welt.Welt:
+        """Die Welt mit den entwickelten Autos der eigenen Fahrer.
+
+        Die eigenen Autos fangen bei null an und werden ueber die Karriere
+        entwickelt (GDD 1); die Welt haelt nur die leeren Huellen. Wer
+        Werte anzeigt, braucht diese Welt - ``self._welt`` bleibt der
+        Ausgangsstand, aus dem eine neue Karriere startet.
+        """
+        if getattr(self, "_karriere", None) is None:
+            return self._welt
+        return self._welt.mit_autos(self._karriere.entwickelte_autos(self._welt))
+
+    def _ziehe_werte_nach(self) -> None:
+        """Gibt der Weltseite die frisch entwickelten Autos."""
+        seite = getattr(self, "_weltseite", None)
+        if seite is not None:
+            seite.setze_welt(self.anzeigewelt)
 
     @property
     def weltseite(self) -> Weltseite:

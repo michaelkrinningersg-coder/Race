@@ -154,11 +154,15 @@ def schrittkosten(
     faktor = k0_faktor(konfiguration, faehigkeit) * grundkurve
 
     geld = round(einstellung["k0_geld"] * faktor) if GELD in faehigkeit.waehrung else 0
-    erfahrung = (
-        round(einstellung["k0_erfahrung"] * faktor)
-        if ERFAHRUNG in faehigkeit.waehrung
-        else 0
-    )
+    if ERFAHRUNG in faehigkeit.waehrung:
+        erfahrung = round(einstellung["k0_erfahrung"] * faktor)
+    elif ZEIT in faehigkeit.waehrung:
+        # Ein belegter Tag kostet zusaetzlich etwas Erfahrung. Die Zeit
+        # bleibt ein Tag und skaliert nicht; die Erfahrung waechst ueber
+        # dieselbe Kurve mit jedem Kauf.
+        erfahrung = round(einstellung["k0_erfahrung_zeit"] * faktor)
+    else:
+        erfahrung = 0
     return int(geld), int(erfahrung)
 
 

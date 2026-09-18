@@ -58,6 +58,10 @@ class Karriereseite(QWidget):
     # Punkt 17: Ein Tageswechsel ist ein Spielstand wert - das Fenster
     # schreibt darauf den Autosave.
     tag_gewechselt = Signal()
+    # Die Werte eines eigenen Autos haben sich geaendert - belegter Tag,
+    # Sofortkauf oder Tageswechsel. Die Welt kennt diese Werte nicht, sie
+    # stehen in der Karriere; wer sie anzeigt, muss sie neu holen.
+    werte_geaendert = Signal()
 
     def __init__(
         self,
@@ -224,6 +228,7 @@ class Karriereseite(QWidget):
             return
         self._zeichne()
         self._melde_neues(offen)
+        self.werte_geaendert.emit()
         self.tag_gewechselt.emit()
 
     def _zum_rennen(self) -> None:
@@ -235,6 +240,7 @@ class Karriereseite(QWidget):
             return
         self._zeichne()
         self._melde_neues(offen)
+        self.werte_geaendert.emit()
         self.tag_gewechselt.emit()
 
     def _melde_neues(self, vorher: int) -> None:
@@ -283,6 +289,7 @@ class Karriereseite(QWidget):
             QMessageBox.information(self, "Nicht moeglich", str(fehler))
             return
         self._zeichne()
+        self.werte_geaendert.emit()
 
     def _kaufe(self) -> None:
         schluessel = self._gewaehlt()
@@ -294,6 +301,7 @@ class Karriereseite(QWidget):
             QMessageBox.information(self, "Nicht moeglich", str(fehler))
             return
         self._zeichne()
+        self.werte_geaendert.emit()
 
     # -- Anzeige -----------------------------------------------------------
     def _zeichne(self) -> None:

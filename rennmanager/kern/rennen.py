@@ -22,12 +22,15 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field, replace
+from functools import cached_property
 from typing import TYPE_CHECKING
 
 import numpy as np
 
+from rennmanager.kern import boxenstopp as kern_boxenstopp
 from rennmanager.kern import form as kern_form
 from rennmanager.kern import reifen as kern_reifen
+from rennmanager.kern import strategie as kern_strategie
 from rennmanager.kern import tempoverlauf as kern_tempoverlauf
 from rennmanager.kern import wetter as kern_wetter
 from rennmanager.kern import windschatten as kern_windschatten
@@ -92,6 +95,26 @@ class Ueberholmanoever:
 
 
 @dataclass(frozen=True)
+class Boxenstopp:
+    """Ein gefahrener Boxenstopp (Punkt 39).
+
+    ``restprofil`` ist der Reifenzustand beim Wechsel, 1,0 frisch bis
+    0,0 abgefahren - dieselbe Groesse, die die Rangliste als Balken
+    zeigt. ``notstopp`` unterscheidet den geplanten Stopp von dem, den
+    ein Wetterwechsel erzwungen hat.
+    """
+
+    teilnehmer: int
+    runde: int
+    zeit_ms: int
+    von: str
+    nach: str
+    restprofil: float
+    standzeit_ms: int
+    notstopp: bool = False
+
+
+@dataclass(frozen=True)
 class Ergebnis:
     """Das Ergebnis eines Autos am Rennende."""
 
@@ -131,6 +154,17 @@ class Rennverlauf:
     reifenzustand: np.ndarray
     ergebnisse: tuple[Ergebnis, ...]
     dauer_ms: int
+    # Punkt 39: Welche Mischung jedes Auto in jedem Bild faehrt, als
+    # Index in ``mischungen``. Form ``(Bilder, Autos)``. Ohne Strategie
+    # steht ueberall die Startmischung.
+    mischungsindex: np.ndarray | None = None
+    # Die Kuerzel in der Reihenfolge der Indizes.
+    mischungen: tuple[str, ...] = ()
+    boxenstopps: tuple[Boxenstopp, ...] = ()
+    # Ob in diesem Rennen zwei Mischungen Pflicht sind (Punkt 39). Bei
+    # Regen, Starkregen und wechselhaftem Wetter ist die Pflicht
+    # aufgehoben.
+    mischungspflicht: bool = False
 
     @property
     def anzahl(self) -> int:
@@ -145,9 +179,53 @@ class Rennverlauf:
         """Alle Zwischenfaelle eines Autos - fuer die Anzeige im Ranking."""
         return tuple(z for z in self.zwischenfaelle if z.teilnehmer == teilnehmer)
 
+    @cached_property
+    def _ausfallzeiten(self) -> tuple[int | None, ...]:
+        """Wann jedes Auto ausgefallen ist, in Millisekunden."""
+        zeiten: list[int | None] = []
+        for i in range(self.anzahl):
+            spalte = self.ausgefallen[:, i]
+            treffer = np.flatnonzero(spalte)
+            zeiten.append(
+                int(self.zeitpunkte_ms[int(treffer[0])]) if len(treffer) else None
+            )
+        return tuple(zeiten)
+
+    def ausfallzeit(self, teilnehmer: int) -> int | None:
+        """Wann dieses Auto ausgefallen ist, oder ``None``."""
+        return self._ausfallzeiten[teilnehmer]
+
     def reifen_zu(self, zeit_ms: float) -> np.ndarray:
         """Reifenzustand je Auto zu einem Zeitpunkt, 1,0 frisch bis 0,0."""
         return self.reifenzustand[self.bild_zu(zeit_ms)]
+
+    def mischung_zu(self, zeit_ms: float) -> tuple[str, ...]:
+        """Welche Mischung jedes Auto zu diesem Zeitpunkt faehrt (Punkt 39)."""
+        if self.mischungsindex is None or not self.mischungen:
+            return ("",) * self.anzahl
+        zeile = self.mischungsindex[self.bild_zu(zeit_ms)]
+        return tuple(self.mischungen[int(stelle)] for stelle in zeile)
+
+    def stopps_von(self, teilnehmer: int) -> tuple[Boxenstopp, ...]:
+        """Alle Boxenstopps eines Autos, in der Reihenfolge des Rennens."""
+        return tuple(b for b in self.boxenstopps if b.teilnehmer == teilnehmer)
+
+    def gefahrene_mischungen(self, teilnehmer: int, zeit_ms: float) -> tuple[str, ...]:
+        """Welche Mischungen ein Auto bis zu diesem Zeitpunkt gefahren hat.
+
+        Die Rangliste braucht das fuer die Mischungspflicht: Sie ist
+        erfuellt, sobald hier zwei verschiedene Kuerzel stehen.
+        """
+        if self.mischungsindex is None or not self.mischungen:
+            return ()
+        bis = self.bild_zu(zeit_ms)
+        spalte = self.mischungsindex[: bis + 1, teilnehmer]
+        gesehen: list[str] = []
+        for stelle in spalte:
+            kuerzel = self.mischungen[int(stelle)]
+            if kuerzel not in gesehen:
+                gesehen.append(kuerzel)
+        return tuple(gesehen)
 
     def distanzen_zu(self, zeit_ms: float) -> np.ndarray:
         """Zurueckgelegte Strecke je Auto, zwischen den Bildern interpoliert."""
@@ -159,10 +237,47 @@ class Rennverlauf:
         anteil = (zeit_ms - davor) / max(danach - davor, 1e-9)
         return self.distanz_m[bild] + anteil * (self.distanz_m[bild + 1] - self.distanz_m[bild])
 
+    @cached_property
+    def _ergebnis_je_auto(self) -> dict[int, Ergebnis]:
+        """Das Schlussergebnis, nach Teilnehmernummer greifbar."""
+        return {e.teilnehmer: e for e in self.ergebnisse}
+
+    def im_ziel_zu(self, teilnehmer: int, zeit_ms: float) -> bool:
+        """Ob dieses Auto zu diesem Zeitpunkt schon im Ziel war."""
+        ergebnis = self._ergebnis_je_auto.get(teilnehmer)
+        return (
+            ergebnis is not None
+            and ergebnis.zeit_ms is not None
+            and ergebnis.zeit_ms <= zeit_ms
+        )
+
     def reihenfolge_zu(self, zeit_ms: float) -> list[int]:
-        """Positionen zum Zeitpunkt: wer am weitesten ist, fuehrt (GDD 4)."""
+        """Positionen zum Zeitpunkt: wer am weitesten ist, fuehrt (GDD 4).
+
+        Solange gefahren wird, entscheidet die zurueckgelegte Strecke. Wer
+        im Ziel ist, steht dagegen fest: absolvierte Runden absteigend,
+        bei gleicher Rundenzahl die Zielzeit aufsteigend - und immer vor
+        denen, die noch fahren.
+
+        Das ist keine Feinheit: Ein Auto im Ziel steht, ein anderes faehrt
+        weiter. Ohne diese Regel zieht der Zweite auf den letzten Metern
+        an einem Sieger vorbei, der schon ueber der Linie ist, weil seine
+        Strecke noch waechst.
+        """
         distanzen = self.distanzen_zu(zeit_ms)
-        return sorted(range(self.anzahl), key=lambda i: -distanzen[i])
+        ergebnisse = self._ergebnis_je_auto
+
+        def schluessel(i: int) -> tuple:
+            ergebnis = ergebnisse.get(i)
+            if (
+                ergebnis is not None
+                and ergebnis.zeit_ms is not None
+                and ergebnis.zeit_ms <= zeit_ms
+            ):
+                return (0, -ergebnis.runden, ergebnis.zeit_ms, 0.0)
+            return (1, 0, 0, -float(distanzen[i]))
+
+        return sorted(range(self.anzahl), key=schluessel)
 
 
 # ---------------------------------------------------------------------------
@@ -324,7 +439,12 @@ class _Lauf:
         tagesformbonus: tuple[float, ...] | None = None,
         rhythmusfaktor: tuple[float, ...] | None = None,
         mischungen: tuple[kern_reifen.Mischung, ...] | None = None,
+        strategien: tuple[kern_strategie.Strategie, ...] | None = None,
+        mischungspflicht: bool = False,
+        liga: int | None = None,
     ) -> None:
+        self.mischungspflicht = mischungspflicht
+        self.liga = liga
         self.k = konfiguration
         self.strecke = strecke
         self.teilnehmer = teilnehmer
@@ -442,6 +562,10 @@ class _Lauf:
         self.dt_s = konfiguration.wert("simulation", "zeitschritt_ms") / 1000.0
         # Der Wetter-Multiplikator auf Fehler und Unfaelle (GDD 7).
         self.wetter_fehlerfaktor = 1.0
+        # Der Wetter-Multiplikator auf den Verschleiss (GDD 7). Der
+        # Aufschlag fuer den falschen Reifen steckt nicht hier, sondern in
+        # der Verschleissrate je Auto - sonst kaeme er zweimal.
+        self.wetter_verschleiss = 1.0
         self.min_vorteil = konfiguration.wert("ueberholen", "min_tempovorteil_kmh") / KMH_JE_MS
         self.sieger_zeit: float | None = None
         self.laufende_nummer = np.arange(self.anzahl)
@@ -456,24 +580,44 @@ class _Lauf:
         # Punkt 39: Der Verschleiss haengt an der Strecke und der
         # Mischung, nicht mehr an der Renndistanz - sonst hielte ein Satz
         # per Konstruktion genau ein Rennen und Stopps waeren sinnlos.
-        self.mischungen = list(
-            mischungen
-            if mischungen is not None
-            else [kern_reifen.standardmischung(konfiguration)] * self.anzahl
+        self.strategien = list(strategien) if strategien is not None else None
+        if self.strategien is not None and len(self.strategien) != self.anzahl:
+            raise ValueError(
+                f"Strategien fuer {len(self.strategien)} Autos, "
+                f"im Feld stehen {self.anzahl}"
+            )
+        # Punkt 39: Je Fahrer und Mischung ein kleiner Verschleisswurf,
+        # jedes Rennen neu. Er steht nicht in der Vorausberechnung der
+        # Varianten - deshalb wird er hier gezogen und nicht dort.
+        self._streuung: list[dict[str, kern_reifen.Mischung]] = [
+            {} for _ in range(self.anzahl)
+        ]
+        gewaehlt = (
+            [s.mischungen[0] for s in self.strategien]
+            if self.strategien is not None
+            else list(
+                mischungen
+                if mischungen is not None
+                else [kern_reifen.standardmischung(konfiguration)] * self.anzahl
+            )
+        )
+        self.mischungen = [self._gestreut(i, m) for i, m in enumerate(gewaehlt)]
+        self.streckenverschleiss = streckenverschleiss
+        # Wie nass es gerade ist. Die Rate haengt daran, deshalb wird sie
+        # neu gesetzt, sobald sich die Lage oder die Mischung aendert.
+        self.naesse_jetzt = (
+            kern_reifen.naesse_von(konfiguration, wetter.startzustand)
+            if wetter is not None
+            else 0.0
         )
         self.verschleiss_je_meter = np.zeros(self.anzahl)
         if not ohne_zufall:
-            self.verschleiss_je_meter = np.array(
-                [
-                    kern_reifen.verschleiss_je_meter(
-                        konfiguration, auto, misch, streckenverschleiss
-                    )
-                    for auto, misch in zip(self.autos, self.mischungen, strict=True)
-                ]
-            )
+            for i in range(self.anzahl):
+                self._setze_verschleissrate(i)
         self.verschleiss = np.zeros(self.anzahl)
         self.reifen_tempo = np.ones(self.anzahl)
         self.reifen_fehler = np.ones(self.anzahl)
+        self._richte_boxengasse_ein(grenzen)
 
         # --- Ueber die Distanz (Punkte 9, 11 und 20) ------------------
         # Ermuedung, kalte Reifen und nachlassende Bremsen haengen alle an
@@ -535,6 +679,26 @@ class _Lauf:
             )
         self.sog_fenster = kern_windschatten.fenster_m(konfiguration)
         self.sog_verbraucht = np.full(self.anzahl, -1, dtype=int)
+        # Nachlauf: Wer vorbei ist, faellt nicht schlagartig aus dem Sog.
+        # ``sog_nachlauf_bis`` ist die Distanz, bis zu der der Ueberschuss
+        # in voller Hoehe gilt; danach bleibt sein halber Teil bis zum
+        # Ende derselben Geraden, also bis zum Anbremsen.
+        self.sog_nachlauf_m = kern_windschatten.nachlauf_m(konfiguration)
+        self.sog_nachlauf_anteil = kern_windschatten.nachlauf_anteil(konfiguration)
+        self.sog_nachlauf_ueberholter = kern_windschatten.nachlauf_anteil_ueberholter(
+            konfiguration
+        )
+        self.sog_nachlauf_bis = np.zeros(self.anzahl)
+        self.sog_nachlauf_wert = np.zeros(self.anzahl)
+        # Zwei Stufen, je Auto ein Faktor auf den Ueberschuss: bis
+        # ``sog_nachlauf_bis`` die erste, danach die zweite. Der
+        # Ueberholende faehrt 1,0 und dann die Haelfte, der Ueberholte
+        # zunaechst gar nichts und danach die Haelfte davon.
+        self.sog_nachlauf_erst = np.zeros(self.anzahl)
+        self.sog_nachlauf_dann = np.zeros(self.anzahl)
+        # Der Ueberschuss dieses Zeitschritts - beim Vorbeifahren wird er
+        # in den Nachlauf uebernommen.
+        self.sog_jetzt = np.zeros(self.anzahl)
 
         # --- Zwischenfaelle (GDD 4 und 14) ----------------------------
         self.zwischenfaelle: list[kern_zwischenfall.Zwischenfall] = []
@@ -563,6 +727,337 @@ class _Lauf:
         self._setze_rundenform(0)
         self._setze_grip(0.0)
 
+    def _setze_verschleissrate(self, i: int) -> None:
+        """Wie schnell dieses Auto gerade Profil verliert, je Meter.
+
+        Die Naesse geht hier ein, nicht als Faktor obendrauf: Sonst
+        gaelte ein Intermediate der Rechnung erst als passend und dann
+        noch einmal als Fehlgriff. Der reine Wetterfaktor aus GDD 7 kommt
+        getrennt dazu, weil er nicht an der Mischung haengt.
+        """
+        if self.ohne_zufall:
+            return
+        self.verschleiss_je_meter[i] = kern_reifen.verschleiss_je_meter(
+            self.k,
+            self.autos[i],
+            self.mischungen[i],
+            self.streckenverschleiss,
+            1.0,
+            self.naesse_jetzt,
+        )
+
+    # -- Boxenstopps (Punkt 39) -------------------------------------------
+    def _gestreut(self, i: int, misch: kern_reifen.Mischung) -> kern_reifen.Mischung:
+        """Die Mischung mit dem Verschleisswurf dieses Fahrers.
+
+        Je Fahrer und Mischung genau ein Wurf je Rennen: Wer zweimal auf
+        dieselbe Mischung wechselt, bekommt beide Male denselben Satz -
+        sonst wuerfelte jeder Stopp die Haltbarkeit neu.
+        """
+        if self.ohne_zufall:
+            return misch
+        bekannt = self._streuung[i].get(misch.schluessel)
+        if bekannt is None:
+            bekannt = kern_reifen.mit_streuung(
+                self.k, misch, self.seedquelle.zweig("reifenstreuung", i)
+            )
+            self._streuung[i][misch.schluessel] = bekannt
+        return bekannt
+
+    def _richte_boxengasse_ein(self, grenzen) -> None:
+        """Legt Boxenprofil, Stoppfenster und Standzeiten an.
+
+        Das Boxenprofil ist dasselbe Geschwindigkeitsprofil wie sonst,
+        nur mit dem Deckel von 80 km/h auf der Boxengasse. Es traegt das
+        Bremsen davor und das Beschleunigen danach schon in sich - der
+        Zeitverlust entsteht also von selbst und muss nicht aufaddiert
+        werden. Genau diese Differenz rechnet
+        ``boxenstopp.durchfahrtsverlust_ms`` dem Schnellmodus vor.
+        """
+        self.faehrt_stopps = self.strategien is not None and not self.ohne_zufall
+        self.boxenstopps: list[Boxenstopp] = []
+        self.bremsverlust = np.array(
+            [kern_boxenstopp.bremsverlust_ms(self.k, g, self.liga) for g in grenzen],
+            dtype=float,
+        )
+        # Das Fenster des naechsten Stopps, in gefahrenen Metern. Es
+        # bleibt nach dem Wechsel stehen, bis das Auto die Boxengasse
+        # verlassen hat - sonst faehrt es mit vollem Tempo heraus und der
+        # halbe Zeitverlust faellt unter den Tisch.
+        self.box_von_m = np.full(self.anzahl, np.inf)
+        self.box_bis_m = np.full(self.anzahl, -np.inf)
+        # Ob in diesem Fenster noch gewechselt wird.
+        self.box_offen = np.zeros(self.anzahl, dtype=bool)
+        # Ob das Fenster einem Wetterwechsel gilt und nicht dem Plan.
+        self.box_notstopp = np.zeros(self.anzahl, dtype=bool)
+        # In welcher Runde das offene Fenster liegt - 0 heisst: keines.
+        self.box_runde = np.zeros(self.anzahl, dtype=int)
+        self.stint = np.zeros(self.anzahl, dtype=int)
+        self.stopp_nummer = np.zeros(self.anzahl, dtype=int)
+        self.runde_letzter_stopp = np.zeros(self.anzahl, dtype=int)
+        if not self.faehrt_stopps:
+            self.profil_box = self.profile
+            return
+
+        von, bis = kern_boxenstopp.abschnitt(self.k, self.strecke)
+        if von <= bis:  # pragma: no cover - alle 20 Strecken laufen ueber die Linie
+            raise kern_boxenstopp.BoxenstoppFehler(
+                f"Die Boxengasse von {self.strecke.name} laeuft nicht ueber die Linie"
+            )
+        self.profil_box = np.array(
+            [
+                geschwindigkeitsprofil(
+                    self.strecke,
+                    g,
+                    limit=kern_boxenstopp.gedeckeltes_limit(
+                        self.k, self.strecke, g, liga=self.liga
+                    ),
+                )
+                for g in grenzen
+            ]
+        )
+        # Das Fenster ist nicht der Abschnitt selbst: Gebremst wird lange
+        # davor, beschleunigt lange danach. Beides steht schon im
+        # Boxenprofil, also wird das Fenster daraus abgelesen - der
+        # Bereich um die Ziellinie, in dem sich die beiden Profile
+        # unterscheiden. In Suzuka sind das 100 Meter Abschnitt vor der
+        # Linie, aber 400 Meter Bremsweg.
+        self.box_vor_linie_m = np.zeros(self.anzahl)
+        self.box_nach_linie_m = np.zeros(self.anzahl)
+        for i in range(self.anzahl):
+            anders = np.abs(self.profil_box[i] - self.profile[i]) > 1e-6
+            nach = int(np.argmin(anders)) if not anders.all() else self.punkte
+            rueckwaerts = anders[::-1]
+            vor = int(np.argmin(rueckwaerts)) if not rueckwaerts.all() else self.punkte
+            self.box_vor_linie_m[i] = vor * self.ds
+            self.box_nach_linie_m[i] = nach * self.ds
+            self._plane_stopp(i)
+
+    def _setze_fenster(self, i: int, runde: int, notstopp: bool) -> None:
+        """Oeffnet das Boxenfenster um die Ziellinie dieser Runde."""
+        linie = runde * self.laenge
+        self.box_von_m[i] = linie - self.box_vor_linie_m[i]
+        self.box_bis_m[i] = linie + self.box_nach_linie_m[i]
+        self.box_offen[i] = True
+        self.box_notstopp[i] = notstopp
+        self.box_runde[i] = runde
+
+    def _schliesse_fenster(self, i: int) -> None:
+        self.box_von_m[i] = np.inf
+        self.box_bis_m[i] = -np.inf
+        self.box_offen[i] = False
+        self.box_notstopp[i] = False
+        self.box_runde[i] = 0
+
+    def _plane_stopp(self, i: int) -> None:
+        """Legt das Boxenfenster fuer den naechsten geplanten Stopp."""
+        if not self.faehrt_stopps:
+            return
+        stopps = self.strategien[i].stopps
+        stelle = int(self.stopp_nummer[i])
+        if stelle >= len(stopps):
+            self._schliesse_fenster(i)
+            return
+        self._setze_fenster(i, stopps[stelle], False)
+
+    def _raeume_boxengasse(self) -> None:
+        """Wer die Ausfahrt hinter sich hat, bekommt sein naechstes Fenster.
+
+        Das Fenster bleibt bis hierher stehen, damit die Ausfahrt noch auf
+        dem gedeckelten Profil gefahren wird.
+        """
+        if not self.faehrt_stopps:
+            return
+        fertig = (self.distanz >= self.box_bis_m) & ~self.box_offen
+        for i in np.flatnonzero(fertig):
+            self._plane_stopp(int(i))
+
+    def _wechsle_reifen(self, i: int, ueberfahrt: float, neu, notstopp: bool) -> None:
+        """Faehrt den Stopp: Standzeit, frische Reifen, neue Mischung."""
+        neu = self._gestreut(i, neu)
+        standzeit = kern_boxenstopp.standzeit_ms(
+            self.k, self.seedquelle.zweig("standzeit", i, len(self.boxenstopps))
+        )
+        alt = self.mischungen[i]
+        self.boxenstopps.append(
+            Boxenstopp(
+                teilnehmer=i,
+                runde=int(self.runden_gefahren[i]),
+                zeit_ms=int(round(ueberfahrt)),
+                von=alt.kuerzel,
+                nach=neu.kuerzel,
+                restprofil=float(np.clip(1.0 - self.verschleiss[i], 0.0, 1.0)),
+                standzeit_ms=standzeit,
+                notstopp=notstopp,
+            )
+        )
+        self.mischungen[i] = neu
+        self.verschleiss[i] = 0.0
+        self._setze_verschleissrate(i)
+        self._setze_reifen(i)
+        # Die Standzeit laeuft ueber dieselbe Uhr wie die Pause nach einem
+        # Fehler: Das Auto steht, die anderen fahren vorbei. Dazu der
+        # Bremsverlust: Die Simulation bremst ohne Zeitverlust, weil das
+        # Geschwindigkeitsprofil die Bremszonen schon eingerechnet hat -
+        # fuer den Halt in der Box muss er deshalb ausdruecklich dazu. Das
+        # Anfahren danach entsteht von selbst, es steckt in der
+        # Beschleunigungsgrenze.
+        halt = standzeit + self.bremsverlust[i]
+        self.pause_ms[i] = max(float(self.pause_ms[i]), float(halt))
+        self.runde_letzter_stopp[i] = int(self.runden_gefahren[i])
+
+    def _pruefe_boxenstopp(self, i: int, ueberfahrt: float) -> None:
+        """Geplanter Stopp oder Notstopp wegen Wetterwechsels (Punkt 39).
+
+        Laeuft bei jeder Ueberfahrt der Ziellinie - dort steht die Box.
+        Ist das Fenster offen, wird gewechselt; sonst wird geprueft, ob das
+        Wetter einen ausserplanmaessigen Stopp erzwingt. Der wird fuer die
+        **naechste** Runde angesetzt, nicht fuer diese: Der Fahrer merkt
+        es auf der Strecke und kommt eine Runde spaeter herein - vorher
+        haette das Auto die Boxengasse schon mit vollem Tempo passiert.
+        """
+        if not self.faehrt_stopps or self.im_ziel[i] or not self.aktiv[i]:
+            return
+        # Wer das Rennen hinter sich hat, kommt nicht mehr herein - auch
+        # nicht, wenn der Sieger eben erst durchgefahren ist.
+        if self.runden_gefahren[i] >= self.runden or self.sieger_zeit is not None:
+            return
+
+        runde = int(self.runden_gefahren[i])
+        if self.box_offen[i] and self.box_von_m[i] <= runde * self.laenge < self.box_bis_m[i]:
+            self._fahre_stopp(i, ueberfahrt)
+            return
+        # Kommt der geplante Stopp naechste Runde, der Satz ist aber noch
+        # zu gut? Dann eine Runde weiter - so lange, bis er unter die
+        # Schwelle faellt. Entschieden wird das **eine Runde vorher**:
+        # Sonst faehrt das Auto schon langsam in die Boxengasse ein und
+        # dann doch daran vorbei.
+        if self._verschiebt_planstopp(i, runde):
+            return
+        # Der Auftraggeber hat die Frist gesetzt: hoechstens drei Runden
+        # auf dem falschen Reifen, und mindestens drei Runden zwischen
+        # zwei Stopps. Das gilt auch, wenn noch ein geplanter Stopp
+        # aussteht: Der Notstopp geht vor und schiebt den geplanten nach
+        # hinten - sonst faehrt ein Auto mit drei Planstopps das ganze
+        # Rennen auf Trockenreifen durch den Regen.
+        if self.wetter is None or self.box_notstopp[i]:
+            return
+        naesse = kern_reifen.naesse_von(self.k, self.wetter.zustand_zu(ueberfahrt))
+        seit = runde - int(self.runde_letzter_stopp[i])
+        if not kern_strategie.notstopp(self.k, self.mischungen[i], naesse, seit):
+            return
+        if kern_strategie.passende_mischung(self.k, naesse).kuerzel == self.mischungen[i].kuerzel:
+            return
+        if runde + 1 > self.runden - self.k.wert("boxenstopp", "strategie", "sperre_runden"):
+            # So kurz vor Schluss wird durchgefahren.
+            return
+        self._setze_fenster(i, runde + 1, True)
+
+    def _zur_lage(self, geplant, ueberfahrt: float):
+        """Der geplante Reifen - oder der passende, wenn er nicht mehr passt."""
+        if self.wetter is None:
+            return geplant
+        naesse = kern_reifen.naesse_von(self.k, self.wetter.zustand_zu(ueberfahrt))
+        grenze = self.k.wert("boxenstopp", "strategie", "eignungsgrenze")
+        if abs(geplant.naesse - naesse) <= grenze:
+            return geplant
+        return kern_strategie.passende_mischung(self.k, naesse)
+
+    def _verschiebt_planstopp(self, i: int, runde: int) -> bool:
+        """Schiebt einen geplanten Stopp, solange der Satz zu gut dafuer ist.
+
+        Der Auftraggeber hat die Schwelle gesetzt: Ueber
+        ``planstopp_ab_restprofil`` wird nicht gewechselt, sondern Runde
+        um Runde weitergefahren. Gerechnet wird mit dem Profil, das am
+        Ende der **naechsten** Runde uebrig sein wird - denn dort liegt
+        der Stopp.
+
+        Ein Notstopp wird nie verschoben: Der falsche Reifen wird nicht
+        besser, wenn man laenger darauf faehrt.
+        """
+        if not self.box_offen[i] or self.box_notstopp[i]:
+            return False
+        if int(self.box_runde[i]) != runde + 1:
+            return False
+        schwelle = self.k.wert("boxenstopp", "strategie", "planstopp_ab_restprofil")
+        naechste = float(
+            self.verschleiss[i]
+            + self.verschleiss_je_meter[i] * self.laenge * self.wetter_verschleiss
+        )
+        if 1.0 - naechste <= schwelle:
+            return False
+
+        einstellung = self.k.wert("boxenstopp", "strategie")
+        spaeteste = self.runden - einstellung["sperre_runden"]
+        if runde + 2 <= spaeteste:
+            self._setze_fenster(i, runde + 2, False)
+            return True
+
+        # Weiter geht es nicht. Wer schon gewechselt hat, faehrt einfach
+        # durch - der Satz traegt ja. Wer noch auf seinem ersten steht,
+        # muss trotzdem herein: Zwei Mischungen sind Pflicht, und die
+        # Verschiebung darf die Regel nicht aushebeln.
+        gewechselt = any(b.teilnehmer == i for b in self.boxenstopps)
+        if gewechselt or not self.mischungspflicht:
+            self.stopp_nummer[i] = len(self.strategien[i].stopps)
+            self._schliesse_fenster(i)
+            return True
+        if int(self.box_runde[i]) != spaeteste:
+            self._setze_fenster(i, spaeteste, False)
+            return True
+        return False
+
+    def _fahre_stopp(self, i: int, ueberfahrt: float) -> None:
+        """Wechselt an der Box - geplant oder wegen des Wetters."""
+        if self.box_notstopp[i]:
+            naesse = (
+                kern_reifen.naesse_von(self.k, self.wetter.zustand_zu(ueberfahrt))
+                if self.wetter is not None
+                else 0.0
+            )
+            neu = kern_strategie.passende_mischung(self.k, naesse)
+            self._wechsle_reifen(i, ueberfahrt, neu, True)
+            self.box_offen[i] = False
+            self._schiebe_stopp(i)
+            return
+
+        strategie = self.strategien[i]
+        stelle = min(int(self.stint[i]) + 1, len(strategie.mischungen) - 1)
+        self.stint[i] = stelle
+        self.stopp_nummer[i] += 1
+        geplant = strategie.mischungen[stelle]
+        # Der Plan steht vor dem Rennen, das Wetter kann sich seither
+        # gedreht haben. Passt der geplante Reifen nicht mehr zur Lage,
+        # kommt der auf, der passt - sonst faehrt ein Auto bei einem
+        # Planstopp im Regen wieder Slicks auf und muss zwei Runden
+        # spaeter zum Notstopp herein.
+        self._wechsle_reifen(i, ueberfahrt, self._zur_lage(geplant, ueberfahrt), False)
+        # Das Fenster bleibt bis zur Ausfahrt stehen; erst danach wird der
+        # naechste Stopp geplant (siehe _raeume_boxengasse).
+        self.box_offen[i] = False
+
+    def _schiebe_stopp(self, i: int) -> None:
+        """Haelt den Mindestabstand nach einem Notstopp ein.
+
+        Der geplante Stopp rutscht so weit nach hinten, dass zwischen zwei
+        Stopps die Mindestrunden liegen. Passt er dann nicht mehr ins
+        Rennen, faellt er weg - das Auto hat ja eben frische Reifen
+        bekommen.
+        """
+        stopps = list(self.strategien[i].stopps)
+        stelle = int(self.stopp_nummer[i])
+        if stelle >= len(stopps):
+            return
+        einstellung = self.k.wert("boxenstopp", "strategie")
+        frueheste = int(self.runden_gefahren[i]) + einstellung["abstand_min_runden"]
+        if stopps[stelle] >= frueheste:
+            return
+        if frueheste > self.runden - einstellung["sperre_runden"]:
+            self.stopp_nummer[i] = len(stopps)
+        else:
+            stopps[stelle] = frueheste
+            self.strategien[i] = replace(self.strategien[i], stopps=tuple(stopps))
+
     def _setze_grip(self, zeit_ms: float) -> None:
         """Grip je Auto zum Zeitpunkt, mit Wetterkoennen (GDD 7).
 
@@ -575,6 +1070,23 @@ class _Lauf:
         self.wetter_fehlerfaktor = float(
             self.k.wert("wetter", "zustand", zustand)["fehlerquote"]
         )
+        # Punkt 39: Das Wetter zehrt an den Reifen (GDD 7), und wer den
+        # falschen Reifen fuer die Lage faehrt, zusaetzlich. Bisher stand
+        # beides nur im Schnellmodus - in der vollen Simulation kostete
+        # ein Regenrennen gar nichts.
+        #
+        # Der Aufschlag fuer den falschen Reifen steckt in
+        # ``verschleiss_je_meter`` selbst, sobald man ihm die Naesse
+        # nennt; er darf deshalb **nicht** noch einmal obendrauf. Ohne
+        # Naesse rechnet die Funktion mit trockener Strecke, und ein
+        # Intermediate gilt ihr dann schon als Fehlgriff.
+        self.wetter_verschleiss = float(kern_wetter.verschleissfaktor(self.k, zustand))
+        naesse = kern_reifen.naesse_von(self.k, zustand)
+        if naesse != self.naesse_jetzt:
+            self.naesse_jetzt = naesse
+            for i in range(self.anzahl):
+                self._setze_verschleissrate(i)
+                self._setze_reifen(i)
         # Im Rennen wird der Grip ueber die Sektoren gemittelt: Die Autos
         # sind gleichzeitig an verschiedenen Stellen der Runde.
         roh = sum(
@@ -614,12 +1126,19 @@ class _Lauf:
         faehrt = self.aktiv & ~self.im_ziel
         self.distanz[faehrt] += self.tempo[faehrt] * wirksam[faehrt]
 
-        # Reifen bauen mit jedem gefahrenen Meter ab (GDD 4).
-        self.verschleiss += (self.distanz - vorher) * self.verschleiss_je_meter
+        # Reifen bauen mit jedem gefahrenen Meter ab (GDD 4). Das Wetter
+        # zehrt mit (GDD 7), und der falsche Reifen fuer die Lage zehrt
+        # zusaetzlich (Punkt 39) - beides steckt in
+        # ``wetter_verschleiss`` und wird beim Rundenwechsel gesetzt.
+        self.verschleiss += (
+            (self.distanz - vorher) * self.verschleiss_je_meter * self.wetter_verschleiss
+        )
         # Eine angefangene Pause nach einem Fehler laeuft ab.
         self.pause_ms = np.maximum(self.pause_ms - dt * 1000.0, 0.0)
 
         self._pruefe_marken(vorher, zeit_ms, dt)
+        # Wer die Boxengasse verlassen hat, bekommt sein naechstes Fenster.
+        self._raeume_boxengasse()
 
     def _ziel_tempo(self, zeit_ms: int) -> np.ndarray:
         """Tempo, das ein Auto anstrebt: freies Profil, gedeckelt durch
@@ -659,6 +1178,16 @@ class _Lauf:
             ende_dort = self.profil_ende[self.laufende_nummer, danach]
             hier = hier + anteil * (ende_hier - hier)
             dort = dort + anteil * (ende_dort - dort)
+
+        # Punkt 39: Wer zum Stopp hereinkommt, faehrt vom Bremspunkt vor
+        # der Boxengasse bis zur Ausfahrt danach auf dem gedeckelten
+        # Profil. Alles andere daran bleibt, wie es ist - das Boxenprofil
+        # unterscheidet sich vom freien nur an dieser Stelle der Runde.
+        if self.faehrt_stopps:
+            in_box = (self.distanz >= self.box_von_m) & (self.distanz < self.box_bis_m)
+            if in_box.any():
+                hier = np.where(in_box, self.profil_box[self.laufende_nummer, index], hier)
+                dort = np.where(in_box, self.profil_box[self.laufende_nummer, danach], dort)
 
         # Ermuedung ab der halben Distanz (GDD 8, Bereich er) und kalte
         # Reifen in der ersten Runde (Punkt 48).
@@ -703,6 +1232,7 @@ class _Lauf:
         # Der Sog wirkt auf ``ziel``, bevor die Folgeregel greift. Damit
         # waechst der Tempovorteil, mit dem gleich das Ueberholen
         # gewuerfelt wird - genau dafuer ist er da.
+        self.sog_jetzt[:] = 0.0
         if self.sog_fenster > 0.0:
             gerade = self.geradennummer[index[hinten]]
             im_fenster = (
@@ -715,7 +1245,32 @@ class _Lauf:
             )
             if im_fenster.any():
                 anteil = np.where(im_fenster, 1.0 - abstand_m / self.sog_fenster, 0.0)
-                ziel[hinten] = ziel[hinten] * (1.0 + self.sog_gewinn[hinten] * anteil)
+                self.sog_jetzt[hinten] = self.sog_gewinn[hinten] * anteil
+                ziel[hinten] = ziel[hinten] * (1.0 + self.sog_jetzt[hinten])
+
+        # --- Nachlauf des Windschattens -------------------------------
+        # Der Ueberschuss endet nicht in dem Augenblick, in dem das Auto
+        # vorbei ist: Er gilt noch ``sog_nachlauf_m`` Meter voll und
+        # danach zur Haelfte, bis dieselbe Gerade zu Ende ist. Sobald das
+        # Profil faellt, wird angebremst - dort ist Schluss, sonst traege
+        # das Auto zu viel Tempo in die Kurve.
+        if self.sog_nachlauf_m > 0.0:
+            jetzt = self.geradennummer[index]
+            kennung = self.runden_gefahren * self.geraden_je_runde + np.maximum(jetzt, 0)
+            ueberschuss = self.sog_nachlauf_wert * np.where(
+                self.distanz <= self.sog_nachlauf_bis,
+                self.sog_nachlauf_erst,
+                self.sog_nachlauf_dann,
+            )
+            laeuft_nach = (
+                faehrt
+                & (jetzt >= 0)
+                & (kennung == self.sog_verbraucht)
+                & (dort >= hier)
+                & (ueberschuss > 0.0)
+            )
+            if laeuft_nach.any():
+                ziel = np.where(laeuft_nach, ziel * (1.0 + ueberschuss), ziel)
 
         # Unfaelle haengen allein am Abstand (GDD 4: unter 30 m), nicht am
         # engeren Fenster fuers Ueberholen.
@@ -758,7 +1313,28 @@ class _Lauf:
                 # ist der Sog auf dieser Geraden aufgebraucht (Punkt 7).
                 nummer = int(self.geradennummer[index[i]])
                 if nummer >= 0:
-                    self.sog_verbraucht[i] = int(self._gerade_id(i, nummer))
+                    kennung = int(self._gerade_id(i, nummer))
+                    # Was der Sog gerade hergab, laeuft noch nach: beim
+                    # Ueberholenden voll und dann zur Haelfte, beim
+                    # Ueberholten erst gar nicht und danach mit der
+                    # Haelfte davon. Beide haengen an derselben Marke,
+                    # damit die zweite Stufe fuer beide zugleich beginnt.
+                    marke = self.distanz[i] + self.sog_nachlauf_m
+                    ueberschuss = float(self.sog_jetzt[i])
+                    self.sog_verbraucht[i] = kennung
+                    self.sog_nachlauf_wert[i] = ueberschuss
+                    self.sog_nachlauf_bis[i] = marke
+                    self.sog_nachlauf_erst[i] = 1.0
+                    self.sog_nachlauf_dann[i] = self.sog_nachlauf_anteil
+                    # Der Ueberholte faehrt auf dieser Geraden ebenfalls
+                    # den Nachlauf - und damit keinen vollen Sog mehr.
+                    self.sog_verbraucht[j] = int(self._gerade_id(j, nummer))
+                    self.sog_nachlauf_wert[j] = ueberschuss
+                    self.sog_nachlauf_bis[j] = marke
+                    self.sog_nachlauf_erst[j] = 0.0
+                    self.sog_nachlauf_dann[j] = (
+                        self.sog_nachlauf_anteil * self.sog_nachlauf_ueberholter
+                    )
                 continue
             # Sonst bleibt das schnellere Auto dahinter und faehrt dessen
             # Tempo (GDD 4).
@@ -891,7 +1467,15 @@ class _Lauf:
         if self.ohne_zufall:
             return
         auto = self.autos[i]
-        self.reifen_tempo[i] = kern_reifen.tempofaktor(self.k, auto, float(self.verschleiss[i]))
+        # Punkt 39: Die Mischung selbst traegt einen Tempofaktor - weich
+        # ist schneller als hart, ein Regenreifen im Trockenen langsamer.
+        # Er stand bisher nur in der Vorausberechnung der Strategie; im
+        # Rennen fuhren alle fuenf Mischungen gleich schnell, und die
+        # ganze Abwaegung "schneller, aber kuerzer" fand nicht statt.
+        misch = kern_reifen.mischungsfaktor(self.k, self.mischungen[i], self.naesse_jetzt)
+        self.reifen_tempo[i] = misch * kern_reifen.tempofaktor(
+            self.k, auto, float(self.verschleiss[i])
+        )
         self.reifen_fehler[i] = kern_reifen.fehlerfaktor(self.k, auto, float(self.verschleiss[i]))
 
     def _versucht_ueberholen(self, hinten: int, vorne: int, vorteil: float, zeit_ms: int) -> bool:
@@ -985,6 +1569,10 @@ class _Lauf:
         self._setze_grip(ueberfahrt)
         # Reifenzustand und Zwischenfaelle werden je Runde nachgezogen.
         self._setze_reifen(i)
+        # Punkt 39: Der Wechsel liegt auf der Ziellinie - dort steht die
+        # Box. Er kommt vor den Rundenereignissen, damit die Fehlerquote
+        # der neuen Runde schon zu den frischen Reifen passt.
+        self._pruefe_boxenstopp(i, ueberfahrt)
         self._wuerfle_rundenereignisse(i, ueberfahrt)
 
         if self.runden_gefahren[i] >= self.runden and self.sieger_zeit is None:
@@ -1069,6 +1657,9 @@ def simuliere(
     tagesformbonus: tuple[float, ...] | None = None,
     rhythmusfaktor: tuple[float, ...] | None = None,
     hoechstdauer_ms: int | None = None,
+    strategien: tuple[kern_strategie.Strategie, ...] | None = None,
+    mischungspflicht: bool = False,
+    liga: int | None = None,
 ) -> Rennverlauf:
     """Faehrt ein ganzes Rennen und liefert den fertigen Verlauf.
 
@@ -1094,6 +1685,16 @@ def simuliere(
         abweichen laesst. GDD 9 kalibriert ausdruecklich ohne Zufall, und
         fuer die Massensimulation aus GDD 15 ist es ebenfalls noetig.
     :param hoechstdauer_ms: Notbremse gegen ein Rennen, das nie endet
+    :param strategien: Mischungsfolge und Stopprunden je Auto (Punkt 39),
+        aus rennmanager.kern.strategie. Ohne Angabe faehrt jedes Auto das
+        ganze Rennen auf einem Satz - das brauchen die Kalibrierung und
+        die aelteren Tests.
+    :param mischungspflicht: ob in diesem Rennen zwei Mischungen Pflicht
+        sind. Nur fuer die Anzeige; gefahren wird, was in ``strategien``
+        steht.
+    :param liga: bestimmt das Boxenlimit (Punkt 39). Liga 1 bis 5 faehrt
+        80 km/h, die unteren Ligen weniger. Ohne Angabe gilt der
+        Grundwert.
     """
     if not teilnehmer:
         raise ValueError("Ohne Teilnehmer gibt es kein Rennen")
@@ -1103,8 +1704,17 @@ def simuliere(
     lauf = _Lauf(
         konfiguration, strecke, teilnehmer, runden, seedquelle, streckenmittel,
         wetter, ohne_zufall, streckenverschleiss, kenntnisfaktor, tagesformbonus,
-        rhythmusfaktor,
+        rhythmusfaktor, strategien=strategien, mischungspflicht=mischungspflicht,
+        liga=liga,
     )
+    # Punkt 39: Die Mischung wird als Index gefuehrt, nicht als Kuerzel -
+    # ein Bild je 200 Millisekunden mal 30 Autos waere sonst eine
+    # Zeichenkettenwolke.
+    kuerzel = tuple(m.kuerzel for m in kern_reifen.mischungen(konfiguration))
+    stelle_von = {k: n for n, k in enumerate(kuerzel)}
+
+    def mischungszeile() -> np.ndarray:
+        return np.array([stelle_von[m.kuerzel] for m in lauf.mischungen], dtype=np.int8)
     schritt_ms = konfiguration.wert("simulation", "zeitschritt_ms")
     bild_ms = konfiguration.wert("simulation", "bildschritt_ms")
     dt = schritt_ms / 1000.0
@@ -1118,6 +1728,7 @@ def simuliere(
     distanzen = [lauf.distanz.copy()]
     ausgefallen = [~lauf.aktiv.copy()]
     reifen = [np.ones(lauf.anzahl)]
+    mischungsbilder = [mischungszeile()]
 
     zeit_ms = 0
     nummer = 0
@@ -1130,6 +1741,7 @@ def simuliere(
             distanzen.append(lauf.distanz.copy())
             ausgefallen.append(~lauf.aktiv.copy())
             reifen.append(np.clip(1.0 - lauf.verschleiss, 0.0, 1.0))
+            mischungsbilder.append(mischungszeile())
 
     # Das letzte Bild immer festhalten, damit der Zielstand sichtbar ist.
     if zeitpunkte[-1] != zeit_ms:
@@ -1137,6 +1749,7 @@ def simuliere(
         distanzen.append(lauf.distanz.copy())
         ausgefallen.append(~lauf.aktiv.copy())
         reifen.append(np.clip(1.0 - lauf.verschleiss, 0.0, 1.0))
+        mischungsbilder.append(mischungszeile())
 
     return Rennverlauf(
         strecke=strecke,
@@ -1154,6 +1767,10 @@ def simuliere(
         reifenzustand=np.array(reifen),
         ergebnisse=_ergebnisse(lauf, konfiguration, seedquelle),
         dauer_ms=zeit_ms,
+        mischungsindex=np.array(mischungsbilder),
+        mischungen=kuerzel,
+        boxenstopps=tuple(lauf.boxenstopps),
+        mischungspflicht=mischungspflicht,
     )
 
 

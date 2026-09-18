@@ -21,8 +21,10 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from rennmanager.kern import boxenstopp as kern_boxenstopp
 from rennmanager.kern import form as kern_form
 from rennmanager.kern import reifen as kern_reifen
+from rennmanager.kern import strategie as kern_strategie
 from rennmanager.kern import tempoverlauf as kern_tempoverlauf
 from rennmanager.kern import wetter as kern_wetter
 from rennmanager.kern import windschatten as kern_windschatten
@@ -101,6 +103,7 @@ def fahre_wochenende(
     tagesformbonus: tuple[float, ...] | None = None,
     rhythmusfaktor: tuple[float, ...] | None = None,
     mischungen: tuple[kern_reifen.Mischung, ...] | None = None,
+    strategien: tuple[kern_strategie.Strategie, ...] | None = None,
 ) -> Schnellergebnis:
     """Faehrt Qualifying und Rennen einer Liga im Schnellmodus (GDD 13).
 
@@ -113,6 +116,11 @@ def fahre_wochenende(
         Auto (Punkt 15). Ohne Angabe faehrt jedes Auto ohne Vorteil.
     :param mischungen: Reifenmischung je Auto (Punkt 39). Ohne Angabe
         faehrt jedes Auto die mittlere Trockenmischung.
+    :param strategien: Mischungsfolge und Stopprunden je Auto (Punkt 39).
+        Mit Angabe werden dieselben Stopps gefahren wie im Zeitraffer und
+        mit demselben Zeitverlust gebucht - die volle Simulation faehrt
+        die Boxengasse wirklich langsam, hier wird die Differenz
+        abgezogen.
     """
     if not teilnehmer:
         raise ValueError("Ohne Teilnehmer gibt es kein Rennwochenende")
@@ -174,8 +182,17 @@ def fahre_wochenende(
         streuung = kern_form.rundenform(
             konfiguration, auto, seedquelle.zweig("qualirunde", i), 1
         )
+        # Punkt 39: Im Qualifying wird immer weich gefahren, im Nassen
+        # der passende Satz - dieselbe Regel wie in der vollen Session.
+        quali_misch = kern_strategie.qualifyingmischung(konfiguration, quali_zustand)
+        quali_mischfaktor = kern_reifen.mischungsfaktor(
+            konfiguration, quali_misch, kern_reifen.naesse_von(konfiguration, quali_zustand)
+        )
         quali_runden[i] *= streuung / (
-            grip * (1.0 + qualifyingbonus(konfiguration, auto)) * kenntnisfaktor[i]
+            grip
+            * (1.0 + qualifyingbonus(konfiguration, auto))
+            * kenntnisfaktor[i]
+            * quali_mischfaktor
         )
 
     aufstellung = list(np.argsort(quali_runden))
@@ -225,20 +242,69 @@ def fahre_wochenende(
     wuerfel = seedquelle.zweig("schnellrennen").generator()
 
     # Punkt 39: je Strecke und Mischung, nicht je Renndistanz.
-    gefahrene = list(
-        mischungen
-        if mischungen is not None
-        else [kern_reifen.standardmischung(konfiguration)] * anzahl
-    )
-    verschleiss_je_runde = np.array(
-        [
+    streuungen: list[dict[str, kern_reifen.Mischung]] = [{} for _ in range(anzahl)]
+
+    def gestreut(i: int, misch: kern_reifen.Mischung) -> kern_reifen.Mischung:
+        """Der Verschleisswurf dieses Fahrers - wie in der vollen Simulation."""
+        bekannt = streuungen[i].get(misch.schluessel)
+        if bekannt is None:
+            bekannt = kern_reifen.mit_streuung(
+                konfiguration, misch, seedquelle.zweig("reifenstreuung", i)
+            )
+            streuungen[i][misch.schluessel] = bekannt
+        return bekannt
+
+    if strategien is not None:
+        if len(strategien) != anzahl:
+            raise ValueError(
+                f"Strategien fuer {len(strategien)} Autos, im Feld stehen {anzahl}"
+            )
+        gewaehlt = [s.mischungen[0] for s in strategien]
+    else:
+        gewaehlt = list(
+            mischungen
+            if mischungen is not None
+            else [kern_reifen.standardmischung(konfiguration)] * anzahl
+        )
+    gefahrene = [gestreut(i, m) for i, m in enumerate(gewaehlt)]
+
+    def je_runde(i: int, naesse: float) -> float:
+        """Profilverlust je Runde - die Naesse geht hier ein, nicht obendrauf.
+
+        Ohne sie rechnet die Funktion mit trockener Strecke und haelt
+        einen Intermediate schon fuer einen Fehlgriff; der Aufschlag kaeme
+        dann zweimal.
+        """
+        return (
             kern_reifen.verschleiss_je_meter(
-                konfiguration, auto, misch, streckenverschleiss
+                konfiguration, autos[i], gefahrene[i], streckenverschleiss, 1.0, naesse
             )
             * strecke.laenge_m
-            for auto, misch in zip(autos, gefahrene, strict=True)
-        ]
+        )
+
+    naesse_start = kern_reifen.naesse_von(konfiguration, wetter.startzustand)
+    verschleiss_je_runde = np.array([je_runde(i, naesse_start) for i in range(anzahl)])
+    # Was ein Stopp kostet - ohne die Standzeit, die je Stopp gewuerfelt
+    # wird. Durchfahrt, Bremsen und Anfahren haengen nur am Auto.
+    stoppgrundlast = np.array(
+        [
+            kern_boxenstopp.durchfahrtsverlust_ms(
+                konfiguration, strecke, _grenzen(konfiguration, auto, faktor_r), liga=liga
+            )
+            + kern_boxenstopp.haltverlust_ms(
+                konfiguration, _grenzen(konfiguration, auto, faktor_r), liga
+            )
+            for auto, faktor_r in zip(autos, rhythmusfaktor, strict=True)
+        ],
+        dtype=float,
     )
+    strategie_stand = list(strategien) if strategien is not None else None
+    pflicht_zwei = kern_strategie.pflicht_zwei_mischungen(konfiguration, wetter.zustaende)
+    stint_stand = np.zeros(anzahl, dtype=int)
+    stopp_nummer = np.zeros(anzahl, dtype=int)
+    runde_letzter_stopp = np.zeros(anzahl, dtype=int)
+    notstopp_faellig = np.zeros(anzahl, dtype=bool)
+    stopps_je_auto = np.zeros(anzahl, dtype=int)
 
     gesamtzeit = np.zeros(anzahl)
     # Die Startaufstellung kostet Zeit: 5 m Abstand je Platz.
@@ -264,11 +330,17 @@ def fahre_wochenende(
     grenze = kern_zwischenfall.ausfallgrenze(konfiguration, wuerfel)
     # Die Startaufstellung ist die Reihenfolge vor der ersten Runde.
     vorige_reihenfolge = list(aufstellung)
+    naesse_lage = naesse_start
 
     for runde in range(1, runden + 1):
         zustand = wetter.zustand_zu(gesamtzeit[aktiv].min() if aktiv.any() else 0.0)
         wetter_fehler = float(konfiguration.wert("wetter", "zustand", zustand)["fehlerquote"])
         wetter_verschleiss = kern_wetter.verschleissfaktor(konfiguration, zustand)
+        naesse_jetzt = kern_reifen.naesse_von(konfiguration, zustand)
+        if naesse_jetzt != naesse_lage:
+            naesse_lage = naesse_jetzt
+            for i in range(anzahl):
+                verschleiss_je_runde[i] = je_runde(i, naesse_lage)
 
         for i in range(anzahl):
             if not aktiv[i]:
@@ -280,7 +352,12 @@ def fahre_wochenende(
             streuung = kern_form.rundenform(
                 konfiguration, auto, seedquelle.zweig("rundenform", i), runde
             )
-            reifen = kern_reifen.tempofaktor(konfiguration, auto, float(verschleiss[i]))
+            # Punkt 39: Der Tempofaktor der Mischung gehoert dazu - sonst
+            # faehrt weich im Rennen so schnell wie hart, und die
+            # Strategie waere eine Rechnung ohne Wirkung.
+            reifen = kern_reifen.mischungsfaktor(
+                konfiguration, gefahrene[i], naesse_lage
+            ) * kern_reifen.tempofaktor(konfiguration, auto, float(verschleiss[i]))
             # Ueber die Distanz (Punkte 9, 11 und 20): Die Bremse laesst
             # nach, die Ermuedung waechst, die kalten Reifen kosten die
             # erste Runde. Der Anteil gilt zu Rundenbeginn.
@@ -317,6 +394,92 @@ def fahre_wochenende(
             kilometer[i][zustand] += strecke.laenge_m / 1000.0
             verschleiss[i] += verschleiss_je_runde[i] * wetter_verschleiss
             gefahrene_runden[i] += 1
+
+            # --- Boxenstopp (Punkt 39) --------------------------------
+            # Dieselben Regeln wie im Zeitraffer, nur ohne Geometrie: Was
+            # dort als langsame Durchfahrt entsteht, wird hier gebucht.
+            if strategie_stand is None or gefahrene_runden[i] >= runden:
+                continue
+            strat = strategie_stand[i]
+            stelle = int(stopp_nummer[i])
+            geplant = stelle < len(strat.stopps) and strat.stopps[stelle] == runde
+            # Punkt 39: Ein geplanter Stopp wird verschoben, solange der
+            # Satz besser ist als die Schwelle. Entschieden wird eine
+            # Runde im Voraus - genau wie im Zeitraffer, wo das Auto sonst
+            # schon langsam in die Boxengasse einfuehre und dann doch
+            # daran vorbei.
+            if (
+                not notstopp_faellig[i]
+                and stelle < len(strat.stopps)
+                and strat.stopps[stelle] == runde + 1
+            ):
+                einstellung = konfiguration.wert("boxenstopp", "strategie")
+                kuenftig = 1.0 - float(
+                    verschleiss[i] + verschleiss_je_runde[i] * wetter_verschleiss
+                )
+                if kuenftig > einstellung["planstopp_ab_restprofil"]:
+                    spaeteste = runden - einstellung["sperre_runden"]
+                    stopps = list(strat.stopps)
+                    if runde + 2 <= spaeteste:
+                        stopps[stelle] = runde + 2
+                    elif stopps_je_auto[i] or not pflicht_zwei:
+                        stopps = stopps[:stelle]
+                    else:
+                        # Zwei Mischungen sind Pflicht - der Stopp bleibt,
+                        # so spaet wie erlaubt.
+                        stopps[stelle] = spaeteste
+                    strategie_stand[i] = kern_strategie.Strategie(
+                        mischungen=strat.mischungen, stopps=tuple(stopps)
+                    )
+                    continue
+            if not (geplant or notstopp_faellig[i]):
+                # Zwingt das Wetter zum ausserplanmaessigen Stopp? Der
+                # Fahrer merkt es auf der Strecke und kommt eine Runde
+                # spaeter herein - genau wie in der vollen Simulation.
+                naesse = kern_reifen.naesse_von(konfiguration, zustand)
+                seit = runde - int(runde_letzter_stopp[i])
+                sperre = konfiguration.wert("boxenstopp", "strategie", "sperre_runden")
+                if (
+                    kern_strategie.notstopp(konfiguration, gefahrene[i], naesse, seit)
+                    and kern_strategie.passende_mischung(konfiguration, naesse).kuerzel
+                    != gefahrene[i].kuerzel
+                    and runde + 1 <= runden - sperre
+                ):
+                    notstopp_faellig[i] = True
+                continue
+
+            if notstopp_faellig[i]:
+                naesse = kern_reifen.naesse_von(konfiguration, zustand)
+                neu = kern_strategie.passende_mischung(konfiguration, naesse)
+                notstopp_faellig[i] = False
+                strategie_stand[i] = kern_strategie.nach_notstopp(
+                    konfiguration, strat, stelle, runde, runden
+                )
+            else:
+                neu_stelle = min(int(stint_stand[i]) + 1, len(strat.mischungen) - 1)
+                stint_stand[i] = neu_stelle
+                stopp_nummer[i] += 1
+                # Der Plan steht vor dem Rennen, das Wetter kann sich
+                # seither gedreht haben. Passt der geplante Reifen nicht
+                # mehr zur Lage, kommt der auf, der passt - wie in der
+                # vollen Simulation. Ohne das zieht ein Auto im Regen
+                # Slicks auf und kommt zwei Runden spaeter zum Notstopp.
+                neu = strat.mischungen[neu_stelle]
+                naesse = kern_reifen.naesse_von(konfiguration, zustand)
+                grenze = konfiguration.wert("boxenstopp", "strategie", "eignungsgrenze")
+                if abs(neu.naesse - naesse) > grenze:
+                    neu = kern_strategie.passende_mischung(konfiguration, naesse)
+
+            standzeit = kern_boxenstopp.standzeit_ms(
+                konfiguration,
+                seedquelle.zweig("standzeit", i, int(stopps_je_auto[i])),
+            )
+            gesamtzeit[i] += stoppgrundlast[i] + standzeit
+            gefahrene[i] = gestreut(i, neu)
+            verschleiss[i] = 0.0
+            verschleiss_je_runde[i] = je_runde(i, naesse_lage)
+            runde_letzter_stopp[i] = runde
+            stopps_je_auto[i] += 1
 
         # Verkehr und Ueberholen: Wo sich die Reihenfolge gegenueber der
         # Vorrunde geaendert hat, ist auf der Strecke ueberholt worden -

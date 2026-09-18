@@ -352,6 +352,30 @@ class Karriere:
             wetterwerte={s: w for s, w in werte.items() if s not in matrix},
         )
 
+    def entwickelte_autos(self, welt) -> dict[int, object]:
+        """Die entwickelten Autos aller eigenen Fahrer, fuer die Anzeige.
+
+        **Ohne** Ereignisse und Defekte: Die gehoeren ins Rennen, nicht in
+        den Steckbrief. Wer auf die Werte seines Fahrers schaut, will
+        sehen, was er sich erarbeitet hat.
+        """
+        from rennmanager.kern.auto import Auto
+
+        matrix = {f.schluessel for f in self.konfiguration.faehigkeiten}
+        vorlagen = {f.nummer: f.auto for f in welt.fahrer}
+        gebaut = {}
+        for nummer, werte in self.autos.items():
+            vorlage = vorlagen.get(nummer)
+            if vorlage is None:
+                continue
+            gebaut[nummer] = Auto(
+                kuerzel=vorlage.kuerzel,
+                name=vorlage.name,
+                werte={s: w for s, w in werte.items() if s in matrix},
+                wetterwerte={s: w for s, w in werte.items() if s not in matrix},
+            )
+        return gebaut
+
     def rennauto_von(self, nummer: int, vorlage, session: str = kern_ereignis.RENNEN):
         """Das Auto eines bestimmten eigenen Fahrers in dieser Session.
 
@@ -607,6 +631,7 @@ class Karriere:
         kilometer_je_wetter: dict[str, float] | None = None,
         fahrer: int | None = None,
         liga: int | None = None,
+        zaehle_rennwochenende: bool = True,
     ) -> Konto:
         """Schreibt Preisgeld, Startgeld, Erfahrung und Sponsoren gut (GDD 10).
 
@@ -617,6 +642,13 @@ class Karriere:
         :param fahrer: wessen Rennen gebucht wird. Ohne Angabe der
             gewaehlte - so bleiben Aufrufe mit einem Auto unveraendert.
         :param liga: seine Liga. Ohne Angabe die des Teams.
+        :param zaehle_rennwochenende: ob dieser Aufruf die Ereignisse ein
+            Wochenende weiterzaehlt. Die Lage gehoert dem **Team**, nicht
+            dem einzelnen Fahrer: Stehen vier eigene Autos im selben
+            Rennen, wird viermal gebucht, aber es ist ein Rennen. Wer das
+            viermal zaehlt, laesst jedes Ereignis viermal so schnell
+            ablaufen. Die Sponsorenvertraege sitzen dagegen auf dem
+            einzelnen Auto und zaehlen deshalb bei jedem Aufruf mit.
         """
         vorher = self.fahrernummer
         if fahrer is not None:
@@ -637,12 +669,16 @@ class Karriere:
                 )
 
             self.konto = self.konto.mit(geld=geld, erfahrung=erfahrung, **toepfe)
+            # Die Sponsorenvertraege sitzen auf dem Auto dieses Fahrers -
+            # sie zaehlen mit jedem seiner Rennen herunter, nicht mit
+            # denen seiner Kollegen.
             self.vertraege = kern_sponsoren.nach_rennen(self.vertraege)
         finally:
             self.fahrernummer = vorher
         # Ereignisse, die in Rennwochenenden laufen, sind eines weiter
         # (GDD 14).
-        self.lage.nach_rennwochenende()
+        if zaehle_rennwochenende:
+            self.lage.nach_rennwochenende()
         return self.konto
 
     def verbuche_runden(

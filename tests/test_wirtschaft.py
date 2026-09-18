@@ -7,6 +7,7 @@ import pytest
 from rennmanager import konfiguration as kf
 from rennmanager.kern import einnahmen as ei
 from rennmanager.kern import entwicklung as ew
+from rennmanager.kern import ereignis as kern_ereignis
 from rennmanager.kern import karriere as kr
 from rennmanager.kern import sponsoren as sp
 from rennmanager.kern.entwicklung import EntwicklungsFehler, Konto
@@ -97,9 +98,11 @@ def test_achtzehn_faehigkeiten_kosten_geld(k) -> None:
     assert len(mit_geld) == kf.ANZAHL_MIT_GELDANTEIL
 
 
-def test_tag_bei_reiner_zeit_ist_kostenlos(k) -> None:
+def test_tag_bei_reiner_zeit_kostet_kein_geld_aber_erfahrung(k) -> None:
+    """Punkt 69: Wer Zeit einsetzt, gibt auch etwas Erfahrung dazu."""
     plan = ew.plane_tag(k, k.faehigkeit("D1"), 0)
-    assert plan.geld == 0 and plan.erfahrung == 0
+    assert plan.geld == 0
+    assert plan.erfahrung > 0
     assert plan.zuwachs == 10
 
 
@@ -300,6 +303,8 @@ def test_karriere_startet_am_ersten_januar(k) -> None:
 
 def test_tag_belegen_hebt_den_wert(k) -> None:
     c = kr.beginne(k, 2026, liga=20)
+    # Ein belegter Tag kostet seit Punkt 69 auch etwas Erfahrung.
+    c.konto = c.konto.mit(erfahrung=1_000)
     c.belege_tag("D1")
     assert c.wert("D1") == 10
     # Derselbe Platz geht heute nicht noch einmal.
@@ -349,3 +354,76 @@ def test_wetterfaehigkeiten_zahlen_aus_ihrem_topf(k) -> None:
     vorschau = c.vorschau("regenfahren")
     assert vorschau.wettertopf == "regen"
     assert vorschau.erfahrung > 0
+
+
+# -- Zeit kostet auch Erfahrung (Punkt 69) ---------------------------------
+def test_wer_zeit_einsetzt_zahlt_auch_erfahrung(k) -> None:
+    """Jede Faehigkeit, die einen Tag kostet, kostet auch etwas EP."""
+    zeit = [f for f in k.faehigkeiten if ew.ZEIT in f.waehrung]
+    assert zeit, "Es muss Faehigkeiten geben, die Zeit kosten"
+    for faehigkeit in zeit:
+        _, erfahrung = ew.schrittkosten(k, faehigkeit, 0)
+        assert erfahrung > 0, faehigkeit.schluessel
+
+
+def test_die_erfahrung_waechst_mit_jedem_kauf(k) -> None:
+    """Die Zeit bleibt ein Tag, die Erfahrung steigt ueber die Kurve."""
+    faehigkeit = next(
+        f for f in k.faehigkeiten
+        if ew.ZEIT in f.waehrung and ew.ERFAHRUNG not in f.waehrung
+    )
+    werte = [ew.schrittkosten(k, faehigkeit, wert)[1] for wert in (0, 20_000, 90_000)]
+    assert werte == sorted(werte)
+    assert werte[0] < werte[-1]
+    # Ein Tag bleibt ein Tag - die Zeit skaliert nicht mit.
+    assert ew.braucht_tag(faehigkeit)
+
+
+def test_wer_schon_erfahrung_zahlt_zahlt_nicht_doppelt(k) -> None:
+    """('E','Z') behaelt den vollen EP-Satz, nicht Satz plus Zuschlag."""
+    beide = next(
+        f for f in k.faehigkeiten
+        if ew.ZEIT in f.waehrung and ew.ERFAHRUNG in f.waehrung
+    )
+    einstellung = k.wert("kosten")
+    faktor = ew.k0_faktor(k, beide)
+    erwartet = round(einstellung["k0_erfahrung"] * faktor)
+    assert ew.schrittkosten(k, beide, 0)[1] == erwartet
+
+
+# -- Ein Rennwochenende zaehlt einmal (Punkt 70) ---------------------------
+def test_ereignisse_zaehlen_je_rennen_nicht_je_fahrer(k) -> None:
+    """Vier eigene Autos im selben Rennen sind ein Rennwochenende.
+
+    Die Lage gehoert dem Team. Wurde sie bei jedem Auto weitergezaehlt,
+    lief jedes Ereignis viermal so schnell ab.
+    """
+    c = kr.beginne(k, 2026, liga=20, fahrer=(1, 2, 3, 4))
+    schluessel = next(
+        eintrag["schluessel"]
+        for eintrag in kern_ereignis.liste(k)
+        if kern_ereignis.dauer_von(eintrag) is kern_ereignis.Dauer.RENNWOCHENENDEN
+        and eintrag["dauer"]["anzahl"] > 1
+    )
+    c.lage.loese_aus(schluessel, c.heute)
+    offen = c.lage.laufende[0].rest
+
+    for stelle, fahrer in enumerate((1, 2, 3, 4)):
+        c.verbuche_rennen(platz=5, fahrer=fahrer, zaehle_rennwochenende=stelle == 0)
+
+    assert c.lage.laufende[0].rest == offen - 1
+
+
+def test_ein_sponsorenvertrag_laeuft_seine_rennen(k) -> None:
+    """Punkt 70: Ein Vertrag ueber N Rennen zahlt genau N-mal."""
+    c = kr.beginne(k, 2026, liga=20)
+    angebot = next(
+        iter(sp.wuerfle_angebote(k, 20, 0, Seedquelle(3)).values())
+    )[0]
+    c.unterschreibe(angebot)
+    gezahlt = 0
+    for _ in range(angebot.laufzeit_rennen + 5):
+        if sp.auszahlung(c.vertraege, 5) > 0:
+            gezahlt += 1
+        c.verbuche_rennen(platz=5)
+    assert gezahlt == angebot.laufzeit_rennen

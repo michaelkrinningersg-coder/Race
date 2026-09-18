@@ -782,6 +782,12 @@ teiler = 1000.0
 exponent = 0.6
 k0_geld = 50.0
 k0_erfahrung = 5.0
+# Wer Zeit einsetzt, gibt auch etwas Erfahrung dazu: Ein belegter Tag ist
+# Arbeit am Auto und am Fahrer, und die kostet Koepfe. Die Zeit selbst
+# bleibt bei einem Tag - sie skaliert nicht -, die Erfahrung waechst mit
+# jedem Kauf ueber dieselbe Kurve wie Geld und Erfahrung. Faehigkeiten,
+# die ohnehin schon Erfahrung kosten, zahlen nicht doppelt.
+k0_erfahrung_zeit = 2.0
 # Nur Einzelkauf, kein Mehrfachkauf
 mehrfachkauf = false
 startkapital_euro = 1000
@@ -1049,7 +1055,7 @@ stint_basis_m = 165_000
 naesse_strafe_tempo = 0.12
 # Gemildert von 2,5: Gemessen erzwang der alte Wert bei Regen bei allen
 # 30 Autos drei Stopps, weil selbst der passende Reifen noch danebenlag.
-naesse_strafe_verschleiss = 1.2
+naesse_strafe_verschleiss = 1.6
 # Wie nass eine Wetterlage ist, 0 trocken bis 1 voll unter Wasser. Steht
 # hier statt bei [wetter], weil es eine Reifensache ist.
 naesse_je_lage = { trocken = 0.0, heiss = 0.0, wechselhaft = 0.35, regen = 0.7, starkregen = 1.0 }
@@ -1060,7 +1066,7 @@ name = "Weich"
 kuerzel = "W"
 farbe = "#D7191C"
 tempo = 1.020          # rund 1,8 s je Runde schneller als hart
-verschleiss = 1.30
+verschleiss = 1.27
 naesse = 0.0
 
 [[reifen.mischungen.liste]]
@@ -1069,7 +1075,7 @@ name = "Mittel"
 kuerzel = "M"
 farbe = "#E8B93B"
 tempo = 1.010
-verschleiss = 1.00
+verschleiss = 0.88
 naesse = 0.0
 
 [[reifen.mischungen.liste]]
@@ -1078,7 +1084,7 @@ name = "Hart"
 kuerzel = "H"
 farbe = "#F2F0EB"
 tempo = 1.000
-verschleiss = 0.75
+verschleiss = 0.64
 naesse = 0.0
 
 [[reifen.mischungen.liste]]
@@ -1112,25 +1118,53 @@ naesse = 0.85
 # rechnet dasselbe Geschwindigkeitsprofil wie sonst.
 [boxenstopp]
 limit_kmh = 80
+# Das Limit steht nicht ueberall gleich: Je tiefer die Liga, desto
+# strenger die Boxengasse. So hat es der Auftraggeber gesetzt. Jeder
+# Eintrag gilt **bis** zu seiner Liga einschliesslich; ohne Treffer gilt
+# ``limit_kmh``.
+limit_je_liga = [
+    { bis_liga = 5, kmh = 80 },
+    { bis_liga = 10, kmh = 70 },
+    { bis_liga = 15, kmh = 65 },
+    { bis_liga = 20, kmh = 60 },
+]
+# Wo die Strecke ohnehin langsamer als das Limit ist - in den unteren
+# Ligen kommt das oft vor -, gilt nicht das Limit, sondern das
+# Streckentempo **minus diesem Anteil**. Ohne den Abzug kostete die
+# Boxengasse dort gar nichts, und ein Stopp waere in Liga 20 fast
+# umsonst.
+abzug_unter_limit = 0.05
 # Spanne der Boxengassenlaenge. Ohne sie kam Monza mit der ganzen
 # Start-Ziel-Geraden auf 1350 m und 44 s Durchfahrt - mehr als eine halbe
 # Rundenzeit -, und Silverstone auf 45 m, weil Start/Ziel dort kurz vor
 # dem Kurveneingang liegt. Echte Boxengassen liegen dazwischen.
 min_laenge_m = 500
 max_laenge_m = 750
-# Ein ganzer Stopp - Durchfahrt plus mittlere Standzeit - darf hoechstens
-# diesen Anteil der Rundenzeit kosten. Gemessen wird an der
-# Referenzrundenzeit der Strecke, nicht am gerade fahrenden Auto.
+# Die **Durchfahrt** darf hoechstens diesen Anteil der Rundenzeit kosten.
+# Gemessen wird an der Referenzrundenzeit der Strecke, nicht am gerade
+# fahrenden Auto - sonst haette jedes Auto seine eigene Boxengasse.
 #
 # Ueber die Zeit statt ueber die Laenge, weil die Laenge die Zeit nicht
 # vorhersagt: Monza kostete bei 13 % Rundenlaenge 42 % Rundenzeit,
 # Catalunya bei 16 % nur 38 %. Schnelle Strecken bestrafen die
 # Boxengasse staerker.
-max_anteil_rundenzeit = 0.38
-# Standzeit, gleichverteilt gewuerfelt. Ein guter Stopp ist unter vier
-# Sekunden, ein verpatzter kostet das Doppelte.
-standzeit_min_s = 3.0
-standzeit_max_s = 10.0
+#
+# Die Standzeit steht bewusst **nicht** drin: Sie ist Sache der
+# Mannschaft, die Boxengasse ist Sache der Strecke. Sonst wuerde die
+# Gasse kuerzer, nur weil das Reifenwechseln laenger dauert.
+#
+# Bei 38 % war der Norisring mit 2260 m Runde die eine Ausnahme: Er kam
+# auf 490 m und 47,8 % und musste ausdruecklich zugelassen werden. Mit
+# 50 % faellt die Ausnahme weg - er landet bei 515 m und 49,6 %, alle
+# uebrigen 19 Strecken bleiben unveraendert.
+max_anteil_rundenzeit = 0.50
+# Standzeit, gleichverteilt gewuerfelt. Sie meint das reine Stehen -
+# Bremsen davor und Anfahren danach kommen aus der Fahrzeuggrenze und
+# stehen nicht hier. Die Vorausberechnung rechnet mit der Mitte der
+# Spanne, also mit 9 Sekunden: Sie kennt die einzelnen Wuerfe nicht, und
+# die Mitte bevorzugt keine Strategie.
+standzeit_min_s = 6.0
+standzeit_max_s = 12.0
 
 # Die Strategieregeln des Auftraggebers.
 [boxenstopp.strategie]
@@ -1155,6 +1189,11 @@ fenster_min_runden = 2
 # faellt es darunter. Damit fallen auf verschleissstarken Strecken die
 # Ein-Stopp-Strategien von selbst heraus.
 mindest_restprofil = 0.30
+# Ein geplanter Stopp wird verschoben, solange der Satz noch besser als
+# dieser Wert ist - Runde um Runde, bis er darunter faellt. Sonst gibt
+# ein Auto nach einem Notstopp wegen Wetterwechsels vier Runden spaeter
+# einen fast neuen Satz ab, nur weil der Plan das so vorsah.
+planstopp_ab_restprofil = 0.75
 # Wie weit eine Variante hinter der besten liegen darf, bevor sie
 # ausscheidet: ein Sockel plus ein Anteil je 100 km Renndistanz. Bei
 # 100 km sind das 30 s, bei 200 km 45 s, bei 300 km 60 s - so hat es der
@@ -1774,6 +1813,19 @@ je_auto_und_rennen_bei_null = 0.05
 je_auto_und_rennen_bei_maximum = 0.005
 
 [reifen.verschleiss]
+# Punkt 39: Je Fahrer, Mischung und Rennen zwei kleine Wuerfe - plus
+# oder minus diesen Betrag, gleichverteilt, getrennt auf den
+# Verschleissfaktor und auf den Tempofaktor der Mischung. Beide stehen
+# bewusst **nicht** in der Vorausberechnung der Varianten: Geplant wird
+# auf den Sollwerten, gefahren wird mit der Streuung. Dass es
+# auseinanderlaeuft, ist so gewollt - eine Strategie geht im Rennen mal
+# knapper, mal bequemer auf als auf dem Papier.
+#
+# Der Verschleiss streut zehnmal so weit wie das Tempo: 0,02 auf einen
+# Faktor von 0,70 bis 1,30 sind rund zwei bis drei Prozent Haltbarkeit,
+# beim Tempo waeren zwei Prozent das ganze Feld von hart bis weich.
+streuung_verschleiss = 0.02
+streuung_tempo = 0.002
 # Entscheidung B: progressiv - erst flach, letztes Drittel steil.
 #
 #   zustand:      1,0 frisch bis 0,0 abgefahren
@@ -1786,23 +1838,32 @@ je_auto_und_rennen_bei_maximum = 0.005
 # Renndistanz voll ab, eines bei S = referenz nur zum Teil - die Spanne
 # steht unten.
 # Punkt 39: Die alte Parabel ist abgeloest. Der Grip haengt jetzt an einer
-# Kurve mit **Optimum bei 80 % Restprofil** - ein frischer Reifen ist
+# Kurve mit **Optimum bei 85 % Restprofil** - ein frischer Reifen ist
 # also nicht der schnellste. Das ist die wichtigste Aenderung am
 # Reifenmodell: Erst dadurch ist ein langer Stint etwas wert und ein
 # frueher Stopp ein Risiko.
 #
 # Die Form kommt vom Auftraggeber:
 #   100-95  steiler Gripanstieg
-#    95-80  flacher werdender Anstieg bis zum Optimum
-#    80-65  flacher werdender Abfall
-#   ab  60  der Abfall wird je Prozent staerker
-#   bei  0  hoechstens noch ein Viertel des Startgrips
+#    95-85  weiter steil, flacher werdend bis zum Optimum
+#    85-70  langsamer Abfall
+#    70-40  halb so steil wie frueher - hier liegt der brauchbare Stint
+#    40- 0  erst flach, dann von Stufe zu Stufe steiler
+#   bei  0  noch 0,30 Grip, also nicht unfahrbar
+#
+# Der Anfang wurde nachgeschaerft: Frueher stand der frische Reifen bei
+# 0,940 und stieg bis 0,985 auf 95 %. Der Auftraggeber wollte den
+# Abstand zum Optimum **verdoppelt** und den Anstieg entsprechend
+# steiler - jetzt 0,880 auf 0,970. Fuer ein Auto mit dem
+# Referenz-Reifenfluesterer heisst das: Tempofaktor 0,952 statt 0,976 in
+# der ersten Runde nach Start und Stopp, und eine um 4 Prozent erhoehte
+# Fehlerquote statt 3.
 #
 # Stuetzstellen: Restprofil -> Grip. Dazwischen wird linear interpoliert;
 # die Stuetzstellen stehen dicht genug, dass die Kurve rund laeuft.
-verlauf = "optimum_bei_80"
-zustand_stuetzstellen = [1.00, 0.95, 0.90, 0.80, 0.70, 0.65, 0.60, 0.50, 0.40, 0.30, 0.20, 0.10, 0.00]
-grip_stuetzstellen   = [0.940, 0.985, 0.996, 1.000, 0.988, 0.978, 0.963, 0.925, 0.870, 0.790, 0.670, 0.480, 0.235]
+verlauf = "optimum_bei_85"
+zustand_stuetzstellen = [1.00, 0.95, 0.90, 0.85, 0.80, 0.70, 0.65, 0.60, 0.50, 0.40, 0.30, 0.20, 0.10, 0.00]
+grip_stuetzstellen   = [0.880, 0.970, 0.992, 1.000, 0.998, 0.986, 0.982, 0.975, 0.956, 0.928, 0.830, 0.690, 0.510, 0.300]
 # Der Boden ist genau ein Viertel des Startgrips: 0,235 = 0,25 * 0,940.
 exponent = 2.0
 # Der Tempoverlust steht nicht mehr hier: Er kommt aus der Gripkurve
@@ -1940,6 +2001,18 @@ faktor_bei_maximum = 0.60
 fenster_m = 30.0
 gewinn_bei_null = 0.010
 gewinn_bei_maximum = 0.025
+# Nachlauf: Wer vorbei ist, faellt nicht schlagartig aus dem Sog. Der
+# Ueberschuss gilt noch ``nachlauf_m`` Meter in voller Hoehe, danach mit
+# dem Anteil ``nachlauf_anteil`` bis zum Ende derselben Geraden - also bis
+# zum Anbremsen. Das macht ein Ueberholmanoever haltbar, statt das Auto
+# gleich hinter dem Ueberholten wieder einbrechen zu lassen.
+nachlauf_m = 50.0
+nachlauf_anteil = 0.5
+# Der Ueberholte haengt sich an: Sobald der Ueberholende nur noch den
+# reduzierten Ueberschuss hat, bekommt der Ueberholte davon die Haelfte -
+# vorher gar nichts. So bleibt das Duell offen, ohne dass der gerade
+# Ueberholte im Sog sofort zurueckschlaegt.
+nachlauf_anteil_ueberholter = 0.5
 
 [reifen.streckenfaktor]
 # Entscheidung A: aus der Querbeschleunigung, also der Summe von 1/Radius

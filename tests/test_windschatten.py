@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import statistics
 
+import numpy as np
 import pytest
 
 from rennmanager import konfiguration as kf
@@ -169,9 +170,107 @@ def test_der_ueberrundende_faellt_in_keiner_runde_ab(k, strecke) -> None:
         k, strecke, gemischtes_feld(k), runden=12, seedquelle=Seedquelle(5),
         streckenmittel=mittel,
     )
-    zeiten = verlauf.protokolle[0].rundenzeiten_ms[1:]
+    # Die ersten Runden sind langsamer, weil der Reifen erst ins
+    # Grifffenster hineinlaufen muss (Optimum bei 85 % Restprofil) - das
+    # ist gewollt und kein Verkehr. Gemessen wird ab der vierten Runde.
+    zeiten = verlauf.protokolle[0].rundenzeiten_ms[3:]
     mittelwert = statistics.median(zeiten)
     # Nur die Ermuedung und die nachlassenden Bremsen duerfen bremsen -
     # kein Verkehr. Ein Stau hinter einem Ueberrundeten kostete sofort
     # mehrere Prozent.
     assert max(zeiten) < mittelwert * 1.02
+
+
+# --- Nachlauf des Ueberschusses -------------------------------------------
+def test_nachlauf_steht_in_der_konfiguration(k) -> None:
+    """50 m voll, danach die Haelfte - beides zentral eingestellt."""
+    assert ws.nachlauf_m(k) == pytest.approx(50.0)
+    assert ws.nachlauf_anteil(k) == pytest.approx(0.5)
+    assert ws.nachlauf_anteil_ueberholter(k) == pytest.approx(0.5)
+
+
+def _lauf_auf_gerader_strecke(k, strecke, nachlauf_m: float):
+    """Ein Lauf, in dem ein Auto gerade vorbeigekommen ist.
+
+    Der Nachlauf laesst sich von aussen kaum beobachten - er steckt im
+    Zieltempo eines einzelnen Zeitschritts. Deshalb hier weiss: Lauf
+    bauen, ein Auto auf eine Gerade stellen und ihm einen aufgebrauchten
+    Sog verpassen, so wie es nach einem Ueberholmanoever aussieht.
+    """
+    k.roh["windschatten"]["nachlauf_m"] = nachlauf_m
+    mittel = kr.mittlerer_ueberholzonenanteil(k, (strecke,))
+    lauf = kr._Lauf(
+        k, strecke, feld(k, k.wert("skala", "referenz"), anzahl=2), runden=3,
+        seedquelle=Seedquelle(1), streckenmittel=mittel,
+    )
+    # Auf eine Gerade stellen, weit genug auseinander fuer keinen Sog.
+    geraden = np.flatnonzero(lauf.geradennummer >= 0)
+    stelle = int(geraden[len(geraden) // 2])
+    lauf.distanz[:] = [stelle * lauf.ds, stelle * lauf.ds - 400.0]
+    lauf.aktiv[:] = True
+    return lauf, stelle
+
+
+def test_nachlauf_hebt_das_tempo_nach_dem_vorbeifahren(k, strecke) -> None:
+    """Wer vorbei ist, faellt nicht schlagartig auf sein freies Tempo."""
+    lauf, stelle = _lauf_auf_gerader_strecke(k, strecke, nachlauf_m=50.0)
+    ohne = lauf._ziel_tempo(0)[0]
+
+    # So sieht es aus, wenn dieses Auto gerade vorbeigekommen ist.
+    nummer = int(lauf.geradennummer[stelle])
+    lauf.sog_verbraucht[0] = int(lauf._gerade_id(0, nummer))
+    lauf.sog_nachlauf_wert[0] = 0.02
+    lauf.sog_nachlauf_bis[0] = lauf.distanz[0] + 50.0
+    lauf.sog_nachlauf_erst[0] = 1.0
+    lauf.sog_nachlauf_dann[0] = 0.5
+    mit = lauf._ziel_tempo(0)[0]
+
+    assert mit > ohne
+    assert mit == pytest.approx(ohne * 1.02)
+
+
+def test_nach_50_m_bleibt_die_haelfte(k, strecke) -> None:
+    """Der volle Ueberschuss endet nach 50 m, die Haelfte laeuft weiter."""
+    lauf, stelle = _lauf_auf_gerader_strecke(k, strecke, nachlauf_m=50.0)
+    nummer = int(lauf.geradennummer[stelle])
+    lauf.sog_verbraucht[0] = int(lauf._gerade_id(0, nummer))
+    lauf.sog_nachlauf_wert[0] = 0.02
+    lauf.sog_nachlauf_erst[0] = 1.0
+    lauf.sog_nachlauf_dann[0] = 0.5
+    # Die 50 m sind schon vorbei.
+    lauf.sog_nachlauf_bis[0] = lauf.distanz[0] - 1.0
+    halb = lauf._ziel_tempo(0)[0]
+
+    lauf.sog_nachlauf_wert[0] = 0.0
+    ohne = lauf._ziel_tempo(0)[0]
+    assert halb == pytest.approx(ohne * 1.01)
+
+
+def test_der_ueberholte_bekommt_erst_spaeter_und_nur_die_haelfte(k, strecke) -> None:
+    """Waehrend der ersten 50 m gar nichts, danach die Haelfte davon."""
+    lauf, stelle = _lauf_auf_gerader_strecke(k, strecke, nachlauf_m=50.0)
+    nummer = int(lauf.geradennummer[stelle])
+    lauf.sog_verbraucht[0] = int(lauf._gerade_id(0, nummer))
+    lauf.sog_nachlauf_wert[0] = 0.02
+    lauf.sog_nachlauf_erst[0] = 0.0
+    lauf.sog_nachlauf_dann[0] = 0.5 * 0.5
+
+    lauf.sog_nachlauf_bis[0] = lauf.distanz[0] + 50.0
+    frueh = lauf._ziel_tempo(0)[0]
+    lauf.sog_nachlauf_bis[0] = lauf.distanz[0] - 1.0
+    spaet = lauf._ziel_tempo(0)[0]
+
+    assert spaet == pytest.approx(frueh * 1.005)
+
+
+def test_ausserhalb_der_geraden_laeuft_nichts_nach(k, strecke) -> None:
+    """Der Nachlauf endet mit der Geraden - spaetestens beim Anbremsen."""
+    lauf, stelle = _lauf_auf_gerader_strecke(k, strecke, nachlauf_m=50.0)
+    ohne = lauf._ziel_tempo(0)[0]
+    # Eine fremde Gerade: der Nachlauf gehoert nicht hierher.
+    lauf.sog_verbraucht[0] = int(lauf._gerade_id(0, int(lauf.geradennummer[stelle]))) + 1
+    lauf.sog_nachlauf_wert[0] = 0.02
+    lauf.sog_nachlauf_bis[0] = lauf.distanz[0] + 50.0
+    lauf.sog_nachlauf_erst[0] = 1.0
+    lauf.sog_nachlauf_dann[0] = 0.5
+    assert lauf._ziel_tempo(0)[0] == pytest.approx(ohne)

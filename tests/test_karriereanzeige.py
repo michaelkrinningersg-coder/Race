@@ -279,3 +279,75 @@ def test_punkteverlauf_wird_beim_saisonwechsel_geleert(qtbot, konfig) -> None:
     # Ereignisschleife neu auf.
     qtbot.wait(20)
     assert fenster.saisonseite.punkteansicht.rennen == 0
+
+
+# -- Punkt 55: Gekaufte Upgrades muessen in der Anzeige ankommen -------------
+def _spielerfenster(qtbot, konfig):
+    from rennmanager.ui.hauptfenster import Hauptfenster
+
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    return fenster
+
+
+def test_anzeigewelt_traegt_die_entwickelten_autos(qtbot, konfig) -> None:
+    """Ein Kauf hebt den Wert - und die Anzeige zeigt ihn auch.
+
+    Die Welt haelt nur die leere Huelle; entwickelt wird in der Karriere.
+    Ohne Zusammenfuehren stuende im Steckbrief ewig der Anfangsstand.
+    """
+    fenster = _spielerfenster(qtbot, konfig)
+    nummer = fenster.welt.spielerfahrer[0].nummer
+    schluessel = konfig.faehigkeiten[0].schluessel
+    karriere = fenster.karriere
+    karriere.waehle_fahrer(nummer)
+    karriere.konto = karriere.konto.mit(geld=5_000_000, erfahrung=5_000)
+
+    vorher = fenster.anzeigewelt.fahrer[nummer].auto.werte[schluessel]
+    karriere.kaufe(schluessel)
+    nachher = fenster.anzeigewelt.fahrer[nummer].auto.werte[schluessel]
+
+    assert nachher > vorher
+    assert nachher == karriere.werte_von(nummer)[schluessel]
+    # Die Ausgangswelt bleibt, wie sie war - aus ihr startet eine neue
+    # Karriere wieder bei null.
+    assert fenster.welt.fahrer[nummer].auto.werte[schluessel] == vorher
+
+
+def test_kauf_trifft_nur_den_gewaehlten_fahrer(qtbot, konfig) -> None:
+    """Jedes Auto gehoert seinem Fahrer; der Kollege bleibt unberuehrt."""
+    fenster = _spielerfenster(qtbot, konfig)
+    eigene = fenster.welt.spielerfahrer
+    schluessel = konfig.faehigkeiten[0].schluessel
+    karriere = fenster.karriere
+    karriere.waehle_fahrer(eigene[0].nummer)
+    karriere.konto = karriere.konto.mit(geld=5_000_000, erfahrung=5_000)
+    vorher = fenster.anzeigewelt.fahrer[eigene[1].nummer].auto.werte[schluessel]
+
+    karriere.kaufe(schluessel)
+
+    assert fenster.anzeigewelt.fahrer[eigene[1].nummer].auto.werte[schluessel] == vorher
+
+
+def test_fremde_fahrer_behalten_ihre_werte(qtbot, konfig) -> None:
+    """Nur die eigenen Autos kommen aus der Karriere, alle anderen nicht."""
+    fenster = _spielerfenster(qtbot, konfig)
+    eigene = {f.nummer for f in fenster.welt.spielerfahrer}
+    fremd = next(f for f in fenster.welt.fahrer if f.nummer not in eigene)
+    assert fenster.anzeigewelt.fahrer[fremd.nummer].auto.werte == fremd.auto.werte
+
+
+def test_weltseite_zieht_nach_einem_kauf_nach(qtbot, konfig) -> None:
+    """Die Weltseite haelt die Welt fest - sie muss sie neu bekommen."""
+    fenster = _spielerfenster(qtbot, konfig)
+    nummer = fenster.welt.spielerfahrer[0].nummer
+    schluessel = konfig.faehigkeiten[0].schluessel
+    karriere = fenster.karriere
+    karriere.waehle_fahrer(nummer)
+    karriere.konto = karriere.konto.mit(geld=5_000_000, erfahrung=5_000)
+    karriere.kaufe(schluessel)
+    fenster.karriereseite.werte_geaendert.emit()
+
+    seite = fenster.weltseite
+    gezeigt = seite._welt.fahrer[nummer].auto.werte[schluessel]
+    assert gezeigt == karriere.werte_von(nummer)[schluessel]

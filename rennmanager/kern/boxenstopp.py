@@ -21,15 +21,30 @@ Bremsgrenze). Bremsen und Beschleunigen entstehen dadurch von allein, und
 zwar mit den Werten **dieses** Autos: Ein Auto mit starken Bremsen
 verliert in der Boxengasse weniger.
 
-Der **Durchfahrtsverlust** ist die Differenz der beiden Rundenzeiten, mit
-und ohne Deckel. Dazu kommt die **Standzeit** von 3 bis 10 Sekunden.
+Der Deckel gilt nur, wo die Strecke ueberhaupt schneller waere: Gerechnet
+wird mit dem Minimum aus Streckenlimit und 80 km/h. In Liga 1 liegt die
+Boxengasse deshalb durchgehend am Deckel, in Liga 20 sind 57 von 2581
+Punkten schon von sich aus langsamer - dort faehrt das Auto sein eigenes
+Tempo.
+
+Ein ganzer Stopp besteht aus vier Posten:
+
+* dem **Durchfahrtsverlust** - der Differenz der beiden Rundenzeiten, mit
+  und ohne Deckel,
+* dem **Bremsen** bis zum Stillstand,
+* der **Standzeit** von 6 bis 12 Sekunden,
+* dem **Anfahren** aus dem Stand.
+
+Bremsen und Anfahren kommen aus den Grenzen dieses Autos, nicht aus einer
+Pauschale. Sie muessen ausdruecklich gerechnet werden: Das
+Geschwindigkeitsprofil hat die Bremszonen schon eingerechnet und bremst
+deshalb ohne Zeitverlust - fuer einen Halt in der Box stimmt das nicht.
 
 **Zwei Wege, ein Ergebnis.** Im Zeitraffer faehrt das Auto die Boxengasse
-wirklich langsamer - man sieht es kriechen. Im Schnellmodus ohne
-Darstellung ist derselbe Stopp ein einzelner Zeitabzug: Durchfahrtsverlust
-plus Standzeit. Beide muessen auf die Millisekunde dasselbe ergeben, sonst
-kaeme dieselbe Saison je nach Ansicht anders heraus; ein Test haelt das
-fest.
+wirklich langsamer - man sieht es kriechen - und steht wirklich. Im
+Schnellmodus ohne Darstellung ist derselbe Stopp ein einzelner Zeitabzug.
+Beide muessen dasselbe ergeben, sonst kaeme dieselbe Saison je nach
+Ansicht anders heraus; ein Test haelt das fest.
 """
 
 from __future__ import annotations
@@ -135,7 +150,7 @@ def abschnitt(konfiguration: Konfiguration, strecke: Strecke) -> tuple[int, int]
     Die Obergrenze als **Anteil der Runde** trifft nur sehr kurze
     Strecken: Der Norisring mit 2260 Metern kaeme sonst auf 750 Meter
     Boxengasse bei 42,6 Sekunden Rundenzeit - ein Stopp waere teurer als
-    eine ganze Runde. Mit dem Anteil landet er bei 452 Metern; alle
+    eine ganze Runde. Mit dem Anteil landet er bei 515 Metern; alle
     anderen 19 Strecken bleiben unberuehrt.
 
     Der Abschnitt laeuft ueber die Start/Ziel-Linie hinweg; dann ist
@@ -179,19 +194,18 @@ def _auf_zeitanteil(
     des gerade fahrenden Autos - sonst haette jedes Auto seine eigene
     Boxengasse.
 
-    Gekuerzt wird nur, wo noetig: 15 der 20 Strecken bleiben unberuehrt.
+    Die Grenze gilt der **Durchfahrt allein**, nicht dem ganzen Stopp. So
+    hat es der Auftraggeber entschieden, als die Standzeit von 3-10 auf
+    6-12 Sekunden stieg: Die Standzeit ist Sache der Mannschaft, die
+    Boxengasse ist Sache der Strecke. Waere sie eingerechnet, wuerde die
+    Gasse kuerzer, nur weil das Reifenwechseln laenger dauert - Spielberg
+    fiel damit von 610 auf 480 Meter.
+
+    Gekuerzt wird nur, wo noetig: 19 der 20 Strecken bleiben unberuehrt,
+    allein der Norisring wird von 750 auf 515 Meter gestutzt.
     """
     ziel = konfiguration.wert("boxenstopp", "max_anteil_rundenzeit")
-    einstellung = konfiguration.wert("boxenstopp")
-    mittlere_standzeit = (
-        (einstellung["standzeit_min_s"] + einstellung["standzeit_max_s"]) / 2.0 * 1000.0
-    )
-    rundenzeit = referenzrundenzeit_ms(konfiguration, strecke)
-    erlaubt = ziel * rundenzeit - mittlere_standzeit
-    if erlaubt <= 0:  # pragma: no cover - so kurz ist keine Strecke
-        raise BoxenstoppFehler(
-            f"{strecke.name}: Schon die Standzeit sprengt {ziel:.0%} der Rundenzeit"
-        )
+    erlaubt = ziel * referenzrundenzeit_ms(konfiguration, strecke)
 
     anzahl = len(arten)
     punkte = (bis - von) % anzahl or anzahl
@@ -217,13 +231,9 @@ def _verlust_auf(
         wetterwerte=dict.fromkeys(konfiguration.zusatzfaehigkeiten, referenz),
     )
     grenzen = kern_tempo.grenzen_aus(konfiguration, auto)
-    limit = kern_tempo.kurvenlimit(strecke, grenzen, 1.0)
-    deckel = konfiguration.wert("boxenstopp", "limit_kmh") / 3.6
-    if von < bis:
-        limit[von:bis] = np.minimum(limit[von:bis], deckel)
-    else:
-        limit[von:] = np.minimum(limit[von:], deckel)
-        limit[:bis] = np.minimum(limit[:bis], deckel)
+    limit = _decke_ab(
+        konfiguration, kern_tempo.kurvenlimit(strecke, grenzen, 1.0), von, bis
+    )
     mit_box = kern_tempo.rundenzeit_ms(
         strecke, kern_tempo.geschwindigkeitsprofil(strecke, grenzen, limit=limit)
     )
@@ -240,24 +250,76 @@ def laenge_m(konfiguration: Konfiguration, strecke: Strecke) -> float:
 # ---------------------------------------------------------------------------
 # Was sie kostet
 # ---------------------------------------------------------------------------
-def gedeckeltes_limit(
-    konfiguration: Konfiguration, strecke: Strecke, grenzen: Grenzen, grip=1.0
-) -> np.ndarray:
-    """Das Kurvenlimit mit gedeckelter Boxengasse, in m/s."""
-    limit = kern_tempo.kurvenlimit(strecke, grenzen, grip)
-    tempo_kmh = konfiguration.wert("boxenstopp", "limit_kmh")
-    deckel = tempo_kmh / 3.6
-    von, bis = abschnitt(konfiguration, strecke)
+def limit_ms(konfiguration: Konfiguration, liga: int | None = None) -> float:
+    """Das Boxenlimit dieser Liga, in m/s.
+
+    Je tiefer die Liga, desto strenger - so hat es der Auftraggeber
+    gesetzt: Liga 1 bis 5 faehrt 80 km/h, 6 bis 10 siebzig, 11 bis 15
+    fuenfundsechzig, 16 bis 20 sechzig. Ohne Ligaangabe gilt der
+    Grundwert; daran haengen die Streckengeometrie und alles, was nicht
+    an einem bestimmten Rennen haengt.
+    """
+    einstellung = konfiguration.wert("boxenstopp")
+    kmh = einstellung["limit_kmh"]
+    if liga is not None:
+        for eintrag in einstellung.get("limit_je_liga", ()):
+            if liga <= eintrag["bis_liga"]:
+                kmh = eintrag["kmh"]
+                break
+    return kmh / 3.6
+
+
+def _decke_ab(
+    konfiguration: Konfiguration,
+    limit: np.ndarray,
+    von: int,
+    bis: int,
+    liga: int | None = None,
+):
+    """Setzt das Boxentempo auf dem Abschnitt, in m/s.
+
+    Zwei Faelle, beide vom Auftraggeber:
+
+    * Wo die Strecke **schneller** waere als das Limit, gilt das Limit.
+    * Wo sie ohnehin **langsamer** ist, gilt ihr eigenes Tempo minus
+      einem kleinen Abzug. Ohne ihn kostete die Boxengasse in den unteren
+      Ligen gar nichts: In Liga 20 faehrt das schwaechste Auto auf der
+      Start-Ziel-Geraden stellenweise nur 29 km/h.
+    """
+    deckel = limit_ms(konfiguration, liga)
+    abzug = 1.0 - konfiguration.wert("boxenstopp", "abzug_unter_limit")
+
+    def setze(teil: np.ndarray) -> np.ndarray:
+        return np.where(teil < deckel, teil * abzug, deckel)
+
     if von < bis:
-        limit[von:bis] = np.minimum(limit[von:bis], deckel)
+        limit[von:bis] = setze(limit[von:bis])
     else:
-        limit[von:] = np.minimum(limit[von:], deckel)
-        limit[:bis] = np.minimum(limit[:bis], deckel)
+        limit[von:] = setze(limit[von:])
+        limit[:bis] = setze(limit[:bis])
     return limit
 
 
+def gedeckeltes_limit(
+    konfiguration: Konfiguration,
+    strecke: Strecke,
+    grenzen: Grenzen,
+    grip=1.0,
+    liga: int | None = None,
+) -> np.ndarray:
+    """Das Kurvenlimit mit gedeckelter Boxengasse, in m/s."""
+    von, bis = abschnitt(konfiguration, strecke)
+    return _decke_ab(
+        konfiguration, kern_tempo.kurvenlimit(strecke, grenzen, grip), von, bis, liga
+    )
+
+
 def durchfahrtsverlust_ms(
-    konfiguration: Konfiguration, strecke: Strecke, grenzen: Grenzen, grip=1.0
+    konfiguration: Konfiguration,
+    strecke: Strecke,
+    grenzen: Grenzen,
+    grip=1.0,
+    liga: int | None = None,
 ) -> int:
     """Was die Durchfahrt kostet, ohne Standzeit - in Millisekunden.
 
@@ -270,19 +332,75 @@ def durchfahrtsverlust_ms(
         strecke,
         grenzen,
         grip,
-        limit=gedeckeltes_limit(konfiguration, strecke, grenzen, grip),
+        limit=gedeckeltes_limit(konfiguration, strecke, grenzen, grip, liga),
     )
     return kern_tempo.rundenzeit_ms(strecke, mit_box) - kern_tempo.rundenzeit_ms(
         strecke, frei
     )
 
 
+def anfahrverlust_ms(
+    konfiguration: Konfiguration, grenzen: Grenzen, liga: int | None = None
+) -> int:
+    """Was das Anfahren aus dem Stand kostet, in Millisekunden.
+
+    ``durchfahrtsverlust_ms`` rechnet, als rollte das Auto mit dem
+    Boxenlimit durch. Wer aber steht, muss erst wieder auf dieses Limit
+    beschleunigen. Bis dahin vergeht ``v / a``; dieselbe Strecke haette
+    rollend ``v / (2a)`` gedauert - die Differenz ist genau die Haelfte
+    davon.
+
+    Gerechnet wird mit der Beschleunigungsgrenze des Autos aus GDD 9,
+    nicht mit einer eigenen Zahl: Ein Auto mit mehr Antrieb kommt schneller
+    aus der Box.
+    """
+    tempo = limit_ms(konfiguration, liga)
+    return int(round(1000.0 * tempo / (2.0 * max(grenzen.laengs, 1e-6))))
+
+
+def bremsverlust_ms(
+    konfiguration: Konfiguration, grenzen: Grenzen, liga: int | None = None
+) -> int:
+    """Was das Bremsen bis zum Stillstand kostet, in Millisekunden.
+
+    Das Gegenstueck zum Anfahren, mit der Bremsgrenze statt der
+    Beschleunigungsgrenze: ``v / b`` zum Stehen, rollend waeren es
+    ``v / (2b)`` gewesen. Die Simulation bildet das nicht von selbst ab -
+    sie bremst ohne Zeitverlust, weil das Geschwindigkeitsprofil die
+    Bremszonen schon eingerechnet hat. Fuer den Halt in der Box muss der
+    Posten deshalb ausdruecklich dazu.
+    """
+    tempo = limit_ms(konfiguration, liga)
+    return int(round(1000.0 * tempo / (2.0 * max(grenzen.brems, 1e-6))))
+
+
+def haltverlust_ms(
+    konfiguration: Konfiguration, grenzen: Grenzen, liga: int | None = None
+) -> int:
+    """Bremsen und Anfahren zusammen - was der Halt selbst kostet."""
+    return bremsverlust_ms(konfiguration, grenzen, liga) + anfahrverlust_ms(
+        konfiguration, grenzen, liga
+    )
+
+
+def mittlere_standzeit_ms(konfiguration: Konfiguration) -> int:
+    """Die Standzeit, mit der **vor** dem Rennen gerechnet wird.
+
+    Die Mitte der Spanne. Wer die Strategien vorausrechnet, kennt die
+    einzelnen Wuerfe noch nicht - er braucht eine Zahl, und die Mitte ist
+    die einzige, die keine Strategie bevorzugt.
+    """
+    einstellung = konfiguration.wert("boxenstopp")
+    mitte = (einstellung["standzeit_min_s"] + einstellung["standzeit_max_s"]) / 2.0
+    return int(round(mitte * 1000.0))
+
+
 def standzeit_ms(konfiguration: Konfiguration, seedquelle: Seedquelle) -> int:
-    """Wie lange das Auto steht - 3 bis 10 Sekunden, gewuerfelt.
+    """Wie lange das Auto steht - 6 bis 12 Sekunden, gewuerfelt.
 
     Aus dem Seed, damit derselbe Seed dasselbe Rennen ergibt (GDD 15).
-    Die Spanne ist die des Auftraggebers: Ein guter Stopp ist unter vier
-    Sekunden, ein verpatzter kostet das Doppelte.
+    Die Spanne ist die des Auftraggebers und meint das reine Stehen;
+    Bremsen und Anfahren stehen daneben.
     """
     einstellung = konfiguration.wert("boxenstopp")
     wuerfel = seedquelle.generator()
@@ -299,12 +417,16 @@ def stoppverlust_ms(
     seedquelle: Seedquelle,
     grip=1.0,
 ) -> int:
-    """Was ein ganzer Stopp kostet: Durchfahrt plus Standzeit.
+    """Was ein ganzer Stopp kostet: Durchfahrt, Bremsen, Stehen, Anfahren.
 
     Das ist der Abzug, den der Schnellmodus bucht. Im Zeitraffer faehrt
-    das Auto dieselbe Strecke wirklich langsamer und steht dieselbe Zeit -
-    beides muss auf die Millisekunde dasselbe ergeben.
+    das Auto dieselbe Strecke wirklich langsamer, steht dieselbe Zeit und
+    beschleunigt danach wieder - alle drei Posten muessen dasselbe
+    ergeben, sonst faehrt dieselbe Strategie in den beiden Modi
+    verschiedene Rennen.
     """
-    return durchfahrtsverlust_ms(
-        konfiguration, strecke, grenzen, grip
-    ) + standzeit_ms(konfiguration, seedquelle)
+    return (
+        durchfahrtsverlust_ms(konfiguration, strecke, grenzen, grip)
+        + standzeit_ms(konfiguration, seedquelle)
+        + haltverlust_ms(konfiguration, grenzen)
+    )

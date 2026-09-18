@@ -1381,6 +1381,34 @@ Renndistanz.**
 | Zahl der Stopps | **1 bis 3, je nach Mischungswahl; mindestens 1.** Keine Stopps in den ersten und letzten drei Runden |
 | Mischungsregel | **Zwei Mischungen müssen verwendet werden.** Auch zweimal die weichere und dann die härtere ist erlaubt; die Stintlänge folgt der Mischung, die Wahl der KI streut |
 
+#### Nachträge des Auftraggebers zur Umsetzung
+
+| Frage | Entscheidung |
+| --- | --- |
+| Wo liegt die Boxengasse? | **Auf der Geraden um Start und Ziel**, abgeleitet aus der Streckengeometrie. 500 bis 750 m auf allen 20 Strecken |
+| Obergrenze des Verlusts | **50 % der Rundenzeit, und zwar für die Durchfahrt allein.** Die Standzeit ist Sache der Mannschaft, die Boxengasse Sache der Strecke — sonst würde die Gasse kürzer, nur weil das Reifenwechseln länger dauert. Bei 38 % war der Norisring die Ausnahme (490 m, 47,8 %); bei 50 % fällt sie weg (515 m, 49,6 %) |
+| Standzeit | **6 bis 12 Sekunden, gewürfelt.** In der Vorausberechnung wird mit der Mitte (9 s) gerechnet |
+| Gripkurve am Anfang | Der frische Reifen startet bei **0,880 Grip** statt 0,940 — doppelt so weit unter dem Optimum — und steigt entsprechend steiler auf 0,970 bei 95 %. Tempofaktor 0,952, Fehlerfaktor 1,063 in der ersten Runde |
+| Lage des Optimums | Von 80 auf **85 % Restprofil** verschoben. Anstieg 95→85 steiler, Abfall 85→65 langsamer; die Stützstellen bei 95, 65, 50, 30 und 0 % bleiben unverändert |
+| Verschleiß je Mischung | Weich 1,27 · Mittel 0,88 · Hart 0,64 · Intermediate 1,10 · Regen 0,90 |
+| Streuung je Rennen | **±0,02 auf den Verschleiß, ±0,002 aufs Tempo**, je Fahrer und Mischung, zwei unabhängige Würfe. Beide **nicht** in der Vorausberechnung — Plan und Rennen laufen bewusst auseinander |
+| Mischungsfaktor im Rennen | Gilt jetzt auch dort. Vorher stand er nur in der Vorausberechnung, und weich fuhr im Rennen so schnell wie hart |
+| Was kostet ein Stopp? | Durchfahrt **plus** Bremsen bis zum Stillstand **plus** Standzeit **plus** Anfahren aus dem Stand. Bremsen und Anfahren aus den Grenzen dieses Autos: Liga 1 zusammen 1,8 s, Liga 20 gut 17 s |
+| Tempo in der Boxengasse | **80 km/h, aber nur wo die Strecke schneller wäre.** Wo sie ohnehin langsamer ist — in den unteren Ligen — gilt ihr eigenes Tempo minus 5 %. Sonst wäre ein Stopp in Liga 20 stellenweise umsonst |
+| Reifenwahl des Spielers | **Vor dem Rennen**, nach dem Qualifying, je eigenem Fahrer aus den tragfähigen Varianten. Während des Rennens nicht — der Verlauf wird in einem Stück gerechnet und danach nur abgespielt |
+| Reifen im Qualifying | **Keine Wahl, sondern eine Regel**: immer weich, bei wechselhaft Intermediates, bei Regen und Starkregen Regenreifen. Das Wetter des Qualifyings steht fest |
+| Mischungen | **Fünf**: Weich, Mittel, Hart, Intermediate, Regen. Weich am schnellsten und kürzesten, Regenreifen im Trockenen deutlich langsamer und schneller hin |
+| Gripkurve | **Optimum bei 85 % Restprofil**, nicht bei 100. Steiler Anstieg 100→95, weiter steil bis zum Gipfel bei 85, langsamer Abfall 85→65, ab 60 stärker; nie unter ein Viertel des Startgrips. Die Fehlerquote folgt derselben Kurve |
+| Verschleiß je Strecke | **Ja**, nicht mehr je Renndistanz — sonst hielte ein Satz per Konstruktion genau ein Rennen |
+| Streuung je Rennen | **±0,002 auf den Verschleißfaktor der Mischung**, je Fahrer und Mischung neu gewürfelt. Steht **nicht** in der Vorausberechnung: geplant wird auf den Sollwerten, gefahren mit der Streuung |
+| Mindestrestprofil | **30 %**, auch im Ziel. Gilt für die Vorausberechnung **und** für das Zufallsfenster — vorher hebelte das Fenster die Regel wieder aus |
+| Boxenstoppfenster | **±5 % der Rundenzahl, aufgerundet, mindestens ±2 Runden**, solange der Mindestabstand von 3 Runden zwischen zwei Stopps und die 30 % halten |
+| Welche Varianten sind zulässig? | Alle, die weniger als die Schwelle hinter der besten liegen: 60 s bei 300 km, 45 s bei 200 km, 30 s bei 100 km. Gerechnet **einmal vor dem Rennen** für das Feld; die Autos wählen daraus zufällig |
+| Reihenfolge der Stints | In der Vorausberechnung zählt nur die Zusammenstellung (2×M + 1×H), die Reihenfolge wird im Rennen gewürfelt — solange das Wetter gleich bleibt. Wechselt es, ist die Reihenfolge nicht mehr gleichwertig und wird einzeln gerechnet |
+| Vierter Stopp | **Nur als Notausgang**, wenn es mit drei rechnerisch nicht aufgeht |
+| Wetterwechsel im Rennen | Höchstens **3 Runden auf dem falschen Reifen**, mindestens **3 Runden zwischen zwei Stopps**. Der Notstopp geht dem geplanten vor und schiebt ihn nach hinten |
+| Saisonwetter | Je Streckenprofil ein **Band der Wechselneigung**, jede Saison neu gewürfelt; höchstens zwei Wechsel je Rennen und immer nur eine Stufe. Ziel: 75–85 % der Rennen rein trocken — gemessen 77–79 % |
+
 ---
 
 ## Nachtrag: die Fahrerkarte

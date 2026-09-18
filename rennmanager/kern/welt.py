@@ -97,6 +97,26 @@ class Welt:
     fahrer: tuple[Fahrer, ...]
     seed: int
 
+    def mit_autos(self, autos: dict[int, Auto]) -> Welt:
+        """Dieselbe Welt, aber mit diesen Autos bei diesen Fahrern.
+
+        Die Werte des Spielers stehen in der **Karriere**, nicht in der
+        Welt: Er faengt bei null an und entwickelt sich (GDD 1). Ins
+        Rennen kommen sie ueber ``karriere.rennauto_von``, aber alle
+        Anzeigen - Weltseite, Fahrerkarte, Ranglisten - lesen die Welt.
+        Ohne diesen Abgleich stuende dort ewig der Startwert, obwohl der
+        Chef laengst eingekauft hat.
+        """
+        if not autos:
+            return self
+        return replace(
+            self,
+            fahrer=tuple(
+                replace(f, auto=autos[f.nummer]) if f.nummer in autos else f
+                for f in self.fahrer
+            ),
+        )
+
     def liga(self, nummer: int) -> tuple[Fahrer, ...]:
         """Die Fahrer einer Liga, vom staerksten zum schwaechsten."""
         return tuple(

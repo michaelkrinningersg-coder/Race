@@ -43,12 +43,25 @@ from rennmanager.ui.tabellen import Balkenzeichner, verbinde_fahrerkarte
 
 # Spalten der Rangliste.
 SPALTE_INTERVALL = 4
-SPALTE_REIFEN = 5
-SPALTE_STATUS = 6
+SPALTE_MISCHUNG = 5
+SPALTE_REIFEN = 6
+SPALTE_STATUS = 7
 # So viele Zwischenfaelle stehen im Ticker; aeltere rollen heraus.
 TICKER_ZEILEN = 12
+# Punkt 63: So lange bleibt ein ausgefallenes Auto noch auf der
+# Streckengrafik stehen - lang genug, um zu sehen, wo es passiert ist,
+# und kurz genug, dass die Karte nicht mit Standbildern zuwaechst.
+AUSFALL_SICHTBAR_MS = 60_000
 # Platz fuer den Reifenbalken samt Prozentzahl daneben.
 BREITE_REIFEN = 96
+# Punkt 39: Zwei Mischungen sind im Trockenen Pflicht. Solange ein Auto
+# sie nicht erfuellt hat, steht die Mischungsspalte in Warnfarbe; danach
+# traegt sie einen Haken. Bei Regen, Starkregen und wechselhaftem Wetter
+# ist die Pflicht aufgehoben - dann steht der Haken von Anfang an, weil
+# nichts mehr zu erfuellen ist.
+HAKEN = " \u2713"
+FARBE_PFLICHT_OFFEN = "#eda100"
+FARBE_PFLICHT_ERFUELLT = "#2e7d32"
 
 
 class Rennseite(QWidget):
@@ -132,6 +145,10 @@ class Rennseite(QWidget):
         self._sofort.clicked.connect(self._zum_ende)
 
         self._uhrzeit = QLabel("0:00.000")
+        # Punkt 65: Je Fahrer steht in der Rangliste, in welcher Runde er
+        # ist - aber nirgends, wie weit das Rennen insgesamt ist. Hier
+        # steht die Runde des Fuehrenden und die Gesamtzahl.
+        self._rundenstand = QLabel("Runde -/-")
         self._fortschritt = QProgressBar()
         self._fortschritt.setTextVisible(False)
 
@@ -142,6 +159,7 @@ class Rennseite(QWidget):
         zeile.addWidget(self._sofort)
         self._wetteranzeige = QLabel("-")
         zeile.addWidget(self._uhrzeit)
+        zeile.addWidget(self._rundenstand)
         zeile.addWidget(self._fortschritt, stretch=1)
         zeile.addWidget(QLabel("Wetter:"))
         zeile.addWidget(self._wetteranzeige)
@@ -155,7 +173,10 @@ class Rennseite(QWidget):
         # GDD 4: Positionen, Gesamtzeit des Fuehrenden, Rueckstand der uebrigen
         self._rangliste = QTreeWidget()
         self._rangliste.setHeaderLabels(
-            ["Pos", "Auto", "Rd", "Zeit / Rueckstand", "Intervall", "Reifen", "Status"]
+            [
+                "Pos", "Auto", "Rd", "Zeit / Rueckstand", "Intervall",
+                "Mischung", "Reifen", "Status",
+            ]
         )
         self._rangliste.setRootIsDecorated(False)
         self._rangliste.setAlternatingRowColors(True)
@@ -297,6 +318,10 @@ class Rennseite(QWidget):
 
         distanzen = verlauf.distanzen_zu(zeit)
         reihenfolge = verlauf.reihenfolge_zu(zeit)
+        self._rundenstand.setText(
+            f"Runde {self._runde_des_ersten(verlauf, reihenfolge, distanzen)}"
+            f"/{verlauf.runden}"
+        )
 
         self._ansicht.zeige_autos(
             [
@@ -307,12 +332,59 @@ class Rennseite(QWidget):
                     verlauf.teilnehmer[i].ist_spieler,
                 )
                 for i in reihenfolge
+                if self._noch_auf_der_karte(verlauf, i, zeit)
             ]
         )
         self._fuelle_rangliste(verlauf, reihenfolge, distanzen, zeit)
         self._fuelle_monitor(verlauf, reihenfolge)
         self._fuelle_ticker(verlauf, zeit)
         self._rueckstand.setze_marke(zeit)
+
+    @staticmethod
+    def _noch_auf_der_karte(verlauf: Rennverlauf, teilnehmer: int, zeit: float) -> bool:
+        """Ob ein Auto noch auf der Streckengrafik steht (Punkt 63).
+
+        Wer ausfaellt, bleibt eine Minute stehen - so sieht man, wo es
+        passiert ist - und wird danach abgeraeumt. Sonst klebt am Ende
+        ein halbes Feld regungslos auf der Karte.
+        """
+        ausfall = verlauf.ausfallzeit(teilnehmer)
+        return ausfall is None or zeit - ausfall <= AUSFALL_SICHTBAR_MS
+
+    @staticmethod
+    def _runde_des_ersten(verlauf: Rennverlauf, reihenfolge: list[int], distanzen) -> int:
+        """In welcher Runde der Fuehrende gerade ist (Punkt 65)."""
+        if not reihenfolge:
+            return 0
+        erster = reihenfolge[0]
+        strecke = max(verlauf.strecke.laenge_m, 1e-9)
+        runde = int(max(float(distanzen[erster]), 0.0) // strecke) + 1
+        return min(runde, verlauf.runden)
+
+    @staticmethod
+    def _zeit_des_ersten(verlauf: Rennverlauf, fuehrender: int, zeit: float) -> str:
+        """Die Gesamtzeit oben in der Liste (GDD 4).
+
+        Solange gefahren wird, laeuft die Rennuhr mit. Ist der Erste im
+        Ziel, bleibt seine Zielzeit stehen - sonst tickte die Anzeige
+        weiter, obwohl das Rennen fuer ihn gelaufen ist.
+        """
+        ergebnis = verlauf._ergebnis_je_auto.get(fuehrender)
+        if ergebnis is not None and ergebnis.zeit_ms is not None and ergebnis.zeit_ms <= zeit:
+            return formatiere_dauer(int(ergebnis.zeit_ms))
+        return formatiere_dauer(int(zeit))
+
+    @staticmethod
+    def _abstand_im_ziel(verlauf: Rennverlauf, teilnehmer: int) -> str:
+        """Der feststehende Rueckstand eines Autos im Ziel."""
+        ergebnis = verlauf._ergebnis_je_auto.get(teilnehmer)
+        if ergebnis is None:
+            return ""
+        if ergebnis.rundenrueckstand >= 1:
+            return formatiere_runden_rueckstand(ergebnis.rundenrueckstand)
+        if ergebnis.rueckstand_ms is None:
+            return ""
+        return formatiere_rueckstand(int(ergebnis.rueckstand_ms))
 
     def _fuelle_rangliste(
         self, verlauf: Rennverlauf, reihenfolge: list[int], distanzen, zeit: float
@@ -325,6 +397,7 @@ class Rennseite(QWidget):
         reifen = verlauf.reifen_zu(zeit)
         bild = verlauf.bild_zu(zeit)
         raus = verlauf.ausgefallen[bild]
+        mischungen = verlauf.mischung_zu(zeit)
 
         for platz, i in enumerate(reihenfolge, start=1):
             teilnehmer = verlauf.teilnehmer[i]
@@ -332,7 +405,11 @@ class Rennseite(QWidget):
             runde = min(int(max(distanz, 0.0) // laenge) + 1, verlauf.runden)
 
             if i == fuehrender:
-                text = formatiere_dauer(int(zeit))
+                text = self._zeit_des_ersten(verlauf, fuehrender, zeit)
+            elif verlauf.im_ziel_zu(i, zeit) and verlauf.im_ziel_zu(fuehrender, zeit):
+                # Beide sind ueber der Linie - dann steht der Abstand fest
+                # und wird nicht mehr aus Strecke und Tempo geschaetzt.
+                text = self._abstand_im_ziel(verlauf, i)
             else:
                 rueckstandsrunden = int((vorne - distanz) // laenge)
                 if rueckstandsrunden >= 1:
@@ -356,11 +433,13 @@ class Rennseite(QWidget):
                     str(runde),
                     text,
                     self._intervall(verlauf, reihenfolge, distanzen, zeit, platz),
+                    self._mischungstext(verlauf, i, mischungen[i], zeit),
                     f"{reifen[i]:.0%}",
                     status,
                 ],
             )
             zeile.setForeground(1, QColor(teilnehmer.farbe))
+            self._faerbe_mischung(zeile, verlauf, i, zeit)
             zeile.setData(0, Qt.UserRole, i)
             zeile.setData(SPALTE_REIFEN, Balkenzeichner.ANTEILSROLLE, float(reifen[i]))
             # Die Zahl rechts, der Balken links - sonst liegen sie
@@ -382,6 +461,46 @@ class Rennseite(QWidget):
         for spalte in range(self._rangliste.columnCount()):
             if spalte != SPALTE_REIFEN:
                 self._rangliste.resizeColumnToContents(spalte)
+
+    @staticmethod
+    def _pflicht_erfuellt(verlauf: Rennverlauf, i: int, zeit: float) -> bool:
+        """Ob dieses Auto die Mischungspflicht schon erfuellt hat (Punkt 39).
+
+        Gilt sie gar nicht - bei Regen, Starkregen oder wechselhaftem
+        Wetter -, ist nichts zu erfuellen und die Spalte steht von Anfang
+        an auf gruen.
+        """
+        if not verlauf.mischungspflicht:
+            return True
+        return len(verlauf.gefahrene_mischungen(i, zeit)) >= 2
+
+    def _mischungstext(
+        self, verlauf: Rennverlauf, i: int, kuerzel: str, zeit: float
+    ) -> str:
+        """Gefahrene Mischung, Zahl der Stopps und der Haken der Pflicht."""
+        if not kuerzel:
+            return "-"
+        stopps = sum(1 for b in verlauf.boxenstopps if b.teilnehmer == i and b.zeit_ms <= zeit)
+        text = f"{kuerzel} ({stopps})"
+        return text + HAKEN if self._pflicht_erfuellt(verlauf, i, zeit) else text
+
+    def _faerbe_mischung(
+        self, zeile: QTreeWidgetItem, verlauf: Rennverlauf, i: int, zeit: float
+    ) -> None:
+        """Warnfarbe, solange die Pflicht offen ist; gruen, sobald sie steht."""
+        if not verlauf.mischungen:
+            return
+        erfuellt = self._pflicht_erfuellt(verlauf, i, zeit)
+        zeile.setForeground(
+            SPALTE_MISCHUNG,
+            QColor(FARBE_PFLICHT_ERFUELLT if erfuellt else FARBE_PFLICHT_OFFEN),
+        )
+        zeile.setToolTip(
+            SPALTE_MISCHUNG,
+            "Mischungspflicht erfuellt"
+            if erfuellt
+            else "Zweite Mischung steht noch aus",
+        )
 
     def _intervall(
         self,
@@ -445,7 +564,9 @@ class Rennseite(QWidget):
     def _fuelle_monitor(self, verlauf: Rennverlauf, reihenfolge: list[int]) -> None:
         """GDD 4: letzte Runde, beste Runde, 4 Sektorzeiten."""
         self._monitor.clear()
-        for i in reihenfolge[:10]:
+        # Alle Fahrer, nicht nur die ersten zehn: Wer sein eigenes Auto
+        # auf Platz 18 sucht, will dessen Sektorzeiten genauso sehen.
+        for i in reihenfolge:
             protokoll = verlauf.protokolle[i]
             sektoren = protokoll.sektorzeiten_ms[-1] if protokoll.sektorzeiten_ms else ()
             spalten = [

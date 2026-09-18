@@ -306,9 +306,28 @@ def test_reihenfolge_stimmt_mit_der_distanz_ueberein(rennen) -> None:
     assert [distanzen[i] for i in reihenfolge] == sorted(distanzen, reverse=True)
 
 
-def test_distanz_waechst_monoton(rennen) -> None:
+def test_distanz_waechst_nur_beim_ueberholen_nicht(rennen) -> None:
+    """Kein Auto faellt zurueck - ausser im Moment eines Ueberholmanoevers.
+
+    Beim gelungenen Manoever tauschen die beiden Autos ihre Position
+    (siehe ``_versucht_ueberholen``); der Ueberholte rutscht dabei um den
+    Abstand zurueck, der zwischen ihnen lag. Das sind wenige Meter auf
+    einer Runde von mehreren Kilometern. Jeder andere Rueckschritt waere
+    ein Fehler.
+    """
     zuwachs = np.diff(rennen.distanz_m, axis=0)
-    assert (zuwachs >= -1e-6).all()
+    zeiten = rennen.zeitpunkte_ms
+    for bild, auto in np.argwhere(zuwachs < -1e-6):
+        von, bis = zeiten[bild], zeiten[bild + 1]
+        beteiligt = [
+            m
+            for m in rennen.manoever
+            if von <= m.zeit_ms <= bis and auto in (m.angreifer, m.verteidiger)
+        ]
+        assert beteiligt, (
+            f"Auto {auto} verliert zwischen {von} und {bis} ms "
+            f"{-zuwachs[bild, auto]:.2f} m ohne Ueberholmanoever"
+        )
 
 
 def test_abfrage_ausserhalb_des_verlaufs_ist_gueltig(rennen) -> None:
@@ -478,3 +497,55 @@ def test_ein_starker_verteidiger_senkt_die_chance(k) -> None:
     schwach = rn.erfolgschance(k, angreifer, mit_wert(k, "D11", 0), 5.0, 1.0)
     stark = rn.erfolgschance(k, angreifer, mit_wert(k, "D11", 100_000), 5.0, 1.0)
     assert stark < schwach
+
+
+# --- Zieleinlauf (Punkt 67) -------------------------------------------
+def test_die_anzeige_zeigt_im_ziel_dieselbe_reihenfolge_wie_die_wertung(k, strecken):
+    """Wer gewinnt, steht nach dem Zieleinlauf auch oben in der Liste.
+
+    Die Anzeige sortierte bisher allein nach zurueckgelegter Strecke. Das
+    geht, solange gefahren wird - danach nicht mehr: Wer im Ziel ist,
+    steht, alle anderen fahren weiter bis zur Linie. Am Ende hatte
+    ausgerechnet der Letzte die groesste Strecke und stand vorn.
+    """
+    strecke = strecken[0]
+    mittel = rn.mittlerer_ueberholzonenanteil(k, strecken)
+    feld = tuple(
+        rn.Teilnehmer(
+            auto=ka.gleichverteilt(k, 50_000 + i * 200, kuerzel=f"A{i:02d}"),
+            startplatz=i + 1,
+            farbe="#888888",
+        )
+        for i in range(12)
+    )
+    for seed in (1, 2, 3):
+        verlauf = rn.simuliere(
+            k, strecke, feld, runden=5, seedquelle=Seedquelle(seed),
+            streckenmittel=mittel,
+        )
+        ende = float(verlauf.zeitpunkte_ms[-1])
+        assert verlauf.reihenfolge_zu(ende) == [
+            e.teilnehmer for e in verlauf.ergebnisse
+        ]
+
+
+def test_waehrend_des_rennens_entscheidet_weiter_die_strecke(k, strecken):
+    """Solange niemand im Ziel ist, fuehrt wie bisher der Weiteste."""
+    strecke = strecken[0]
+    mittel = rn.mittlerer_ueberholzonenanteil(k, strecken)
+    feld = tuple(
+        rn.Teilnehmer(
+            auto=ka.gleichverteilt(k, 50_000 + i * 200, kuerzel=f"A{i:02d}"),
+            startplatz=i + 1,
+            farbe="#888888",
+        )
+        for i in range(12)
+    )
+    verlauf = rn.simuliere(
+        k, strecke, feld, runden=5, seedquelle=Seedquelle(1), streckenmittel=mittel,
+    )
+    mitte = float(verlauf.zeitpunkte_ms[len(verlauf.zeitpunkte_ms) // 2])
+    distanzen = verlauf.distanzen_zu(mitte)
+    assert verlauf.reihenfolge_zu(mitte) == sorted(
+        range(verlauf.anzahl), key=lambda i: -distanzen[i]
+    )

@@ -40,8 +40,10 @@ from rennmanager.kern import reifen as kern_reifen
 from rennmanager.kern import rennen as kern_rennen
 from rennmanager.kern import rhythmus as kern_rhythmus
 from rennmanager.kern import statistik as kern_statistik
+from rennmanager.kern import strategie as kern_strategie
 from rennmanager.kern import strecke as kern_strecke
 from rennmanager.kern import streckenkenntnis as kern_streckenkenntnis
+from rennmanager.kern import tempo as kern_tempo
 from rennmanager.kern import transfer as kern_transfer
 from rennmanager.kern import welt as kern_welt
 from rennmanager.kern import wertung as kern_wertung
@@ -234,6 +236,86 @@ def _fahre_qualifying(
     )
 
 
+@dataclass(frozen=True)
+class Rennvorbereitung:
+    """Was vor dem Start feststeht: Wetter und zulaessige Strategien.
+
+    Punkt 39: Der Spieler soll die Reifen seiner vier Fahrer selbst
+    waehlen duerfen. Dafuer muss er sehen koennen, was ueberhaupt zur
+    Wahl steht - und das steht vor dem Rennen fest, nicht erst danach.
+    """
+
+    wetter: kern_wetter.Wetterverlauf
+    strategien: kern_strategie.Rennstrategien
+    teilnehmer: tuple[kern_rennen.Teilnehmer, ...]
+
+
+def startfeld(
+    konfiguration: Konfiguration,
+    welt: Welt,
+    liga: int,
+    spielerautos: dict[str, dict[int, object]],
+    quali: Qualifying,
+) -> tuple[kern_rennen.Teilnehmer, ...]:
+    """Das Feld in der Startaufstellung des Qualifyings; Platz 1 ist die Pole."""
+    rennfeld = kern_welt.starterfeld(
+        welt, liga, autos=spielerautos.get(kern_ereignis.RENNEN)
+    )
+    return tuple(
+        kern_rennen.Teilnehmer(
+            auto=rennfeld[i].auto,
+            startplatz=platz,
+            farbe=rennfeld[i].farbe,
+            ist_spieler=rennfeld[i].ist_spieler,
+            nummer=rennfeld[i].nummer,
+        )
+        for platz, i in enumerate(quali.aufstellung, start=1)
+    )
+
+
+def vor_dem_rennen(
+    konfiguration: Konfiguration,
+    gestartet: tuple[kern_rennen.Teilnehmer, ...],
+    strecke: Strecke,
+    runden: int,
+    seedquelle: Seedquelle,
+    streckenverschleiss: float,
+    quali: Qualifying,
+    liga: int | None = None,
+) -> Rennvorbereitung:
+    """Wetter und Strategien, bevor ein Meter gefahren ist.
+
+    Zweimal aufgerufen ergibt zweimal dasselbe: Beides haengt allein am
+    Seed (GDD 15). Die Oberflaeche darf das also vorziehen, um dem
+    Spieler die Wahl zu zeigen, ohne das Rennen zu veraendern.
+    """
+    # Das Rennwetter wird getrennt vom Qualifying gewuerfelt (GDD 7).
+    rundendauer = quali.pole.zeit_ms
+    wetter = kern_wetter.wuerfle(
+        konfiguration,
+        strecke.name,
+        rundendauer * runden,
+        rundendauer,
+        seedquelle.zweig("rennwetter"),
+    )
+    # Punkt 39: Eine Vorausberechnung entscheidet, welche Mischungsfolgen
+    # zulaessig sind; unter ihnen waehlt jedes Auto. Das Wetter geht als
+    # ganze Vorhersage ein - es steht ja schon fest.
+    strategien = kern_strategie.feldstrategien(
+        konfiguration,
+        [t.auto for t in gestartet],
+        strecke,
+        runden,
+        streckenverschleiss,
+        wetter,
+        seedquelle.zweig("strategie"),
+        liga,
+    )
+    return Rennvorbereitung(
+        wetter=wetter, strategien=strategien, teilnehmer=gestartet
+    )
+
+
 def _fahre_rennen(
     konfiguration: Konfiguration,
     welt: Welt,
@@ -249,6 +331,7 @@ def _fahre_rennen(
     tagesformbonus: tuple[float, ...],
     rhythmusfaktor: tuple[float, ...],
     quali: Qualifying,
+    wahl: dict[int, kern_strategie.Strategie] | None = None,
 ) -> tuple[Ligawochenende, Rennverlauf]:
     """Das Rennen einer Liga auf ein gefahrenes Qualifying (GDD 4).
 
@@ -257,31 +340,23 @@ def _fahre_rennen(
     E12 aus GDD 14 nur im Qualifying wirkt. Die *Reihenfolge* des Feldes
     richtet sich in beiden Faellen nach der Welt, sonst passten die
     Indizes aus dem Qualifying nicht mehr aufs Rennen.
-    """
-    # Die Startaufstellung kommt aus dem Qualifying; Platz 1 ist die Pole.
-    rennfeld = kern_welt.starterfeld(
-        welt, liga, autos=spielerautos.get(kern_ereignis.RENNEN)
-    )
-    gestartet = tuple(
-        kern_rennen.Teilnehmer(
-            auto=rennfeld[i].auto,
-            startplatz=platz,
-            farbe=rennfeld[i].farbe,
-            ist_spieler=rennfeld[i].ist_spieler,
-            nummer=rennfeld[i].nummer,
-        )
-        for platz, i in enumerate(quali.aufstellung, start=1)
-    )
 
-    # Das Rennwetter wird getrennt vom Qualifying gewuerfelt (GDD 7).
-    rundendauer = quali.pole.zeit_ms
-    wetter = kern_wetter.wuerfle(
-        konfiguration,
-        strecke.name,
-        rundendauer * runden,
-        rundendauer,
-        seedquelle.zweig("rennwetter"),
+    :param wahl: je Fahrernummer eine vom Spieler gewaehlte Strategie
+        (Punkt 39). Wer nicht darin steht, faehrt, was die
+        Vorausberechnung ihm zuteilt.
+    """
+    gestartet = startfeld(konfiguration, welt, liga, spielerautos, quali)
+    vorbereitung = vor_dem_rennen(
+        konfiguration, gestartet, strecke, runden, seedquelle,
+        streckenverschleiss, quali, liga,
     )
+    strategien = vorbereitung.strategien
+    wetter = vorbereitung.wetter
+    je_auto = list(strategien.je_auto)
+    for stelle, teilnehmer in enumerate(gestartet):
+        gewaehlt = (wahl or {}).get(teilnehmer.nummer)
+        if gewaehlt is not None:
+            je_auto[stelle] = gewaehlt
     verlauf = kern_rennen.simuliere(
         konfiguration,
         strecke,
@@ -291,6 +366,9 @@ def _fahre_rennen(
         streckenmittel,
         wetter=wetter,
         streckenverschleiss=streckenverschleiss,
+        strategien=tuple(je_auto),
+        mischungspflicht=strategien.pflicht_zwei,
+        liga=liga,
         # Die Startaufstellung ordnet das Feld um; Kenntnisfaktor und
         # Tagesformbonus muessen mitwandern, sonst faehrt jeder mit den
         # Werten eines anderen.
@@ -421,6 +499,39 @@ def _ausfuehrlich(
     return wochenende, verlauf, quali
 
 
+def _schnellstrategien(
+    konfiguration: Konfiguration,
+    feld,
+    strecke: Strecke,
+    runden: int,
+    streckenverschleiss: float,
+    seedquelle: Seedquelle,
+    liga: int,
+):
+    """Die Strategien einer Liga im Schnellmodus (Punkt 39).
+
+    Das Rennwetter wird hier vorweggenommen: Der Schnellmodus wuerfelt es
+    selbst aus ``zweig("rennwetter")``, und dieselbe Rechnung hier ergibt
+    denselben Verlauf. Nur so plant die Strategie gegen das Wetter, das
+    im Rennen wirklich kommt.
+    """
+    autos = [t.auto for t in feld]
+    grundrunde = sum(
+        kern_tempo.fahre_runde(konfiguration, strecke, auto).zeit_ms for auto in autos
+    ) / max(len(autos), 1)
+    wetter = kern_wetter.wuerfle(
+        konfiguration,
+        strecke.name,
+        int(grundrunde * runden),
+        int(grundrunde),
+        seedquelle.zweig("rennwetter"),
+    )
+    return kern_strategie.feldstrategien(
+        konfiguration, autos, strecke, runden, streckenverschleiss, wetter,
+        seedquelle.zweig("strategie"), liga,
+    ).je_auto
+
+
 def _schnell(
     konfiguration: Konfiguration,
     welt: Welt,
@@ -446,6 +557,9 @@ def _schnell(
     feld = kern_welt.starterfeld(
         welt, liga, autos=spielerautos.get(kern_ereignis.RENNEN)
     )
+    # Punkt 39: Der Schnellmodus faehrt dieselben Strategien wie die volle
+    # Simulation - nur das Wetter kennt er erst dort. Deshalb wird es hier
+    # aus demselben Zweig gewuerfelt wie drinnen.
     ergebnis = fahre_schnell(
         konfiguration,
         liga,
@@ -458,6 +572,9 @@ def _schnell(
         kenntnisfaktor=kenntnisfaktor,
         tagesformbonus=tagesformbonus,
         rhythmusfaktor=rhythmusfaktor,
+        strategien=_schnellstrategien(
+            konfiguration, feld, strecke, runden, streckenverschleiss, seedquelle, liga
+        ),
     )
     return Ligawochenende(
         liga=liga,
@@ -846,14 +963,16 @@ class Saisonlauf:
             gefahrene,
             kenntnisseed,
         )
-        for spieler in eigene:
+        for stelle, spieler in enumerate(eigene):
             self.karriere.verbuche_runden(
                 rahmen.strecke.name,
                 gefahrene,
                 kenntnisseed.zweig("fahrer", spieler),
                 fahrer=spieler,
             )
-            self._verbuche_karriere(ergebnis, spieler)
+            # Sponsorenvertraege und Ereignisse zaehlen je Rennen, nicht
+            # je Fahrer - deshalb nur beim ersten eigenen Auto.
+            self._verbuche_karriere(ergebnis, spieler, zaehlt=stelle == 0)
 
     def schliesse_wochenende_ab(self, ergebnis: Wochenende) -> Wochenende:
         """Haengt das gefahrene Wochenende an und beendet den Renntag."""
@@ -976,7 +1095,9 @@ class Saisonlauf:
             if f.ist_spieler and f.liga == liga and f.nummer in self.karriere.autos
         )
 
-    def _verbuche_karriere(self, wochenende: Ligawochenende, spieler: int) -> None:
+    def _verbuche_karriere(
+        self, wochenende: Ligawochenende, spieler: int, zaehlt: bool = True
+    ) -> None:
         """Schreibt einem eigenen Fahrer gut, was sein Wochenende brachte.
 
         GDD 10: Preisgeld, Startgeld, Sponsorenauszahlung und Erfahrung -
@@ -998,6 +1119,7 @@ class Saisonlauf:
             kilometer_je_wetter=wochenende.kilometer_je_fahrer.get(spieler),
             fahrer=spieler,
             liga=wochenende.liga,
+            zaehle_rennwochenende=zaehlt,
         )
 
     def fahre_saison(self, ausfuehrliche_liga: int | None = None) -> tuple[Wochenende, ...]:
@@ -1190,8 +1312,11 @@ class Wochenendlauf:
     haelt fest, dass gefuehrt und am Stueck bei gleichem Seed Zeichen fuer
     Zeichen dasselbe herauskommt.
 
-    Zwischen Qualifying und Rennen haelt der Lauf an. Dort sitzt spaeter
-    die Reifenwahl aus Punkt 39.
+    Zwischen Qualifying und Rennen haelt der Lauf an. Dort sitzt die
+    Reifenwahl aus Punkt 39: ``strategiewahl`` zeigt, was zur Wahl steht,
+    ``waehle_reifen`` legt sie fest. Beides geht nur **vor** dem Start -
+    der Rennverlauf wird in einem Stueck gerechnet und danach nur noch
+    abgespielt.
     """
 
     def __init__(self, lauf: Saisonlauf, liga: int) -> None:
@@ -1217,6 +1342,11 @@ class Wochenendlauf:
         self.daten: Ligadaten | None = None
         self.qualifying: Qualifying | None = None
         self.verlauf: Rennverlauf | None = None
+        # Punkt 39: Was der Spieler fuer seine Fahrer gewaehlt hat, je
+        # Fahrernummer. Wer nicht darin steht, faehrt, was die
+        # Vorausberechnung ihm zuteilt.
+        self.reifenwahl: dict[int, kern_strategie.Strategie] = {}
+        self._vorbereitung: Rennvorbereitung | None = None
         self.wochenende: Wochenende | None = None
 
     # -- Was vor dem Fahren schon feststeht ---------------------------------
@@ -1254,6 +1384,61 @@ class Wochenendlauf:
         )
         return self.qualifying
 
+    def strategiewahl(self) -> Rennvorbereitung:
+        """Was vor dem Rennen zur Wahl steht (Punkt 39).
+
+        Rechnet Wetter und Varianten vor, ohne das Rennen zu fahren.
+        Beides haengt allein am Seed, also aendert der Blick darauf
+        nichts am Ergebnis.
+        """
+        if self.qualifying is None:
+            raise WochenendFehler(
+                "Das Qualifying muss vor der Reifenwahl gefahren werden"
+            )
+        if self._vorbereitung is None:
+            self._vorbereitung = vor_dem_rennen(
+                self.lauf.konfiguration,
+                startfeld(
+                    self.lauf.konfiguration,
+                    self.lauf.welt,
+                    self.liga,
+                    self.daten.autos,
+                    self.qualifying,
+                ),
+                self.rahmen.strecke,
+                self.daten.runden,
+                self.daten.seedquelle,
+                self.rahmen.verschleiss,
+                self.qualifying,
+                self.liga,
+            )
+        return self._vorbereitung
+
+    def waehle_reifen(
+        self, fahrernummer: int, strategie: kern_strategie.Strategie | None
+    ) -> None:
+        """Legt die Strategie eines eigenen Fahrers fest - oder gibt sie frei.
+
+        ``None`` heisst: Das Team entscheidet, also die
+        Vorausberechnung. Nach dem Start geht nichts mehr; der
+        Rennverlauf wird in einem Stueck gerechnet und danach nur noch
+        abgespielt.
+        """
+        if self.verlauf is not None:
+            raise WochenendFehler(
+                "Das Rennen laeuft schon - die Reifen stehen fest"
+            )
+        if strategie is None:
+            self.reifenwahl.pop(fahrernummer, None)
+            return
+        kern_strategie.pruefe(
+            self.lauf.konfiguration,
+            strategie,
+            self.daten.runden,
+            nass=not self.strategiewahl().strategien.pflicht_zwei,
+        )
+        self.reifenwahl[fahrernummer] = strategie
+
     def fahre_rennen(self) -> Rennverlauf:
         """Zweite Etappe: das Rennen auf die gefahrene Aufstellung.
 
@@ -1281,6 +1466,7 @@ class Wochenendlauf:
             self.daten.tagesform,
             self.daten.rhythmus,
             self.qualifying,
+            wahl=dict(self.reifenwahl),
         )
         return self.verlauf
 

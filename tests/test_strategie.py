@@ -1,0 +1,349 @@
+"""Reifenstrategie: Mischungsfolge, Stoppfenster und die Regeln (Punkt 39).
+
+Die Regeln kommen vom Auftraggeber: mindestens ein Stopp, hoechstens
+drei (im Notfall vier), zwei Mischungen im Trockenen Pflicht, kein Stopp
+in den ersten und letzten drei Runden, mindestens drei Runden zwischen
+zwei Stopps - und **kein Stint unter 30 Prozent Restprofil**, auch nicht
+nach dem Zufallsfenster.
+"""
+
+import numpy as np
+import pytest
+
+from rennmanager.kern import boxenstopp as bx
+from rennmanager.kern import reifen as kern_reifen
+from rennmanager.kern import rennen as kern_rennen
+from rennmanager.kern import strategie as sg
+from rennmanager.kern import strecke as kern_strecke
+from rennmanager.kern import tempo as kern_tempo
+from rennmanager.kern import wetter as kern_wetter
+from rennmanager.kern.auto import gleichverteilt
+from rennmanager.kern.zufall import Seedquelle
+from rennmanager.konfiguration import lade
+
+LIGA = 1
+
+
+@pytest.fixture(scope="module")
+def k():
+    return lade()
+
+
+@pytest.fixture(scope="module")
+def strecken(k):
+    return kern_strecke.lade_alle(k)
+
+
+@pytest.fixture(scope="module")
+def zandvoort(strecken):
+    return next(s for s in strecken if s.name == "Zandvoort")
+
+
+@pytest.fixture(scope="module")
+def auto(k):
+    return gleichverteilt(k, k.wert("skala", "referenz"))
+
+
+@pytest.fixture(scope="module")
+def umgebung(k, strecken, zandvoort, auto):
+    """Runden, Rundenzeit, Streckenfaktor und Stoppverlust an einem Ort."""
+    grenzen = kern_tempo.grenzen_aus(k, auto)
+    return {
+        "runden": kern_rennen.rundenzahl(k, zandvoort, LIGA),
+        "rundenzeit": float(
+            kern_tempo.rundenzeit_ms(
+                zandvoort, kern_tempo.geschwindigkeitsprofil(zandvoort, grenzen)
+            )
+        ),
+        "faktor": kern_reifen.streckenfaktor(
+            k, zandvoort, kern_reifen.mittlere_querbeschleunigung(strecken)
+        ),
+        "verlust": float(
+            bx.durchfahrtsverlust_ms(k, zandvoort, grenzen)
+            + bx.anfahrverlust_ms(k, grenzen)
+            + bx.mittlere_standzeit_ms(k)
+        ),
+    }
+
+
+def restprofile(k, auto, strecke, folge, stopps, runden, faktor, naesse=0.0, wf=1.0):
+    """Restprofil am Ende jedes Stints - die Groesse, um die es geht."""
+    enden = list(stopps) + [runden]
+    vorher = 0
+    werte = []
+    for misch, bis in zip(folge, enden, strict=True):
+        je_m = kern_reifen.verschleiss_je_meter(k, auto, misch, faktor, wf, naesse)
+        werte.append(max(1.0 - (bis - vorher) * strecke.laenge_m * je_m, 0.0))
+        vorher = bis
+    return werte
+
+
+# -- Die Regeln -------------------------------------------------------------
+def test_eine_folge_ohne_stopp_ist_verboten(k, auto):
+    misch = kern_reifen.standardmischung(k)
+    strategie = sg.Strategie(mischungen=(misch,), stopps=())
+    assert not sg.ist_erlaubt(k, strategie, 50)
+
+
+def test_eine_einzige_mischung_ist_im_trockenen_verboten(k):
+    misch = kern_reifen.standardmischung(k)
+    strategie = sg.Strategie(mischungen=(misch, misch), stopps=(20,))
+    assert not sg.ist_erlaubt(k, strategie, 50)
+    # Im Nassen faellt die Pflicht.
+    assert sg.ist_erlaubt(k, strategie, 50, nass=True)
+
+
+def test_ein_stopp_in_der_sperrfrist_ist_verboten(k):
+    weich = kern_reifen.mischung(k, "weich")
+    hart = kern_reifen.mischung(k, "hart")
+    sperre = k.wert("boxenstopp", "strategie", "sperre_runden")
+    assert not sg.ist_erlaubt(k, sg.Strategie((weich, hart), (sperre,)), 50)
+    assert sg.ist_erlaubt(k, sg.Strategie((weich, hart), (sperre + 1,)), 50)
+    assert not sg.ist_erlaubt(k, sg.Strategie((weich, hart), (50 - sperre + 1,)), 50)
+
+
+def test_mehr_als_drei_stopps_sind_verboten(k):
+    weich = kern_reifen.mischung(k, "weich")
+    hart = kern_reifen.mischung(k, "hart")
+    folge = (weich, hart, weich, hart, weich)
+    assert not sg.ist_erlaubt(k, sg.Strategie(folge, (10, 20, 30, 40)), 60)
+
+
+# -- Reichweite -------------------------------------------------------------
+def test_weich_traegt_kuerzer_als_hart(k, auto, zandvoort, umgebung):
+    weich = sg.reichweite_runden(
+        k, auto, kern_reifen.mischung(k, "weich"), zandvoort.laenge_m, umgebung["faktor"]
+    )
+    hart = sg.reichweite_runden(
+        k, auto, kern_reifen.mischung(k, "hart"), zandvoort.laenge_m, umgebung["faktor"]
+    )
+    assert weich < hart
+
+
+def test_der_hoechststint_bleibt_unter_der_reichweite(k, auto, zandvoort, umgebung):
+    """Mit 30 Prozent Restprofil kommt man nicht so weit wie bis auf null."""
+    for name in ("weich", "mittel", "hart"):
+        misch = kern_reifen.mischung(k, name)
+        bis_null = sg.reichweite_runden(
+            k, auto, misch, zandvoort.laenge_m, umgebung["faktor"]
+        )
+        mit_rest = sg.hoechststint_runden(
+            k, auto, misch, zandvoort.laenge_m, umgebung["faktor"]
+        )
+        assert mit_rest < bis_null
+
+
+# -- Die Vorausberechnung ---------------------------------------------------
+def test_jede_variante_haelt_die_regeln(k, auto, zandvoort, umgebung):
+    alle = sg.varianten(
+        k, auto, umgebung["runden"], umgebung["rundenzeit"], zandvoort.laenge_m,
+        umgebung["verlust"], umgebung["faktor"],
+    )
+    assert alle
+    for v in alle:
+        assert sg.ist_erlaubt(
+            k, sg.Strategie(v.mischungen, v.stopps), umgebung["runden"]
+        )
+
+
+def test_jede_variante_haelt_das_mindestprofil(k, auto, zandvoort, umgebung):
+    mindest = k.wert("boxenstopp", "strategie", "mindest_restprofil")
+    alle = sg.varianten(
+        k, auto, umgebung["runden"], umgebung["rundenzeit"], zandvoort.laenge_m,
+        umgebung["verlust"], umgebung["faktor"],
+    )
+    for v in alle:
+        rest = restprofile(
+            k, auto, zandvoort, v.mischungen, v.stopps,
+            umgebung["runden"], umgebung["faktor"],
+        )
+        assert min(rest) >= mindest - 1e-9, f"{v.folge}: {rest}"
+
+
+def test_die_beste_variante_steht_vorn(k, auto, zandvoort, umgebung):
+    alle = sg.varianten(
+        k, auto, umgebung["runden"], umgebung["rundenzeit"], zandvoort.laenge_m,
+        umgebung["verlust"], umgebung["faktor"],
+    )
+    assert alle == sorted(alle, key=lambda v: v.zeit_ms)
+
+
+def test_der_stoppverlust_verschiebt_das_optimum_auf_haertere_reifen(
+    k, auto, zandvoort, umgebung
+):
+    """Wer fuer jeden Stopp teuer bezahlt, faehrt lieber den zaehen Reifen."""
+    def bester(verlust):
+        alle = sg.varianten(
+            k, auto, umgebung["runden"], umgebung["rundenzeit"], zandvoort.laenge_m,
+            verlust, umgebung["faktor"],
+        )
+        return alle[0]
+
+    billig = bester(5_000.0)
+    teuer = bester(120_000.0)
+    assert teuer.anzahl_stopps <= billig.anzahl_stopps
+
+
+# -- Das Zufallsfenster -----------------------------------------------------
+def test_das_fenster_haelt_das_mindestprofil(k, auto, zandvoort, umgebung):
+    """Der Kern der Sache: Vorher hebelte das Fenster die 30 Prozent aus."""
+    mindest = k.wert("boxenstopp", "strategie", "mindest_restprofil")
+    alle = sg.varianten(
+        k, auto, umgebung["runden"], umgebung["rundenzeit"], zandvoort.laenge_m,
+        umgebung["verlust"], umgebung["faktor"],
+    )
+    zu_wenig = 0
+    for n in range(60):
+        strategie = sg.ki_strategie(
+            k, auto, umgebung["runden"], zandvoort.laenge_m, Seedquelle(n),
+            umgebung["faktor"], 1.0, 0.0, True,
+            umgebung["rundenzeit"], umgebung["verlust"], alle,
+        )
+        rest = restprofile(
+            k, auto, zandvoort, strategie.mischungen, strategie.stopps,
+            umgebung["runden"], umgebung["faktor"],
+        )
+        if min(rest) < mindest - 1e-9:
+            zu_wenig += 1
+    assert zu_wenig == 0, f"{zu_wenig} von 60 Strategien fallen unter {mindest:.0%}"
+
+
+def test_das_fenster_streut_die_stopps(k, auto, zandvoort, umgebung):
+    alle = sg.varianten(
+        k, auto, umgebung["runden"], umgebung["rundenzeit"], zandvoort.laenge_m,
+        umgebung["verlust"], umgebung["faktor"],
+    )
+    gesehen = {
+        sg.ki_strategie(
+            k, auto, umgebung["runden"], zandvoort.laenge_m, Seedquelle(n),
+            umgebung["faktor"], 1.0, 0.0, True,
+            umgebung["rundenzeit"], umgebung["verlust"], alle,
+        ).stopps
+        for n in range(40)
+    }
+    assert len(gesehen) > 5
+
+
+def test_zwischen_zwei_stopps_liegen_die_mindestrunden(k, auto, zandvoort, umgebung):
+    abstand = k.wert("boxenstopp", "strategie", "abstand_min_runden")
+    alle = sg.varianten(
+        k, auto, umgebung["runden"], umgebung["rundenzeit"], zandvoort.laenge_m,
+        umgebung["verlust"], umgebung["faktor"],
+    )
+    for n in range(40):
+        stopps = sg.ki_strategie(
+            k, auto, umgebung["runden"], zandvoort.laenge_m, Seedquelle(n),
+            umgebung["faktor"], 1.0, 0.0, True,
+            umgebung["rundenzeit"], umgebung["verlust"], alle,
+        ).stopps
+        for davor, danach in zip(stopps, stopps[1:], strict=False):
+            assert danach - davor >= abstand
+
+
+# -- Wetter -----------------------------------------------------------------
+def test_die_pflicht_faellt_im_nassen(k):
+    assert sg.pflicht_zwei_mischungen(k, "trocken")
+    assert sg.pflicht_zwei_mischungen(k, ("trocken", "heiss"))
+    assert not sg.pflicht_zwei_mischungen(k, "regen")
+    assert not sg.pflicht_zwei_mischungen(k, ("trocken", "wechselhaft"))
+
+
+def test_zu_nasser_lage_gehoert_ein_nasser_reifen(k):
+    assert sg.passende_mischung(k, 0.0).naesse == 0.0
+    assert sg.passende_mischung(k, 1.0).naesse > 0.5
+    # Bei wechselhaft ist der Intermediate der naechste.
+    wechselhaft = kern_reifen.naesse_von(k, "wechselhaft")
+    assert sg.passende_mischung(k, wechselhaft).schluessel == "intermediate"
+
+
+def test_der_notstopp_kommt_erst_nach_der_mindestzeit(k):
+    trocken = kern_reifen.mischung(k, "hart")
+    abstand = k.wert("boxenstopp", "strategie", "abstand_min_runden")
+    # Falscher Reifen, aber gerade erst gestoppt: noch nicht.
+    assert not sg.notstopp(k, trocken, 1.0, abstand - 1)
+    assert sg.notstopp(k, trocken, 1.0, abstand)
+    # Passender Reifen: nie.
+    assert not sg.notstopp(k, trocken, 0.0, 20)
+
+
+def test_die_vorhersage_folgt_dem_wetterverlauf(k, zandvoort, umgebung):
+    wetter = kern_wetter.wuerfle(
+        k, zandvoort.name,
+        int(umgebung["rundenzeit"] * umgebung["runden"]),
+        int(umgebung["rundenzeit"]),
+        Seedquelle(3),
+    )
+    naesse = sg.vorhersage(k, wetter, umgebung["runden"], umgebung["rundenzeit"])
+    assert len(naesse) == umgebung["runden"]
+    lagen = sg.lagen_im_rennen(k, wetter, umgebung["runden"], umgebung["rundenzeit"])
+    assert set(lagen) <= set(wetter.zustaende)
+
+
+def test_ohne_wetter_ist_die_vorhersage_trocken(k):
+    assert sg.vorhersage(k, None, 10, 90_000.0) == (0.0,) * 10
+    assert sg.verschleissvorhersage(k, None, 10, 90_000.0) == (1.0,) * 10
+
+
+def test_eine_wechselnde_vorhersage_macht_die_tabelle_startabhaengig(
+    k, auto, zandvoort, umgebung
+):
+    """Derselbe Stint kostet vor und nach dem Regen verschieden viel."""
+    runden = umgebung["runden"]
+    trocken = sg._stinttabelle(
+        k, auto, kern_reifen.mischung(k, "hart"), runden, umgebung["rundenzeit"],
+        zandvoort.laenge_m, umgebung["faktor"], 1.0, 0.0,
+    )
+    assert trocken.konstant
+
+    wechselnd = [0.0] * (runden // 2) + [0.7] * (runden - runden // 2)
+    nass = sg._stinttabelle(
+        k, auto, kern_reifen.mischung(k, "hart"), runden, umgebung["rundenzeit"],
+        zandvoort.laenge_m, umgebung["faktor"], 1.0, wechselnd,
+    )
+    assert not nass.konstant
+    frueh = nass.restprofil(np.array([0]), 10)
+    spaet = nass.restprofil(np.array([runden - 12]), 10)
+    assert frueh[0] > spaet[0], "Der Regen muss mehr Profil kosten"
+
+
+# -- Das ganze Feld ---------------------------------------------------------
+def test_feldstrategien_geben_jedem_auto_eine_strategie(k, zandvoort, strecken):
+    feld = kern_rennen.starterfeld(k, LIGA, seedquelle=Seedquelle(1))
+    runden = kern_rennen.rundenzahl(k, zandvoort, LIGA)
+    faktor = kern_reifen.streckenfaktor(
+        k, zandvoort, kern_reifen.mittlere_querbeschleunigung(strecken)
+    )
+    ergebnis = sg.feldstrategien(
+        k, [t.auto for t in feld], zandvoort, runden, faktor, None, Seedquelle(5)
+    )
+    assert len(ergebnis.je_auto) == len(feld)
+    assert ergebnis.pflicht_zwei
+    for strategie in ergebnis.je_auto:
+        assert sg.ist_erlaubt(k, strategie, runden)
+
+
+def test_das_feld_faehrt_nicht_alles_dasselbe(k, zandvoort, strecken):
+    feld = kern_rennen.starterfeld(k, LIGA, seedquelle=Seedquelle(1))
+    runden = kern_rennen.rundenzahl(k, zandvoort, LIGA)
+    faktor = kern_reifen.streckenfaktor(
+        k, zandvoort, kern_reifen.mittlere_querbeschleunigung(strecken)
+    )
+    ergebnis = sg.feldstrategien(
+        k, [t.auto for t in feld], zandvoort, runden, faktor, None, Seedquelle(5)
+    )
+    folgen = {
+        tuple(m.kuerzel for m in s.mischungen) for s in ergebnis.je_auto
+    }
+    assert len(folgen) > 1
+
+
+def test_gleicher_seed_gleiche_strategien(k, zandvoort, strecken):
+    feld = kern_rennen.starterfeld(k, LIGA, seedquelle=Seedquelle(1))
+    runden = kern_rennen.rundenzahl(k, zandvoort, LIGA)
+    faktor = kern_reifen.streckenfaktor(
+        k, zandvoort, kern_reifen.mittlere_querbeschleunigung(strecken)
+    )
+    autos = [t.auto for t in feld]
+    erst = sg.feldstrategien(k, autos, zandvoort, runden, faktor, None, Seedquelle(5))
+    nochmal = sg.feldstrategien(k, autos, zandvoort, runden, faktor, None, Seedquelle(5))
+    assert erst.je_auto == nochmal.je_auto

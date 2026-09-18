@@ -51,6 +51,7 @@ from rennmanager.kern import wertung as kern_wertung
 from rennmanager.kern.zeit import formatiere_dauer
 from rennmanager.konfiguration import Konfiguration
 from rennmanager.ui.qualifyingseite import Qualifyingseite
+from rennmanager.ui.reifenwahl import Reifenwahl
 from rennmanager.ui.rennseite import Rennseite
 from rennmanager.ui.tabellen import verbinde_fahrerkarte
 
@@ -99,7 +100,9 @@ class Rennwochenendeseite(QWidget):
         self._blaetter.addWidget(self._baue_vorschau())
         self._quali = Qualifyingseite(konfiguration)
         self._quali.fahrerkarte_gewuenscht.connect(self.fahrerkarte_gewuenscht.emit)
-        self._blaetter.addWidget(self._quali)
+        self._reifenwahl = Reifenwahl(konfiguration)
+        self._reifenwahl.gewaehlt.connect(self._reifen_gewaehlt)
+        self._blaetter.addWidget(self._baue_qualifyingblatt())
         self._rennen = Rennseite(konfiguration, lauf.welt, lauf.karriere)
         self._rennen.fahrerkarte_gewuenscht.connect(self.fahrerkarte_gewuenscht.emit)
         self._blaetter.addWidget(self._rennen)
@@ -202,6 +205,30 @@ class Rennwochenendeseite(QWidget):
         spalte.addWidget(self._standkasten, stretch=1)
         return seite
 
+    def _baue_qualifyingblatt(self) -> QWidget:
+        """Das Qualifying und darunter die Reifenwahl fuers Rennen.
+
+        Beides auf einem Blatt: Die Wahl gehoert an die Stelle, an der man
+        sie trifft - nach dem Qualifying und vor dem Start. Ein eigener
+        Schritt waere ein Klick mehr fuer eine Entscheidung, die viele
+        Wochenenden lang dieselbe bleibt.
+        """
+        seite = QWidget()
+        spalte = QVBoxLayout(seite)
+        spalte.setContentsMargins(0, 0, 0, 0)
+        spalte.addWidget(self._quali, stretch=3)
+        spalte.addWidget(self._reifenwahl, stretch=1)
+        return seite
+
+    def _reifen_gewaehlt(self, nummer: int, strategie) -> None:
+        """Gibt die Wahl an den Wochenendlauf weiter."""
+        if self._wochenende is None:  # pragma: no cover - ohne Wochenende kein Feld
+            return
+        try:
+            self._wochenende.waehle_reifen(nummer, strategie)
+        except kern_saison.SaisonFehler as fehler:  # pragma: no cover - Notfall
+            QMessageBox.warning(self, "Reifenwahl", str(fehler))
+
     def _baue_ergebnis(self) -> QWidget:
         seite = QWidget()
         spalte = QVBoxLayout(seite)
@@ -268,6 +295,13 @@ class Rennwochenendeseite(QWidget):
         try:
             if self._schritt == 0:
                 self._quali.zeige_session(self._wochenende.fahre_qualifying())
+                # Punkt 39: Jetzt steht fest, was zur Wahl steht - das
+                # Wetter des Rennens und die tragfaehigen Strategien.
+                self._reifenwahl.zeige(
+                    self._wochenende.strategiewahl(),
+                    self._lauf.welt,
+                    self._wochenende.runden,
+                )
                 self._schritt = 1
             elif self._schritt == 1:
                 verlauf = self._wochenende.fahre_rennen()

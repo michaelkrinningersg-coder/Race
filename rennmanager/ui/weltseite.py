@@ -76,6 +76,27 @@ class Weltseite(QWidget):
 
         self._zeige_liga()
 
+    # -- Nachziehen --------------------------------------------------------
+    def setze_welt(self, welt: Welt) -> None:
+        """Nimmt eine frische Welt an und zeichnet die Liste neu.
+
+        Die Werte der eigenen Autos stehen in der Karriere, nicht in der
+        Welt (GDD 1). Wer einen Tag belegt oder etwas kauft, aendert sie -
+        und diese Seite muss das zeigen, sonst bleibt der Steckbrief auf
+        dem Anfangsstand stehen.
+        """
+        self._welt = welt
+        gewaehlt = self._liste.currentItem()
+        nummer = gewaehlt.data(0, Qt.UserRole) if gewaehlt is not None else None
+        self._zeige_liga()
+        if nummer is None:
+            return
+        for stelle in range(self._liste.topLevelItemCount()):
+            zeile = self._liste.topLevelItem(stelle)
+            if zeile.data(0, Qt.UserRole) == nummer:
+                self._liste.setCurrentItem(zeile)
+                break
+
     # -- Aufbau ------------------------------------------------------------
     def _baue_kopf(self) -> QHBoxLayout:
         zeile = QHBoxLayout()

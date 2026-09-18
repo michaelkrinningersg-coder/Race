@@ -29,6 +29,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from rennmanager.kern import form as kern_form
+from rennmanager.kern import reifen as kern_reifen
+from rennmanager.kern import strategie as kern_strategie
 from rennmanager.kern import wetter as kern_wetter
 from rennmanager.kern.auto import bereichswert, gesamtwert
 from rennmanager.kern.rennen import Teilnehmer
@@ -53,6 +55,9 @@ class Fahrt:
     tagesform: float
     zustand: str
     grip: float
+    # Punkt 39: Womit die Runde gefahren wurde. Im Qualifying keine Wahl,
+    # sondern eine Regel - deshalb steht das Kuerzel hier nur zur Anzeige.
+    mischung: str = ""
 
 
 @dataclass(frozen=True)
@@ -249,10 +254,18 @@ def fahre(
         grip = _grip_je_punkt(strecke, verlauf, konfiguration, auto, beginn_runde)
         runde = fahre_runde(konfiguration, strecke, auto, grip, grenzen)
 
-        # Rundenform, der Bonus aus der Q-Spalte und die Streckenkenntnis
-        # wirken auf die Zeit.
+        # Rundenform, der Bonus aus der Q-Spalte, die Streckenkenntnis und
+        # die Reifenmischung wirken auf die Zeit. Die Mischung ist im
+        # Qualifying keine Wahl, sondern eine Regel (Punkt 39): immer
+        # weich, im Nassen der passende Satz.
         streuung = kern_form.rundenform(konfiguration, auto, seedquelle.zweig("runde", i), 1)
-        faktor = streuung / ((1.0 + qualifyingbonus(konfiguration, auto)) * kenntnis)
+        misch = kern_strategie.qualifyingmischung(konfiguration, zustand)
+        mischfaktor = kern_reifen.mischungsfaktor(
+            konfiguration, misch, kern_reifen.naesse_von(konfiguration, zustand)
+        )
+        faktor = streuung / (
+            (1.0 + qualifyingbonus(konfiguration, auto)) * kenntnis * mischfaktor
+        )
         zeit = int(round(runde.zeit_ms * faktor))
         sektoren = tuple(int(round(wert * faktor)) for wert in runde.sektoren_ms)
         uhr += zeit
@@ -268,6 +281,7 @@ def fahre(
                 tagesform=sessionform.tagesform,
                 zustand=zustand,
                 grip=float(grip.mean()),
+                mischung=misch.kuerzel,
             )
         )
 

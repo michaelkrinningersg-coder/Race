@@ -24,7 +24,7 @@ ueber den Multiplikator aus GDD 7.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -32,6 +32,7 @@ import numpy as np
 from rennmanager.kern.auto import Auto, bereichswert
 from rennmanager.kern.strecke import Strecke
 from rennmanager.kern.tempo import leistungsanteil
+from rennmanager.kern.zufall import Seedquelle
 
 if TYPE_CHECKING:  # pragma: no cover
     from rennmanager.konfiguration import Konfiguration
@@ -177,6 +178,43 @@ def stintweite_m(
         einstellung["stint_basis_m"]
         * haltbarkeit(konfiguration, auto)
         / max(teiler, 1e-6)
+    )
+
+
+def mit_streuung(
+    konfiguration: Konfiguration, misch: Mischung, seedquelle: Seedquelle
+) -> Mischung:
+    """Dieselbe Mischung mit den kleinen Wuerfen eines Rennens.
+
+    Der Auftraggeber hat es so festgelegt: Je Fahrer, Mischung und Rennen
+    wird gewuerfelt - ``streuung_verschleiss`` auf den
+    **Verschleissfaktor** und ``streuung_tempo`` auf den **Tempofaktor**.
+    Die Vorausberechnung der Varianten kennt beide **nicht**; geplant wird
+    auf den Sollwerten. Dass Plan und Rennen dadurch auseinanderlaufen,
+    ist so gewollt: Eine Strategie geht mal knapper auf als auf dem
+    Papier, und zwei Autos auf derselben Folge fahren nicht dieselbe
+    Runde.
+
+    Zwei getrennte Zweige, damit ein Satz nicht zugleich schneller **und**
+    haltbarer herauskommt - das waere kein Zufall mehr, sondern ein
+    besserer Reifen.
+    """
+    einstellung = konfiguration.wert("reifen", "verschleiss")
+    fuer_verschleiss = einstellung["streuung_verschleiss"]
+    fuer_tempo = einstellung["streuung_tempo"]
+    if fuer_verschleiss <= 0.0 and fuer_tempo <= 0.0:
+        return misch
+    zweig = seedquelle.zweig(misch.schluessel)
+    auf_verschleiss = float(
+        zweig.zweig("verschleiss").generator().uniform(-fuer_verschleiss, fuer_verschleiss)
+    )
+    auf_tempo = float(
+        zweig.zweig("tempo").generator().uniform(-fuer_tempo, fuer_tempo)
+    )
+    return replace(
+        misch,
+        verschleiss=max(misch.verschleiss + auf_verschleiss, 1e-6),
+        tempo=max(misch.tempo + auf_tempo, 1e-6),
     )
 
 
