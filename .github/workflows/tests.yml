@@ -40,6 +40,8 @@ jobs:
       - name: Ruff
         run: ruff check .
 
+      # Verteilt sich ueber alle Kerne des Runners; die Einstellung
+      # dafuer steht in pyproject.toml (addopts: -n auto).
       - name: Pytest
         env:
           QT_QPA_PLATFORM: offscreen

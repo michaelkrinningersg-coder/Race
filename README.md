@@ -47,6 +47,18 @@ QT_QPA_PLATFORM=offscreen pytest
 ruff check .
 ```
 
+Der Lauf verteilt sich ueber `pytest-xdist` auf **alle Kerne** der
+Maschine - eingestellt in `pyproject.toml`, `pytest` allein genuegt also.
+Verteilt wird **je Datei** (`--dist loadfile`) und nicht je Test: Mehrere
+Dateien rechnen ein Rennen einmal in einem Fixture mit Modulgueltigkeit
+und zeigen es dann in jedem Test; auf mehrere Prozesse verstreut,
+rechnete jeder Prozess dasselbe Rennen noch einmal. Gemessen auf vier
+Kernen: **3:18 statt 9:10**.
+
+Wer einen einzelnen Fehler sucht, haengt `-n0` an. Dann laeuft alles
+wieder in einem Prozess - mit lesbarer Ausgabe, brauchbarem `--pdb` und
+einem `-x`, das wirklich sofort anhaelt.
+
 Unter Linux brauchen die Oberflaechen-Tests einige Qt-Systembibliotheken
 (`libegl1`, `libgl1`, `libdbus-1-3`, `libxkbcommon-x11-0` und die
 `libxcb-*`-Pakete); der Workflow `tests.yml` installiert sie.

@@ -16,6 +16,8 @@ dependencies = [
 entwicklung = [
     "pytest>=8.0",
     "pytest-qt>=4.4",
+    # Verteilt den Testlauf auf alle Kerne (siehe addopts weiter unten).
+    "pytest-xdist>=3.5",
     "ruff>=0.5",
     "pyinstaller>=6.6",
 ]
@@ -30,7 +32,17 @@ include = ["rennmanager*"]
 testpaths = ["tests"]
 # --durations zeigt bei jedem Lauf, welche Tests die Zeit fressen. Ohne
 # das faellt es erst auf, wenn der Lauf schon zwanzig Minuten braucht.
-addopts = "-q --durations=25"
+#
+# -n auto nimmt so viele Prozesse, wie die Maschine Kerne hat.
+# --dist loadfile verteilt **je Datei**, nicht je Test: Mehrere Dateien
+# teilen sich ein gerechnetes Rennen ueber ein Fixture mit
+# Modulgueltigkeit, und wuerden ihre Tests auf mehrere Prozesse
+# verstreut, rechnete jeder Prozess dasselbe Rennen noch einmal. So
+# bleibt jede Datei bei einem Prozess.
+#
+# Wer einen einzelnen Fehler sucht, haengt -n0 an: Dann laeuft alles
+# wieder in einem Prozess, mit lesbarer Ausgabe und brauchbarem --pdb.
+addopts = "-q --durations=25 -n auto --dist loadfile"
 qt_api = "pyside6"
 
 [tool.ruff]
