@@ -23,14 +23,16 @@ from tests.boxenstopp.hilfen import (
 )
 
 
-def test_beide_modi_fahren_dieselbe_strategie(k, monza, feld, umgebung):
+def test_beide_modi_fahren_dieselbe_strategie(ohne_verschiebung, monza, feld, umgebung):
     """Dieselbe Strategie, dieselben Stopprunden und Mischungen.
 
-    Hier zaehlt der **Plan**, also der mildere Streckenverschleiss: Mit dem
-    sonst ueblichen Faktor kaemen beide Modelle schon in Runde 6 wegen
-    abgefahrener Reifen herein, und die geplanten Runden rutschten.
+    Wie beim Planstopp-Test in ``test_rennen`` muessen zwei Dinge aus dem
+    Weg: der sonst uebliche Streckenverschleiss, der beide Modelle schon
+    in Runde 6 wegen abgefahrener Reifen hereinholte, und die
+    Verschiebeschwelle, die als Balancing-Wert die Stopprunde verschoebe.
     """
     mittel, _verschleiss = umgebung
+    k = ohne_verschiebung
     verschleiss = VERSCHLEISS_PLANSTOPP
     strategien = tuple(strategie_mit(k, (8, 16)) for _ in feld)
     voll = rn.simuliere(

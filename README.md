@@ -557,7 +557,11 @@ Drei Dinge halten sich nicht an den Plan:
   der letzten drei Runden wie fuer jeden anderen Stopp.
 * **Der Planstopp selbst.** Passt der geplante Reifen nicht mehr zur Lage,
   kommt der auf, der passt. Ohne das zoege ein Auto im Regen Slicks auf
-  und muesste zwei Runden spaeter wieder herein.
+  und muesste zwei Runden spaeter wieder herein. Und er wartet: Solange
+  der Satz noch besser als **65 Prozent** ist, faehrt das Auto Runde um
+  Runde weiter, bis er darunter faellt. Sonst gaebe es nach einem
+  Notstopp wenige Runden spaeter einen fast neuen Satz ab, nur weil der
+  Plan das so vorsah.
 
 **Nachsehen, was dabei herauskommt.** `python -m werkzeuge.boxenstopps`
 faehrt fuenf Rennen der Liga 1 und schreibt je Fahrer auf, auf welcher

@@ -10,7 +10,12 @@ from rennmanager.kern import reifen as kern_reifen
 from rennmanager.kern import rennen as rn
 from rennmanager.kern import strategie as sg
 from rennmanager.kern.zufall import Seedquelle
-from tests.boxenstopp.hilfen import RUNDEN, VERSCHLEISS_PLANSTOPP, strategie_mit
+from tests.boxenstopp.hilfen import (
+    RUNDEN,
+    VERSCHLEISS_MILD,
+    VERSCHLEISS_PLANSTOPP,
+    strategie_mit,
+)
 
 
 # -- Der Stopp im Rennen ----------------------------------------------------
@@ -23,14 +28,18 @@ def test_ohne_strategie_wird_nicht_gestoppt(k, monza, feld, umgebung):
     assert verlauf.boxenstopps == ()
 
 
-def test_der_geplante_stopp_wird_gefahren(k, monza, feld, umgebung):
-    """Hier zaehlt der **Plan**, also der mildere Streckenverschleiss.
+def test_der_geplante_stopp_wird_gefahren(ohne_verschiebung, monza, feld, umgebung):
+    """Der geplante Stopp faellt in die geplante Runde.
 
+    Zwei Dinge muessen dafuer aus dem Weg. Der **Streckenverschleiss**:
     Mit dem sonst ueblichen Faktor kaeme das Auto schon in Runde 6 wegen
-    abgefahrener Reifen herein, und der geplante Stopp rutschte nach
-    hinten - das prueft der Zwangsstopp-Test weiter unten.
+    abgefahrener Reifen herein - das prueft der Zwangsstopp-Test weiter
+    unten. Und die **Verschiebeschwelle**: Sie haengt an einem
+    Balancing-Wert, und der darf nicht bestimmen, ob dieser Test durch
+    ist. Wann verschoben wird, prueft der naechste Test.
     """
     mittel, _verschleiss = umgebung
+    k = ohne_verschiebung
     verlauf = rn.simuliere(
         k, monza, feld[:3], RUNDEN, Seedquelle(2), mittel,
         streckenverschleiss=VERSCHLEISS_PLANSTOPP,
@@ -76,6 +85,32 @@ def test_die_mischung_steht_im_verlauf(einzelstopp):
     assert einzelstopp.mischung_zu(stopp.zeit_ms + 20_000)[0] == "H"
     assert einzelstopp.gefahrene_mischungen(0, einzelstopp.dauer_ms) == ("W", "H")
     assert einzelstopp.mischungspflicht
+
+
+def test_ein_zu_guter_satz_verschiebt_den_stopp(k, monza, feld, umgebung):
+    """Ein Satz ueber der Schwelle wird nicht abgegeben, sondern weitergefahren.
+
+    Geplant ist Runde 8. Bei diesem milden Verschleiss traegt der Satz
+    dort noch weit mehr Profil, als die Schwelle zulaesst - also faehrt
+    das Auto Runde um Runde weiter, bis es darunter faellt.
+
+    Geprueft wird gegen den Wert **aus der Konfiguration**, nicht gegen
+    eine ausgerechnete Runde: ``planstopp_ab_restprofil`` ist ein
+    Balancing-Wert, und wenn der Auftraggeber ihn dreht, soll sich die
+    Stopprunde verschieben duerfen - die Regel dahinter nicht.
+    """
+    mittel, _verschleiss = umgebung
+    verlauf = rn.simuliere(
+        k, monza, feld[:3], RUNDEN, Seedquelle(2), mittel,
+        streckenverschleiss=VERSCHLEISS_MILD,
+        strategien=tuple(strategie_mit(k, (8, 16)) for _ in range(3)),
+    )
+    schwelle = k.wert("boxenstopp", "strategie", "planstopp_ab_restprofil")
+    for i in range(3):
+        stopps = verlauf.stopps_von(i)
+        assert stopps, "Zwei Mischungen sind Pflicht - ganz ausfallen darf der Stopp nicht"
+        assert stopps[0].runde > 8, "Ein Satz ueber der Schwelle gehoert nicht in die Box"
+        assert stopps[0].restprofil <= schwelle
 
 
 # -- Zwangsstopp bei abgefahrenem Reifen ------------------------------------

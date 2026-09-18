@@ -21,12 +21,25 @@ TROCKEN = 0
 # geplanten Stopprunde unter die Verschiebeschwelle faellt - und seit dem
 # Zwangsstopp bei 30 % Restprofil auch hoch genug, dass dieser greift.
 VERSCHLEISS = 3.0
-# Dazwischen liegt ein schmales Fenster: Wer pruefen will, dass ein
-# **geplanter** Stopp wirklich in seiner Runde gefahren wird, braucht
-# einen Satz, der bis dahin unter 75 % faellt (sonst wird der Stopp
-# verschoben), aber ueber 30 % bleibt (sonst kommt vorher der
-# Zwangsstopp). Gemessen: 1,5 trifft das, 1,0 und 2,0 nicht.
+# Wer pruefen will, dass ein **geplanter** Stopp in seiner Runde gefahren
+# wird, braucht einen Satz, der bis dahin ueber 30 % bleibt - sonst kommt
+# vorher der Zwangsstopp. Gemessen: 1,5 laesst in Runde 8 noch 47 % und
+# in Runde 16 noch 63 % uebrig.
+#
+# Die Verschiebeschwelle muss fuer solche Tests aus dem Weg (Fixture
+# ``ohne_verschiebung``). Sonst haengt die Stopprunde an einem
+# Balancing-Wert: Mit 0,75 fiel der Stopp in Runde 16, mit 0,65 in
+# Runde 17 - dieselbe Mechanik, andere Zahl. Dass verschoben wird, prueft
+# ``test_ein_zu_guter_satz_verschiebt_den_stopp`` eigens, und zwar gegen
+# die Schwelle aus der Konfiguration statt gegen eine feste Runde.
 VERSCHLEISS_PLANSTOPP = 1.5
+# Und andersherum: So schonend, dass ein fuer Runde 8 geplanter Stopp
+# sicher verschoben wird. Gemessen ueber acht Faktoren von 0,3 bis 2,5
+# faellt der Stopp immer dorthin, wo der Satz die Schwelle reisst - bei
+# 0,8 ist das Runde 10 mit 63 bis 65 % Restprofil. Bei 0,3 traegt der
+# Satz das ganze Rennen und es wird gar nicht gestoppt, bei 1,0 liegt er
+# in Runde 8 schon genau auf der Schwelle.
+VERSCHLEISS_MILD = 0.8
 
 
 def strategie_mit(k, stopps):

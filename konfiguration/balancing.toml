@@ -1210,9 +1210,18 @@ fenster_min_runden = 2
 mindest_restprofil = 0.30
 # Ein geplanter Stopp wird verschoben, solange der Satz noch besser als
 # dieser Wert ist - Runde um Runde, bis er darunter faellt. Sonst gibt
-# ein Auto nach einem Notstopp wegen Wetterwechsels vier Runden spaeter
-# einen fast neuen Satz ab, nur weil der Plan das so vorsah.
-planstopp_ab_restprofil = 0.75
+# ein Auto nach einem Notstopp vier Runden spaeter einen fast neuen Satz
+# ab, nur weil der Plan das so vorsah.
+#
+# Stand auf 0,75 und traf damit zu knapp daneben: Ein Satz, der sieben
+# Runden nach einem Zwangsstopp bei 72 Prozent stand, rutschte darunter
+# durch und wurde weggeworfen - auf Zandvoort 22 von 107 Stopps, 14 davon
+# ohne jeden Mischungswechsel, also rund 25 Sekunden fuer nichts.
+# Entscheidung des Auftraggebers: 0,65. Gemessen danach: Ein verworfener
+# Satz hat noch 64 statt 72 Prozent, und ueber die fuenf Strecken fallen
+# 4 von 47 dieser Stopps ganz weg. Die uebrigen bleiben - das Verschieben
+# rueckt den Stopp nur nach hinten, es streicht ihn nicht.
+planstopp_ab_restprofil = 0.65
 # Wie weit eine Variante hinter der besten liegen darf, bevor sie
 # ausscheidet: ein Sockel plus ein Anteil je 100 km Renndistanz. Bei
 # 100 km sind das 30 s, bei 200 km 45 s, bei 300 km 60 s - so hat es der

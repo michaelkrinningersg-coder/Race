@@ -1905,7 +1905,60 @@ ist. Ein Satz, der nach sieben Runden bei 72 Prozent steht, rutscht knapp
 darunter durch. Auf Zandvoort sind das 22 von 107 Stopps, 14 davon ohne
 jeden Mischungswechsel — also rund 25 Sekunden für nichts.
 
-**Das ist ein Balancing-Wert und deshalb eine Frage an den Auftraggeber**,
-keine eigene Entscheidung. Drei Wege stehen offen: die Schwelle anheben,
-einen Zwangsstopp den nächsten geplanten streichen lassen, oder es so
-belassen — dann kostet ein abgefahrener Reifen eben doppelt.
+**Entscheidung des Auftraggebers:** Die Schwelle geht auf **0,65** — ein
+geplanter Stopp wird also verschoben, bis der Satz unter 65 Prozent
+fällt. Gemessen mit demselben Werkzeug, denselben fünf Strecken und
+demselben Weltseed:
+
+| Strecke | Stopps | davon Zwang | Planstopp nach Zwang | Rest dabei | davon ohne Mischungswechsel |
+| --- | --- | --- | --- | --- | --- |
+| Zandvoort | 107 → **104** | 26 → **25** | 25 → **22** | 72,0 → **63,8 %** | 15 → **14** |
+| Sao Paulo | 75 → **75** | 6 → **6** | 4 → **4** | 58,0 → **58,0 %** | 2 → **2** |
+| Nürburgring | 90 → **88** | 13 → **12** | 12 → **11** | 72,3 → **62,4 %** | 7 → **5** |
+| Silverstone | 78 → **78** | 6 → **6** | 6 → **6** | 60,9 → **60,9 %** | 1 → **1** |
+| Monza | 49 → **47** | 3 → **3** | — | — | — |
+
+Die Stoppverteilung je Auto rutscht mit: In Zandvoort fahren jetzt sechs
+statt acht Autos fünf Stopps, am Nürburgring verschwinden die
+Fünf-Stopp-Autos ganz (zwei vorher, keines jetzt), in Monza kommen elf
+statt neun mit einem einzigen Stopp aus. Ohne Stopp kommt weiterhin
+niemand ins Ziel.
+
+**Was der Wert nicht behebt, und das ist ehrlich zu sagen:** Er macht
+jeden verworfenen Satz billiger — acht Prozentpunkte weniger Profil
+landen im Müll —, aber er verhindert den Stopp nicht. Über alle fünf
+Strecken sinkt die Zahl der Planstopps direkt nach einem Zwangsstopp nur
+von 47 auf 43, und die davon ohne jeden Mischungswechsel von 25 auf 22.
+Der Grund liegt in der Sache: Das Verschieben rückt den Stopp um zwei bis
+drei Runden nach hinten, gefahren wird er trotzdem. Wer diese 22 ganz
+loswerden will, braucht die andere Regel — dass ein Zwangsstopp den
+nächsten geplanten streicht. Die ist nicht gebaut; sie steht hier nur
+als das, was noch offen wäre.
+
+### Dabei behoben: Zwei Tests hingen an einem Balancing-Wert
+
+Die Umstellung auf 0,65 ließ zwei Tests durchfallen —
+`test_der_geplante_stopp_wird_gefahren` und
+`test_beide_modi_fahren_dieselbe_strategie`. Beide prüften, dass ein für
+Runde 16 geplanter Stopp in Runde 16 gefahren wird; jetzt fiel er in
+Runde 17.
+
+Am Code war nichts falsch. Falsch war der Test: Ob der Stopp in Runde 16
+oder 17 fällt, entscheidet `planstopp_ab_restprofil` — ein Wert, den der
+Auftraggeber drehen darf. Ein Test der **Mechanik** darf daran nicht
+hängen. Das ist dieselbe Lehre wie bei der Gripkurve in Punkt 77, nur
+andersherum: Dort wiederholten Tests eine Zahl aus der Konfiguration,
+hier hing eine Rundenzahl indirekt daran.
+
+Beide Tests laufen jetzt über das schon vorhandene Fixture
+`ohne_verschiebung`, das die Schwelle auf 1,0 setzt — verschoben wird dann
+nie, und die geplante Runde ist die gefahrene, egal wie der Wert steht.
+
+Damit die Verschiebung nicht ungeprüft bleibt — sie hatte bis dahin
+keinen eigenen Test —, steht sie jetzt in
+`test_ein_zu_guter_satz_verschiebt_den_stopp`. Der prüft nicht gegen eine
+ausgerechnete Runde, sondern gegen die Regel: Der Stopp fällt **nicht**
+in die geplante Runde, und wenn er fällt, ist das Restprofil höchstens so
+hoch wie die Schwelle aus der Konfiguration. Gemessen über acht
+Verschleißfaktoren von 0,3 bis 2,5 hält das durchweg — der Stopp landet
+immer bei 61 bis 65 Prozent, ganz gleich, in welcher Runde das ist.

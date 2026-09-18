@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import statistics
+from collections import Counter
 from dataclasses import dataclass
 
 from rennmanager import konfiguration as kf
@@ -218,6 +219,14 @@ def zeige(lauf: dict) -> None:
         f"Median {statistics.median(je_auto):.1f}   "
         f"Notstopps: {sum(1 for b in alle if b.notstopp)}"
     )
+    # Die Spanne allein verschweigt, wo das Feld wirklich liegt: "1-5"
+    # kann heissen, dass alle drei fahren und einer ausreisst, oder dass
+    # sich das Feld gleichmaessig verteilt. Deshalb die ganze Verteilung.
+    verteilung = Counter(je_auto)
+    print(
+        "Verteilung: "
+        + "   ".join(f"{zahl} Stopps: {verteilung[zahl]:2d} Autos" for zahl in sorted(verteilung))
+    )
     print(
         f"Restprofil beim Stopp: min {reste[0]:.1f} %  "
         f"25 % {perzentil(reste, 0.25):.1f} %  "
@@ -236,6 +245,25 @@ def zeige(lauf: dict) -> None:
         haeufigkeit[folge] = haeufigkeit.get(folge, 0) + 1
     gereiht = sorted(haeufigkeit.items(), key=lambda paar: -paar[1])
     print("Mischungsfolgen im Ziel: " + ", ".join(f"{folge} x{zahl}" for folge, zahl in gereiht))
+
+    # Ein Zwangsstopp zieht einen frischen Satz auf. Will der Plan ihn
+    # kurz darauf schon wieder abgeben, wandert gutes Profil in den Muell
+    # - und wenn dabei nicht einmal die Mischung wechselt, war der Stopp
+    # ganz umsonst. Genau dagegen steht planstopp_ab_restprofil; diese
+    # Zeile zeigt, ob die Schwelle passt.
+    danach = []
+    for i in range(len(verlauf.teilnehmer)):
+        stopps = verlauf.stopps_von(i)
+        for vorher, nachher in zip(stopps, stopps[1:], strict=False):
+            if vorher.notstopp and not nachher.notstopp:
+                danach.append(nachher)
+    if danach:
+        umsonst = sum(1 for b in danach if b.von == b.nach)
+        print(
+            f"Planstopp direkt nach einem Zwangsstopp: {len(danach)}, "
+            f"Median {statistics.median(b.restprofil * 100 for b in danach):.1f} % Restprofil, "
+            f"{umsonst} davon ohne Mischungswechsel"
+        )
 
     # Wer durchfaehrt, ohne zu stoppen, schleicht am Ende auf blankem
     # Gummi - das faellt in der Tabelle nur auf, wenn man danach sucht.
