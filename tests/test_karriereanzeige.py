@@ -210,8 +210,10 @@ def test_punkteverlauf_waechst_mit_jedem_rennen(qtbot, konfig) -> None:
     ansicht = seite.punkteansicht
 
     assert ansicht.rennen == 0
-    seite.knopf_rennwochenende.click()
-    seite.knopf_rennwochenende.click()
+    seite.lauf.fahre_rennen()
+    seite._aktualisiere()
+    seite.lauf.fahre_rennen()
+    seite._aktualisiere()
     assert ansicht.rennen == 2
 
     autos = konfig.wert("ligen", "autos_je_liga")
@@ -227,7 +229,8 @@ def test_punkteverlauf_hebt_spieler_und_auswahl_hervor(qtbot, konfig) -> None:
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
     seite = fenster.saisonseite
-    seite.knopf_rennwochenende.click()
+    seite.lauf.fahre_rennen()
+    seite._aktualisiere()
     ansicht = seite.punkteansicht
 
     spieler = fenster.welt.spieler
@@ -264,7 +267,8 @@ def test_punkteverlauf_wird_beim_saisonwechsel_geleert(qtbot, konfig) -> None:
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
     seite = fenster.saisonseite
-    seite.knopf_rennwochenende.click()
+    seite.lauf.fahre_rennen()
+    seite._aktualisiere()
     assert seite.punkteansicht.rennen == 1
 
     fahre_saison_zu_ende(konfig, seite)

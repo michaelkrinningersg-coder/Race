@@ -1420,3 +1420,25 @@ Fahrer, nur Autos. Ein Doppelklick dort hätte nicht sagen können, wessen
 Karte zu öffnen ist. Der Teilnehmer trägt die Nummer jetzt als reines
 Anzeigefeld mit; die Simulation liest sie nie, und ein Feld aus
 `rennen.starterfeld` hat keinen Fahrer dahinter und behält die 0.
+
+---
+
+## Nachtrag: Block 3
+
+### 60. Zuschnitt des gefuehrten Rennwochenendes (Punkt 12)
+
+| Frage | Entscheidung |
+| --- | --- |
+| Was fährt der Reiter? | **Das echte Saisonrennen.** Strecke, Rundenzahl, Aufstellung und Seed kommen aus Kalender und Saison; das Ergebnis zählt für Tabelle, Preisgeld, Erfahrung und Streckenkenntnis |
+| Freie Wahl von Strecke, Liga, Runden, Seed, Aufstellung | **Ganz weg.** Zum Kalibrieren bleiben `--pruefe` und die Werkzeuge unter `werkzeuge/` |
+| Knopf „Rennwochenende" auf der Saisonseite | **Verschwindet.** Gefahren wird nur noch geführt; „Restliche Saison" bleibt für den Rest des Jahres |
+| Ersetzt der Reiter auch die Saisonseite? | **Nein.** Nur Qualifying und Rennen verschwinden, Saison bleibt eigener Reiter |
+| Startdialog (Punkt 11) | **Name, Land, Geburtstag.** Startliga fest 20, kein Seed-Feld |
+
+### Dabei behoben: Schon das Aufschlagen des Reiters kostete Zeit
+
+Der erste Entwurf baute den `Wochenendlauf` samt Kalendersprung im
+Konstruktor. Damit schaltete das Öffnen des Fensters den Kalender auf den
+Renntag vor — 56 nutzbare Tage weg, nur weil man hingesehen hat, und die
+Testreihe lief in ihr Zeitlimit. Der Aufbau ist jetzt eine reine Vorschau;
+erst `fahre_qualifying` beginnt das Wochenende.

@@ -42,8 +42,7 @@ from rennmanager.ui.editorseite import Editorseite
 from rennmanager.ui.fahrerkarte import Fahrerkarte
 from rennmanager.ui.karriereseite import Karriereseite
 from rennmanager.ui.karriereseite import beginne as beginne_karriere
-from rennmanager.ui.qualifyingseite import Qualifyingseite
-from rennmanager.ui.rennseite import Rennseite
+from rennmanager.ui.rennwochenendeseite import Rennwochenendeseite
 from rennmanager.ui.rundenseite import Rundenseite
 from rennmanager.ui.saisonseite import Saisonseite
 from rennmanager.ui.sponsorenseite import Sponsorenseite
@@ -164,12 +163,6 @@ class Hauptfenster(QMainWindow):
             self._popularitaet,
         )
         self._reiter.addTab(self._sponsorenseite, "Sponsoren")
-        self._qualifyingseite = Qualifyingseite(
-            self._konfiguration, self._welt, self._karriere
-        )
-        self._reiter.addTab(self._qualifyingseite, "Qualifying")
-        self._rennseite = Rennseite(self._konfiguration, self._welt, self._karriere)
-        self._reiter.addTab(self._rennseite, "Rennen")
         self._saisonseite = Saisonseite(
             self._konfiguration,
             self._welt,
@@ -183,6 +176,14 @@ class Hauptfenster(QMainWindow):
             popularitaet=self._popularitaet,
         )
         self._saisonseite.saison_gewechselt.connect(self._saison_gewechselt)
+        # Punkt 12: Das gefuehrte Wochenende ersetzt die Reiter Qualifying
+        # und Rennen. Es steht vor der Saison, weil es der Weg ist, den
+        # der Spieler jede zweite Woche geht.
+        self._wochenendeseite = Rennwochenendeseite(
+            self._konfiguration, self._saisonseite.lauf
+        )
+        self._wochenendeseite.wochenende_gefahren.connect(self._wochenende_gefahren)
+        self._reiter.addTab(self._wochenendeseite, "Rennwochenende")
         self._reiter.addTab(self._saisonseite, "Saison")
         self._statistikseite = Statistikseite(
             self._konfiguration, self._welt, self._statistik
@@ -217,8 +218,7 @@ class Hauptfenster(QMainWindow):
         """
         for seite in (
             self._weltseite,
-            self._qualifyingseite,
-            self._rennseite,
+            self._wochenendeseite,
             self._saisonseite,
             self._statistikseite,
         ):
@@ -252,6 +252,19 @@ class Hauptfenster(QMainWindow):
         self._karten[nummer] = karte
         karte.show()
         return karte
+
+    def _wochenende_gefahren(self) -> None:
+        """Nach einem gefuehrten Wochenende steht die Saison woanders.
+
+        Die Saisonseite haelt denselben ``Saisonlauf``, muss ihre Anzeige
+        aber neu lesen; Karriere und Statistik ebenso.
+        """
+        self._saisonseite._aktualisiere()
+        self.statusBar().showMessage(
+            f"Rennwochenende gefahren - {self._saisonseite.lauf.gefahren} von "
+            f"{self._saisonseite.lauf.rennen_je_saison} Rennen",
+            8000,
+        )
 
     def _reiter_gewechselt(self, stelle: int) -> None:
         seite = self._reiter.widget(stelle)
@@ -391,14 +404,19 @@ class Hauptfenster(QMainWindow):
         return self._karriereseite
 
     @property
-    def qualifyingseite(self) -> Qualifyingseite:
-        """Die Seite mit dem Qualifying."""
-        return self._qualifyingseite
+    def wochenendeseite(self) -> Rennwochenendeseite:
+        """Der gefuehrte Reiter: Vorschau, Qualifying, Rennen, Ergebnis."""
+        return self._wochenendeseite
 
     @property
-    def rennseite(self) -> Rennseite:
-        """Die Seite mit der Rennsimulation."""
-        return self._rennseite
+    def qualifyingseite(self):
+        """Die Qualifying-Anzeige im gefuehrten Wochenende."""
+        return self._wochenendeseite.qualifyingseite
+
+    @property
+    def rennseite(self):
+        """Die Rennanzeige im gefuehrten Wochenende."""
+        return self._wochenendeseite.rennseite
 
     @property
     def saisonseite(self) -> Saisonseite:

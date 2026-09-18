@@ -16,7 +16,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QProgressBar,
     QPushButton,
-    QSpinBox,
     QSplitter,
     QTabWidget,
     QTreeWidget,
@@ -25,13 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from rennmanager.kern import qualifying as kern_qualifying
-from rennmanager.kern import reifen as kern_reifen
-from rennmanager.kern import rennen as kern_rennen
 from rennmanager.kern import strecke as kern_strecke
-from rennmanager.kern import tempo as kern_tempo
-from rennmanager.kern import welt as kern_welt
-from rennmanager.kern import wetter as kern_wetter
 from rennmanager.kern.rennen import Rennverlauf
 from rennmanager.kern.welt import Welt
 from rennmanager.kern.zeit import (
@@ -39,7 +32,6 @@ from rennmanager.kern.zeit import (
     formatiere_rueckstand,
     formatiere_runden_rueckstand,
 )
-from rennmanager.kern.zufall import Seedquelle
 from rennmanager.konfiguration import Konfiguration
 from rennmanager.ui.rueckstandsansicht import Rueckstandsansicht
 from rennmanager.ui.streckenansicht import Streckenansicht
@@ -60,7 +52,16 @@ BREITE_REIFEN = 96
 
 
 class Rennseite(QWidget):
-    """Berechnet ein Rennen und spielt es ab."""
+    """Spielt ein fertig gerechnetes Rennen ab (GDD 4).
+
+    Die Seite rechnet nichts: Sie bekommt einen ``Rennverlauf`` von aussen
+    - vom gefuehrten Rennwochenende (Punkt 12) - und macht daraus eine
+    Uebertragung. Frei einstellbare Testrennen gab es hier frueher; sie
+    sind mit dem gefuehrten Wochenende entfallen, weil gefahren wird, was
+    der Kalender vorgibt (GDD 2). Zum Kalibrieren dienen
+    ``python -m rennmanager --pruefe`` und die Werkzeuge unter
+    ``werkzeuge/``, die ohne Oberflaeche laufen.
+    """
 
     # Doppelklick auf eine Zeile: Das Fenster oeffnet die Fahrerkarte. Die
     # Listen hier fuehren die Startnummer im Feld, nicht die des Fahrers -
@@ -97,7 +98,6 @@ class Rennseite(QWidget):
         self._uhr.timeout.connect(self._takt)
 
         spalte = QVBoxLayout(self)
-        spalte.addLayout(self._baue_steuerung())
         spalte.addLayout(self._baue_wiedergabe())
 
         self._blaetter = QTabWidget()
@@ -112,50 +112,6 @@ class Rennseite(QWidget):
         spalte.addWidget(teiler, stretch=1)
 
     # -- Aufbau ------------------------------------------------------------
-    def _baue_steuerung(self) -> QHBoxLayout:
-        zeile = QHBoxLayout()
-
-        self._auswahl = QComboBox()
-        for eintrag in self._konfiguration.strecken:
-            self._auswahl.addItem(f"{eintrag['nummer']:>2}  {eintrag['name']}", eintrag["name"])
-
-        self._liga = QComboBox()
-        for nummer in range(1, self._konfiguration.wert("ligen", "anzahl") + 1):
-            self._liga.addItem(f"Liga {nummer} - {self._konfiguration.ligenname(nummer)}", nummer)
-        spieler = self._welt.spieler
-        self._liga.setCurrentIndex((spieler.liga - 1) if spieler else 0)
-
-        self._seed = QSpinBox()
-        self._seed.setRange(0, 2**31 - 1)
-        self._seed.setValue(4711)
-        self._seed.setGroupSeparatorShown(True)
-
-        self._runden = QSpinBox()
-        self._runden.setRange(1, 200)
-        self._runden.setValue(5)
-
-        self._aufstellung = QComboBox()
-        self._aufstellung.addItem("Aufstellung aus dem Qualifying", "qualifying")
-        self._aufstellung.addItem("Aufstellung nach Staerke", "staerke")
-        self._aufstellung.addItem("Staerkster startet hinten", "umgedreht")
-
-        self._starten = QPushButton("Rennen berechnen")
-        self._starten.clicked.connect(self._berechne)
-
-        for beschriftung, feld in (
-            ("Strecke:", self._auswahl),
-            ("Liga:", self._liga),
-            ("Runden:", self._runden),
-            ("Seed:", self._seed),
-            ("", self._aufstellung),
-        ):
-            if beschriftung:
-                zeile.addWidget(QLabel(beschriftung))
-            zeile.addWidget(feld)
-        zeile.addWidget(self._starten)
-        zeile.addStretch(1)
-        return zeile
-
     def _baue_wiedergabe(self) -> QHBoxLayout:
         zeile = QHBoxLayout()
 
@@ -247,101 +203,25 @@ class Rennseite(QWidget):
         spalte.addWidget(self._tickerkasten, stretch=2)
         return seite
 
-    # -- Rennen berechnen --------------------------------------------------
-    def _spielerautos(self, liga: int) -> dict:
-        """Das Auto des Spielers, wenn er in dieser Liga faehrt (GDD 1, 14)."""
-        if self._karriere is None or self._karriere.liga != liga:
-            return {}
-        nummer = self._karriere.fahrernummer
-        return {nummer: self._karriere.rennauto(self._welt.fahrer[nummer].auto)}
+    # -- Rennen uebernehmen ------------------------------------------------
+    def zeige_verlauf(
+        self,
+        verlauf: Rennverlauf,
+        strecke: kern_strecke.Strecke,
+        qualifying=None,
+    ) -> None:
+        """Uebernimmt ein fertig gerechnetes Rennen und spielt es ab.
 
-    def _lade_strecke(self, name: str) -> kern_strecke.Strecke:
-        if name not in self._strecken:
-            self._strecken[name] = kern_strecke.lade(self._konfiguration, name)
-        return self._strecken[name]
-
-    def _mittlerer_anteil(self) -> float:
-        alle = [self._lade_strecke(e["name"]) for e in self._konfiguration.strecken]
-        return kern_rennen.mittlerer_ueberholzonenanteil(self._konfiguration, alle)
-
-    def _berechne(self) -> None:
+        Gerechnet hat es der Kern - beim gefuehrten Wochenende der
+        ``Wochenendlauf`` (Punkt 12). Die Seite ist reine Uebertragung.
+        """
         self._halte_an()
-        self._starten.setEnabled(False)
-        self._starten.setText("Berechne ...")
-        try:
-            strecke = self._lade_strecke(self._auswahl.currentData())
-            liga = self._liga.currentData()
-            art = self._aufstellung.currentData()
-            haupt = Seedquelle(self._seed.value())
-
-            # Das Feld kommt aus der Welt: echte Fahrer, Teams und
-            # Herstellerzuordnung (GDD 12).
-            feld = kern_welt.starterfeld(
-                self._welt, liga, autos=self._spielerautos(liga)
-            )
-            if art == "umgedreht":
-                anzahl = len(feld)
-                feld = tuple(
-                    kern_rennen.Teilnehmer(
-                        auto=t.auto,
-                        startplatz=anzahl + 1 - t.startplatz,
-                        farbe=t.farbe,
-                        ist_spieler=t.ist_spieler,
-                        nummer=t.nummer,
-                    )
-                    for t in feld
-                )
-            if art == "qualifying":
-                # Das Qualifying bestimmt die Startaufstellung (GDD 4).
-                self._qualifying = kern_qualifying.fahre(
-                    self._konfiguration, strecke, feld, haupt.zweig("qualifying")
-                )
-                feld = tuple(
-                    kern_rennen.Teilnehmer(
-                        auto=feld[i].auto,
-                        startplatz=platz,
-                        farbe=feld[i].farbe,
-                        ist_spieler=feld[i].ist_spieler,
-                        nummer=feld[i].nummer,
-                    )
-                    for platz, i in enumerate(self._qualifying.aufstellung, start=1)
-                )
-            else:
-                self._qualifying = None
-
-            # Das Wetter des Rennens wird getrennt vom Qualifying gewuerfelt
-            # (GDD 7).
-            rundendauer = kern_tempo.fahre_runde(
-                self._konfiguration, strecke, feld[0].auto
-            ).zeit_ms
-            wetter = kern_wetter.wuerfle(
-                self._konfiguration,
-                strecke.name,
-                rundendauer * self._runden.value(),
-                rundendauer,
-                haupt.zweig("rennwetter"),
-            )
-            alle = [self._lade_strecke(e["name"]) for e in self._konfiguration.strecken]
-            self._verlauf = kern_rennen.simuliere(
-                self._konfiguration,
-                strecke,
-                feld,
-                self._runden.value(),
-                haupt.zweig("rennen"),
-                self._mittlerer_anteil(),
-                wetter=wetter,
-                streckenverschleiss=kern_reifen.streckenfaktor(
-                    self._konfiguration, strecke, kern_reifen.mittlere_querbeschleunigung(alle)
-                ),
-            )
-        finally:
-            self._starten.setEnabled(True)
-            self._starten.setText("Rennen berechnen")
-
+        self._verlauf = verlauf
+        self._qualifying = qualifying
         self._ansicht.zeige(strecke)
-        self._rueckstand.zeige(self._verlauf)
+        self._rueckstand.zeige(verlauf)
         self._auswahl_geaendert(None)
-        self._fortschritt.setRange(0, max(self._verlauf.dauer_ms, 1))
+        self._fortschritt.setRange(0, max(verlauf.dauer_ms, 1))
         for knopf in (self._abspielen, self._zurueck, self._sofort):
             knopf.setEnabled(True)
         self._waehle_zeitraffer()

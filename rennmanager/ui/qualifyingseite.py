@@ -3,6 +3,10 @@
 Zeigt die Fahrten in der Reihenfolge, in der sie stattfinden, und sortiert
 sie live ins Ranking ein. Die Sektorzeiten stehen mit Vorzeichen gegen die
 jeweils aktuelle Bestzeit: schneller in Gruen, langsamer in Rot.
+
+Die Seite rechnet nichts: Sie bekommt eine gefahrene Session von aussen -
+vom gefuehrten Rennwochenende (Punkt 12) - und macht daraus eine
+Uebertragung.
 """
 
 from __future__ import annotations
@@ -10,27 +14,20 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QComboBox,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
     QSlider,
-    QSpinBox,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
-from rennmanager.kern import qualifying as kern_qualifying
-from rennmanager.kern import strecke as kern_strecke
-from rennmanager.kern import welt as kern_welt
 from rennmanager.kern.qualifying import Qualifying
-from rennmanager.kern.welt import Welt
 from rennmanager.kern.zeit import formatiere_dauer, formatiere_rueckstand
-from rennmanager.kern.zufall import Seedquelle
 from rennmanager.konfiguration import Konfiguration
 from rennmanager.ui.tabellen import verbinde_fahrerkarte
 
@@ -39,7 +36,7 @@ FARBE_LANGSAMER = QColor("#c62828")
 
 
 class Qualifyingseite(QWidget):
-    """Faehrt ein Qualifying und zeigt die Live-Einsortierung."""
+    """Zeigt ein gefahrenes Qualifying mit Live-Einsortierung."""
 
     # Doppelklick auf eine Zeile: Das Fenster oeffnet die Fahrerkarte.
     fahrerkarte_gewuenscht = Signal(int)
@@ -47,21 +44,13 @@ class Qualifyingseite(QWidget):
     def __init__(
         self,
         konfiguration: Konfiguration,
-        welt: Welt,
-        karriere=None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._konfiguration = konfiguration
-        self._welt = welt
-        # Die entwickelten Werte des Spielers stehen in der Karriere, nicht
-        # in der Welt (GDD 1 und 14); ohne sie faehrt er hier mit Nullen.
-        self._karriere = karriere
-        self._strecken: dict[str, kern_strecke.Strecke] = {}
         self._session: Qualifying | None = None
 
         spalte = QVBoxLayout(self)
-        spalte.addLayout(self._baue_steuerung())
         spalte.addLayout(self._baue_fortschritt())
 
         inhalt = QHBoxLayout()
@@ -70,37 +59,6 @@ class Qualifyingseite(QWidget):
         spalte.addLayout(inhalt, stretch=1)
 
     # -- Aufbau ------------------------------------------------------------
-    def _baue_steuerung(self) -> QHBoxLayout:
-        zeile = QHBoxLayout()
-        self._auswahl = QComboBox()
-        for eintrag in self._konfiguration.strecken:
-            self._auswahl.addItem(f"{eintrag['nummer']:>2}  {eintrag['name']}", eintrag["name"])
-
-        self._liga = QComboBox()
-        for nummer in range(1, self._konfiguration.wert("ligen", "anzahl") + 1):
-            self._liga.addItem(f"Liga {nummer} - {self._konfiguration.ligenname(nummer)}", nummer)
-        spieler = self._welt.spieler
-        self._liga.setCurrentIndex((spieler.liga - 1) if spieler else 0)
-
-        self._seed = QSpinBox()
-        self._seed.setRange(0, 2**31 - 1)
-        self._seed.setValue(4711)
-        self._seed.setGroupSeparatorShown(True)
-
-        self._starten = QPushButton("Qualifying fahren")
-        self._starten.clicked.connect(self._fahre)
-
-        for beschriftung, feld in (
-            ("Strecke:", self._auswahl),
-            ("Liga:", self._liga),
-            ("Seed:", self._seed),
-        ):
-            zeile.addWidget(QLabel(beschriftung))
-            zeile.addWidget(feld)
-        zeile.addWidget(self._starten)
-        zeile.addStretch(1)
-        return zeile
-
     def _baue_fortschritt(self) -> QHBoxLayout:
         zeile = QHBoxLayout()
         self._regler = QSlider(Qt.Horizontal)
@@ -152,42 +110,16 @@ class Qualifyingseite(QWidget):
         spalte.addWidget(kasten, stretch=1)
         return seite
 
-    # -- Fahren ------------------------------------------------------------
-    def _lade_strecke(self, name: str) -> kern_strecke.Strecke:
-        if name not in self._strecken:
-            self._strecken[name] = kern_strecke.lade(self._konfiguration, name)
-        return self._strecken[name]
-
-    def _spielerautos(self, liga: int) -> dict:
-        """Das Auto des Spielers, wenn er in dieser Liga faehrt (GDD 1, 14)."""
-        if self._karriere is None or self._karriere.liga != liga:
-            return {}
-        nummer = self._karriere.fahrernummer
-        return {nummer: self._karriere.rennauto(self._welt.fahrer[nummer].auto)}
-
-    def _fahre(self) -> None:
-        self._starten.setEnabled(False)
-        self._starten.setText("Faehrt ...")
-        try:
-            strecke = self._lade_strecke(self._auswahl.currentData())
-            feld = kern_welt.starterfeld(
-                self._welt,
-                self._liga.currentData(),
-                autos=self._spielerautos(self._liga.currentData()),
-            )
-            self._session = kern_qualifying.fahre(
-                self._konfiguration, strecke, feld, Seedquelle(self._seed.value())
-            )
-        finally:
-            self._starten.setEnabled(True)
-            self._starten.setText("Qualifying fahren")
-
-        self._regler.setRange(0, len(self._session.fahrten))
+    # -- Session uebernehmen -----------------------------------------------
+    def zeige_session(self, session: Qualifying) -> None:
+        """Uebernimmt ein gefahrenes Qualifying und spielt es ab."""
+        self._session = session
+        self._regler.setRange(0, len(session.fahrten))
         self._regler.setEnabled(True)
         self._alle.setEnabled(True)
         self._fuelle_wetter()
         self._fuelle_aufstellung()
-        self._regler.setValue(len(self._session.fahrten))
+        self._regler.setValue(len(session.fahrten))
         self._zeichne()
 
     # -- Anzeige -----------------------------------------------------------

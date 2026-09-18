@@ -680,12 +680,16 @@ class Saisonlauf:
 
     # -- Fahren ------------------------------------------------------------
     def beginne_wochenende(self, nummer: int | None = None) -> Wochenendrahmen:
-        """Ruestet das naechste Rennwochenende zu, ohne es zu fahren.
+        """Ruestet das naechste Rennwochenende zu und startet den Renntag.
 
         Strecke, Reifenverschleiss und der Seedzweig gelten fuer alle 20
         Ligen; sie einmal zu bilden ist die halbe Arbeit. Der Kalender der
         Karriere wird dabei auf den Renntag vorgeschaltet (GDD 2) - vor dem
         Rennen, damit die Ereignisse dieser Tage noch auf es wirken.
+
+        **Das bewegt die Karriere.** Wer nur wissen will, was als Naechstes
+        ansteht, nimmt ``strecke_zu`` und ``renntag``; das gefuehrte
+        Wochenende ruft diese Methode erst, wenn wirklich gefahren wird.
         """
         if nummer is None:
             nummer = self.naechstes_rennen
@@ -1049,28 +1053,29 @@ class Wochenendlauf:
     def __init__(self, lauf: Saisonlauf, liga: int) -> None:
         if liga not in lauf.tabellen:
             raise SaisonFehler(f"Liga {liga} gibt es nicht")
+        nummer = lauf.naechstes_rennen
+        if nummer is None:
+            raise SaisonFehler(f"Die Saison {lauf.jahr} ist zu Ende")
         self.lauf = lauf
         self.liga = liga
-        # Ruestet zu und schaltet den Kalender auf den Renntag (GDD 2).
-        self.rahmen = lauf.beginne_wochenende()
-        self.daten = lauf.ligadaten(self.rahmen, liga)
+        # Der Aufbau ist eine **Vorschau** und bewegt nichts: Strecke,
+        # Rundenzahl und Renntag stehen fest, ohne dass der Kalender
+        # vorschaltet oder ein Wuerfel faellt. Erst ``fahre_qualifying``
+        # beginnt das Wochenende wirklich - sonst kostete schon das
+        # Aufschlagen des Reiters die nutzbaren Tage bis zum Rennen
+        # (GDD 2).
+        self.nummer = nummer
+        self.strecke = lauf.strecke_zu(nummer)
+        self.runden = kern_rennen.rundenzahl(
+            lauf.konfiguration, self.strecke, liga
+        )
+        self.rahmen: Wochenendrahmen | None = None
+        self.daten: Ligadaten | None = None
         self.qualifying: Qualifying | None = None
         self.verlauf: Rennverlauf | None = None
         self.wochenende: Wochenende | None = None
 
     # -- Was vor dem Fahren schon feststeht ---------------------------------
-    @property
-    def nummer(self) -> int:
-        """Das wievielte Rennen der Saison dieses Wochenende ist."""
-        return self.rahmen.nummer
-
-    @property
-    def strecke(self) -> Strecke:
-        return self.rahmen.strecke
-
-    @property
-    def runden(self) -> int:
-        return self.daten.runden
 
     @property
     def renntag(self) -> dt.date | None:
@@ -1082,9 +1087,15 @@ class Wochenendlauf:
 
     # -- Die Etappen --------------------------------------------------------
     def fahre_qualifying(self) -> Qualifying:
-        """Erste Etappe: das Qualifying der Liga des Spielers (GDD 4)."""
+        """Erste Etappe: das Qualifying der Liga des Spielers (GDD 4).
+
+        Hier beginnt das Wochenende: Der Kalender schaltet auf den Renntag
+        vor (GDD 2), und die Werte des Feldes werden gezogen.
+        """
         if self.qualifying is not None:
             return self.qualifying
+        self.rahmen = self.lauf.beginne_wochenende(self.nummer)
+        self.daten = self.lauf.ligadaten(self.rahmen, self.liga)
         self.qualifying = _fahre_qualifying(
             self.lauf.konfiguration,
             self.lauf.welt,

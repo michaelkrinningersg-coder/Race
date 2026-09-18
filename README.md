@@ -253,6 +253,58 @@ Eigenschafts-Zufall je einmal pro Session (GDD 7 und 11). Fuer die
 Kalibrierung und die Massensimulation laesst sich der Zufall abschalten:
 `rennen.simuliere(..., ohne_zufall=True)`, wie GDD 9 es verlangt.
 
+### Das gefuehrte Rennwochenende
+
+In der Oberflaeche laeuft ein Rennwochenende in vier Schritten ab, in
+einem Reiter:
+
+1. **Vorschau** - Renntag, Strecke, Charakter, Laenge, Rundenzahl und der
+   Tabellenstand vor dem Rennen. Vor Rennen 1 gibt es noch keine Tabelle;
+   dann steht dort das Feld nach Staerke.
+2. **Qualifying** - die Session der eigenen Liga, Fahrt fuer Fahrt (GDD 4)
+3. **Rennen** - auf die gefahrene Aufstellung, abspielbar im Zeitraffer
+4. **Ergebnis** - die eigene Wertung, das Rennergebnis und die Tabelle
+   danach mit dem Sprung gegen vorher
+
+Gefahren wird, was der Kalender vorgibt (GDD 2): Strecke, Rundenzahl,
+Aufstellung und Seed kommen aus der Saison. Frueher liessen sich hier
+Strecke, Liga, Rundenzahl, Seed und Startaufstellung frei einstellen -
+das war ein Werkzeug, kein Spiel. Zum Kalibrieren dienen
+`python -m rennmanager --pruefe` und die Werkzeuge unter `werkzeuge/`,
+die ohne Oberflaeche laufen.
+
+```python
+from rennmanager.kern.saison import Wochenendlauf
+
+wochenende = Wochenendlauf(lauf, liga=20)
+wochenende.nummer, wochenende.strecke.name, wochenende.runden   # Vorschau
+wochenende.fahre_qualifying()   # ab hier springt der Kalender auf den Renntag
+wochenende.fahre_rennen()       # auf die Aufstellung des Qualifyings
+wochenende.schliesse_ab()       # die 19 anderen Ligen, dann verbuchen
+```
+
+#### Warum der Aufbau nichts bewegt
+
+Der `Wochenendlauf` ist beim Aufbau eine reine Vorschau: Strecke,
+Rundenzahl und Renntag stehen fest, ohne dass der Kalender vorschaltet
+oder ein Wuerfel faellt. Sonst kostete schon das Aufschlagen des Reiters
+die nutzbaren Tage bis zum Rennen (GDD 2) - man haette Zeit verloren, nur
+weil man hingesehen hat.
+
+Gebucht wird erst im letzten Schritt. Ein abgebrochenes Wochenende bewegt
+die Saison nicht.
+
+#### Warum gefuehrt und am Stueck dasselbe ergibt
+
+`fahre_rennen` geht von Liga 1 bis 20 durch, das gefuehrte Wochenende
+faengt mit der Liga des Spielers an. Dass beides dasselbe ergibt, haengt
+an zwei Dingen: Die Seedzweige heissen nach ihrer Sache (`qualifying`,
+`rennwetter`, `rennen`, `liga 7`) und nicht nach der Reihenfolge, und jede
+Liga bucht fuer sich. Ein Test haelt es fest - gemessen stimmen alle 600
+Ergebniszeilen ueberein, dazu Tabellen, Streckenkenntnis und Popularitaet
+aller 600 Fahrer. Gegenprobe mit einem anderen Seed: Dann weichen alle 20
+Ligen ab.
+
 ## Reifen, Fehler, Unfaelle, Defekte
 
 `rennmanager.kern.reifen` und `rennmanager.kern.zwischenfall` setzen um,

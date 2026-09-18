@@ -13,7 +13,6 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QApplication,
-    QCheckBox,
     QComboBox,
     QGroupBox,
     QHBoxLayout,
@@ -118,16 +117,15 @@ class Saisonseite(QWidget):
             self._liga.setCurrentIndex(spieler.liga - 1)
         self._liga.currentIndexChanged.connect(self._aktualisiere)
 
-        self._ausfuehrlich = QCheckBox("Spielerliga ausfuehrlich")
-        self._ausfuehrlich.setToolTip(
-            "Die Liga des Spielers mit Qualifying und vollem Rennverlauf fahren - "
-            "langsamer, dafuer abspielbar (GDD 15)."
-        )
-        self._ausfuehrlich.setEnabled(spieler is not None)
-
-        self._ein_rennen = QPushButton("Rennwochenende")
-        self._ein_rennen.clicked.connect(self._fahre_eines)
+        # Punkt 12: Ein einzelnes Wochenende faehrt der Spieler gefuehrt
+        # im eigenen Reiter. Hier bleibt nur der Weg, den Rest des Jahres
+        # im Schnellmodus durchlaufen zu lassen.
         self._ganze_saison = QPushButton("Restliche Saison")
+        self._ganze_saison.setToolTip(
+            "Alle verbleibenden Wochenenden im Schnellmodus fahren - auch die "
+            "des Spielers. Wer sie selbst fahren will, nimmt den Reiter "
+            "Rennwochenende (GDD 15)."
+        )
         self._ganze_saison.clicked.connect(self._fahre_rest)
         self._naechste_saison = QPushButton("Naechste Saison")
         self._naechste_saison.setToolTip(
@@ -141,8 +139,6 @@ class Saisonseite(QWidget):
 
         zeile.addWidget(QLabel("Liga:"))
         zeile.addWidget(self._liga)
-        zeile.addWidget(self._ausfuehrlich)
-        zeile.addWidget(self._ein_rennen)
         zeile.addWidget(self._ganze_saison)
         zeile.addWidget(self._naechste_saison)
         zeile.addWidget(self._stand, stretch=1)
@@ -227,36 +223,23 @@ class Saisonseite(QWidget):
         return seite
 
     # -- Fahren ------------------------------------------------------------
-    def _ausfuehrliche_liga(self) -> int | None:
-        spieler = self._welt.spieler
-        if spieler is None or not self._ausfuehrlich.isChecked():
-            return None
-        return spieler.liga
-
-    def _fahre_eines(self) -> None:
-        self._fahre(alle=False)
-
     def _fahre_rest(self) -> None:
-        self._fahre(alle=True)
-
-    def _fahre(self, alle: bool) -> None:
+        """Laesst die restliche Saison im Schnellmodus durchlaufen (GDD 15)."""
         if self._lauf.ist_fertig:
             return
-        for knopf in (self._ein_rennen, self._ganze_saison):
-            knopf.setEnabled(False)
+        self._ganze_saison.setEnabled(False)
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
-            while True:
+            while not self._lauf.ist_fertig:
                 nummer = self._lauf.naechstes_rennen
-                self._stand.setText(f"Rennen {nummer} von {self._lauf.rennen_je_saison} laeuft ...")
+                self._stand.setText(
+                    f"Rennen {nummer} von {self._lauf.rennen_je_saison} laeuft ..."
+                )
                 QApplication.processEvents()
-                self._letztes = self._lauf.fahre_rennen(self._ausfuehrliche_liga())
-                if not alle or self._lauf.ist_fertig:
-                    break
+                self._letztes = self._lauf.fahre_rennen()
         finally:
             QApplication.restoreOverrideCursor()
-            for knopf in (self._ein_rennen, self._ganze_saison):
-                knopf.setEnabled(not self._lauf.ist_fertig)
+            self._ganze_saison.setEnabled(not self._lauf.ist_fertig)
         self._aktualisiere()
 
     def _wechsle_saison(self) -> None:
@@ -281,6 +264,10 @@ class Saisonseite(QWidget):
 
     # -- Anzeige -----------------------------------------------------------
     def _aktualisiere(self, *_) -> None:
+        # Das gefuehrte Wochenende faehrt denselben Saisonlauf; sein
+        # Ergebnis steht dann in ``wochenenden`` und nicht in ``_letztes``.
+        if self._lauf.wochenenden:
+            self._letztes = self._lauf.wochenenden[-1]
         liga = self._liga.currentData()
         self._zeige_tabelle(liga)
         self._zeige_verlauf(liga)
@@ -289,8 +276,7 @@ class Saisonseite(QWidget):
         self._zeige_kalender()
         self._zeige_abschluss()
         self._naechste_saison.setEnabled(self._lauf.ist_fertig)
-        for knopf in (self._ein_rennen, self._ganze_saison):
-            knopf.setEnabled(not self._lauf.ist_fertig)
+        self._ganze_saison.setEnabled(not self._lauf.ist_fertig)
         if self._lauf.ist_fertig:
             self._stand.setText(
                 f"Saison {self._lauf.jahr} beendet - {self._lauf.gefahren} Rennen gefahren."
@@ -538,8 +524,8 @@ class Saisonseite(QWidget):
         return self._liga
 
     @property
-    def knopf_rennwochenende(self) -> QPushButton:
-        return self._ein_rennen
+    def knopf_restliche_saison(self) -> QPushButton:
+        return self._ganze_saison
 
     @property
     def kalenderzeile(self) -> QLabel:

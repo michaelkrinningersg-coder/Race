@@ -131,8 +131,10 @@ def test_balken_messen_gegen_den_groessten_des_astes(fenster) -> None:
 
 # --- Saison und Laufbahn --------------------------------------------------
 def test_saison_und_verlauf_fuellen_sich_nach_dem_rennen(fenster, konfig) -> None:
-    fenster.saisonseite.knopf_rennwochenende.click()
-    fenster.saisonseite.knopf_rennwochenende.click()
+    fenster.saisonseite.lauf.fahre_rennen()
+    fenster.saisonseite._aktualisiere()
+    fenster.saisonseite.lauf.fahre_rennen()
+    fenster.saisonseite._aktualisiere()
 
     liga = fenster.welt.spieler.liga
     erster = fenster.saisonseite.lauf.tabelle(liga).stand()[0]
@@ -177,7 +179,8 @@ def test_laufbahn_zeigt_jede_abgeschlossene_saison(fenster, konfig) -> None:
 
 
 def test_rundenrekorde_sind_nur_die_eigenen(fenster) -> None:
-    fenster.saisonseite.knopf_rennwochenende.click()
+    fenster.saisonseite.lauf.fahre_rennen()
+    fenster.saisonseite._aktualisiere()
     halter = {r.fahrer for r in fenster.statistik.rekorde.values()}
     nummer = next(iter(halter))
 
@@ -215,7 +218,8 @@ def test_strecken_zeigen_kenntnis_und_heimstrecke(fenster, konfig) -> None:
 # --- Oeffnen aus den Listen -----------------------------------------------
 def test_doppelklick_oeffnet_aus_jeder_liste(fenster) -> None:
     """Welt, Saison, Qualifying, Rennen und Statistik koennen es alle."""
-    fenster.saisonseite.knopf_rennwochenende.click()
+    fenster.saisonseite.lauf.fahre_rennen()
+    fenster.saisonseite._aktualisiere()
     fenster.statistikseite.aktualisiere()
 
     listen = [
@@ -238,9 +242,9 @@ def test_doppelklick_im_rennen_findet_den_fahrer(qtbot, konfig) -> None:
     """Die Rangliste fuehrt die Startnummer im Feld, nicht die des Fahrers."""
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
-    seite = fenster.rennseite
-    seite._runden.setValue(2)
-    seite._starten.click()
+    from tests.test_ui import _kurzes_rennen
+
+    seite = _kurzes_rennen(fenster)
     seite._halte_an()
     seite._springe(seite.verlauf.dauer_ms * 0.6)
 

@@ -189,14 +189,59 @@ def test_tempoprofil_muss_zur_strecke_passen(qtbot, konfig: kf.Konfiguration) ->
         ansicht.zeige_tempo(strecke, np.zeros(5))
 
 
-# -- Rennseite --------------------------------------------------------------
+# -- Rennanzeige ------------------------------------------------------------
 def _kurzes_rennen(fenster, runden: int = 2, umgedreht: bool = False):
-    """Berechnet ein moeglichst kurzes Rennen auf der Rennseite."""
+    """Rechnet ein kurzes Rennen und gibt es der Rennanzeige.
+
+    Die Rennseite rechnet seit Punkt 12 nichts mehr - sie spielt ab, was
+    ihr das gefuehrte Wochenende reicht. Ein echtes Wochenende dauert 19
+    Runden und 17 Sekunden; die Anzeige-Tests brauchen das nicht, also
+    kommt hier ein Zweirundenrennen aus dem Kern.
+    """
+    from rennmanager.kern import rennen as kern_rennen
+    from rennmanager.kern import strecke as kern_strecke
+    from rennmanager.kern import tempo as kern_tempo
+    from rennmanager.kern import welt as kern_welt
+    from rennmanager.kern import wetter as kern_wetter
+    from rennmanager.kern.zufall import Seedquelle
+
+    liga = fenster.welt.spieler.liga
+    strecke = kern_strecke.lade(fenster._konfiguration, fenster._konfiguration.strecken[0]["name"])
+    feld = kern_welt.starterfeld(fenster.welt, liga)
+    if umgedreht:
+        anzahl = len(feld)
+        feld = tuple(
+            kern_rennen.Teilnehmer(
+                auto=t.auto,
+                startplatz=anzahl + 1 - t.startplatz,
+                farbe=t.farbe,
+                ist_spieler=t.ist_spieler,
+                nummer=t.nummer,
+            )
+            for t in feld
+        )
+    haupt = Seedquelle(4711)
+    # Das Wetter gehoert dazu (GDD 7); ohne es stuende im Rennen "None".
+    rundendauer = kern_tempo.fahre_runde(
+        fenster._konfiguration, strecke, feld[0].auto
+    ).zeit_ms
+    verlauf = kern_rennen.simuliere(
+        fenster._konfiguration,
+        strecke,
+        feld,
+        runden,
+        haupt.zweig("rennen"),
+        kern_rennen.mittlerer_ueberholzonenanteil(fenster._konfiguration, (strecke,)),
+        wetter=kern_wetter.wuerfle(
+            fenster._konfiguration,
+            strecke.name,
+            rundendauer * runden,
+            rundendauer,
+            haupt.zweig("rennwetter"),
+        ),
+    )
     seite = fenster.rennseite
-    seite._runden.setValue(runden)
-    # Ohne Qualifying, das wuerde jeden Test um eine ganze Session verlaengern.
-    seite._aufstellung.setCurrentIndex(2 if umgedreht else 1)
-    seite._berechne()
+    seite.zeige_verlauf(verlauf, strecke)
     return seite
 
 
@@ -357,11 +402,21 @@ def test_rennen_zeigt_das_wetter(qtbot, konfig: kf.Konfiguration) -> None:
 
 
 # -- Qualifyingseite --------------------------------------------------------
+def _gefahrenes_qualifying(fenster):
+    """Faehrt das Qualifying des naechsten Wochenendes (Punkt 12).
+
+    Eigene Regler hat die Qualifyingseite seit Punkt 12 nicht mehr; sie
+    zeigt, was das gefuehrte Wochenende ihr reicht. Das Qualifying selbst
+    dauert nur Bruchteile einer Sekunde.
+    """
+    fenster.wochenendeseite.knopf_weiter.click()
+    return fenster.qualifyingseite
+
+
 def test_qualifyingseite_faehrt_eine_session(qtbot, konfig: kf.Konfiguration) -> None:
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
-    seite = fenster.qualifyingseite
-    seite._fahre()
+    seite = _gefahrenes_qualifying(fenster)
 
     assert seite.session is not None
     assert len(seite.session.fahrten) == konfig.wert("rennen", "autos")
@@ -372,8 +427,7 @@ def test_qualifying_sortiert_live_ein(qtbot, konfig: kf.Konfiguration) -> None:
     """GDD 4: Live-Einsortierung ins Ranking."""
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
-    seite = fenster.qualifyingseite
-    seite._fahre()
+    seite = _gefahrenes_qualifying(fenster)
 
     seite._regler.setValue(1)
     assert seite._rangliste.topLevelItemCount() == 1
@@ -386,8 +440,7 @@ def test_qualifying_sortiert_live_ein(qtbot, konfig: kf.Konfiguration) -> None:
 def test_qualifying_zeigt_aufstellung_und_wetter(qtbot, konfig: kf.Konfiguration) -> None:
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
-    seite = fenster.qualifyingseite
-    seite._fahre()
+    seite = _gefahrenes_qualifying(fenster)
 
     assert seite._aufstellung.topLevelItemCount() == konfig.wert("rennen", "autos")
     assert seite._aufstellung.topLevelItem(0).text(0) == "1"
@@ -397,8 +450,7 @@ def test_qualifying_zeigt_aufstellung_und_wetter(qtbot, konfig: kf.Konfiguration
 def test_qualifying_rueckstand_nur_ab_platz_zwei(qtbot, konfig: kf.Konfiguration) -> None:
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
-    seite = fenster.qualifyingseite
-    seite._fahre()
+    seite = _gefahrenes_qualifying(fenster)
     seite._regler.setValue(seite._regler.maximum())
 
     liste = seite._rangliste
@@ -406,16 +458,20 @@ def test_qualifying_rueckstand_nur_ab_platz_zwei(qtbot, konfig: kf.Konfiguration
     assert liste.topLevelItem(1).text(3).startswith("+")
 
 
-def test_rennen_kann_aufstellung_aus_dem_qualifying_nehmen(
+def test_die_aufstellung_kommt_aus_dem_qualifying(
     qtbot, konfig: kf.Konfiguration
 ) -> None:
-    """GDD 4: Aufstellung nach Qualifying."""
+    """GDD 4: Aufstellung nach Qualifying - im gefuehrten Wochenende immer.
+
+    Frueher war das eine von drei Einstellungen. Seit Punkt 12 gibt es
+    keine Wahl mehr: Gefahren wird, was das Qualifying ergeben hat.
+    """
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
+    gefuehrt = fenster.wochenendeseite
+    gefuehrt.knopf_weiter.click()   # Qualifying
+    gefuehrt.knopf_weiter.click()   # Rennen
     seite = fenster.rennseite
-    seite._runden.setValue(2)
-    seite._aufstellung.setCurrentIndex(0)
-    seite._berechne()
     seite._halte_an()
 
     assert seite.qualifying is not None
@@ -535,16 +591,21 @@ def test_rennen_nutzt_die_fahrer_der_welt(qtbot, konfig: kf.Konfiguration) -> No
     seite = _kurzes_rennen(fenster)
     seite._halte_an()
 
-    liga = seite._liga.currentData()
+    liga = fenster.welt.spieler.liga
     erwartet = {f.kuerzel for f in fenster.welt.liga(liga)}
     assert {t.kuerzel for t in seite.verlauf.teilnehmer} == erwartet
 
 
-def test_rennen_startet_in_der_liga_des_spielers(qtbot, konfig: kf.Konfiguration) -> None:
+def test_gefahren_wird_die_liga_des_spielers(qtbot, konfig: kf.Konfiguration) -> None:
+    """Seit Punkt 12 gibt es keine Ligawahl mehr - gefahren wird die eigene."""
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
-    assert fenster.rennseite._liga.currentData() == fenster.welt.spieler.liga
-    assert fenster.qualifyingseite._liga.currentData() == fenster.welt.spieler.liga
+    gefuehrt = fenster.wochenendeseite
+    assert gefuehrt.wochenende.liga == fenster.welt.spieler.liga
+
+    gefuehrt.knopf_weiter.click()
+    kuerzel = {t.kuerzel for t in gefuehrt.qualifyingseite.session.teilnehmer}
+    assert kuerzel == {f.kuerzel for f in fenster.welt.liga(fenster.welt.spieler.liga)}
 
 
 # -- Karriereseite ----------------------------------------------------------
@@ -650,7 +711,8 @@ def test_saisonseite_faehrt_ein_rennwochenende(qtbot, konfig: kf.Konfiguration) 
     qtbot.addWidget(fenster)
     seite = fenster.saisonseite
 
-    seite.knopf_rennwochenende.click()
+    seite.lauf.fahre_rennen()
+    seite._aktualisiere()
 
     autos = konfig.wert("ligen", "autos_je_liga")
     assert seite.lauf.gefahren == 1
@@ -667,7 +729,8 @@ def test_saisonseite_wechselt_die_liga(qtbot, konfig: kf.Konfiguration) -> None:
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
     seite = fenster.saisonseite
-    seite.knopf_rennwochenende.click()
+    seite.lauf.fahre_rennen()
+    seite._aktualisiere()
 
     seite.liga_auswahl.setCurrentIndex(0)
     assert seite.liga_auswahl.currentData() == 1
@@ -688,7 +751,8 @@ def test_saisonseite_zeigt_den_kalenderstand(qtbot, konfig: kf.Konfiguration) ->
     assert f"{renntag:%d.%m.%Y}" in text
     assert "verfallen" in text
 
-    seite.knopf_rennwochenende.click()
+    seite.lauf.fahre_rennen()
+    seite._aktualisiere()
     assert fenster.karriere.heute > renntag
     assert f"{seite.lauf.renntag(2):%d.%m.%Y}" in seite.kalenderzeile.text()
 
@@ -720,7 +784,7 @@ def test_saisonseite_zeigt_den_abschluss(qtbot, konfig: kf.Konfiguration) -> Non
 
     fahre_saison_zu_ende(konfig, seite)
     assert seite.knopf_naechste_saison.isEnabled()
-    assert not seite.knopf_rennwochenende.isEnabled()
+    assert not seite.knopf_restliche_saison.isEnabled()
     text = seite.abschlusstext.text()
     assert fenster.welt.spieler.name in text
     assert f"Liga {fenster.welt.spieler.liga}" in text
@@ -850,7 +914,8 @@ def test_fenster_speichert_und_laedt_einen_spielstand(
     karriere = fenster.karriereseite.karriere
     karriere.kaufe("F1")
     karriere.uebernimm_defekte(("X7",))
-    fenster.saisonseite.knopf_rennwochenende.click()
+    fenster.saisonseite.lauf.fahre_rennen()
+    fenster.saisonseite._aktualisiere()
 
     pfad = tmp_path / "stand.sqlite"
     kern_spielstand.speichere(fenster.spielstand(), pfad)
@@ -878,14 +943,16 @@ def test_geladener_stand_laesst_sich_weiterfahren(
 
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
-    fenster.saisonseite.knopf_rennwochenende.click()
+    fenster.saisonseite.lauf.fahre_rennen()
+    fenster.saisonseite._aktualisiere()
     pfad = tmp_path / "stand.sqlite"
     kern_spielstand.speichere(fenster.spielstand(), pfad)
 
     zweites = Hauptfenster(konfig)
     qtbot.addWidget(zweites)
     zweites.uebernimm(kern_spielstand.lade(konfig, pfad))
-    zweites.saisonseite.knopf_rennwochenende.click()
+    zweites.saisonseite.lauf.fahre_rennen()
+    zweites.saisonseite._aktualisiere()
 
     assert zweites.saisonseite.lauf.gefahren == 2
     # Die Punkte aus dem geladenen Rennen sind noch da.

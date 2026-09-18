@@ -28,12 +28,17 @@ def konfig() -> kf.Konfiguration:
 
 @pytest.fixture
 def gefahren(qtbot, konfig):
-    """Ein kurzes Rennen, abgespielt bis zur Mitte."""
+    """Ein kurzes Rennen, abgespielt bis zur Mitte.
+
+    Die Rennseite rechnet seit Punkt 12 nichts mehr; sie bekommt den
+    Verlauf gereicht. Vier Runden reichen fuer alles, was hier geprueft
+    wird - ein echtes Wochenende waere 19 Runden und 17 Sekunden.
+    """
+    from tests.test_ui import _kurzes_rennen
+
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
-    seite = fenster.rennseite
-    seite._runden.setValue(4)
-    seite._starten.click()
+    seite = _kurzes_rennen(fenster, runden=4)
     seite._halte_an()
     seite._springe(seite.verlauf.dauer_ms * 0.6)
     return fenster, seite
