@@ -56,10 +56,18 @@ def formularwerte(formular: QFormLayout) -> dict[str, str]:
 
 
 # --- Aufbau ---------------------------------------------------------------
-def test_karte_hat_fuenf_reiter(fenster) -> None:
+def test_karte_hat_sechs_reiter(fenster) -> None:
+    """Fuenf aus dem ersten Bau, dazu die Wetterbilanz aus Punkt 23."""
     karte = fenster.oeffne_fahrerkarte(fenster.welt.spieler.nummer)
     namen = [karte.blaetter.tabText(i) for i in range(karte.blaetter.count())]
-    assert namen == ["Steckbrief", "Werte", "Saison", "Laufbahn", "Strecken"]
+    assert namen == [
+        "Steckbrief",
+        "Werte",
+        "Saison",
+        "Laufbahn",
+        "Strecken",
+        "Wetter",
+    ]
     assert karte.windowTitle().startswith(fenster.welt.spieler.name)
     # Nicht modal: Das Hauptfenster bleibt bedienbar.
     assert not karte.isModal()
@@ -284,10 +292,15 @@ def test_karte_ohne_statistik_und_kenntnis_stuerzt_nicht_ab(qtbot, konfig) -> No
     welt = kern_welt.erzeuge(konfig, Seedquelle(1))
     karte = Fahrerkarte(konfig, welt, welt.fahrer[2].nummer)
     qtbot.addWidget(karte)
-    assert karte.blaetter.count() == 5
+    assert karte.blaetter.count() == 6
     assert karte.streckenliste.topLevelItemCount() == 0
     assert karte.rekordliste.topLevelItemCount() == 0
     assert karte.punkteverlauf.rennen == 0
+    # Die Wetterlagen stehen auch ohne Statistik da, nur ohne Zahlen.
+    assert karte.wetterliste.topLevelItemCount() == len(
+        konfig.wert("wetter", "kette")
+    )
+    assert karte.wetterliste.topLevelItem(0).text(2) == ""
 
 
 # --- Laufbahndiagramm ------------------------------------------------------

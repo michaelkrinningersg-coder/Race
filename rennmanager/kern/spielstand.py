@@ -38,6 +38,7 @@ mit der gespielten ueberein.
 
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
 import sqlite3
 from dataclasses import dataclass
@@ -71,7 +72,7 @@ if TYPE_CHECKING:  # pragma: no cover
 # Version 4: Der Punkteverlauf der laufenden Saison (Tabelle
 # ``saisonverlauf``, Punkt 9). Aeltere Staende werden gelesen; ihr Verlauf
 # beginnt dann beim naechsten gefahrenen Rennen.
-SPIELSTAND_VERSION = 4
+SPIELSTAND_VERSION = 5
 
 # Punkt 17: Autosave und Schnellspeicher liegen an einem festen Ort,
 # damit sie ohne Dateidialog geschrieben werden koennen.
@@ -81,6 +82,7 @@ SCHNELLSPEICHER = "schnellspeicher.sqlite"
 HISTORIE_AB_VERSION = 2
 POPULARITAET_AB_VERSION = 3
 VERLAUF_AB_VERSION = 4
+BILANZ_AB_VERSION = 5
 
 SCHEMA = """
 CREATE TABLE kopf (
@@ -211,6 +213,34 @@ CREATE TABLE saisonverlauf (
     punkte INTEGER NOT NULL,
     PRIMARY KEY (liga, rennen, fahrer)
 );
+CREATE TABLE streckenbilanz (
+    fahrer INTEGER NOT NULL,
+    strecke TEXT NOT NULL,
+    rennen INTEGER NOT NULL,
+    siege INTEGER NOT NULL,
+    podien INTEGER NOT NULL,
+    poles INTEGER NOT NULL,
+    schnellste_runden INTEGER NOT NULL,
+    ausfaelle INTEGER NOT NULL,
+    punkte INTEGER NOT NULL,
+    bester_platz INTEGER NOT NULL,
+    beste_liga INTEGER NOT NULL,
+    PRIMARY KEY (fahrer, strecke)
+);
+CREATE TABLE wetterbilanz (
+    fahrer INTEGER NOT NULL,
+    lage TEXT NOT NULL,
+    rennen INTEGER NOT NULL,
+    siege INTEGER NOT NULL,
+    podien INTEGER NOT NULL,
+    poles INTEGER NOT NULL,
+    schnellste_runden INTEGER NOT NULL,
+    ausfaelle INTEGER NOT NULL,
+    punkte INTEGER NOT NULL,
+    bester_platz INTEGER NOT NULL,
+    beste_liga INTEGER NOT NULL,
+    PRIMARY KEY (fahrer, lage)
+);
 CREATE TABLE historie (
     saison INTEGER NOT NULL,
     liga INTEGER NOT NULL,
@@ -312,7 +342,11 @@ def speichere(stand: Spielstand, pfad: Path | str) -> Path:
         pfad.unlink()
     pfad.parent.mkdir(parents=True, exist_ok=True)
 
-    with sqlite3.connect(pfad) as verbindung:
+    # ``with sqlite3.connect(...)`` committet nur, es *schliesst nicht*.
+    # Unter Windows bleibt die Datei dann offen, und das ``unlink`` oben
+    # schlaegt beim naechsten Speichern fehl - gemessen im Windows-Lauf:
+    # Der zweite Autosave ueberschrieb den ersten nicht mehr.
+    with contextlib.closing(sqlite3.connect(pfad)) as verbindung, verbindung:
         verbindung.executescript(SCHEMA)
         _schreibe_kopf(verbindung, stand)
         _schreibe_welt(verbindung, stand.welt)
@@ -513,6 +547,29 @@ def _schreibe_statistik(
         "INSERT INTO saisonverlauf VALUES (?, ?, ?, ?)",
         [(li, r, f, p) for (li, r, f), p in statistik.saisonverlauf.items()],
     )
+    for tabelle, bilanzen in (
+        ("streckenbilanz", statistik.streckenbilanz),
+        ("wetterbilanz", statistik.wetterbilanz),
+    ):
+        verbindung.executemany(
+            f"INSERT INTO {tabelle} VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    fahrer,
+                    name,
+                    b.rennen,
+                    b.siege,
+                    b.podien,
+                    b.poles,
+                    b.schnellste_runden,
+                    b.ausfaelle,
+                    b.punkte,
+                    b.bester_platz,
+                    b.beste_liga,
+                )
+                for (fahrer, name), b in bilanzen.items()
+            ],
+        )
     verbindung.executemany(
         "INSERT INTO historie VALUES (?, ?)",
         [(a.saison, a.liga) for a in statistik.historie],
@@ -549,7 +606,7 @@ def lade(konfiguration: Konfiguration, pfad: Path | str) -> Spielstand:
         raise SpielstandFehler(f"Spielstand nicht gefunden: {pfad}")
 
     try:
-        with sqlite3.connect(pfad) as verbindung:
+        with contextlib.closing(sqlite3.connect(pfad)) as verbindung:
             verbindung.row_factory = sqlite3.Row
             kopf = verbindung.execute("SELECT * FROM kopf").fetchone()
             if kopf is None:
@@ -795,8 +852,34 @@ def _lies_statistik(
             (z["liga"], z["rennen"], z["fahrer"]): z["punkte"]
             for z in verbindung.execute("SELECT * FROM saisonverlauf")
         }
+    if version >= BILANZ_AB_VERSION:
+        # Punkt 21 und 23. Aeltere Staende haben sie nicht, und sie lassen
+        # sich auch nicht nachbilden: Die einzelnen Rennen von damals sind
+        # nirgends aufgehoben. Die Bilanz faengt dort bei null an.
+        statistik.streckenbilanz = _lies_bilanz(verbindung, "streckenbilanz", "strecke")
+        statistik.wetterbilanz = _lies_bilanz(verbindung, "wetterbilanz", "lage")
     statistik.historie = _lies_historie(verbindung, version)
     return statistik
+
+
+def _lies_bilanz(
+    verbindung, tabelle: str, spalte: str
+) -> dict[tuple[int, str], kern_statistik.Bilanz]:
+    """Liest eine Bilanztabelle in ihr Woerterbuch zurueck."""
+    return {
+        (z["fahrer"], z[spalte]): kern_statistik.Bilanz(
+            rennen=z["rennen"],
+            siege=z["siege"],
+            podien=z["podien"],
+            poles=z["poles"],
+            schnellste_runden=z["schnellste_runden"],
+            ausfaelle=z["ausfaelle"],
+            punkte=z["punkte"],
+            bester_platz=z["bester_platz"],
+            beste_liga=z["beste_liga"],
+        )
+        for z in verbindung.execute(f"SELECT * FROM {tabelle}")
+    }
 
 
 def _lies_historie(
@@ -854,7 +937,7 @@ def beschreibe(pfad: Path | str) -> str:
     """Kurzbeschreibung eines Spielstands, ohne ihn ganz zu laden."""
     pfad = Path(pfad)
     try:
-        with sqlite3.connect(pfad) as verbindung:
+        with contextlib.closing(sqlite3.connect(pfad)) as verbindung:
             verbindung.row_factory = sqlite3.Row
             kopf = verbindung.execute("SELECT * FROM kopf").fetchone()
             karriere = verbindung.execute("SELECT heute FROM karriere").fetchone()

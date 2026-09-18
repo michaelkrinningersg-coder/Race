@@ -82,6 +82,31 @@ class Wetterverlauf:
     def zustand_zu(self, zeit_ms: float) -> str:
         return self.abschnitt_zu(zeit_ms).zustand
 
+    def vorherrschend(self, dauer_ms: int) -> str:
+        """Die Lage, die am laengsten galt (Punkt 23).
+
+        Eine Session wechselt 0- bis 3-mal (GDD 7). Fuer die Wetterbilanz
+        braucht es eine Lage je Rennen, nicht den ganzen Verlauf - und die
+        richtige ist die, unter der am meisten gefahren wurde, nicht die
+        erste und nicht die haeufigste. Ein Rennen, das zwei Runden im
+        Regen beginnt und danach trocken bleibt, war ein trockenes.
+
+        Bei Gleichstand gewinnt die fruehere Lage; so haengt das Ergebnis
+        nicht an der Reihenfolge eines Woerterbuchs.
+        """
+        gesamt: dict[str, int] = {}
+        for stelle, abschnitt in enumerate(self.abschnitte):
+            bis = (
+                self.abschnitte[stelle + 1].ab_ms
+                if stelle + 1 < len(self.abschnitte)
+                else max(dauer_ms, abschnitt.ab_ms)
+            )
+            gesamt[abschnitt.zustand] = gesamt.get(abschnitt.zustand, 0) + max(
+                bis - abschnitt.ab_ms, 0
+            )
+        reihenfolge = {a.zustand: i for i, a in enumerate(reversed(self.abschnitte))}
+        return max(gesamt, key=lambda lage: (gesamt[lage], reihenfolge[lage]))
+
     def grip_zu(self, zeit_ms: float, sektor: int = 1) -> float:
         """Grip-Faktor zu einem Zeitpunkt, mit verzoegerter Streckennaesse.
 

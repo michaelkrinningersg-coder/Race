@@ -55,6 +55,9 @@ class Schnellergebnis:
     schnellste_runde_ms: int
     ueberholmanoever: int
     ausfaelle: int
+    # Punkt 23: die Lage, unter der am meisten gefahren wurde. Fuer die
+    # Wetterbilanz braucht es eine Lage je Rennen, nicht den Verlauf.
+    vorherrschendes_wetter: str = ""
     # Je Auto: gelungene Ueberholmanoever, offen gebliebene Defekte und
     # gefahrene Kilometer je Wetterlage. Die Karriere braucht das fuer
     # Erfahrung, Reparaturen und die Wetter-Erfahrung (GDD 10 und 14).
@@ -424,6 +427,9 @@ def fahre_wochenende(
         strecke=strecke.name,
         ergebnisse=ergebnisse,
         wetter=wetter.zustaende,
+        vorherrschendes_wetter=wetter.vorherrschend(
+            int(round(gesamtzeit[schlussstand[0]]))
+        ),
         siegerzeit_ms=int(round(gesamtzeit[schlussstand[0]])),
         schnellste_runde_ms=int(round(beste_runde[schnellste])),
         ueberholmanoever=manoever,

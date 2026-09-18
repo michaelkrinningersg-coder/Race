@@ -810,16 +810,87 @@ statistik.punkte_in(2026, 10, fahrer)   # Gesamtpunkte je Liga und Saison
 ```
 
 `rennmanager.kern.spielstand` schreibt alles in eine SQLite-Datei, wie
-GDD 15 es vorgibt - 22 Tabellen, eine Datei je Spielstand, im Menue unter
-Datei. Die Welt wird dabei vollstaendig abgelegt statt aus dem Seed neu
+GDD 15 es vorgibt - eine Datei je Spielstand, im Menue unter Datei. Jede
+Verbindung wird dabei ausdruecklich geschlossen: `with sqlite3.connect(...)`
+committet nur, es schliesst *nicht*. Unter Linux faellt das nicht auf -
+eine offene Datei laesst sich dort loeschen. Unter Windows nicht, und dann
+ueberschreibt der naechste Autosave den alten Stand nicht mehr. Ein Test
+zaehlt die Verbindungen selbst mit, statt sich aufs Betriebssystem zu
+verlassen. Die Welt wird dabei vollstaendig abgelegt statt aus dem Seed neu
 gewuerfelt: Nach dem ersten Auf- und Abstieg stimmt die gewuerfelte Welt
 nicht mehr mit der gespielten ueberein. Ein Test haelt genau das fest.
 
-Der Stand traegt seine **Version**. Version 2 legt die Historie je Saison
+Der Stand traegt seine **Version**. Version 5 legt Strecken- und
+Wetterbilanz ab (Punkte 21 und 23). Version 2 legt die Historie je Saison
 und Liga vollstaendig ab (Tabelle `historiezeile`) statt nur Reihenfolge
 und Punkte; Staende der Version 1 bleiben lesbar, die Zahlen, die es dort
 nicht gab, stehen auf 0. Auch das haelt ein Test fest - er baut einen
 gespeicherten Stand auf das alte Schema zurueck und laedt ihn.
+
+### Streckenbilanz, Wetterbilanz und Bestmarken
+
+Was ein Fahrer **wo** und **bei welchem Wetter** erreicht hat, fuehrt die
+Statistik als Summe je Paar (Punkte 21 und 23):
+
+```python
+statistik.strecken_von(fahrer)["Monza"].siege     # Bilanz eines Fahrers
+statistik.wetterlagen_von(fahrer)["regen"].punkte
+statistik.bilanzen_auf("Monza")                   # alle Fahrer dort
+statistik.bilanzen_bei("regen")
+```
+
+Je Zeile stehen Starts, Siege, Podien, Poles, schnellste Runden,
+Ausfaelle, Punkte, das beste Ergebnis und die **beste Liga** - die
+staerkste Liga, in der dort ein Podium gelang. Zehn Siege in Liga 20 und
+einer in Liga 3 stuenden sonst gleichwertig nebeneinander.
+
+Zu sehen ist beides an zwei Stellen: in der Fahrerkarte (die
+Streckenbilanz im Reiter *Strecken* neben der Streckenkenntnis, die
+Wetterbilanz als eigener Reiter neben der Faehigkeit zu jeder Lage) und
+auf der Statistikseite als Vergleich ueber alle 600 Fahrer.
+
+#### Warum Summen und keine Rennliste
+
+600 Fahrer mal 20 Rennen mal zwanzig Saisons waeren 240.000 Zeilen, und
+der Spielstand wuechse endlos weiter. Als Summe bleiben es 12.000 Zeilen
+je Strecke und 3.000 je Wetterlage - gleich viele nach der ersten Saison
+wie nach der zwanzigsten. Ein Test haelt genau das fest: Vier Rennen auf
+vier Strecken ergeben vier Zeilen je Fahrer, nicht acht.
+
+Der Preis: Ein geladener Spielstand aelter als Version 5 hat keine
+Bilanzdaten, und sie lassen sich nicht nachbilden - die einzelnen Rennen
+von damals sind nirgends aufgehoben. Die Bilanz faengt dort bei null an.
+
+#### Die vorherrschende Wetterlage
+
+Eine Session wechselt 0- bis 3-mal (GDD 7). Die Wetterbilanz braucht aber
+**eine** Lage je Rennen, und die richtige ist die, unter der am meisten
+gefahren wurde - nicht die erste und nicht die haeufigste. Ein Rennen, das
+zwei Runden im Regen beginnt und danach trocken bleibt, war ein
+trockenes. Bei Gleichstand gewinnt die fruehere Lage, damit das Ergebnis
+nicht an der Reihenfolge eines Woerterbuchs haengt.
+
+#### Bestmarken
+
+Die Statistikseite kennt eine Ansicht *Bestmarken* (Punkt 25) mit drei
+Gruppen: die schnellste Runde je Strecke, die Bestmarken der Karriere
+(meiste Siege, Punkte, Podien, Poles, schnellste Runden und die beste
+Siegquote ab 20 Rennen) und aus der Historie die beste einzelne Saison.
+Die Quote braucht die 20 Rennen, sonst gewaenne, wer einmal gefahren und
+einmal gewonnen hat.
+
+Wahlweise **insgesamt oder je Liga** - mit einer Auswahlliste und zwei
+Pfeilen zum Durchschalten. Insgesamt gewinnt fast immer Liga 1, dort
+faehrt das staerkste Feld; wer wissen will, wer in Liga 14 am meisten
+gewonnen hat, muss die Liga einzeln sehen koennen.
+
+In der Ligaansicht kommen die Karrierezahlen aus der **Historie**, nicht
+aus ``statistik.karriere``: Die Karrierezahlen rechnen alles zusammen und
+wissen nicht, in welcher Liga ein Sieg fiel. ``karriere_in_liga`` summiert
+stattdessen die Abschlusstabellen dieser Liga. Der Preis: Nur
+abgeschlossene Saisons zaehlen, die laufende steht noch in den Tabellen.
+Dafuer stimmen Karriere- und Saisonmarke einer Liga zusammen, statt zwei
+verschiedene Namen zu nennen.
 
 ### Autosave und Schnellspeicher
 

@@ -117,6 +117,9 @@ class Ligawochenende:
     schnellste_runde_ms: int
     ueberholmanoever: int
     ausfaelle: int
+    # Punkt 23: die Lage, unter der am meisten gefahren wurde. Die
+    # Wetterbilanz braucht eine Lage je Rennen, nicht den ganzen Verlauf.
+    vorherrschendes_wetter: str = ""
     ausfuehrlich: bool = False
     # Je Fahrer, mit weltweiter Nummer: gelungene Ueberholmanoever, die im
     # Rennen aufgetretenen Defekte und die gefahrenen Kilometer je
@@ -349,6 +352,7 @@ def _fahre_rennen(
         liga=liga,
         ergebnisse=ergebnisse,
         wetter=wetter.zustaende,
+        vorherrschendes_wetter=wetter.vorherrschend(verlauf.dauer_ms),
         siegerzeit_ms=verlauf.ergebnisse[0].zeit_ms or 0,
         schnellste_runde_ms=schnellste_ms,
         ueberholmanoever=sum(verlauf.positionsgewinne),
@@ -458,6 +462,7 @@ def _schnell(
             replace(e, fahrer=fahrer[e.fahrer].nummer) for e in ergebnis.ergebnisse
         ),
         wetter=ergebnis.wetter,
+        vorherrschendes_wetter=ergebnis.vorherrschendes_wetter,
         siegerzeit_ms=ergebnis.siegerzeit_ms,
         schnellste_runde_ms=ergebnis.schnellste_runde_ms,
         ueberholmanoever=ergebnis.ueberholmanoever,
@@ -800,6 +805,7 @@ class Saisonlauf:
             strecke=rahmen.strecke.name,
             ergebnisse=ergebnis.ergebnisse,
             schnellste_runde_ms=ergebnis.schnellste_runde_ms,
+            wetter=ergebnis.vorherrschendes_wetter,
         )
         # Qualifying und Rennen zaehlen beide fuer die Kenntnis (GDD 6).
         quali_runden = self.konfiguration.wert(

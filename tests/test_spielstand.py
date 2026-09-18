@@ -390,6 +390,81 @@ def test_ein_stand_der_version_1_bleibt_lesbar(k, nach_zwei_saisons, tmp_path):
     assert alt.zeilen[0].rennen == 0
 
 
+def mache_zu_version_4(pfad) -> None:
+    """Baut einen Stand auf das Schema der Version 4 zurueck (ohne Bilanzen)."""
+    with sqlite3.connect(pfad) as verbindung:
+        verbindung.execute("DROP TABLE streckenbilanz")
+        verbindung.execute("DROP TABLE wetterbilanz")
+        verbindung.execute("UPDATE kopf SET version = 4")
+
+
+def test_ein_stand_der_version_4_bleibt_lesbar(k, gespielt, tmp_path):
+    """Punkt 21 und 23 kamen erst mit Version 5 dazu."""
+    pfad = sp.speichere(gespielt, tmp_path / "v4.sqlite")
+    assert gespielt.statistik.streckenbilanz
+    mache_zu_version_4(pfad)
+
+    geladen = sp.lade(k, pfad)
+    # Alles andere steht noch; die Bilanzen fangen bei null an, weil die
+    # einzelnen Rennen von damals nirgends aufgehoben sind.
+    assert geladen.statistik.streckenbilanz == {}
+    assert geladen.statistik.wetterbilanz == {}
+    assert geladen.statistik.karriere.keys() == gespielt.statistik.karriere.keys()
+    assert geladen.gefahrene_rennen == gespielt.gefahrene_rennen
+
+
+def test_die_bilanzen_ueberstehen_speichern_und_laden(k, gespielt, tmp_path):
+    pfad = sp.speichere(gespielt, tmp_path / "bilanz.sqlite")
+    geladen = sp.lade(k, pfad)
+    assert geladen.statistik.streckenbilanz == gespielt.statistik.streckenbilanz
+    assert geladen.statistik.wetterbilanz == gespielt.statistik.wetterbilanz
+    assert geladen.statistik.streckenbilanz
+
+
+def test_keine_verbindung_bleibt_offen(k, gespielt, tmp_path, monkeypatch):
+    """Sonst laesst sich der Stand unter Windows nicht ueberschreiben.
+
+    ``with sqlite3.connect(...)`` committet nur, es *schliesst nicht*.
+    Unter Linux stoert das nicht - eine offene Datei laesst sich dort
+    loeschen. Unter Windows nicht: Gemessen im Windows-Lauf schrieb der
+    zweite Autosave die Datei nicht mehr, weil das ``unlink`` am Anfang
+    von ``speichere`` an der noch offenen Verbindung scheiterte.
+
+    Der Test zaehlt deshalb selbst mit, statt sich auf das Betriebssystem
+    zu verlassen.
+    """
+    offen = []
+    echt = sqlite3.connect
+
+    def zaehlend(*args, **kw):
+        verbindung = echt(*args, **kw)
+        offen.append(verbindung)
+        return verbindung
+
+    monkeypatch.setattr(sp.sqlite3, "connect", zaehlend)
+
+    pfad = sp.speichere(gespielt, tmp_path / "offen.sqlite")
+    sp.lade(k, pfad)
+    sp.beschreibe(pfad)
+
+    assert offen, "Der Test greift nur, wenn ueberhaupt verbunden wurde"
+    for verbindung in offen:
+        with pytest.raises(sqlite3.ProgrammingError):
+            verbindung.execute("SELECT 1")
+
+
+def test_ein_stand_laesst_sich_mehrfach_ueberschreiben(k, gespielt, tmp_path):
+    """Genau das tut der Autosave nach jedem Tag (Punkt 17)."""
+    pfad = tmp_path / "wieder.sqlite"
+    sp.speichere(gespielt, pfad)
+    erst = sp.lade(k, pfad)
+    # Lesen und danach erneut schreiben - der Fall, der unter Windows brach.
+    sp.speichere(erst, pfad)
+    sp.lade(k, pfad)
+    sp.speichere(gespielt, pfad)
+    assert sp.lade(k, pfad).gefahrene_rennen == gespielt.gefahrene_rennen
+
+
 # --- Autosave und Schnellspeicher (Punkt 17) ------------------------------
 def test_die_festen_staende_liegen_an_einem_ort(spielstandordner) -> None:
     """Ohne Dialog geschrieben heisst: an einem Ort, den das Spiel kennt."""

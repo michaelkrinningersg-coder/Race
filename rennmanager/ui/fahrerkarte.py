@@ -68,6 +68,49 @@ def _prozent(anteil: float) -> str:
     return f"{anteil * 100:.2f} %".replace(".", ",")
 
 
+def _bilanzfelder(bilanz) -> list[str]:
+    """Die neun Spalten einer Bilanz als Text (Punkte 21 und 23).
+
+    Ohne Bilanz - also vor dem ersten Rennen dort - bleiben sie leer statt
+    auf 0 zu stehen: "noch nie gefahren" ist etwas anderes als "null Siege".
+    """
+    if bilanz is None or not bilanz.rennen:
+        return [""] * 9
+    return [
+        str(bilanz.rennen),
+        str(bilanz.siege),
+        str(bilanz.podien),
+        str(bilanz.poles),
+        str(bilanz.schnellste_runden),
+        str(bilanz.ausfaelle),
+        _zahl(bilanz.punkte),
+        str(bilanz.bester_platz) if bilanz.bester_platz else "-",
+        str(bilanz.beste_liga) if bilanz.beste_liga else "-",
+    ]
+
+
+def _setze_bilanzsortierung(zeile, bilanz, ab: int) -> None:
+    """Sortiert die Bilanzspalten nach Zahlen, nicht nach Text."""
+    if bilanz is None:
+        werte = [0] * 9
+    else:
+        werte = [
+            bilanz.rennen,
+            bilanz.siege,
+            bilanz.podien,
+            bilanz.poles,
+            bilanz.schnellste_runden,
+            bilanz.ausfaelle,
+            bilanz.punkte,
+            # Platz 1 ist der beste: ohne Vorzeichenwechsel stuende der
+            # Sieger beim Sortieren ganz unten. Wer nie ankam, auch.
+            -bilanz.bester_platz if bilanz.bester_platz else -99,
+            -bilanz.beste_liga if bilanz.beste_liga else -99,
+        ]
+    for versatz, wert in enumerate(werte):
+        zeile.setze_sortierwert(ab + versatz, wert)
+
+
 class Fahrerkarte(QDialog):
     """Alles ueber einen Fahrer in einem Fenster."""
 
@@ -110,6 +153,7 @@ class Fahrerkarte(QDialog):
         self._blaetter.addTab(self._baue_saison(), "Saison")
         self._blaetter.addTab(self._baue_laufbahn(), "Laufbahn")
         self._blaetter.addTab(self._baue_strecken(), "Strecken")
+        self._blaetter.addTab(self._baue_wetter(), "Wetter")
         spalte.addWidget(self._blaetter, stretch=1)
 
     # -- Kopf --------------------------------------------------------------
@@ -441,8 +485,10 @@ class Fahrerkarte(QDialog):
             + ", ".join(s.name for s in heim)
             + "."
             if heim
-            else f"In {self._fahrer.land} liegt keine der 20 Strecken - "
-            "dieser Fahrer hat keine Heimstrecke (Punkt 49)."
+            # Nicht "In Schweiz": Manche Laender brauchen einen Artikel,
+            # manche nicht. So stimmt der Satz fuer alle 32.
+            else f"Keine der {len(self._strecken)} Strecken liegt in seinem "
+            f"Land ({self._fahrer.land}) - keine Heimstrecke (Punkt 49)."
         )
         hinweis = QLabel(
             "Streckenkenntnis nach GDD 6: Wer eine Strecke kennt, faehrt sie "
@@ -452,8 +498,25 @@ class Fahrerkarte(QDialog):
         spalte.addWidget(hinweis)
 
         self._streckenliste = QTreeWidget()
+        # Punkt 21: Was er dort erreicht hat, steht neben dem, was er dort
+        # kann - Kenntnis und Bilanz gehoeren zur selben Strecke.
         self._streckenliste.setHeaderLabels(
-            ["Strecke", "Land", "Runden", "Tempogewinn", "Kenntnis"]
+            [
+                "Strecke",
+                "Land",
+                "Runden",
+                "Tempogewinn",
+                "Kenntnis",
+                "Starts",
+                "Siege",
+                "Podien",
+                "Poles",
+                "SR",
+                "DNF",
+                "Punkte",
+                "Bester",
+                "Beste Liga",
+            ]
         )
         self._streckenliste.setRootIsDecorated(False)
         self._streckenliste.setAlternatingRowColors(True)
@@ -467,10 +530,16 @@ class Fahrerkarte(QDialog):
     def _fuelle_strecken(self) -> None:
         if self._kenntnis is None or not self._strecken:
             return
+        bilanzen = (
+            self._statistik.strecken_von(self._fahrer.nummer)
+            if self._statistik is not None
+            else {}
+        )
         voll = self._konfiguration.wert("streckenkenntnis", "volle_kenntnis_runden")
         for strecke in self._strecken:
             runden = self._kenntnis.stand(self._fahrer.nummer, strecke.name)
             bonus = self._kenntnis.bonus(self._fahrer.nummer, strecke.name)
+            bilanz = bilanzen.get(strecke.name)
             zeile = SortierbareZeile(
                 self._streckenliste,
                 [
@@ -479,10 +548,12 @@ class Fahrerkarte(QDialog):
                     f"{runden:.1f}".replace(".", ","),
                     _prozent(bonus),
                     "",
+                    *_bilanzfelder(bilanz),
                 ],
             )
             zeile.setze_sortierwert(2, runden)
             zeile.setze_sortierwert(3, bonus)
+            _setze_bilanzsortierung(zeile, bilanz, ab=5)
             anteil = min(runden / voll, 1.0) if voll else 0.0
             zeile.setData(4, Balkenzeichner.ANTEILSROLLE, anteil)
             zeile.setze_sortierwert(4, anteil)
@@ -491,9 +562,80 @@ class Fahrerkarte(QDialog):
                 schrift.setBold(True)
                 zeile.setFont(0, schrift)
                 zeile.setForeground(0, QColor(self._team.farbe))
-        for stelle in range(self._streckenliste.columnCount() - 1):
-            self._streckenliste.resizeColumnToContents(stelle)
-        self._streckenliste.setColumnWidth(4, 140)
+        for stelle in range(self._streckenliste.columnCount()):
+            if stelle != 4:
+                self._streckenliste.resizeColumnToContents(stelle)
+        self._streckenliste.setColumnWidth(4, 120)
+
+    # -- Wetter ------------------------------------------------------------
+    def _baue_wetter(self) -> QWidget:
+        seite = QWidget()
+        spalte = QVBoxLayout(seite)
+
+        hinweis = QLabel(
+            "Wetterbilanz nach Punkt 23: Gezaehlt wird je Rennen die Lage, "
+            "unter der am meisten gefahren wurde - nicht jeder Wechsel. Ein "
+            "Rennen, das zwei Runden im Regen beginnt und danach trocken "
+            "bleibt, war ein trockenes."
+        )
+        hinweis.setWordWrap(True)
+        spalte.addWidget(hinweis)
+
+        self._wetterliste = QTreeWidget()
+        self._wetterliste.setHeaderLabels(
+            [
+                "Wetterlage",
+                "Koennen",
+                "Starts",
+                "Siege",
+                "Podien",
+                "Poles",
+                "SR",
+                "DNF",
+                "Punkte",
+                "Bester",
+                "Beste Liga",
+            ]
+        )
+        self._wetterliste.setRootIsDecorated(False)
+        self._wetterliste.setAlternatingRowColors(True)
+        self._fuelle_wetter()
+        spalte.addWidget(self._wetterliste)
+        return seite
+
+    def _fuelle_wetter(self) -> None:
+        """Je Lage der Wirkungswert daneben - Koennen und Bilanz zusammen."""
+        bilanzen = (
+            self._statistik.wetterlagen_von(self._fahrer.nummer)
+            if self._statistik is not None
+            else {}
+        )
+        # Zu jeder Lage aus GDD 7 gehoert eine Faehigkeit daneben
+        # (Trockenroutine, Regenfahren, ...). Beide nebeneinander zeigen,
+        # ob das Koennen zum Ergebnis passt.
+        koennen = {
+            eintrag["wetter"]: eintrag
+            for eintrag in self._konfiguration.zusatzeintraege
+            if eintrag.get("wetter")
+        }
+        for lage in self._konfiguration.wert("wetter", "kette"):
+            bilanz = bilanzen.get(lage)
+            eintrag = koennen.get(lage)
+            wert = (
+                f"{eintrag['name']} {_zahl(self._fahrer.auto.wetterwert(eintrag['schluessel']))}"
+                if eintrag
+                else "-"
+            )
+            zeile = SortierbareZeile(
+                self._wetterliste, [lage, wert, *_bilanzfelder(bilanz)]
+            )
+            if eintrag:
+                zeile.setze_sortierwert(
+                    1, self._fahrer.auto.wetterwert(eintrag["schluessel"])
+                )
+            _setze_bilanzsortierung(zeile, bilanz, ab=2)
+        for stelle in range(self._wetterliste.columnCount()):
+            self._wetterliste.resizeColumnToContents(stelle)
 
     # -- Zugriff fuer Tests -------------------------------------------------
     @property
@@ -511,6 +653,10 @@ class Fahrerkarte(QDialog):
     @property
     def streckenliste(self) -> QTreeWidget:
         return self._streckenliste
+
+    @property
+    def wetterliste(self) -> QTreeWidget:
+        return self._wetterliste
 
     @property
     def rekordliste(self) -> QTreeWidget:

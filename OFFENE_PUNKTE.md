@@ -1454,3 +1454,51 @@ untergehen:
 | Ort der automatischen Stände | **`~/.rennmanager`** — für Stände ohne Dialog braucht es einen Platz, den das Spiel kennt. Von Hand gespeicherte Stände bleiben unberührt |
 | Was die Fahrersuche durchsucht | **Die ganze Zeile** (Name, Kürzel, Liga, Team) — so findet „Rosskamp" auch ein ganzes Team. Fahrertreffer stehen aber vorn |
 | Wohin die Suche springt | **In die Fahrerkarte** des Treffers |
+
+### 62. Zuschnitt von Block 4
+
+| Frage | Entscheidung |
+| --- | --- |
+| Wo stehen Strecken- und Wetterbilanz? | **An beiden Stellen** — in der Fahrerkarte je Fahrer, auf der Statistikseite als Vergleich über alle 600 |
+| Zählt die Bilanz über Ligen zusammen oder getrennt? | **Zusammen, dazu die beste Liga** — eine Zeile je Strecke, mit der stärksten Liga, in der dort ein Podium gelang |
+| Was gehört auf die Rekordseite? | **Strecken-, Karriere- und Saisonrekorde** |
+
+Vom Auftraggeber nicht widersprochen und hier festgehalten:
+
+* Die Bilanz wird für **alle 600 Fahrer** geführt, nicht nur für den
+  Spieler. Sie kostet nichts extra, und die Fahrerkarte zeigt schon heute
+  für jeden dasselbe.
+* Gespeichert werden **Summen**, keine Rennliste — sonst wüchse der
+  Spielstand mit jeder Saison weiter (240.000 statt 15.000 Zeilen).
+* Die Siegquote unter den Bestmarken zählt erst **ab 20 Rennen**.
+
+**Bekannte Einschränkung:** Spielstände älter als Version 5 haben keine
+Bilanzdaten, und sie lassen sich nicht nachbilden — die einzelnen Rennen
+von damals sind nirgends aufgehoben. Die Bilanz fängt dort bei null an.
+
+### Dabei behoben: Der Autosave überschrieb sich unter Windows nicht
+
+Der Windows-Lauf meldete nach Punkt 17 einen Fehler: Der zweite Autosave
+enthielt noch den Stand vom Vortag. Ursache war nicht der Autosave, sondern
+`rennmanager.kern.spielstand`: `with sqlite3.connect(...)` **committet nur,
+es schließt nicht**. Die Datei blieb offen, und das `unlink` am Anfang von
+`speichere` scheiterte unter Windows an der offenen Verbindung — unter Linux
+nicht, dort lässt sich eine offene Datei löschen.
+
+Alle drei Verbindungen schließen jetzt ausdrücklich. Ein Test zählt die
+Verbindungen selbst mit, damit der Fehler auf jedem System auffällt und
+nicht nur im Windows-Lauf.
+
+### 63. Bestmarken je Liga
+
+Auf Wunsch des Auftraggebers: Die Bestmarken lassen sich zwischen
+**insgesamt** und **je Liga** umschalten — als Auswahlliste mit zwei
+Pfeilen zum Durchschalten.
+
+In der Ligaansicht kommen die Karrierezahlen aus der Historie statt aus
+`statistik.karriere`: Letztere rechnen alles zusammen und wissen nicht, in
+welcher Liga ein Sieg fiel. Ein erster Entwurf zählte die *heutigen* Fahrer
+einer Liga mit ihrer ganzen Karriere — dabei standen bei „meiste Siege in
+Liga 14" und „meiste Siege in einer Saison, Liga 14" zwei verschiedene
+Namen. **Bekannte Einschränkung:** Die Ligaansicht zählt nur
+abgeschlossene Saisons; die laufende steht noch in den Tabellen.
