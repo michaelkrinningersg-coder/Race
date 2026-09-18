@@ -1731,3 +1731,35 @@ eine eigene Spalte zeigt mit „+x", wie viel aus diesem Rennen dazukommt.
 Eine **vorübergehende** Ansicht zum Abspielzeitpunkt: `livewertung`
 rechnet nur und lässt die Tabelle unberührt. Fortgeschrieben wird der
 Stand erst am Rennende, und zwar vom Saisonlauf.
+
+### 77. Der Testlauf hing an einem Meldungsfenster
+
+Beim Entschlacken fiel auf, dass der Lauf nicht langsam war, sondern
+**stand**: Der Prozess wartete in `poll_schedule_timeout` bei null
+Prozent CPU — gemessen 19 Minuten, ohne Ausgabe und ohne Fehler.
+
+`QMessageBox.information` öffnet eine eigene Ereignisschleife und wartet
+auf einen Klick. Im Offscreen-Lauf klickt niemand. Ausgelöst hatte es
+eine Verkleinerung des Rennkalenders: Mit drei Rennen je Saison war die
+Saison im Test zu Ende, und die Karriereseite meldete „Kein Rennen mehr".
+In der Oberfläche stehen **22** solcher Dialoge; jeder kann das.
+
+Ein `autouse`-Fixture in `conftest` ersetzt `information`, `warning`,
+`critical`, `question` und `about` im Test durch No-Ops. Damit kann kein
+Dialog den Lauf mehr anhalten, unabhängig davon, was ihn auslöst. Wer
+eine Meldung prüft, hebt die Ersetzung für seinen Test auf.
+
+**Was verkleinert wird und was nicht.** `verkleinert()` nimmt alle vier
+Größen als Parameter — Ligen, Autos je Liga, Rennen je Saison,
+Renndistanz. Voreingestellt schrumpfen nur die ersten beiden:
+
+| Größe | Voreinstellung | Gemessen | Warum nicht kleiner |
+| --- | --- | --- | --- |
+| Ligen × Autos | 3 × 4 statt 20 × 30 | 54,27 s → 1,45 s je Wochenende | — |
+| Renndistanz | echt (100 km) | 24,5 s → 8,8 s bei 30 km | Bei sechs Runden trägt kein Boxenstopp; die Reifenstrategie findet keine Variante, fünf Tests fallen aus |
+| Rennen je Saison | echt (20) | — | Die Saison endet im Test, die Oberfläche meldet es per Dialog |
+
+Die getesteten Regeln sind größeninvariant: Auf- und Abstieg,
+Punktevergabe und Tabellensortierung stimmen mit drei Ligen zu je vier
+Autos genauso. Wo die Größe selbst Gegenstand ist — die Ligastruktur über
+zwanzig Stufen —, steht `kf.lade()` daneben.

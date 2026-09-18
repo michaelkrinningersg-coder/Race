@@ -402,7 +402,9 @@ def test_die_ligamarken_kommen_aus_der_historie(fenster, k) -> None:
     seite = fenster.statistikseite
     seite.aktualisiere()
     waehle(seite, BESTMARKEN)
-    liga = 14
+    # Eine Liga in der Mitte des Feldes - in der kleinen Testwelt gibt es
+    # Liga 14 nicht.
+    liga = max(1, k.wert("ligen", "anzahl") // 2)
     stellen = [
         seite.bestmarkenliga.itemData(i) for i in range(seite.bestmarkenliga.count())
     ]

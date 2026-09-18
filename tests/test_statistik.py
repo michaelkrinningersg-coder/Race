@@ -205,8 +205,11 @@ def test_der_saisonlauf_fuellt_die_statistik(k):
         assert rekord.saison == 2026 and rekord.rennen == 1
 
     # Und die Punkte stehen doppelt: in der Tabelle und in der Statistik.
-    for eintrag in lauf.tabelle(20).stand():
-        assert lauf.statistik.punkte_in(2026, 20, eintrag.fahrer) == eintrag.punkte
+    unterste = k.wert("ligen", "anzahl")
+    for eintrag in lauf.tabelle(unterste).stand():
+        assert (
+            lauf.statistik.punkte_in(2026, unterste, eintrag.fahrer) == eintrag.punkte
+        )
 
 
 def test_die_streckenkenntnis_waechst_mit_dem_saisonlauf(k):
@@ -216,7 +219,7 @@ def test_die_streckenkenntnis_waechst_mit_dem_saisonlauf(k):
     lauf = sa.Saisonlauf(k, welt, Seedquelle(2), jahr=2026, strecken=strecken)
     wochenende = lauf.fahre_rennen()
 
-    for fahrer in welt.liga(20):
+    for fahrer in welt.liga(k.wert("ligen", "anzahl")):
         assert lauf.kenntnis.stand(fahrer.nummer, wochenende.strecke) > 0.0
         # Auf einer Strecke, auf der noch nicht gefahren wurde, nichts.
         assert lauf.kenntnis.stand(fahrer.nummer, strecken[-1].name) == 0.0
