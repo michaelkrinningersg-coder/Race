@@ -166,14 +166,9 @@ class Karriereseite(QWidget):
         self._plaetze = QLabel()
         spalte.addWidget(self._plaetze)
 
-        self._liste = QTreeWidget()
-        self._liste.setHeaderLabels(
-            ["", "Faehigkeit", "Wert", "Waehrung", "Ein Tag bringt", "Kosten", "Platz"]
-        )
-        self._liste.setRootIsDecorated(False)
-        self._liste.setAlternatingRowColors(True)
-        spalte.addWidget(self._liste)
-
+        # Die Knoepfe stehen ueber der Liste: Die Liste ist lang, und wer
+        # unten in ihr eine Faehigkeit waehlt, soll nicht erst wieder
+        # nach unten schauen muessen.
         knoepfe = QHBoxLayout()
         self._belegen = QPushButton("Heutigen Tag belegen")
         self._belegen.clicked.connect(self._belege_tag)
@@ -183,6 +178,14 @@ class Karriereseite(QWidget):
         knoepfe.addWidget(self._kaufen)
         knoepfe.addStretch(1)
         spalte.addLayout(knoepfe)
+
+        self._liste = QTreeWidget()
+        self._liste.setHeaderLabels(
+            ["", "Faehigkeit", "Wert", "Waehrung", "Ein Tag bringt", "Kosten", "Platz"]
+        )
+        self._liste.setRootIsDecorated(False)
+        self._liste.setAlternatingRowColors(True)
+        spalte.addWidget(self._liste)
         return kasten
 
     def _baue_seitenspalte(self) -> QWidget:
@@ -536,6 +539,9 @@ def beginne(
     werte = dict(spieler.auto.werte) if spieler else None
     if werte is not None:
         werte.update(spieler.auto.wetterwerte)
+    # Punkt 72: Das Budget des eigenen Teams zahlt sich in Monatsraten
+    # aufs Konto aus. Es steht in der Welt, nicht in der Karriere.
+    mannschaft = welt.spielerteam
     return kern_karriere.beginne(
         konfiguration,
         jahr if jahr is not None else kern_karriere.startjahr(konfiguration),
@@ -544,4 +550,5 @@ def beginne(
         seedquelle=seedquelle,
         fahrernummer=spieler.nummer if spieler else 0,
         fahrer=tuple(f.nummer for f in eigene) if eigene else None,
+        teambudget=mannschaft.budget if mannschaft is not None else 0,
     )

@@ -1530,3 +1530,131 @@ einer Liga mit ihrer ganzen Karriere — dabei standen bei „meiste Siege in
 Liga 14" und „meiste Siege in einer Saison, Liga 14" zwei verschiedene
 Namen. **Bekannte Einschränkung:** Die Ligaansicht zählt nur
 abgeschlossene Saisons; die laufende steht noch in den Tabellen.
+
+### 64. Windschatten: Nachlauf und Ueberrunden
+
+Auf Wunsch des Auftraggebers wirkt der Sog nicht mehr nur im Fenster von
+30 m bis auf gleiche Höhe:
+
+* Wer vorbei ist, behält den **Überschuss noch 50 m in voller Höhe** und
+  danach zur **Hälfte bis zum Anbremsen** derselben Geraden. Ohne das fiel
+  ein Auto genau in dem Augenblick, in dem es vorbei war, auf sein freies
+  Tempo zurück — und der Überholte klebte wieder dran.
+* Der **Überholte** bekommt auf derselben Geraden die Hälfte dessen, was
+  der Überholende in der zweiten Stufe hat, und das erst ab dieser Stufe;
+  während der ersten 50 m gar nichts.
+* Die Nähe wird für den Sog jetzt an der **Position auf der Runde**
+  gemessen, nicht an der gesamt gefahrenen Strecke. Vorher konnte ein
+  Überrundender nie im Sog eines Überrundeten fahren, weil zwischen beiden
+  rechnerisch eine ganze Runde lag. Verkehr, Überholen und Unfälle rechnen
+  weiter auf der Gesamtdistanz — so hat es der Auftraggeber entschieden
+  („nur der Sog, kein Verkehr").
+
+Gemessen über 10 Rennen mit 20 gleich starken Autos: 16,7 % weniger
+Manöver, weil ein Überholmanöver jetzt hält statt sofort zurückgedreht zu
+werden. Über 5 Rennen mit einem schnellen und elf langsamen Autos wirkte
+der Sog 377.443-mal; davon 2.344-mal für einen Überrundenden und nur
+129-mal für einen Überrundeten (0,03 %, Messartefakt der
+Positionstausche innerhalb eines Zeitschritts).
+
+### 65. Der Zieleinlauf stand auf dem Kopf
+
+Die Rangliste im Rennen sortierte allein nach zurückgelegter Strecke. Das
+geht, solange gefahren wird — danach nicht mehr: Wer im Ziel ist, **steht**,
+alle anderen fahren weiter bis zur Linie. Am Ende hatte ausgerechnet der
+Letzte die größte Strecke und stand oben.
+
+Gemessen: In **10 von 10** Rennen wich die angezeigte Reihenfolge am Ende
+von der Wertung ab, in allen zehn stand der falsche Sieger vorn.
+
+Sortiert wird jetzt wie die Wertung: absolvierte Runden absteigend, dann
+Zielzeit aufsteigend, und wer im Ziel ist, steht vor allen, die noch
+fahren. Die Abstände stehen fest, sobald beide über der Linie sind —
+sie werden nicht mehr aus Strecke und Tempo geschätzt.
+
+### 66. Entwicklung: Zeit kostet Erfahrung, ein Platz hält bis zum Rennen
+
+Zwei Entscheidungen des Auftraggebers:
+
+* **Alles, was Zeit kostet, kostet auch etwas Erfahrung.** Die Zeit bleibt
+  ein Tag und skaliert nicht; die Erfahrung wächst über dieselbe Kurve wie
+  Geld, also mit jedem Kauf. Wer schon Erfahrung zahlt, zahlt nicht
+  doppelt (`k0_erfahrung_zeit = 2.0` gegen `k0_erfahrung = 5.0`).
+* **Ein belegter Platz bleibt bis zum nächsten Rennen belegt**, nicht nur
+  für einen Tag. Vorher ließ sich an jedem Tag des Abstands ein weiterer
+  Schritt belegen; jetzt gibt es je Abstand einen Trainings- und einen
+  Werkstattschritt. Das verlangsamt die Entwicklung über Zeit deutlich —
+  so gewollt.
+
+### 67. Ereignisse liefen viermal so schnell ab
+
+`verbuche_rennen` zählte am Ende `lage.nach_rennwochenende()`, und die
+Saison ruft es **je eigenem Fahrer** auf. Mit vier Autos in derselben Liga
+lief damit jedes Ereignis viermal so schnell ab. Die Lage gehört dem Team,
+also zählt jetzt nur der erste Aufruf je Rennen.
+
+Die Sponsorenverträge bleiben davon unberührt: Sie sitzen auf dem Auto
+**eines** Fahrers (`vertraege_je_fahrer`) und zählen deshalb zu Recht mit
+jedem seiner Rennen herunter. Nachgemessen: Ein Vertrag über 16 Rennen
+zahlt genau 16-mal.
+
+### 68. Das Kassenbuch und die Finanzseite
+
+Auf Wunsch des Auftraggebers eine Seite mit allen Ein- und Ausgaben,
+gruppiert nach Haupt- und Unterkategorien. Das Konto kannte bisher nur
+einen Stand; woher er kam, stand nirgends. `kern.kassenbuch` schreibt
+deshalb jede Geldbewegung mit — Datum, Betrag, Kategorie, Fahrer.
+
+Entschieden: Das Buch reicht über die **ganze Karriere** (die Seite blendet
+auf Wunsch auf eine Saison ein), und das **Teambudget des Spielers** zahlt
+sich in zwölf Monatsraten aufs Konto aus, je eine am Monatsersten, auch in
+Vor- und Nachsaison. Die Budgets der KI-Teams bleiben reine Anzeige.
+
+Ein Test misst die Vollständigkeit, nicht einzelne Beträge: Der Saldo
+aller Buchungen muss den Kontostand ergeben. Fällt eine Buchung aus, fällt
+der Test.
+
+**Bekannte Einschränkung:** Spielstände vor Version 8 laden mit leerem
+Kassenbuch und ohne Teambudget. Die Buchungen von damals sind nirgends
+aufgehoben, und ein nachträglich erfundenes Buch wäre gelogen.
+
+### 69. Der Zeitenmonitor zeigte das Rennende
+
+Der Monitor las `protokoll.letzte_runde_ms` und `beste_runde_ms` — beides
+Werte vom **Rennende**, unabhängig davon, wo das Abspielen gerade steht.
+Deshalb stand dort immer eine Zeit, die noch gar nicht gefahren war.
+
+Das Rundenprotokoll führt jetzt `rundenende_ms` mit, also den Zeitpunkt
+jeder Rundenankunft; `stand_zu(zeit)` liefert daraus letzte Runde, beste
+Runde und die Sektorzeiten der letzten Runde. Sortiert wird nach der
+besten Runde, und die letzte Runde leuchtet grün auf, wenn sie zugleich
+die beste dieses Fahrers war.
+
+### 70. Rangliste: gewonnene und verlorene Plätze
+
+Auf Wunsch des Auftraggebers eine Spalte „+/-" mit grünem Pfeil nach oben
+oder rotem nach unten und der Zahl der Plätze daneben — die Farbe ist nie
+die einzige Auskunft.
+
+Verglichen wird gegen die Reihenfolge **zu Beginn der laufenden Runde des
+Führenden**. Ein fester Bezugspunkt fürs ganze Feld: Nähme jedes Auto seine
+eigene letzte Rundenankunft, verglichen dreißig Zeilen dreißig
+verschiedene Augenblicke, und die Pfeile widersprächen sich. In der ersten
+Runde bleibt die Spalte leer — da gibt es nichts zu vergleichen.
+
+### 71. Die Sponsorenseite bekommt eine Fahrerwahl
+
+Die Sponsoren sitzen auf den Plätzen **eines** Autos, und jedes Auto gehört
+seinem Fahrer (`vertraege_je_fahrer`). Die Seite zeigte aber immer nur die
+Verträge des gerade eingestellten Fahrers; an die der anderen drei kam man
+nur über die Karriereseite. Jetzt steht oben dieselbe Fahrerwahl wie dort.
+
+Vom Auftraggeber bestätigt: Vier Autos, vier Sponsorensätze, vier
+Auszahlungen je Rennwochenende — das ist so gewollt.
+
+### 72. Das Rennen läuft erst los, wenn man hinschaut
+
+`zeige_verlauf` startete die Wiedergabe sofort. Im geführten Wochenende
+steht der Spieler zu diesem Zeitpunkt aber noch beim Qualifying; bis er
+auf den Rennreiter wechselte, war das Rennen im Zeitraffer durchgelaufen
+und stand am Ende. Die Wiedergabe wartet jetzt auf `showEvent`.

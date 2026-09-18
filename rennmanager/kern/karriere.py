@@ -28,6 +28,7 @@ from rennmanager.kern import einnahmen as kern_einnahmen
 from rennmanager.kern import entwicklung as kern_entwicklung
 from rennmanager.kern import ereignis as kern_ereignis
 from rennmanager.kern import kalender as kern_kalender
+from rennmanager.kern import kassenbuch as kern_kassenbuch
 from rennmanager.kern import sponsoren as kern_sponsoren
 from rennmanager.kern import streckenkenntnis as kern_streckenkenntnis
 from rennmanager.kern import zwischenfall as kern_zwischenfall
@@ -113,6 +114,20 @@ class Karriere:
     # Belegte Plaetze des laufenden Tages, je Fahrer: An einem Tag wird
     # an **einem** Auto gearbeitet, und jedes hat seine eigenen Plaetze.
     belegte_plaetze: dict[int, set[str]] = field(default_factory=dict)
+    # Punkt 72: Jede Geldbewegung wird mitgeschrieben, damit die
+    # Finanzseite nach Kategorien gruppieren kann. Das Konto kennt nur
+    # den Stand, nicht die Herkunft.
+    kassenbuch: kern_kassenbuch.Kassenbuch = field(
+        default_factory=kern_kassenbuch.Kassenbuch
+    )
+    # Das Teambudget des Spielers; es zahlt sich in Monatsraten aus.
+    # 0 heisst: kein Budget, also keine Raten (so laufen alte Staende und
+    # Tests, die nur die Entwicklung pruefen).
+    teambudget: int = 0
+    # Der Monat, fuer den zuletzt eine Rate gebucht wurde - damit ein
+    # Tageswechsel ueber mehrere Monate keine Rate verschluckt und ein
+    # zweiter Blick auf denselben Tag keine doppelt bucht.
+    letzte_rate: tuple[int, int] | None = None
 
     # -- Schritt 10 --------------------------------------------------------
     # Die Ereignisse der Saison, einmal beim Start gewuerfelt (GDD 14).
@@ -153,7 +168,13 @@ class Karriere:
 
     @property
     def belegt(self) -> set[str]:
-        """Die heute belegten Plaetze des gewaehlten Fahrers."""
+        """Die belegten Plaetze des gewaehlten Fahrers (Punkt 69).
+
+        Wer einen Platz mit Zeit belegt, hat ihn **bis zum naechsten
+        Rennen** belegt, nicht nur fuer heute: Ein Umbau am Auto oder ein
+        Trainingsblock laeuft ueber den ganzen Abstand zwischen zwei
+        Rennen. Erst der Renntag gibt die Plaetze wieder frei.
+        """
         return self.belegte_plaetze.setdefault(self.fahrernummer, set())
 
     @property
@@ -247,8 +268,13 @@ class Karriere:
             raise KarriereFehler("Die Saison ist zu Ende")
 
         vorher = kern_ereignis.zyklusnummer(self.konfiguration, self.saison, self.heute)
+        war_renntag = self.tag.art is Tagesart.RENNEN
         self.heute = naechster
-        self.belegte_plaetze.clear()
+        self.zahle_monatsrate()
+        # Die belegten Plaetze bleiben bis zum naechsten Rennen belegt
+        # (Punkt 69) - erst danach steht wieder ein Platz zur Verfuegung.
+        if war_renntag:
+            self.belegte_plaetze.clear()
         if kern_ereignis.zyklusnummer(self.konfiguration, self.saison, naechster) != vorher:
             self.lage.nach_zyklus()
 
@@ -290,6 +316,12 @@ class Karriere:
 
         if geld or erfahrung:
             self.konto = self.konto.mit(geld=geld, erfahrung=erfahrung)
+        if geld:
+            self.kassenbuch.buche(
+                self.heute, geld, kern_kassenbuch.EREIGNISSE,
+                kern_kassenbuch.ZUSCHUSS if geld > 0 else kern_kassenbuch.STRAFE,
+                text=aktiv.name,
+            )
 
         meldung = Meldung(
             datum=self.heute,
@@ -453,7 +485,59 @@ class Karriere:
         else:
             self.lage.repariere(schluessel)
         self.konto = self.konto.mit(geld=-kosten)
+        self.kassenbuch.buche(
+            self.heute, -kosten, kern_kassenbuch.WERKSTATT,
+            kern_kassenbuch.REPARATUR, fahrer=self.fahrernummer,
+            text=schluessel,
+        )
         return kosten
+
+    # -- Kassenbuch (Punkt 72) ---------------------------------------------
+    def _buche_entwicklung(self, entwicklung, platz: str) -> None:
+        """Schreibt einen Kauf oder belegten Tag ins Kassenbuch.
+
+        Fahrzeug und Fahrer bekommen eigene Unterkategorien: Wer wissen
+        will, ob sein Geld ins Auto oder in die Fahrer geht, sieht es
+        sonst nirgends.
+        """
+        if not entwicklung.geld:
+            return
+        fahrzeug = self._faehigkeit(entwicklung.faehigkeit)
+        ins_auto = fahrzeug is not None and fahrzeug.ist_fahrzeug
+        self.kassenbuch.buche(
+            self.heute,
+            -entwicklung.geld,
+            kern_kassenbuch.ENTWICKLUNG,
+            kern_kassenbuch.FAHRZEUG if ins_auto else kern_kassenbuch.TRAINING,
+            fahrer=self.fahrernummer,
+            text=f"{entwicklung.faehigkeit} {entwicklung.von} auf {entwicklung.nach}"
+            + (f" ({platz})" if platz else ""),
+        )
+
+    def zahle_monatsrate(self) -> int:
+        """Bucht die faellige Monatsrate aus dem Teambudget (Punkt 72).
+
+        Am Ersten jedes Monats fuellt eine Rate das Konto. Gezaehlt wird
+        ueber den zuletzt gezahlten Monat, nicht ueber das Datum allein:
+        Wer mit ``bis_zum_rennen`` ueber einen Monatsersten hinwegspringt,
+        soll seine Rate trotzdem bekommen, und zweimal derselbe Tag darf
+        nicht zweimal zahlen.
+
+        :return: die gebuchte Summe
+        """
+        rate = kern_kassenbuch.monatsrate(self.konfiguration, self.teambudget)
+        if rate <= 0:
+            return 0
+        jetzt = (self.heute.year, self.heute.month)
+        if self.letzte_rate is not None and self.letzte_rate >= jetzt:
+            return 0
+        self.letzte_rate = jetzt
+        self.konto = self.konto.mit(geld=rate)
+        self.kassenbuch.buche(
+            self.heute, rate, kern_kassenbuch.TEAM, kern_kassenbuch.MONATSBUDGET,
+            text=f"{self.heute.month:02d}/{self.heute.year}",
+        )
+        return rate
 
     def bis_zum_rennen(self) -> int:
         """Springt direkt zum naechsten Renntag (GDD 2).
@@ -521,8 +605,11 @@ class Karriere:
 
         platz = self.platz_fuer(schluessel)
         if platz in self.belegt:
-            raise KarriereFehler(f"Der Platz {platz} ist heute schon belegt")
+            raise KarriereFehler(
+                f"Der Platz {platz} ist bis zum naechsten Rennen belegt"
+            )
         self.konto = kern_entwicklung.buche(self.konto, entwicklung)
+        self._buche_entwicklung(entwicklung, platz)
         self.belegt.add(platz)
         self._uebernimm(entwicklung, platz)
         return entwicklung
@@ -536,6 +623,7 @@ class Karriere:
                 f"{schluessel} braucht einen Tag - ueber belege_tag statt kaufen"
             )
         self.konto = kern_entwicklung.buche(self.konto, entwicklung)
+        self._buche_entwicklung(entwicklung, platz="")
         self._uebernimm(entwicklung, platz="")
         return entwicklung
 
@@ -655,9 +743,19 @@ class Karriere:
             self.fahrernummer = fahrer
         seine_liga = liga if liga is not None else self.liga
         try:
-            geld = kern_einnahmen.preisgeld(self.konfiguration, seine_liga, platz)
-            geld += kern_einnahmen.startgeld(self.konfiguration, seine_liga)
-            geld += kern_sponsoren.auszahlung(self.vertraege, platz)
+            preisgeld = kern_einnahmen.preisgeld(self.konfiguration, seine_liga, platz)
+            startgeld = kern_einnahmen.startgeld(self.konfiguration, seine_liga)
+            sponsoren = kern_sponsoren.auszahlung(self.vertraege, platz)
+            geld = preisgeld + startgeld + sponsoren
+            for betrag, haupt, unter in (
+                (preisgeld, kern_kassenbuch.RENNEN, kern_kassenbuch.PREISGELD),
+                (startgeld, kern_kassenbuch.RENNEN, kern_kassenbuch.STARTGELD),
+                (sponsoren, kern_kassenbuch.SPONSOREN, kern_kassenbuch.SPONSORENGELD),
+            ):
+                self.kassenbuch.buche(
+                    self.heute, betrag, haupt, unter,
+                    fahrer=self.fahrernummer, text=f"Platz {platz}",
+                )
             erfahrung = kern_einnahmen.erfahrung_fuer(
                 self.konfiguration, seine_liga, platz, ueberholmanoever
             )
@@ -779,6 +877,10 @@ class Karriere:
             )
         if abloese:
             self.konto = self.konto.mit(geld=-abloese)
+            self.kassenbuch.buche(
+                self.heute, -abloese, kern_kassenbuch.TRANSFER,
+                kern_kassenbuch.ABLOESE, fahrer=nummer,
+            )
         self.autos.setdefault(nummer, leere_werte(self.konfiguration))
         self.belegte_plaetze.setdefault(nummer, set())
         self.vertraege_je_fahrer.setdefault(nummer, {})
@@ -797,6 +899,11 @@ class Karriere:
         summe = min(self.gehaltssumme, max(self.konto.geld, 0))
         if summe:
             self.konto = self.konto.mit(geld=-summe)
+            self.kassenbuch.buche(
+                self.heute, -summe, kern_kassenbuch.PERSONAL,
+                kern_kassenbuch.GEHALT,
+                text=f"{len(self.fahrervertraege)} Vertraege",
+            )
         weiter = {}
         for nummer, (gehalt, laufzeit) in self.fahrervertraege.items():
             if nummer not in self.autos:
@@ -836,6 +943,7 @@ def beginne(
     seedquelle: Seedquelle | None = None,
     fahrernummer: int = 0,
     fahrer: tuple[int, ...] | None = None,
+    teambudget: int = 0,
 ) -> Karriere:
     """Startet eine Karriere am 1. Januar (GDD 10).
 
@@ -845,6 +953,9 @@ def beginne(
     :param seedquelle: bestimmt die Ereignisse der Saison (GDD 14). Ohne
         Angabe laeuft das Jahr ohne Ereignisse - so bleiben Tests, die
         allein die Entwicklung pruefen, von ihnen unberuehrt.
+    :param teambudget: das Budget des eigenen Teams aus der Welt. Es zahlt
+        sich in Monatsraten aufs Konto aus (Punkt 72); 0 heisst keine
+        Raten.
     """
     saison = kern_kalender.erzeuge(konfiguration, jahr)
     if werte is None:
@@ -867,7 +978,17 @@ def beginne(
         autos={nummer: dict(werte) for nummer in nummern},
         ereignisplan=plan,
         fahrernummer=fahrernummer,
+        teambudget=teambudget,
     )
+    karriere.kassenbuch.buche(
+        karriere.heute,
+        karriere.konto.geld,
+        kern_kassenbuch.TEAM,
+        kern_kassenbuch.STARTKAPITAL,
+    )
+    # Die Rate des Startmonats gibt es sofort - sonst faengt das erste
+    # Jahr mit elf Raten an.
+    karriere.zahle_monatsrate()
     # Der erste Januar ist selbst schon ein Tag des ersten Zyklus; was auf
     # ihn faellt, wird nie "weitergeschaltet" und muesste sonst ausfallen.
     for schluessel in plan.get(karriere.heute, ()):

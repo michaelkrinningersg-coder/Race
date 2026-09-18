@@ -47,6 +47,7 @@ from typing import TYPE_CHECKING
 
 from rennmanager.kern import ereignis as kern_ereignis
 from rennmanager.kern import karriere as kern_karriere
+from rennmanager.kern import kassenbuch as kern_kassenbuch
 from rennmanager.kern import popularitaet as kern_popularitaet
 from rennmanager.kern import sponsoren as kern_sponsoren
 from rennmanager.kern import statistik as kern_statistik
@@ -72,7 +73,7 @@ if TYPE_CHECKING:  # pragma: no cover
 # Version 4: Der Punkteverlauf der laufenden Saison (Tabelle
 # ``saisonverlauf``, Punkt 9). Aeltere Staende werden gelesen; ihr Verlauf
 # beginnt dann beim naechsten gefahrenen Rennen.
-SPIELSTAND_VERSION = 7
+SPIELSTAND_VERSION = 8
 
 # Punkt 17: Autosave und Schnellspeicher liegen an einem festen Ort,
 # damit sie ohne Dateidialog geschrieben werden koennen.
@@ -92,6 +93,11 @@ TEAMAUTOS_AB_VERSION = 6
 # die Fahrervertraege aus Punkt 7 kommen dazu. Aeltere Staende tragen
 # einen Sponsorensatz - der des einen Fahrers, der der Spieler war.
 TEAMVERTRAEGE_AB_VERSION = 7
+# Ab Version 8 fuehrt die Karriere ein Kassenbuch (Punkt 72) und kennt
+# ihr Teambudget, aus dem sich die Monatsraten speisen. Aeltere Staende
+# laden mit leerem Buch und ohne Budget - sie haben nie eines gefuehrt,
+# und ein nachtraeglich erfundenes waere gelogen.
+KASSENBUCH_AB_VERSION = 8
 
 SCHEMA = """
 CREATE TABLE kopf (
@@ -135,7 +141,11 @@ CREATE TABLE karriere (
     fahrernummer INTEGER NOT NULL,
     geld INTEGER NOT NULL,
     erfahrung INTEGER NOT NULL,
-    belegt TEXT NOT NULL
+    belegt TEXT NOT NULL,
+    -- Ab Version 8: das Teambudget und der zuletzt ausgezahlte Monat
+    -- (Punkt 72). '' heisst: noch keine Rate gebucht.
+    teambudget INTEGER NOT NULL DEFAULT 0,
+    letzte_rate TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE wettertopf (wetter TEXT PRIMARY KEY, erfahrung INTEGER NOT NULL);
 CREATE TABLE karrierewert (schluessel TEXT PRIMARY KEY, wert INTEGER NOT NULL);
@@ -172,6 +182,14 @@ CREATE TABLE buchung (
     nach INTEGER NOT NULL,
     geld INTEGER NOT NULL,
     erfahrung INTEGER NOT NULL
+);
+CREATE TABLE kassenbuch (
+    datum TEXT NOT NULL,
+    betrag INTEGER NOT NULL,
+    hauptkategorie TEXT NOT NULL,
+    unterkategorie TEXT NOT NULL,
+    fahrer INTEGER,
+    text TEXT NOT NULL
 );
 CREATE TABLE ereignisplan (datum TEXT NOT NULL, schluessel TEXT NOT NULL);
 CREATE TABLE ereignis (
@@ -445,7 +463,7 @@ def _schreibe_welt(verbindung: sqlite3.Connection, welt: Welt) -> None:
 
 def _schreibe_karriere(verbindung: sqlite3.Connection, k: kern_karriere.Karriere) -> None:
     verbindung.execute(
-        "INSERT INTO karriere VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO karriere VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (
             k.heute.isoformat(),
             k.liga,
@@ -453,7 +471,23 @@ def _schreibe_karriere(verbindung: sqlite3.Connection, k: kern_karriere.Karriere
             k.konto.geld,
             k.konto.erfahrung,
             ",".join(sorted(k.belegt)),
+            k.teambudget,
+            f"{k.letzte_rate[0]}-{k.letzte_rate[1]}" if k.letzte_rate else "",
         ),
+    )
+    verbindung.executemany(
+        "INSERT INTO kassenbuch VALUES (?, ?, ?, ?, ?, ?)",
+        [
+            (
+                b.datum.isoformat(),
+                b.betrag,
+                b.hauptkategorie,
+                b.unterkategorie,
+                b.fahrer,
+                b.text,
+            )
+            for b in k.kassenbuch.buchungen
+        ],
     )
     verbindung.executemany(
         "INSERT INTO wettertopf VALUES (?, ?)", list(k.konto.wetter_erfahrung.items())
@@ -792,6 +826,33 @@ def _lies_karriere(
     karriere.autos = autos
     karriere.belegte_plaetze = belegte
     karriere.heute = _datum(z["heute"])
+    # Punkt 72: Kassenbuch, Teambudget und die zuletzt gezahlte Rate.
+    # ``beginne`` hat gerade Startkapital und erste Rate gebucht - das
+    # war der Anfang einer *neuen* Karriere, nicht der geladene Stand.
+    karriere.kassenbuch = kern_kassenbuch.Kassenbuch()
+    try:
+        karriere.teambudget = z["teambudget"]
+        marke = z["letzte_rate"]
+    except (IndexError, KeyError):  # Stand vor Version 8
+        karriere.teambudget = 0
+        marke = ""
+    karriere.letzte_rate = (
+        tuple(int(teil) for teil in marke.split("-")) if marke else None
+    )
+    try:
+        karriere.kassenbuch.buchungen = [
+            kern_kassenbuch.Buchung(
+                datum=_datum(b["datum"]),
+                betrag=b["betrag"],
+                hauptkategorie=b["hauptkategorie"],
+                unterkategorie=b["unterkategorie"],
+                fahrer=b["fahrer"],
+                text=b["text"],
+            )
+            for b in verbindung.execute("SELECT * FROM kassenbuch")
+        ]
+    except sqlite3.OperationalError:  # Tabelle gibt es erst ab Version 8
+        karriere.kassenbuch.buchungen = []
 
     toepfe = {
         e["wetter"]: e["erfahrung"] for e in verbindung.execute("SELECT * FROM wettertopf")

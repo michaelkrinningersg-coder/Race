@@ -41,6 +41,7 @@ from rennmanager.konfiguration import Konfiguration
 from rennmanager.ui.editorseite import Editorseite
 from rennmanager.ui.fahrerkarte import Fahrerkarte
 from rennmanager.ui.fahrersuche import Fahrersuche
+from rennmanager.ui.finanzseite import Finanzseite
 from rennmanager.ui.karriereseite import Karriereseite
 from rennmanager.ui.karriereseite import beginne as beginne_karriere
 from rennmanager.ui.rennwochenendeseite import Rennwochenendeseite
@@ -206,7 +207,15 @@ class Hauptfenster(QMainWindow):
             self._seedquelle.zweig("sponsoren"),
             self._popularitaet,
         )
+        # Die Sponsoren sitzen je Auto; die Wahl soll Namen tragen.
+        self._sponsorenseite.zeige_namen(
+            {f.nummer: f.name for f in self._welt.spielerfahrer}
+        )
         self._reiter.addTab(self._sponsorenseite, "Sponsoren")
+        # Punkt 72: Woher das Geld kam und wohin es ging.
+        self._finanzseite = Finanzseite(self._konfiguration, self._karriere)
+        self._karriereseite.werte_geaendert.connect(self._finanzseite.zeichne)
+        self._reiter.addTab(self._finanzseite, "Finanzen")
         self._saisonseite = Saisonseite(
             self._konfiguration,
             self._welt,
@@ -479,6 +488,11 @@ class Hauptfenster(QMainWindow):
     @property
     def weltseite(self) -> Weltseite:
         return self._weltseite
+
+    @property
+    def finanzseite(self) -> Finanzseite:
+        """Die Seite mit Ein- und Ausgaben nach Kategorien."""
+        return self._finanzseite
 
     @property
     def karriereseite(self) -> Karriereseite:

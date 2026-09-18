@@ -859,6 +859,10 @@ schulden = false
 bankrott = false
 # KI-Teambudgets sind vorerst nur Anzeige
 ki_budget_wirksam = false
+# Punkt 72: Das Teambudget des Spielers war bisher ebenfalls nur Anzeige.
+# Jetzt zahlt es sich in Monatsraten aus und fuellt das Konto - am Ersten
+# jedes Monats eine Rate, zwoelf im Jahr, auch in Vor- und Nachsaison.
+budget_raten_je_jahr = 12
 
 [sponsoren]
 plaetze = ["anzug", "helm", "muetze", "auto_haupt", "auto_neben_1", "auto_neben_2"]

@@ -42,16 +42,30 @@ from rennmanager.ui.tabellen import Balkenzeichner, verbinde_fahrerkarte
 # gerafft wird.
 
 # Spalten der Rangliste.
-SPALTE_INTERVALL = 4
-SPALTE_MISCHUNG = 5
-SPALTE_REIFEN = 6
-SPALTE_STATUS = 7
+SPALTE_PLATZ = 0
+SPALTE_KUERZEL = 1
+# Punkt 76: Gewonnene oder verlorene Plaetze seit Beginn dieser Runde.
+SPALTE_WECHSEL = 2
+SPALTE_RUNDE = 3
+SPALTE_ZEIT = 4
+SPALTE_INTERVALL = 5
+SPALTE_MISCHUNG = 6
+SPALTE_REIFEN = 7
+SPALTE_STATUS = 8
+# Gruener Pfeil hoch, roter Pfeil runter - die Zahl daneben sagt, um wie
+# viele Plaetze. Die Farbe ist nie die einzige Auskunft.
+PFEIL_HOCH = "\u25b2"
+PFEIL_RUNTER = "\u25bc"
+FARBE_GEWONNEN = "#2e7d32"
+FARBE_VERLOREN = "#c62828"
 # So viele Zwischenfaelle stehen im Ticker; aeltere rollen heraus.
 TICKER_ZEILEN = 12
 # Punkt 63: So lange bleibt ein ausgefallenes Auto noch auf der
 # Streckengrafik stehen - lang genug, um zu sehen, wo es passiert ist,
 # und kurz genug, dass die Karte nicht mit Standbildern zuwaechst.
 AUSFALL_SICHTBAR_MS = 60_000
+# Die letzte Runde leuchtet auf, wenn sie die beste dieses Fahrers war.
+FARBE_PERSOENLICHE_BEST = "#2e7d32"
 # Platz fuer den Reifenbalken samt Prozentzahl daneben.
 BREITE_REIFEN = 96
 # Punkt 39: Zwei Mischungen sind im Trockenen Pflicht. Solange ein Auto
@@ -99,6 +113,10 @@ class Rennseite(QWidget):
         self._qualifying = None
         self._zeit_ms = 0.0
         self._laeuft = False
+        # Das Rennen laeuft erst los, wenn diese Seite auch zu sehen ist.
+        # Sonst rauscht es im Hintergrund durch, waehrend der Spieler noch
+        # beim Qualifying steht - und er findet es am Ende vor.
+        self._startet_beim_zeigen = False
 
         self._ansicht = Streckenansicht()
         # Punkt 2: Das Rueckstandsdiagramm liegt als zweiter Reiter neben
@@ -174,7 +192,7 @@ class Rennseite(QWidget):
         self._rangliste = QTreeWidget()
         self._rangliste.setHeaderLabels(
             [
-                "Pos", "Auto", "Rd", "Zeit / Rueckstand", "Intervall",
+                "Pos", "Auto", "+/-", "Rd", "Zeit / Rueckstand", "Intervall",
                 "Mischung", "Reifen", "Status",
             ]
         )
@@ -249,8 +267,18 @@ class Rennseite(QWidget):
         self._springe(0)
 
         # Das Rennen laeuft von selbst los, damit es sich wie eine
-        # Uebertragung anfuehlt und nicht wie eine Auswertung.
+        # Uebertragung anfuehlt und nicht wie eine Auswertung - aber erst,
+        # wenn man auch hinschaut.
         if self._konfiguration.wert("zeitraffer", "automatisch_starten"):
+            if self.isVisible():
+                self._umschalten()
+            else:
+                self._startet_beim_zeigen = True
+
+    def showEvent(self, ereignis) -> None:  # noqa: D102 - Qt-Name
+        super().showEvent(ereignis)
+        if self._startet_beim_zeigen and self._verlauf is not None:
+            self._startet_beim_zeigen = False
             self._umschalten()
 
     def _waehle_zeitraffer(self) -> None:
@@ -279,6 +307,7 @@ class Rennseite(QWidget):
             self._uhr.start()
 
     def _halte_an(self) -> None:
+        self._startet_beim_zeigen = False
         self._laeuft = False
         self._uhr.stop()
         self._abspielen.setText("Start")
@@ -336,9 +365,40 @@ class Rennseite(QWidget):
             ]
         )
         self._fuelle_rangliste(verlauf, reihenfolge, distanzen, zeit)
-        self._fuelle_monitor(verlauf, reihenfolge)
+        self._fuelle_monitor(verlauf, reihenfolge, zeit)
         self._fuelle_ticker(verlauf, zeit)
         self._rueckstand.setze_marke(zeit)
+
+    @staticmethod
+    def _wechseltext(gewinn: int) -> str:
+        """Pfeil und Zahl der Plaetze, oder leer bei keiner Aenderung."""
+        if gewinn > 0:
+            return f"{PFEIL_HOCH} {gewinn}"
+        if gewinn < 0:
+            return f"{PFEIL_RUNTER} {-gewinn}"
+        return ""
+
+    @staticmethod
+    def _plaetze_vorige_runde(
+        verlauf: Rennverlauf, fuehrender: int, zeit: float
+    ) -> dict[int, int]:
+        """Die Plaetze zu Beginn der laufenden Runde des Fuehrenden.
+
+        Ein fester Bezugspunkt fuers ganze Feld: Nimmt jedes Auto seine
+        eigene letzte Rundenankunft, vergleichen dreissig Zeilen dreissig
+        verschiedene Augenblicke, und die Pfeile widersprechen sich.
+        Leer, solange die erste Runde laeuft - da gibt es nichts zu
+        vergleichen.
+        """
+        protokoll = verlauf.protokolle[fuehrender]
+        gefahren = protokoll.gefahren_bis(zeit)
+        if gefahren < 1 or not protokoll.rundenende_ms:
+            return {}
+        rundenbeginn = protokoll.rundenende_ms[gefahren - 1]
+        return {
+            auto: platz
+            for platz, auto in enumerate(verlauf.reihenfolge_zu(rundenbeginn), start=1)
+        }
 
     @staticmethod
     def _noch_auf_der_karte(verlauf: Rennverlauf, teilnehmer: int, zeit: float) -> bool:
@@ -398,6 +458,7 @@ class Rennseite(QWidget):
         bild = verlauf.bild_zu(zeit)
         raus = verlauf.ausgefallen[bild]
         mischungen = verlauf.mischung_zu(zeit)
+        vorher = self._plaetze_vorige_runde(verlauf, fuehrender, zeit)
 
         for platz, i in enumerate(reihenfolge, start=1):
             teilnehmer = verlauf.teilnehmer[i]
@@ -425,11 +486,16 @@ class Rennseite(QWidget):
             bisher = [z for z in verlauf.zwischenfaelle_von(i) if z.zeit_ms <= zeit]
             status = self._status(bisher, bool(raus[i]))
 
+            # Punkt 76: Wie viele Plaetze seit Beginn dieser Runde gewonnen
+            # oder verloren wurden.
+            gewinn = vorher.get(i, platz) - platz
+
             zeile = QTreeWidgetItem(
                 self._rangliste,
                 [
                     str(platz),
                     teilnehmer.kuerzel,
+                    self._wechseltext(gewinn),
                     str(runde),
                     text,
                     self._intervall(verlauf, reihenfolge, distanzen, zeit, platz),
@@ -438,7 +504,12 @@ class Rennseite(QWidget):
                     status,
                 ],
             )
-            zeile.setForeground(1, QColor(teilnehmer.farbe))
+            zeile.setForeground(SPALTE_KUERZEL, QColor(teilnehmer.farbe))
+            if gewinn:
+                zeile.setForeground(
+                    SPALTE_WECHSEL,
+                    QColor(FARBE_GEWONNEN if gewinn > 0 else FARBE_VERLOREN),
+                )
             self._faerbe_mischung(zeile, verlauf, i, zeit)
             zeile.setData(0, Qt.UserRole, i)
             zeile.setData(SPALTE_REIFEN, Balkenzeichner.ANTEILSROLLE, float(reifen[i]))
@@ -454,9 +525,9 @@ class Rennseite(QWidget):
                 for spalte in range(self._rangliste.columnCount()):
                     zeile.setForeground(spalte, QColor("#8b93a1"))
             if teilnehmer.ist_spieler:
-                schrift = zeile.font(1)
+                schrift = zeile.font(SPALTE_KUERZEL)
                 schrift.setBold(True)
-                for spalte in range(4):
+                for spalte in range(SPALTE_ZEIT + 1):
                     zeile.setFont(spalte, schrift)
         for spalte in range(self._rangliste.columnCount()):
             if spalte != SPALTE_REIFEN:
@@ -561,23 +632,46 @@ class Rennseite(QWidget):
         dt = (verlauf.zeitpunkte_ms[bild + 1] - verlauf.zeitpunkte_ms[bild]) / 1000.0
         return float(verlauf.distanz_m[bild + 1, i] - verlauf.distanz_m[bild, i]) / max(dt, 1e-6)
 
-    def _fuelle_monitor(self, verlauf: Rennverlauf, reihenfolge: list[int]) -> None:
-        """GDD 4: letzte Runde, beste Runde, 4 Sektorzeiten."""
+    def _fuelle_monitor(
+        self, verlauf: Rennverlauf, reihenfolge: list[int], zeit: float
+    ) -> None:
+        """GDD 4: letzte Runde, beste Runde, 4 Sektorzeiten.
+
+        Alles zum **Abspielzeitpunkt**: Der Monitor zeigte bisher die
+        Zeiten vom Rennende, also Runden, die in der Uebertragung noch
+        gar nicht gefahren waren.
+
+        Sortiert wird nach der besten Runde - das ist die Frage, die
+        dieser Monitor beantwortet. Wer noch keine Runde beendet hat,
+        steht hinten.
+        """
         self._monitor.clear()
+        staende = {i: verlauf.protokolle[i].stand_zu(zeit) for i in reihenfolge}
         # Alle Fahrer, nicht nur die ersten zehn: Wer sein eigenes Auto
         # auf Platz 18 sucht, will dessen Sektorzeiten genauso sehen.
-        for i in reihenfolge:
-            protokoll = verlauf.protokolle[i]
-            sektoren = protokoll.sektorzeiten_ms[-1] if protokoll.sektorzeiten_ms else ()
+        nach_bestzeit = sorted(
+            reihenfolge,
+            key=lambda i: (staende[i][1] is None, staende[i][1] or 0, i),
+        )
+        for i in nach_bestzeit:
+            letzte, beste, sektoren = staende[i]
             spalten = [
                 verlauf.teilnehmer[i].kuerzel,
-                formatiere_dauer(protokoll.letzte_runde_ms) if protokoll.letzte_runde_ms else "-",
-                formatiere_dauer(protokoll.beste_runde_ms) if protokoll.beste_runde_ms else "-",
+                formatiere_dauer(letzte) if letzte else "-",
+                formatiere_dauer(beste) if beste else "-",
             ]
-            spalten += [formatiere_dauer(zeit) for zeit in sektoren]
+            spalten += [formatiere_dauer(sektor) for sektor in sektoren]
             spalten += ["-"] * (7 - len(spalten))
             zeile = QTreeWidgetItem(self._monitor, spalten)
             zeile.setForeground(0, QColor(verlauf.teilnehmer[i].farbe))
+            # Die letzte Runde leuchtet auf, wenn sie zugleich die beste
+            # dieses Fahrers war - eine persoenliche Bestzeit sieht man
+            # so im Vorbeilaufen.
+            if letzte is not None and letzte == beste:
+                zeile.setForeground(1, QColor(FARBE_PERSOENLICHE_BEST))
+                schrift = zeile.font(1)
+                schrift.setBold(True)
+                zeile.setFont(1, schrift)
         for spalte in range(7):
             self._monitor.resizeColumnToContents(spalte)
 

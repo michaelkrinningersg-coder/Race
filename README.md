@@ -194,7 +194,29 @@ Vier Dinge stehen neben der Streckenansicht, alle aus dem fertigen
   nicht "Auto Nummer drei".
 * **Zwischenfall-Ticker**: Fehler, Unfaelle und Defekte bis zur laufenden
   Rennzeit, neueste zuerst.
+* **Zeitenmonitor** mit letzter Runde, bester Runde und den vier
+  Sektorzeiten - alles **zum Abspielzeitpunkt**, sortiert nach der besten
+  Runde. Die letzte Runde leuchtet gruen auf, wenn sie zugleich die beste
+  dieses Fahrers war. Dafuer fuehrt das Rundenprotokoll ``rundenende_ms``
+  mit; ohne diese Zeitpunkte zeigte der Monitor die Werte vom Rennende,
+  also Runden, die in der Uebertragung noch gar nicht gefahren waren.
+* **Rundenstand** "Runde X/Y" des Fuehrenden im Kopf der Seite.
 * **Rueckstandsdiagramm** als zweiter Reiter neben der Strecke.
+
+Ausgefallene Autos bleiben noch eine Minute auf der Streckengrafik stehen
+- lang genug, um zu sehen, wo es passiert ist - und werden danach
+abgeraeumt, statt regungslos liegen zu bleiben.
+
+#### Warum die Reihenfolge im Ziel nicht aus der Strecke kommt
+
+Die Rangliste sortierte anfangs allein nach zurueckgelegter Strecke. Das
+geht, solange gefahren wird; danach nicht mehr: Wer im Ziel ist, **steht**,
+alle anderen fahren weiter bis zur Linie. Gemessen stand am Ende in 10 von
+10 Rennen der falsche Sieger oben - naemlich der, der als Letzter ankam
+und deshalb die groesste Strecke hatte.
+
+Sortiert wird jetzt wie die Wertung: Runden absteigend, dann Zielzeit
+aufsteigend, und wer im Ziel ist, steht vor allen, die noch fahren.
 
 #### Warum das Diagramm nur zwei farbige Linien hat
 
@@ -534,6 +556,48 @@ gewichtet, gegen eine Schwelle, die mit seiner Bekanntheit steigt
 (Punkt 5). Weil ein neuer Fahrer sein leeres Auto mitbringt, ist der
 Autoteil beim Spieler fast immer ein Minus - Geld muss es ausgleichen.
 Sagt er ab, nennt die Antwort den schwaechsten der drei Punkte.
+
+### Geld: Kassenbuch und Finanzseite
+
+`rennmanager.kern.kassenbuch` schreibt **jede** Geldbewegung mit - Datum,
+Betrag, Haupt- und Unterkategorie, Fahrer. Das Konto kannte bisher nur
+einen Stand; woher er kam, stand nirgends, und eine Finanzseite haette
+nichts zu gruppieren gehabt.
+
+| Hauptkategorie | Unterkategorien |
+|---|---|
+| Rennen | Preisgeld, Startgeld |
+| Sponsoren | Sponsorenzahlung |
+| Team | Monatsbudget, Startkapital |
+| Ereignisse | Zuschuss, Strafe |
+| Entwicklung | Fahrzeug-Upgrade, Fahrertraining |
+| Werkstatt | Reparatur |
+| Personal | Gehalt |
+| Transfer | Abloese |
+
+Das **Teambudget** des Spielers stand in der Welt und war reine Anzeige.
+Jetzt zahlt es sich in zwoelf Monatsraten aufs Konto aus, je eine am
+Monatsersten - auch in Vor- und Nachsaison. Die Budgets der KI-Teams
+bleiben Anzeige (`finanzen.ki_budget_wirksam = false`).
+
+Der Reiter **Finanzen** zeigt das Buch als Baum: Hauptkategorie,
+Unterkategorie, darunter die Einzelbuchungen; wahlweise die ganze
+Karriere oder eine Saison. Ein Test misst die Vollstaendigkeit statt
+einzelner Betraege - der Saldo aller Buchungen muss den Kontostand
+ergeben.
+
+### Was ein Tag kostet
+
+Zwei Entscheidungen des Auftraggebers weichen vom GDD ab:
+
+* **Alles, was Zeit kostet, kostet auch etwas Erfahrung.** Die Zeit bleibt
+  ein Tag und skaliert nicht; die Erfahrung waechst ueber dieselbe Kurve
+  wie das Geld, also mit jedem Kauf. Wer schon Erfahrung zahlt, zahlt
+  nicht doppelt.
+* **Ein belegter Platz bleibt bis zum naechsten Rennen belegt.** GDD 2
+  gibt jedem Tag zwei Plaetze; gemeint ist jetzt der Abstand zwischen zwei
+  Rennen. Je Abstand gibt es also einen Trainings- und einen
+  Werkstattschritt, nicht einen je Tag.
 
 ## Talente und Generationen
 
@@ -960,7 +1024,7 @@ Alle Entscheidungen dazu stehen in OFFENE_PUNKTE.md (Punkte 48 bis 53).
 | **Ermuedung** (GDD 8, Bereich `er`) | bis -2,0 % Tempo am Rennende, ab halber Distanz | `kern.tempoverlauf` |
 | **Kaltreifen** | bis -3,0 % Tempo, abgebaut ueber die erste Runde | `kern.tempoverlauf` |
 | **Bremskuehlung** | bis -4,0 % Bremsgrenze am Rennende | `kern.tempoverlauf` |
-| **Windschatten** | bis +2,5 % Tempo, 30 m bis auf gleiche Hoehe, einmal je Gerade | `kern.windschatten` |
+| **Windschatten** | bis +2,5 % Tempo, 30 m bis auf gleiche Hoehe, einmal je Gerade, danach Nachlauf | `kern.windschatten` |
 | **Rhythmus** | +/- 1,5 % Querbeschleunigung, je nach Kurvenanteil der Strecke | `kern.rhythmus` |
 | **Materialgefuehl** | Defektrate mal 1,0 bis 0,6 | `kern.zwischenfall` |
 | **Heimstrecke** | +0,5 bis +1,0 % auf fuenf je Wochenende gezogene Eigenschaften | `kern.heimstrecke` |
@@ -984,6 +1048,32 @@ GDD 9 unberuehrt - gemessen liegt Zandvoort weiter bei +0.00. Dafuer
 sorgt auch, dass **alle neuen Wirkungen hinter `ohne_zufall` liegen**:
 GDD 9 kalibriert die freie Einzelrunde, und die kennt weder Ermuedung noch
 kalte Reifen noch Windschatten.
+
+### Der Nachlauf des Windschattens
+
+Der Sog endete anfangs in dem Augenblick, in dem ein Auto vorbei war -
+und der gerade Ueberholte klebte sofort wieder dran. Auf Wunsch des
+Auftraggebers laeuft er jetzt nach:
+
+* Der **Ueberholende** behaelt den Ueberschuss **50 m in voller Hoehe**
+  und danach **zur Haelfte bis zum Anbremsen** derselben Geraden. Das
+  Anbremsen erkennt das Modell daran, dass das Profil faellt - dort ist
+  Schluss, sonst traege das Auto zu viel Tempo in die Kurve.
+* Der **Ueberholte** bekommt waehrend der ersten 50 m gar nichts und
+  danach die **Haelfte dessen**, was der Ueberholende in der zweiten Stufe
+  hat. Er haengt sich also an, statt im vollen Sog zurueckzuschlagen.
+
+Gemessen ueber 10 Rennen mit 20 gleich starken Autos: **16,7 % weniger
+Manoever**, weil ein Ueberholmanoever jetzt haelt.
+
+Die Naehe wird fuer den Sog an der **Position auf der Runde** gemessen,
+nicht an der gesamt gefahrenen Strecke. Vorher konnte ein Ueberrundender
+nie im Sog eines Ueberrundeten fahren, weil zwischen beiden rechnerisch
+eine ganze Runde lag; ein Ueberrundeter bekam umgekehrt nie den Sog des
+Ueberrundenden. Der erste Fall ist jetzt moeglich, der zweite bleibt
+ausgeschlossen (`wird_ueberrundet`). **Verkehr, Ueberholen und Unfaelle
+rechnen weiter auf der Gesamtdistanz** - so hat es der Auftraggeber
+entschieden.
 
 ### Warum die Bremskuehlung ein zweites Profil bekommt
 

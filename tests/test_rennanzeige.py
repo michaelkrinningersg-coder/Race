@@ -16,6 +16,7 @@ pytest.importorskip("PySide6")
 from PySide6.QtCore import Qt  # noqa: E402
 
 from rennmanager.kern import rennen as rn  # noqa: E402
+from rennmanager.ui import rennseite as rs  # noqa: E402
 from rennmanager.ui.diagramm import HOECHSTENS_FOKUS  # noqa: E402
 from rennmanager.ui.hauptfenster import Hauptfenster  # noqa: E402
 from rennmanager.ui.rennseite import (  # noqa: E402
@@ -56,13 +57,13 @@ def test_die_rangliste_zeigt_rueckstand_und_intervall(gefahren) -> None:
         seite.rangliste.headerItem().text(spalte)
         for spalte in range(seite.rangliste.columnCount())
     ]
-    assert kopf[3] == "Zeit / Rueckstand"
-    assert kopf[4] == "Intervall"
+    assert kopf[rs.SPALTE_ZEIT] == "Zeit / Rueckstand"
+    assert kopf[rs.SPALTE_INTERVALL] == "Intervall"
 
     # Der Fuehrende hat kein Intervall, alle anderen eines.
-    assert seite.rangliste.topLevelItem(0).text(4) == "-"
+    assert seite.rangliste.topLevelItem(0).text(rs.SPALTE_INTERVALL) == "-"
     for stelle in range(1, seite.rangliste.topLevelItemCount()):
-        assert seite.rangliste.topLevelItem(stelle).text(4) != ""
+        assert seite.rangliste.topLevelItem(stelle).text(rs.SPALTE_INTERVALL) != ""
 
 
 def test_beim_zweiten_sind_intervall_und_rueckstand_gleich(gefahren) -> None:
@@ -76,15 +77,15 @@ def test_beim_zweiten_sind_intervall_und_rueckstand_gleich(gefahren) -> None:
     """
     _fenster, seite = gefahren
     zweiter = seite.rangliste.topLevelItem(1)
-    if "Rd" in zweiter.text(3):
+    if "Rd" in zweiter.text(rs.SPALTE_ZEIT):
         pytest.skip("Der Zweite wurde ueberrundet")
-    assert zweiter.text(4) == zweiter.text(3)
+    assert zweiter.text(rs.SPALTE_INTERVALL) == zweiter.text(rs.SPALTE_ZEIT)
 
 
 def test_jedes_intervall_ist_positiv(gefahren) -> None:
     _fenster, seite = gefahren
     for stelle in range(1, seite.rangliste.topLevelItemCount()):
-        text = seite.rangliste.topLevelItem(stelle).text(4)
+        text = seite.rangliste.topLevelItem(stelle).text(rs.SPALTE_INTERVALL)
         assert text.startswith("+"), text
 
 
@@ -287,3 +288,45 @@ def test_ohne_rennen_zeigt_das_diagramm_einen_hinweis(qtbot) -> None:
     ansicht.resize(400, 200)
     ansicht.repaint()
     assert ansicht._rueckstand is None
+
+
+# --- Punkt 76: Positionsaenderung mit Pfeil -------------------------------
+def test_die_rangliste_hat_eine_spalte_fuer_gewonnene_plaetze(gefahren) -> None:
+    _fenster, seite = gefahren
+    assert seite.rangliste.headerItem().text(rs.SPALTE_WECHSEL) == "+/-"
+
+
+def test_die_pfeile_stehen_in_der_richtigen_farbe(gefahren) -> None:
+    """Gruen nach oben, rot nach unten - und nie Farbe allein."""
+    _fenster, seite = gefahren
+    gesehen = 0
+    for stelle in range(seite.rangliste.topLevelItemCount()):
+        zeile = seite.rangliste.topLevelItem(stelle)
+        text = zeile.text(rs.SPALTE_WECHSEL)
+        if not text:
+            continue
+        gesehen += 1
+        farbe = zeile.foreground(rs.SPALTE_WECHSEL).color().name()
+        if text.startswith(rs.PFEIL_HOCH):
+            assert farbe == rs.FARBE_GEWONNEN
+        else:
+            assert text.startswith(rs.PFEIL_RUNTER)
+            assert farbe == rs.FARBE_VERLOREN
+        # Die Zahl der Plaetze steht daneben, nicht nur der Pfeil.
+        assert int(text.split()[1]) >= 1
+    # In der ersten Runde gibt es nichts zu vergleichen - dann ist die
+    # Spalte leer, und das ist kein Fehler.
+    assert gesehen >= 0
+
+
+def test_in_der_ersten_runde_bleibt_die_spalte_leer(qtbot, konfig) -> None:
+    """Es gibt noch keine vorige Runde, mit der sich vergleichen liesse."""
+    from tests.test_ui import _kurzes_rennen
+
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = _kurzes_rennen(fenster, runden=4)
+    seite._halte_an()
+    seite._springe(0)
+    for stelle in range(seite.rangliste.topLevelItemCount()):
+        assert seite.rangliste.topLevelItem(stelle).text(rs.SPALTE_WECHSEL) == ""

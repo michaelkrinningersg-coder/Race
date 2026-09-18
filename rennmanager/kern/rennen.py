@@ -21,6 +21,7 @@ Regeln aus GDD 4:
 from __future__ import annotations
 
 import math
+from bisect import bisect_right
 from dataclasses import dataclass, field, replace
 from functools import cached_property
 from typing import TYPE_CHECKING
@@ -74,6 +75,10 @@ class Rundenprotokoll:
 
     rundenzeiten_ms: list[int] = field(default_factory=list)
     sektorzeiten_ms: list[tuple[int, ...]] = field(default_factory=list)
+    # Wann jede Runde zu Ende war, in Rennzeit. Ohne das weiss die
+    # Anzeige nicht, welche Runden zum Abspielzeitpunkt schon gefahren
+    # sind - sie zeigte immer die Zeiten vom Rennende.
+    rundenende_ms: list[int] = field(default_factory=list)
 
     @property
     def beste_runde_ms(self) -> int | None:
@@ -82,6 +87,28 @@ class Rundenprotokoll:
     @property
     def letzte_runde_ms(self) -> int | None:
         return self.rundenzeiten_ms[-1] if self.rundenzeiten_ms else None
+
+    def gefahren_bis(self, zeit_ms: float) -> int:
+        """Wie viele Runden bis zu diesem Zeitpunkt fertig waren."""
+        if not self.rundenende_ms:
+            # Ein Protokoll aus einem Stand ohne Rundenenden: dann gilt
+            # alles als gefahren, wie es die Anzeige bisher tat.
+            return len(self.rundenzeiten_ms)
+        return int(bisect_right(self.rundenende_ms, zeit_ms))
+
+    def stand_zu(self, zeit_ms: float) -> tuple[int | None, int | None, tuple[int, ...]]:
+        """Letzte Runde, beste Runde und ihre Sektorzeiten zum Zeitpunkt.
+
+        :return: (letzte Rundenzeit, beste Rundenzeit, Sektoren der
+            letzten Runde); alles ``None`` beziehungsweise leer, solange
+            noch keine Runde fertig ist.
+        """
+        bis = self.gefahren_bis(zeit_ms)
+        if bis <= 0:
+            return None, None, ()
+        zeiten = self.rundenzeiten_ms[:bis]
+        sektoren = self.sektorzeiten_ms[bis - 1] if bis <= len(self.sektorzeiten_ms) else ()
+        return zeiten[-1], min(zeiten), sektoren
 
 
 @dataclass(frozen=True)
@@ -1234,19 +1261,33 @@ class _Lauf:
         # gewuerfelt wird - genau dafuer ist er da.
         self.sog_jetzt[:] = 0.0
         if self.sog_fenster > 0.0:
-            gerade = self.geradennummer[index[hinten]]
+            # Der Sog haengt an der Position **auf der Runde**, nicht an
+            # der gesamt gefahrenen Strecke: Wer einen Ueberrundeten
+            # einholt, faehrt hinter ihm her und bekommt seinen Sog, auch
+            # wenn zwischen beiden auf dem Papier eine ganze Runde liegt.
+            # Verkehr, Ueberholen und Unfaelle bleiben davon unberuehrt -
+            # die rechnen weiter auf der Gesamtdistanz.
+            sog_hinten, sog_vorne, lueck = self._sogpaare()
+            gerade = self.geradennummer[index[sog_hinten]]
+            # Wer ueberrundet wird, bekommt vom Ueberrundenden nichts:
+            # Liegt der Vordermann eine gute halbe Runde weiter, ist er
+            # eine Runde voraus - dann ist es sein Sog, nicht meiner.
+            wird_ueberrundet = (
+                self.distanz[sog_vorne] - self.distanz[sog_hinten] > self.laenge * 0.5
+            )
             im_fenster = (
-                faehrt[hinten]
-                & faehrt[vorne]
-                & (abstand_m > 0.0)
-                & (abstand_m < self.sog_fenster)
+                faehrt[sog_hinten]
+                & faehrt[sog_vorne]
+                & (lueck > 0.0)
+                & (lueck < self.sog_fenster)
+                & ~wird_ueberrundet
                 & (gerade >= 0)
-                & (self._gerade_id(hinten, gerade) != self.sog_verbraucht[hinten])
+                & (self._gerade_id(sog_hinten, gerade) != self.sog_verbraucht[sog_hinten])
             )
             if im_fenster.any():
-                anteil = np.where(im_fenster, 1.0 - abstand_m / self.sog_fenster, 0.0)
-                self.sog_jetzt[hinten] = self.sog_gewinn[hinten] * anteil
-                ziel[hinten] = ziel[hinten] * (1.0 + self.sog_jetzt[hinten])
+                anteil = np.where(im_fenster, 1.0 - lueck / self.sog_fenster, 0.0)
+                self.sog_jetzt[sog_hinten] = self.sog_gewinn[sog_hinten] * anteil
+                ziel[sog_hinten] = ziel[sog_hinten] * (1.0 + self.sog_jetzt[sog_hinten])
 
         # --- Nachlauf des Windschattens -------------------------------
         # Der Ueberschuss endet nicht in dem Augenblick, in dem das Auto
@@ -1341,6 +1382,24 @@ class _Lauf:
             if ziel[j] < ziel[i]:
                 ziel[i] = ziel[j]
         return ziel
+
+    def _sogpaare(self):
+        """Wer faehrt auf der Runde direkt hinter wem (Punkt 68)?
+
+        Anders als beim Verkehr wird hier die Position **auf der Strecke**
+        genommen. Sonst sieht ein Auto seinen Vordermann nur, solange
+        beide auf derselben Runde sind - ein Ueberrundeter liegt auf der
+        Gesamtdistanz eine ganze Runde zurueck und waere nie in Reichweite,
+        obwohl er direkt vor der Nase faehrt.
+
+        :return: (hinten, vorne, Luecke in Metern) je Auto
+        """
+        auf_der_runde = np.mod(np.maximum(self.distanz, 0.0), self.laenge)
+        ordnung = np.argsort(auf_der_runde)
+        hinten = ordnung
+        vorne = np.roll(ordnung, -1)
+        lueck = np.mod(auf_der_runde[vorne] - auf_der_runde[hinten], self.laenge)
+        return hinten, vorne, lueck
 
     def _gerade_id(self, autos, gerade):
         """Eindeutige Kennung einer Geraden in einer Runde.
@@ -1552,6 +1611,7 @@ class _Lauf:
         protokoll = self.protokolle[i]
         protokoll.rundenzeiten_ms.append(int(round(ueberfahrt - self.linienzeit[i])))
         protokoll.sektorzeiten_ms.append(tuple(self.sektor_puffer[i]))
+        protokoll.rundenende_ms.append(int(round(ueberfahrt)))
 
         self.sektor_puffer[i] = []
         self.linienzeit[i] = ueberfahrt

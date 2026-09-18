@@ -14,6 +14,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
+    QComboBox,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -68,11 +69,48 @@ class Sponsorenseite(QWidget):
         teiler.setStretchFactor(1, 3)
         spalte.addWidget(teiler, stretch=1)
 
+        self._fuelle_fahrerwahl()
         self.wuerfle_angebote()
+
+    # -- Die vier eigenen Autos --------------------------------------------
+    def zeige_namen(self, namen: dict[int, str]) -> None:
+        """Ersetzt 'Fahrer 401' durch den wirklichen Namen."""
+        self._fuelle_fahrerwahl(namen)
+
+    def _fuelle_fahrerwahl(self, namen: dict[int, str] | None = None) -> None:
+        """Traegt die eigenen Fahrer ein; der gewaehlte bleibt gewaehlt.
+
+        Die Sponsoren sitzen auf den Plaetzen **eines** Autos (GDD 10), und
+        jedes Auto gehoert seinem Fahrer. Ohne diese Wahl sah der Spieler
+        immer nur die Vertraege des gerade eingestellten Fahrers und kam
+        an die der anderen drei nur ueber die Karriereseite.
+        """
+        self._fahrerwahl.blockSignals(True)
+        self._fahrerwahl.clear()
+        for nummer in self._karriere.fahrer:
+            beschriftung = (namen or {}).get(nummer, f"Fahrer {nummer}")
+            self._fahrerwahl.addItem(beschriftung, nummer)
+        stelle = self._fahrerwahl.findData(self._karriere.fahrernummer)
+        self._fahrerwahl.setCurrentIndex(stelle if stelle >= 0 else 0)
+        self._fahrerwahl.blockSignals(False)
+        # Bei einem einzigen Auto waere die Auswahl eine Zeile ohne Wahl.
+        self._fahrerwahl.setVisible(len(self._karriere.fahrer) > 1)
+
+    def _fahrer_gewechselt(self) -> None:
+        nummer = self._fahrerwahl.currentData()
+        if nummer is None or nummer == self._karriere.fahrernummer:
+            return
+        self._karriere.waehle_fahrer(int(nummer))
+        self.zeichne()
 
     # -- Aufbau ------------------------------------------------------------
     def _baue_kopf(self) -> QHBoxLayout:
         zeile = QHBoxLayout()
+        zeile.addWidget(QLabel("Auto:"))
+        self._fahrerwahl = QComboBox()
+        self._fahrerwahl.currentIndexChanged.connect(self._fahrer_gewechselt)
+        zeile.addWidget(self._fahrerwahl)
+        zeile.addSpacing(16)
         self._hinweis = QLabel()
         self._hinweis.setWordWrap(True)
         zeile.addWidget(self._hinweis, stretch=1)
