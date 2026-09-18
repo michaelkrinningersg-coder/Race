@@ -40,6 +40,7 @@ from rennmanager.kern.zufall import Seedquelle
 from rennmanager.konfiguration import Konfiguration
 from rennmanager.ui.editorseite import Editorseite
 from rennmanager.ui.fahrerkarte import Fahrerkarte
+from rennmanager.ui.fahrersuche import Fahrersuche
 from rennmanager.ui.karriereseite import Karriereseite
 from rennmanager.ui.karriereseite import beginne as beginne_karriere
 from rennmanager.ui.rennwochenendeseite import Rennwochenendeseite
@@ -123,6 +124,13 @@ class Hauptfenster(QMainWindow):
         laden.setShortcut("Ctrl+O")
         laden.triggered.connect(self._lade)
         datei.addAction(laden)
+        datei.addSeparator()
+
+        # Punkt 18: Strg+F springt ins Suchfeld ueber den Reitern.
+        suchen = QAction("Fahrer &suchen", self)
+        suchen.setShortcut("Ctrl+F")
+        suchen.triggered.connect(lambda: self._suche.fokussiere())
+        datei.addAction(suchen)
         datei.addSeparator()
 
         neu = QAction("&Neue Karriere ...", self)
@@ -225,7 +233,17 @@ class Hauptfenster(QMainWindow):
         # der Seite wird sie deshalb neu gelesen.
         self._reiter.currentChanged.connect(self._reiter_gewechselt)
         self._verbinde_fahrerkarten()
-        return self._reiter
+
+        # Punkt 18: Die Suche steht ueber den Reitern, damit sie von
+        # ueberall aus erreichbar ist.
+        rahmen = QWidget()
+        spalte = QVBoxLayout(rahmen)
+        spalte.setContentsMargins(6, 4, 6, 0)
+        self._suche = Fahrersuche(self._konfiguration, self._welt)
+        self._suche.fahrer_gewaehlt.connect(self.oeffne_fahrerkarte)
+        spalte.addWidget(self._suche)
+        spalte.addWidget(self._reiter, stretch=1)
+        return rahmen
 
     def _schliesse_fahrerkarten(self) -> None:
         for karte in getattr(self, "_karten", {}).values():
@@ -426,6 +444,11 @@ class Hauptfenster(QMainWindow):
     def karriereseite(self) -> Karriereseite:
         """Die Seite mit Kalender, Entwicklung und Sponsoren."""
         return self._karriereseite
+
+    @property
+    def fahrersuche(self) -> Fahrersuche:
+        """Das Suchfeld ueber den Reitern (Punkt 18)."""
+        return self._suche
 
     @property
     def wochenendeseite(self) -> Rennwochenendeseite:

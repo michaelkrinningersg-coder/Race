@@ -1410,3 +1410,107 @@ def test_die_tastenkuerzel_sind_gesetzt(qtbot, konfig) -> None:
     assert kuerzel["Schnellspeichern"] == "F5"
     assert kuerzel["Schnellladen"] == "F9"
     assert kuerzel["Neue Karriere ..."] == "Ctrl+N"
+
+
+# -- Fahrersuche (Punkt 18) --------------------------------------------------
+def test_die_suche_kennt_alle_600_fahrer(qtbot, konfig) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    suche = fenster.fahrersuche
+    assert suche.vervollstaendigung.model().rowCount() == len(fenster.welt.fahrer)
+
+
+def test_die_suche_findet_teiltreffer(qtbot, konfig) -> None:
+    """Wer nur den halben Nachnamen tippt, soll ihn trotzdem finden."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    suche = fenster.fahrersuche
+    fahrer = fenster.welt.fahrer[123]
+
+    assert fahrer.nummer in suche.treffer(fahrer.nachname)
+    assert fahrer.nummer in suche.treffer(fahrer.nachname[2:-1])
+    assert fahrer.nummer in suche.treffer(fahrer.nachname.upper())
+    assert fahrer.nummer in suche.treffer(fahrer.kuerzel)
+    assert suche.treffer("   ") == ()
+    assert suche.treffer("Gibtesnicht") == ()
+
+
+def test_die_eingabetaste_oeffnet_die_fahrerkarte(qtbot, konfig) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    suche = fenster.fahrersuche
+    fahrer = fenster.welt.fahrer[77]
+
+    suche.feld.setText(fahrer.name)
+    suche.feld.returnPressed.emit()
+
+    assert fahrer.nummer in fenster._karten
+    assert fenster._karten[fahrer.nummer].fahrer.nummer == fahrer.nummer
+    # Danach ist das Feld wieder leer, fuer die naechste Suche.
+    assert suche.feld.text() == ""
+
+
+def test_die_suche_laeuft_ins_leere_ohne_treffer(qtbot, konfig) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    suche = fenster.fahrersuche
+
+    suche.feld.setText("Zzzz Nichtvorhanden")
+    suche.feld.returnPressed.emit()
+    assert fenster._karten == {}
+    # Die Eingabe bleibt stehen, damit man sie berichtigen kann.
+    assert suche.feld.text() == "Zzzz Nichtvorhanden"
+
+
+def test_die_suche_zieht_nach_dem_saisonwechsel_nach(qtbot, konfig) -> None:
+    """Nach Auf- und Abstieg stehen die Ligen anders - die Suche auch."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    fahre_saison_zu_ende(konfig, fenster.saisonseite)
+    fenster.saisonseite.knopf_naechste_saison.click()
+    qtbot.wait(20)
+
+    suche = fenster.fahrersuche
+    assert suche.vervollstaendigung.model().rowCount() == len(fenster.welt.fahrer)
+    spieler = fenster.welt.spieler
+    gefunden = suche.treffer(spieler.name)
+    assert spieler.nummer in gefunden
+    # Die Zeile nennt die neue Liga.
+    zeilen = [
+        z for z in suche._nummer_zu if suche._nummer_zu[z] == spieler.nummer
+    ]
+    assert f"Liga {spieler.liga} " in zeilen[0]
+
+
+def test_die_suche_nennt_liga_und_team(qtbot, konfig) -> None:
+    """Nachnamen gibt es zweimal - die Zeile muss sie auseinanderhalten."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    fahrer = fenster.welt.fahrer[200]
+    team = fenster.welt.team_von(fahrer)
+
+    from rennmanager.ui.fahrersuche import eintrag
+
+    zeile = eintrag(konfig, fahrer, team)
+    assert fahrer.name in zeile
+    assert fahrer.kuerzel in zeile
+    assert f"Liga {fahrer.liga}" in zeile
+    assert team.name in zeile
+
+
+def test_fahrertreffer_stehen_vor_teamtreffern(qtbot, konfig) -> None:
+    """Die Suche trifft auch Teams - aber der Fahrer geht vor."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    suche = fenster.fahrersuche
+
+    # Ein Nachname, der zugleich in einem Teamnamen steckt.
+    fahrer = next(f for f in fenster.welt.fahrer if "kamp" in f.nachname.casefold())
+    gefunden = suche.treffer(fahrer.nachname)
+    assert gefunden[0] == fahrer.nummer
+
+    # Und die Teamtreffer sind trotzdem dabei.
+    ueber_team = suche.treffer("Rosskamp")
+    assert len(ueber_team) > 1
+    namen = {fenster.welt.team_von(fenster.welt.fahrer[n]).name for n in ueber_team}
+    assert "Rosskamp Engineering" in namen

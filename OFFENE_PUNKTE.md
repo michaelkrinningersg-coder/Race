@@ -1442,3 +1442,15 @@ Konstruktor. Damit schaltete das Öffnen des Fensters den Kalender auf den
 Renntag vor — 56 nutzbare Tage weg, nur weil man hingesehen hat, und die
 Testreihe lief in ihr Zeitlimit. Der Aufbau ist jetzt eine reine Vorschau;
 erst `fahre_qualifying` beginnt das Wochenende.
+
+### 61. Kleinigkeiten in Block 3, selbst entschieden
+
+Vom Auftraggeber nicht widersprochen; hier festgehalten, damit sie nicht
+untergehen:
+
+| Sache | Entscheidung |
+| --- | --- |
+| Zahl der Autosave-Stände | **Einer**, der überschrieben wird. Ein mitwachsender Autosave füllte nach zwanzig Saisons das Verzeichnis |
+| Ort der automatischen Stände | **`~/.rennmanager`** — für Stände ohne Dialog braucht es einen Platz, den das Spiel kennt. Von Hand gespeicherte Stände bleiben unberührt |
+| Was die Fahrersuche durchsucht | **Die ganze Zeile** (Name, Kürzel, Liga, Team) — so findet „Rosskamp" auch ein ganzes Team. Fahrertreffer stehen aber vorn |
+| Wohin die Suche springt | **In die Fahrerkarte** des Treffers |

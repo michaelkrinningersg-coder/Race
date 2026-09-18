@@ -422,6 +422,15 @@ lesend - Werte aendern geht weiter nur ueber den Editor. Fuer alle 600
 Fahrer zeigt sie dasselbe; Konto, Sponsoren und Werkstatt des Spielers
 bleiben auf ihren eigenen Seiten.
 
+#### Die Fahrersuche
+
+Ueber allen Reitern steht ein Suchfeld (Punkt 18, **Strg+F**). Name
+tippen, Eingabetaste, die Fahrerkarte geht auf. Gesucht wird ueber die
+ganze Zeile - Name, Kuerzel, Liga und Team -, deshalb findet "Rosskamp"
+auch die vier Fahrer dieses Teams. **Fahrertreffer stehen vorn:** Auf
+"kamp" passen 18 Zeilen, aber nur 2 ueber den Fahrernamen, und wer einen
+Namen tippt, meint den Fahrer und nicht dessen Teamkollegen.
+
 #### Warum die Balken gegen den eigenen Hoechstwert messen
 
 Die Skala reicht von 0 bis 100.000, ein Fahrer aus Liga 20 steht bei 150.
