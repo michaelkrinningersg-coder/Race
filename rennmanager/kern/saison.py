@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from rennmanager.kern import ereignis as kern_ereignis
+from rennmanager.kern import generationen as kern_generationen
 from rennmanager.kern import heimstrecke as kern_heimstrecke
 from rennmanager.kern import karriere as kern_karriere
 from rennmanager.kern import popularitaet as kern_popularitaet
@@ -45,6 +46,7 @@ from rennmanager.kern import welt as kern_welt
 from rennmanager.kern import wertung as kern_wertung
 from rennmanager.kern import wetter as kern_wetter
 from rennmanager.kern import zwischenfall as kern_zwischenfall
+from rennmanager.kern.generationen import Winterbericht
 from rennmanager.kern.qualifying import Qualifying
 from rennmanager.kern.rennen import Rennverlauf
 from rennmanager.kern.schnellsimulation import fahre_wochenende as fahre_schnell
@@ -542,6 +544,8 @@ class Saisonlauf:
             liga: Tabelle(liga) for liga in range(1, konfiguration.wert("ligen", "anzahl") + 1)
         }
         self.wochenenden: list[Wochenende] = []
+        # Punkt 35: Was der letzte Generationswechsel bewegt hat.
+        self.letzter_winter: Winterbericht | None = None
         # Rennen, die vor dem Laden eines Spielstands schon gefahren waren
         # (GDD 15). Ihre Wochenenden liegen nicht mehr vor, ihre Punkte
         # stehen aber in den Tabellen.
@@ -993,6 +997,46 @@ class Saisonlauf:
         """Die Welt der Folgesaison, mit vollzogenen Ligawechseln (GDD 13)."""
         return wende_wechsel_an(self.welt, self.schliesse_ab())
 
+    def platzierungen(self) -> dict[int, int]:
+        """Je Fahrer sein Platz in der abgelaufenen Saison (Punkt 35).
+
+        Danach richtet sich, wer nachrueckt, wenn ein Platz frei wird: Wer
+        seine Liga gewonnen hat, geht zuerst. Das koppelt den Aufstieg an
+        die Ergebnisse und nicht an die blossen Werte.
+        """
+        return {
+            eintrag.fahrer: platz
+            for tabelle in self.tabellen.values()
+            for platz, eintrag in enumerate(tabelle.stand(), start=1)
+        }
+
+    def generationswechsel(self, welt: Welt, jahr: int) -> Winterbericht:
+        """Ruecktritte, Newgens und die Alterung der KI (Punkt 35).
+
+        Laeuft **nach** dem Auf- und Abstieg: Der regelt, wer sich
+        sportlich hoch- oder runtergefahren hat; hier geht es um die
+        Plaetze, die niemand mehr besetzt.
+
+        Ein Newgen erbt die Nummer des Zurueckgetretenen - die Welt haelt
+        genau 600 Fahrer. Was an dieser Nummer hing, wird deshalb
+        vergessen: Karrierezahlen, Bilanzen, Streckenkenntnis und
+        Popularitaet. Die Historie bleibt; sie gehoert der Saison, nicht
+        dem Nachfolger.
+        """
+        neue, bericht = kern_generationen.naechste_generation(
+            self.konfiguration,
+            welt,
+            jahr,
+            self.seedquelle,
+            platzierungen=self.platzierungen(),
+        )
+        for nummer in bericht.newgens:
+            self.statistik.vergiss_fahrer(nummer)
+            self.kenntnis.vergiss_fahrer(nummer)
+            self.popularitaet.vergiss_fahrer(nummer)
+        self._neue_welt = neue
+        return bericht
+
     def naechste_saison(self) -> Saisonlauf:
         """Der Saisonlauf des Folgejahres (GDD 13).
 
@@ -1007,11 +1051,18 @@ class Saisonlauf:
         * aus der Karriere Konto, Werte, Sponsorenvertraege, offene
           Defekte und laufende Ereignisse (GDD 10 und 14).
 
-        Neu sind Tabellen, Kalender und Ereignisplan. Dieselben 600 Fahrer
-        bleiben; es gibt keine Zu- und Abgaenge.
+        Neu sind Tabellen, Kalender und Ereignisplan. Es bleiben 600
+        Fahrer, aber nicht dieselben: Wer ueber seinem Ruecktrittsalter
+        ist, hoert auf, und ebenso viele Newgens steigen unten ein
+        (Punkt 35). Was dabei geschah, steht in ``letzter_winter`` des
+        **zurueckgegebenen** Laufs: Der Winter gehoert der Saison, die er
+        eroeffnet, nicht der, die er beendet.
         """
         welt = self.naechste_welt()
         jahr = self.jahr + 1
+        # Punkt 35: Erst danach treten die Alten ab und die Newgens ein.
+        winter = self.generationswechsel(welt, jahr)
+        welt = self._neue_welt
         if self.karriere is not None:
             spieler = welt.spieler
             self.karriere.naechste_saison(
@@ -1019,7 +1070,7 @@ class Saisonlauf:
                 spieler.liga if spieler is not None else self.karriere.liga,
                 self.seedquelle.zweig("karriere", jahr),
             )
-        return Saisonlauf(
+        folge = Saisonlauf(
             self.konfiguration,
             welt,
             self.seedquelle,
@@ -1030,6 +1081,8 @@ class Saisonlauf:
             karriere=self.karriere,
             popularitaet=self.popularitaet,
         )
+        folge.letzter_winter = winter
+        return folge
 
 
 # ---------------------------------------------------------------------------

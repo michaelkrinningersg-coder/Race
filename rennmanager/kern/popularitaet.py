@@ -43,6 +43,15 @@ class Popularitaet:
     def stand(self, fahrer: int) -> float:
         return self.werte.get(fahrer, 0.0)
 
+    def vergiss_fahrer(self, fahrer: int) -> None:
+        """Nimmt einen Fahrer aus der Bekanntheit (Punkt 35).
+
+        Ein Newgen erbt die Nummer des Zurueckgetretenen - dessen
+        Bekanntheit waere ein Sponsorenvorteil, den er nie verdient hat.
+        Sein eigener Anfangswert wird beim naechsten ``anfang`` gezogen.
+        """
+        self.werte.pop(fahrer, None)
+
     def setze(self, fahrer: int, wert: float) -> None:
         kleinster = self.konfiguration.wert("skala", "minimum")
         groesster = self.konfiguration.wert("skala", "maximum")

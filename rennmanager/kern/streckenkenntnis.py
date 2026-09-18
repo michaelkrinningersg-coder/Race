@@ -148,6 +148,17 @@ class Streckenkenntnis:
         for nummer in fahrer:
             self.verbuche(nummer, strecke, runden, seedquelle.zweig("fahrer", nummer))
 
+    def vergiss_fahrer(self, fahrer: int) -> None:
+        """Setzt einen Fahrer auf null zurueck (Punkt 35).
+
+        Ein Newgen erbt die Nummer des Zurueckgetretenen; dessen
+        Streckenkenntnis waere ein Startvorteil, den er nie gefahren hat.
+        """
+        for schluessel in [s for s in self.runden if s[0] == fahrer]:
+            del self.runden[schluessel]
+        self._lerntempo.pop(fahrer, None)
+        self.fest.discard(fahrer)
+
     def setze(self, fahrer: int, strecke: str, runden: float) -> None:
         """Setzt einen Stand - fuer das Laden eines Spielstands (GDD 15)."""
         self.runden[(fahrer, strecke)] = float(runden)

@@ -941,7 +941,9 @@ geschlecht = "maennlich"
 regionen = ["Europa", "Nordamerika"]
 an_echte_fahrer_angelehnt = false
 felder = ["vorname", "nachname", "herkunftsland", "geburtsdatum", "team", "hersteller"]
-altern = false
+# Punkt 35: Die KI altert jetzt. Das GDD nannte ein Geburtsdatum "vorerst
+# ohne Altern"; der Auftraggeber hat Ruecktritt und Newgens entschieden.
+altern = true
 # Geburtsjahre der erzeugten Fahrer. Das GDD nennt ein Geburtsdatum
 # "vorerst ohne Altern", aber keine Spanne; gewaehlt ist ein uebliches
 # Rennfahreralter zum Saisonstart.
@@ -950,6 +952,39 @@ alter_max = 42
 # Anteil nordamerikanischer Fahrer. GDD 12 nennt beide Regionen, ohne
 # Gewichtung; gewaehlt nach der Zahl der Laender (3 von 32).
 anteil_nordamerika = 0.1
+
+# ---------------------------------------------------------------------------
+# Punkt 35 – Ruecktritt, Newgens und die Entwicklung der KI
+# ---------------------------------------------------------------------------
+[generationen]
+# Ruecktrittsalter, je Fahrer einmal gestreut. Der Wert haengt am Seed und
+# an der Fahrernummer, steht also fest, ohne gespeichert zu werden.
+ruecktritt_min = 34
+ruecktritt_max = 42
+# Hoechstens so viele Ruecktritte je Winter. Die Startwelt wuerfelt Alter
+# von 18 bis 42, damit waeren im ersten Winter 152 Fahrer ueber ihrer
+# Grenze - ein Viertel des Feldes auf einmal. Die Grenze verteilt die
+# Welle auf mehrere Jahre; wer nicht drankommt, tritt im naechsten zurueck.
+#
+# Mehr als 30 gehen, weil die Newgens von unten aufsteigen duerfen: erst
+# Liga 20, und wenn es mehr sind, als dort Platz haben, auch Liga 19. Bei
+# einer Obergrenze von 30 blieben gemessen dauerhaft rund 60 Fahrer im
+# Rueckstau, weil die natuerliche Rate darueber liegt (600 Fahrer bei
+# rund 18 Jahren Laufbahn sind etwa 33 im Jahr).
+ruecktritte_je_saison_max = 45
+# Alter der Newgens beim Einstieg in Liga 20.
+newgen_alter_min = 18
+newgen_alter_max = 22
+
+# Die Alterskurve: ein Fahrer wird bis zum Gipfel besser, haelt sich, und
+# laesst danach nach. Gerechnet wird der *Schritt* von einem Jahr zum
+# naechsten auf die vorhandenen Werte - nicht die Kurve auf einen
+# gespeicherten Grundwert, sonst haette jeder Fahrer zwei Wahrheiten.
+gipfel_alter = 28
+abbau_ab_alter = 33
+# Faktor am Anfang und am Ende der Laufbahn, gemessen am Gipfel (1,0).
+faktor_bei_einstieg = 0.85
+faktor_bei_ruecktritt = 0.85
 
 # ---------------------------------------------------------------------------
 # GDD 13 – Wertung, Auf- und Abstieg

@@ -131,8 +131,13 @@ def lade_namen(konfiguration: Konfiguration) -> dict:
         return tomllib.load(datei)
 
 
-def _staerken(konfiguration: Konfiguration, liga: int, anzahl: int) -> list[int]:
-    """Staerken einer Liga, vom Besten zum Letzten (GDD 9)."""
+def ligastaerken(konfiguration: Konfiguration, liga: int, anzahl: int) -> list[int]:
+    """Staerken einer Liga, vom Besten zum Letzten (GDD 9).
+
+    Oeffentlich, weil Punkt 35 die Liga nach jedem Winter darauf
+    zurueckholt: Die KI entwickelt sich *innerhalb* ihrer Liga, die Liga
+    selbst bleibt auf dem Korridor aus GDD 9.
+    """
     kontrolle = {z["liga"]: z for z in konfiguration.wert("ligen", "kontrolle")}
     if liga in kontrolle:
         bester = kontrolle[liga]["s_bester"]
@@ -172,8 +177,10 @@ def _wert_zu_tempo(konfiguration: Konfiguration, tempo_kmh: float) -> int:
     return int(round(referenz * anteil * anteil))
 
 
-def _kuerzel(nachname: str, vergeben: set[str]) -> str:
+def kuerzel_fuer(nachname: str, vergeben: set[str]) -> str:
     """Drei Buchstaben, die im ganzen Feld nur einmal vorkommen.
+
+    Oeffentlich, weil Punkt 35 sie auch fuer Newgens braucht.
 
     Im Rennen stehen die Kuerzel neben den Punkten (GDD 4); zwei gleiche
     waeren dort nicht auseinanderzuhalten.
@@ -219,7 +226,49 @@ def _teamfarbe(grundfarbe: str, nummer: int, anzahl: int) -> str:
     return f"#{an(rot):02x}{an(gruen):02x}{an(blau):02x}"
 
 
-def _wuerfle_werte(
+def auf_skala(
+    konfiguration: Konfiguration, werte: dict[str, float], ziel: float
+) -> dict[str, int]:
+    """Schneidet Werte auf die Skala und holt zurueck, was das Kappen nimmt.
+
+    In Liga 1 liegt die Ligastaerke nahe am Skalenmaximum aus GDD 9. Ohne
+    Ausgleich fielen dort die hohen Werte eines Spezialisten weg und sein
+    Mittel saenke unter den Wert, den die Kalibriertabelle vorgibt -
+    gemessen um 5 %, also gut 3 km/h.
+
+    Gemessen beim Altern (Punkt 35): Der Beste in Liga 1 hat 28 seiner 32
+    Werte dicht unter der Decke. Ihn um 5 % anzuheben brachte ohne diesen
+    Ausgleich nur 0,6 %, und die Liga sank ueber dreissig Saisons um
+    2,7 % unter ihr Soll.
+
+    :param ziel: der Mittelwert, den die Werte danach haben sollen
+    """
+    kleinster = konfiguration.wert("skala", "minimum")
+    groesster = konfiguration.wert("skala", "maximum")
+    aktuell = dict(werte)
+    for _ in range(8):
+        geschnitten = {
+            s: min(max(w, kleinster), groesster) for s, w in aktuell.items()
+        }
+        ist = sum(geschnitten.values()) / len(geschnitten)
+        if ziel <= 0 or abs(ist - ziel) < 0.5:
+            return {s: int(round(w)) for s, w in geschnitten.items()}
+        # Nur die Werte anheben, die noch Luft haben.
+        frei = {s: w for s, w in geschnitten.items() if kleinster < w < groesster}
+        if not frei:
+            return {s: int(round(w)) for s, w in geschnitten.items()}
+        fehlt = (ziel - ist) * len(geschnitten)
+        faktor = 1.0 + fehlt / sum(frei.values())
+        aktuell = {
+            s: (w * faktor if s in frei else geschnitten[s])
+            for s, w in geschnitten.items()
+        }
+    return {
+        s: int(round(min(max(w, kleinster), groesster))) for s, w in aktuell.items()
+    }
+
+
+def wuerfle_werte(
     konfiguration: Konfiguration, mittelwert: int, wuerfel, zusatz: list[str]
 ) -> tuple[dict[str, int], dict[str, int]]:
     """Profil eines Autos (GDD 12).
@@ -238,8 +287,6 @@ def _wuerfle_werte(
     streuung = konfiguration.wert("ki", "profil_streuung")
     bereichs_streuung = konfiguration.wert("ki", "bereichs_streuung")
     wetter_streuung = konfiguration.wert("ki", "wetter_streuung")
-    kleinster = konfiguration.wert("skala", "minimum")
-    groesster = konfiguration.wert("skala", "maximum")
 
     bereichsfaktor = {
         bereich: 1.0 + float(wuerfel.uniform(-bereichs_streuung, bereichs_streuung))
@@ -262,33 +309,7 @@ def _wuerfle_werte(
         return mittelwert * profil * rauschen
 
     def begrenzt(werte: dict[str, float]) -> dict[str, int]:
-        """Schneidet auf die Skala und holt zurueck, was das Kappen nimmt.
-
-        In Liga 1 liegt die Ligastaerke nahe am Skalenmaximum aus GDD 9.
-        Ohne Ausgleich fielen dort die hohen Werte eines Spezialisten weg
-        und sein Mittel saenke unter den Wert, den die Kalibriertabelle
-        vorgibt - gemessen um 5 %, also gut 3 km/h.
-        """
-        ziel = mittelwert
-        aktuell = dict(werte)
-        for _ in range(8):
-            geschnitten = {
-                s: min(max(w, kleinster), groesster) for s, w in aktuell.items()
-            }
-            ist = sum(geschnitten.values()) / len(geschnitten)
-            if ziel <= 0 or abs(ist - ziel) < 0.5:
-                return {s: int(round(w)) for s, w in geschnitten.items()}
-            # Nur die Werte anheben, die noch Luft haben.
-            frei = {s: w for s, w in geschnitten.items() if kleinster < w < groesster}
-            if not frei:
-                return {s: int(round(w)) for s, w in geschnitten.items()}
-            fehlt = (ziel - ist) * len(geschnitten)
-            faktor = 1.0 + fehlt / sum(frei.values())
-            aktuell = {
-                s: (w * faktor if s in frei else geschnitten[s])
-                for s, w in geschnitten.items()
-            }
-        return {s: int(round(min(max(w, kleinster), groesster))) for s, w in aktuell.items()}
+        return auf_skala(konfiguration, werte, mittelwert)
 
     # Die Bereichsfaktoren werden auf den Mittelwert 1 normiert. Ein
     # Spezialist ist damit eine Frage der *Form*, nicht der Staerke: Er
@@ -343,7 +364,7 @@ def erzeuge(
     # Alle 600 Plaetze mit ihrer Liga und Staerke aufbauen.
     plaetze: list[tuple[int, int]] = []
     for liga in range(1, ligen + 1):
-        plaetze.extend((liga, staerke) for staerke in _staerken(konfiguration, liga, je_liga))
+        plaetze.extend((liga, staerke) for staerke in ligastaerken(konfiguration, liga, je_liga))
 
     # Die Plaetze auf die Teams verteilen. Weil gemischt wird, fahren die
     # vier Autos eines Teams meist in verschiedenen Ligen - genau wie es
@@ -435,7 +456,7 @@ def _erzeuge_fahrer(
                 werte = {f.schluessel: 0 for f in konfiguration.faehigkeiten}
                 wetterwerte = dict.fromkeys(zusatz, 0)
             else:
-                werte, wetterwerte = _wuerfle_werte(konfiguration, staerke, wuerfel, zusatz)
+                werte, wetterwerte = wuerfle_werte(konfiguration, staerke, wuerfel, zusatz)
 
             fahrer.append(
                 Fahrer(
@@ -447,7 +468,7 @@ def _erzeuge_fahrer(
                     team=team,
                     liga=liga,
                     auto=Auto(
-                        kuerzel=_kuerzel(paar[1], kuerzel_vergeben),
+                        kuerzel=kuerzel_fuer(paar[1], kuerzel_vergeben),
                         name=f"{paar[0]} {paar[1]}",
                         werte=werte,
                         wetterwerte=wetterwerte,

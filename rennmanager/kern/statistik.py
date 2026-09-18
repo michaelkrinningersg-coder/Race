@@ -389,6 +389,25 @@ class Statistik:
                 bahn.append((a.saison, a.liga, platz))
         return tuple(sorted(bahn))
 
+    def vergiss_fahrer(self, nummer: int) -> None:
+        """Loescht, was an einer Fahrernummer haengt (Punkt 35).
+
+        Ein Newgen erbt die Nummer des Zurueckgetretenen - die Welt haelt
+        genau 600 Fahrer, und an 53 Stellen ist die Nummer zugleich der
+        Platz in der Liste. Ohne dieses Vergessen begaenne er seine
+        Laufbahn mit dessen Siegen, Punkten und Bilanzen.
+
+        Die **Historie** bleibt: Sie ist das Protokoll dessen, was wirklich
+        passiert ist, und gehoert nicht dem Nachfolger, sondern der Saison.
+        """
+        self.karriere.pop(nummer, None)
+        for sammlung in (self.saisonpunkte, self.saisonverlauf):
+            for schluessel in [s for s in sammlung if s[-1] == nummer]:
+                del sammlung[schluessel]
+        for bilanz in (self.streckenbilanz, self.wetterbilanz):
+            for schluessel in [s for s in bilanz if s[0] == nummer]:
+                del bilanz[schluessel]
+
     def karriere_in_liga(self, liga: int) -> dict[int, Karrierezahlen]:
         """Die Karrierezahlen, aber nur aus einer Liga (Punkt 25).
 
