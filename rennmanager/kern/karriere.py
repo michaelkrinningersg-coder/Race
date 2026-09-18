@@ -82,9 +82,18 @@ class Tagesbuchung:
 
 @dataclass
 class Karriere:
-    """Der Stand einer Karriere.
+    """Der Stand einer Karriere - jetzt die eines ganzen Teams.
 
-    :param werte: Wert je Faehigkeit; enthaelt die 32 aus der
+    **Jedes Auto gehoert seinem Fahrer**, nicht dem Team (Entscheidung
+    des Auftraggebers). Die Karriere fuehrt deshalb je Fahrernummer einen
+    eigenen Satz Werte; entwickelt wird jedes Auto einzeln. Geht ein
+    Fahrer, geht sein Auto mit: Der Nachfolger bringt ein leeres,
+    nicht upgegradetes Auto mit (siehe ``fahrer_geht``).
+
+    Was dem **Team** gehoert und nicht dem einzelnen Auto: Konto,
+    Sponsorenvertraege, Kalender und die Ereignisse der Saison.
+
+    :param autos: je Fahrernummer die Werte seines Autos - die 32 aus der
         Wirkungsmatrix und die Zusatzfaehigkeiten aus GDD 7 und dem
         Reifenfluesterer
     """
@@ -94,11 +103,12 @@ class Karriere:
     heute: dt.date
     liga: int
     konto: Konto
-    werte: dict[str, int]
+    autos: dict[int, dict[str, int]]
     vertraege: dict[str, kern_sponsoren.Vertrag] = field(default_factory=dict)
     buchungen: list[Tagesbuchung] = field(default_factory=list)
-    # Belegte Plaetze des laufenden Tages.
-    belegt: set[str] = field(default_factory=set)
+    # Belegte Plaetze des laufenden Tages, je Fahrer: An einem Tag wird
+    # an **einem** Auto gearbeitet, und jedes hat seine eigenen Plaetze.
+    belegte_plaetze: dict[int, set[str]] = field(default_factory=dict)
 
     # -- Schritt 10 --------------------------------------------------------
     # Die Ereignisse der Saison, einmal beim Start gewuerfelt (GDD 14).
@@ -118,6 +128,61 @@ class Karriere:
             self.lage = kern_ereignis.Lage(self.konfiguration)
         if self.kenntnis is None:
             self.kenntnis = kern_streckenkenntnis.Streckenkenntnis(self.konfiguration)
+        if self.fahrernummer not in self.autos:
+            self.autos[self.fahrernummer] = leere_werte(self.konfiguration)
+
+    # -- Der gewaehlte Fahrer ----------------------------------------------
+    # Entwickelt, trainiert und gebucht wird immer an **einem** Auto. Wer
+    # gerade dran ist, steht in ``fahrernummer``; ``werte`` und ``belegt``
+    # sind die Sicht darauf. So bleibt alles, was mit einem Auto arbeitet,
+    # unveraendert - es sieht nur den gewaehlten.
+    @property
+    def werte(self) -> dict[str, int]:
+        """Die Werte des gewaehlten Fahrers - aenderbar, kein Abbild."""
+        return self.autos.setdefault(
+            self.fahrernummer, leere_werte(self.konfiguration)
+        )
+
+    @property
+    def belegt(self) -> set[str]:
+        """Die heute belegten Plaetze des gewaehlten Fahrers."""
+        return self.belegte_plaetze.setdefault(self.fahrernummer, set())
+
+    @property
+    def fahrer(self) -> tuple[int, ...]:
+        """Die Fahrernummern, fuer die das Team ein Auto fuehrt."""
+        return tuple(sorted(self.autos))
+
+    def waehle_fahrer(self, nummer: int) -> None:
+        """Stellt auf einen anderen eigenen Fahrer um."""
+        if nummer not in self.autos:
+            raise KarriereFehler(f"Fahrer {nummer} gehoert nicht zum Team")
+        self.fahrernummer = nummer
+
+    def werte_von(self, nummer: int) -> dict[str, int]:
+        """Die Werte eines bestimmten eigenen Fahrers."""
+        if nummer not in self.autos:
+            raise KarriereFehler(f"Fahrer {nummer} gehoert nicht zum Team")
+        return self.autos[nummer]
+
+    def fahrer_geht(self, nummer: int, nachfolger: int | None = None) -> None:
+        """Ein Fahrer hoert auf; sein Auto geht mit.
+
+        Der Auftraggeber hat entschieden: Ein neuer Fahrer bringt ein
+        **leeres, nicht upgegradetes** Auto mit. Alles, was der Chef in
+        das alte Auto investiert hat, ist damit weg - Fahrer zu halten
+        hat einen Preis, und ein Wechsel kostet mehr als das Gehalt.
+        """
+        self.autos.pop(nummer, None)
+        self.belegte_plaetze.pop(nummer, None)
+        self.defekte = [d for d in self.defekte if d.get("fahrer", nummer) != nummer]
+        if nachfolger is not None:
+            self.autos[nachfolger] = leere_werte(self.konfiguration)
+            self.belegte_plaetze[nachfolger] = set()
+        if self.fahrernummer == nummer:
+            self.fahrernummer = nachfolger if nachfolger is not None else (
+                self.fahrer[0] if self.fahrer else 0
+            )
 
     # -- Kalender ----------------------------------------------------------
     @property
@@ -163,7 +228,7 @@ class Karriere:
 
         vorher = kern_ereignis.zyklusnummer(self.konfiguration, self.saison, self.heute)
         self.heute = naechster
-        self.belegt.clear()
+        self.belegte_plaetze.clear()
         if kern_ereignis.zyklusnummer(self.konfiguration, self.saison, naechster) != vorher:
             self.lage.nach_zyklus()
 
@@ -266,6 +331,19 @@ class Karriere:
             werte={s: w for s, w in werte.items() if s in matrix},
             wetterwerte={s: w for s, w in werte.items() if s not in matrix},
         )
+
+    def rennauto_von(self, nummer: int, vorlage, session: str = kern_ereignis.RENNEN):
+        """Das Auto eines bestimmten eigenen Fahrers in dieser Session.
+
+        Jedes Auto gehoert seinem Fahrer und ist einzeln entwickelt - hier
+        wird das richtige genommen, ohne die Auswahl zu verstellen.
+        """
+        vorher = self.fahrernummer
+        try:
+            self.fahrernummer = nummer
+            return self.rennauto(vorlage, session)
+        finally:
+            self.fahrernummer = vorher
 
     def fahrwerte(self, session: str = kern_ereignis.RENNEN) -> dict[str, int]:
         """Die Werte, mit denen gefahren wird - Ereignisse und Defekte drin."""
@@ -582,7 +660,7 @@ class Karriere:
         self.saison = kern_kalender.erzeuge(self.konfiguration, jahr)
         self.heute = self.saison.tage[0].datum
         self.liga = liga
-        self.belegt.clear()
+        self.belegte_plaetze.clear()
         self.verlorene_tage.clear()
         self.ereignisplan = (
             kern_ereignis.plane_saison(
@@ -601,6 +679,18 @@ class Karriere:
         self.vertraege[angebot.platz] = kern_sponsoren.unterschreibe(angebot)
 
 
+def leere_werte(konfiguration: Konfiguration) -> dict[str, int]:
+    """Ein frisches Auto: alle Werte auf 0.
+
+    So faengt jeder eigene Fahrer an - beim Start des Spiels und wenn er
+    einen abgetretenen ersetzt. Ein neuer Fahrer bringt ein leeres, nicht
+    upgegradetes Auto mit (Entscheidung des Auftraggebers).
+    """
+    werte = {f.schluessel: 0 for f in konfiguration.faehigkeiten}
+    werte.update(dict.fromkeys(konfiguration.zusatzfaehigkeiten, 0))
+    return werte
+
+
 def startjahr(konfiguration: Konfiguration) -> int:
     """Das Jahr der ersten Saison (GDD 2)."""
     return int(konfiguration.wert("kalender", "startjahr"))
@@ -613,18 +703,24 @@ def beginne(
     werte: dict[str, int] | None = None,
     seedquelle: Seedquelle | None = None,
     fahrernummer: int = 0,
+    fahrer: tuple[int, ...] | None = None,
 ) -> Karriere:
-    """Startet eine Karriere am 1. Januar (GDD 1 und 10).
+    """Startet eine Karriere am 1. Januar (GDD 10).
 
+    :param fahrer: die Fahrernummern des Teams. Jeder bekommt sein
+        **eigenes** Auto; ``werte`` gilt fuer alle als Anfangsstand.
+        Ohne Angabe fuehrt die Karriere nur ``fahrernummer``.
     :param seedquelle: bestimmt die Ereignisse der Saison (GDD 14). Ohne
         Angabe laeuft das Jahr ohne Ereignisse - so bleiben Tests, die
         allein die Entwicklung pruefen, von ihnen unberuehrt.
     """
     saison = kern_kalender.erzeuge(konfiguration, jahr)
     if werte is None:
-        # GDD 1: Der Spieler startet mit allen Werten auf 0.
-        werte = {f.schluessel: 0 for f in konfiguration.faehigkeiten}
-        werte.update(dict.fromkeys(konfiguration.zusatzfaehigkeiten, 0))
+        # Jeder eigene Fahrer startet mit allen Werten auf 0.
+        werte = leere_werte(konfiguration)
+    nummern = tuple(fahrer) if fahrer else (fahrernummer,)
+    if fahrernummer not in nummern:
+        fahrernummer = nummern[0]
     plan = (
         kern_ereignis.plane_saison(konfiguration, saison, seedquelle.zweig("ereignisse"))
         if seedquelle is not None
@@ -636,7 +732,7 @@ def beginne(
         heute=saison.tage[0].datum,
         liga=liga,
         konto=Konto(geld=kern_einnahmen.startkapital(konfiguration)),
-        werte=dict(werte),
+        autos={nummer: dict(werte) for nummer in nummern},
         ereignisplan=plan,
         fahrernummer=fahrernummer,
     )
@@ -652,10 +748,10 @@ def kopiere(karriere: Karriere) -> Karriere:
     kopie = replace(
         karriere,
         konto=karriere.konto,
-        werte=dict(karriere.werte),
+        autos={n: dict(w) for n, w in karriere.autos.items()},
         vertraege=dict(karriere.vertraege),
         buchungen=list(karriere.buchungen),
-        belegt=set(karriere.belegt),
+        belegte_plaetze={n: set(p) for n, p in karriere.belegte_plaetze.items()},
         defekte=list(karriere.defekte),
         verlorene_tage=set(karriere.verlorene_tage),
         meldungen=list(karriere.meldungen),

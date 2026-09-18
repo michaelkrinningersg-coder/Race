@@ -16,6 +16,7 @@ pytest.importorskip("PySide6")
 from PySide6.QtCore import Qt  # noqa: E402
 
 from rennmanager.kern import rennen as rn  # noqa: E402
+from rennmanager.ui.diagramm import HOECHSTENS_FOKUS  # noqa: E402
 from rennmanager.ui.hauptfenster import Hauptfenster  # noqa: E402
 from rennmanager.ui.rueckstandsansicht import Rueckstandsansicht  # noqa: E402
 from rennmanager.ui.tabellen import Balkenzeichner  # noqa: E402
@@ -140,20 +141,21 @@ def test_das_diagramm_kennt_den_verlauf(gefahren) -> None:
     assert rueckstand.min() == pytest.approx(0.0, abs=1e-6)
 
 
-def test_der_spieler_tritt_im_diagramm_hervor(gefahren) -> None:
-    """Fokus und Kontext: nicht 30 Farben, sondern zwei Linien."""
+def test_die_eigenen_fahrer_treten_im_diagramm_hervor(gefahren, konfig) -> None:
+    """Fokus und Kontext: nicht 30 Farben, sondern das eigene Team."""
     _fenster, seite = gefahren
-    spieler = [
+    eigene = [
         i for i, t in enumerate(seite.verlauf.teilnehmer) if t.ist_spieler
     ]
-    assert seite.rueckstandsansicht._hervorgehoben == spieler
+    assert len(eigene) == konfig.wert("teams", "autos_je_team")
+    assert seite.rueckstandsansicht._hervorgehoben == eigene
 
-    # Eine Auswahl in der Rangliste kommt dazu - hoechstens zwei Linien.
+    # Eine Auswahl in der Rangliste kommt dazu - das Team und einer mehr.
     seite.rangliste.setCurrentItem(seite.rangliste.topLevelItem(2))
     hervor = seite.rueckstandsansicht._hervorgehoben
-    assert len(hervor) <= 2
+    assert len(hervor) <= HOECHSTENS_FOKUS
     gewaehlt = seite.rangliste.topLevelItem(2).data(0, Qt.UserRole)
-    assert gewaehlt in hervor or gewaehlt in spieler
+    assert gewaehlt in hervor or gewaehlt in eigene
 
 
 def test_ausgefallene_bestimmen_die_achse_nicht(gefahren) -> None:

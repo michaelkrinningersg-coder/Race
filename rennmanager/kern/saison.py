@@ -593,12 +593,25 @@ class Saisonlauf:
         Je Session ein eigenes, weil E12 aus GDD 14 nur im Qualifying
         wirkt.
         """
-        if self.karriere is None or self.karriere.liga != liga:
+        if self.karriere is None:
             return {}
-        nummer = self.karriere.fahrernummer
-        vorlage = self.welt.fahrer[nummer].auto
+        # Alle eigenen Fahrer dieser Liga, nicht nur einer: Seit der
+        # Spieler Teamchef ist, koennen mehrere seiner vier im selben
+        # Rennen stehen - und jedes Auto ist einzeln entwickelt.
+        eigene = [
+            f.nummer
+            for f in self.welt.fahrer
+            if f.ist_spieler and f.liga == liga and f.nummer in self.karriere.autos
+        ]
+        if not eigene:
+            return {}
         return {
-            sitzung: {nummer: self.karriere.rennauto(vorlage, sitzung)}
+            sitzung: {
+                nummer: self.karriere.rennauto_von(
+                    nummer, self.welt.fahrer[nummer].auto, sitzung
+                )
+                for nummer in eigene
+            }
             for sitzung in (kern_ereignis.QUALIFYING, kern_ereignis.RENNEN)
         }
 
@@ -609,14 +622,18 @@ class Saisonlauf:
         keine Ereignisse (GDD 12).
         """
         ohne = (0.0,) * len(feld)
-        if self.karriere is None or self.karriere.liga != liga:
+        if self.karriere is None:
             return ohne
         bonus = self.karriere.tagesformbonus()
         if not bonus:
             return ohne
-        return tuple(
-            bonus if f.nummer == self.karriere.fahrernummer else 0.0 for f in feld
-        )
+        # E3 gilt dem Team, also allen eigenen Fahrern dieser Liga.
+        eigene = {
+            f.nummer for f in self.welt.fahrer if f.ist_spieler and f.liga == liga
+        }
+        if not eigene:
+            return ohne
+        return tuple(bonus if f.nummer in eigene else 0.0 for f in feld)
 
     def rhythmusfaktoren(
         self, strecke: Strecke, feld: tuple[Fahrer, ...], autos: dict[int, object]
@@ -1034,8 +1051,36 @@ class Saisonlauf:
             self.statistik.vergiss_fahrer(nummer)
             self.kenntnis.vergiss_fahrer(nummer)
             self.popularitaet.vergiss_fahrer(nummer)
+        if self.karriere is not None:
+            self._uebergib_eigene_autos(neue, bericht)
         self._neue_welt = neue
         return bericht
+
+    def _uebergib_eigene_autos(self, neue: Welt, bericht) -> None:
+        """Ein eigener Fahrer hoert auf - sein Auto geht mit ihm.
+
+        Der Auftraggeber hat entschieden: Jedes Auto gehoert seinem
+        Fahrer, und ein neuer bringt ein **leeres, nicht upgegradetes**
+        Auto mit. Wer in den eigenen Reihen aufhoert, nimmt also alles
+        mit, was der Chef in sein Auto gesteckt hat.
+
+        Die Fahrernummer bleibt dieselbe - der Newgen erbt sie -, das
+        Auto dahinter nicht.
+        """
+        gegangen = set(bericht.zurueckgetreten)
+        eigene_neue = {
+            f.nummer for f in neue.fahrer if f.ist_spieler and f.nummer in bericht.newgens
+        }
+        for nummer in sorted(gegangen & set(self.karriere.autos)):
+            nachfolger = nummer if nummer in eigene_neue else None
+            self.karriere.fahrer_geht(nummer, nachfolger)
+        # Ein Fahrer, der ueber einen Wechsel neu ins Team kam, bekommt
+        # ebenfalls sein leeres Auto.
+        for fahrer in neue.fahrer:
+            if fahrer.ist_spieler and fahrer.nummer not in self.karriere.autos:
+                self.karriere.autos[fahrer.nummer] = kern_karriere.leere_werte(
+                    self.konfiguration
+                )
 
     def naechste_saison(self) -> Saisonlauf:
         """Der Saisonlauf des Folgejahres (GDD 13).
@@ -1064,10 +1109,16 @@ class Saisonlauf:
         winter = self.generationswechsel(welt, jahr)
         welt = self._neue_welt
         if self.karriere is not None:
-            spieler = welt.spieler
+            # Die Liga des Fahrers, an dem die Karriere haengt - nicht die
+            # des ersten Spielerfahrers. Seit dem Teamchef hat der Spieler
+            # vier, und sie koennen in verschiedenen Ligen stehen.
+            eigener = next(
+                (f for f in welt.fahrer if f.nummer == self.karriere.fahrernummer),
+                None,
+            )
             self.karriere.naechste_saison(
                 jahr,
-                spieler.liga if spieler is not None else self.karriere.liga,
+                eigener.liga if eigener is not None else self.karriere.liga,
                 self.seedquelle.zweig("karriere", jahr),
             )
         folge = Saisonlauf(

@@ -19,6 +19,7 @@ from PySide6.QtCore import Qt  # noqa: E402
 from PySide6.QtGui import QImage  # noqa: E402
 from PySide6.QtWidgets import QFormLayout  # noqa: E402
 
+from rennmanager.ui.diagramm import HOECHSTENS_FOKUS
 from rennmanager.ui.hauptfenster import Hauptfenster  # noqa: E402
 from rennmanager.ui.kalenderstreifen import (  # noqa: E402
     FARBEN,
@@ -233,18 +234,19 @@ def test_punkteverlauf_hebt_spieler_und_auswahl_hervor(qtbot, konfig) -> None:
     seite._aktualisiere()
     ansicht = seite.punkteansicht
 
-    spieler = fenster.welt.spieler
-    seite.liga_auswahl.setCurrentIndex(spieler.liga - 1)
-    # Ohne Auswahl tritt nur der Spieler hervor.
+    eigene = fenster.welt.spielerfahrer
+    seite.liga_auswahl.setCurrentIndex(eigene[0].liga - 1)
+    # Ohne Auswahl treten die eigenen Fahrer dieser Liga hervor.
     seite.tabelle.setCurrentItem(None)
-    assert len(ansicht._hervorgehoben) == 1
+    in_der_liga = sum(1 for f in eigene if f.liga == eigene[0].liga)
+    assert len(ansicht._hervorgehoben) == in_der_liga
 
-    # Mit Auswahl zwei Linien - und nie mehr als zwei.
+    # Mit Auswahl einer mehr - und nie mehr als das Team plus einen.
     letzte = seite.tabelle.topLevelItem(seite.tabelle.topLevelItemCount() - 1)
     seite.tabelle.setCurrentItem(letzte)
-    assert len(ansicht._hervorgehoben) == 2
-    ansicht.hebe_hervor([0, 1, 2, 3, 4])
-    assert len(ansicht._hervorgehoben) == 2
+    assert len(ansicht._hervorgehoben) <= HOECHSTENS_FOKUS
+    ansicht.hebe_hervor(list(range(HOECHSTENS_FOKUS + 3)))
+    assert len(ansicht._hervorgehoben) == HOECHSTENS_FOKUS
 
 
 def test_punkteverlauf_zeichnet_und_haelt_den_leeren_fall_aus(qtbot) -> None:

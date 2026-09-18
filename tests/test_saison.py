@@ -474,7 +474,8 @@ def test_e10_hebt_den_kenntniszuwachs(k, welt, strecken):
 
 
 # --- E3 Motivationsschub (GDD 14) ----------------------------------------
-def test_der_tagesformbonus_trifft_nur_den_spieler(k, welt, strecken):
+def test_der_tagesformbonus_trifft_nur_das_eigene_team(k, welt, strecken):
+    """E3 gehoert der Karriere, und die ist jetzt die des Teams."""
     karriere = spielerkarriere(k, welt)
     lauf = lauf_mit_karriere(k, welt, strecken, karriere)
     feld = welt.liga(karriere.liga)
@@ -483,7 +484,11 @@ def test_der_tagesformbonus_trifft_nur_den_spieler(k, welt, strecken):
     karriere._loese_ereignis_aus("E3")
     bonus = ev.eintrag(k, "E3")["wirkung"][0]["faktor"]
     gesetzt = lauf.tagesformbonus(karriere.liga, feld)
-    assert gesetzt.count(bonus) == 1
+    eigene = sum(1 for f in feld if f.ist_spieler)
+    assert eigene == k.wert("teams", "autos_je_team")
+    assert gesetzt.count(bonus) == eigene
+    # Die KI hat keine Ereignisse (GDD 12).
+    assert gesetzt.count(0.0) == len(feld) - eigene
     assert gesetzt[[f.nummer for f in feld].index(karriere.fahrernummer)] == bonus
     # Andere Ligen bleiben unberuehrt - die KI hat keine Ereignisse.
     andere = welt.liga(karriere.liga - 1)
@@ -668,16 +673,20 @@ def test_die_karriere_nimmt_alles_mit_was_ueberdauert(k, welt, strecken):
 
 
 def test_der_spieler_wechselt_mit_seiner_liga(k, strecken):
-    """Nach dem Aufstieg faehrt die Karriere in der neuen Liga."""
+    """Nach dem Abstieg faehrt die Karriere in der neuen Liga."""
     welt = kw.erzeuge(k, Seedquelle(SEED).zweig("welt"), spielerliga=5)
-    karriere = spielerkarriere(k, welt)
+    # Die vier eigenen Fahrer stehen mit lauter Nullen hinten; drei von
+    # ihnen steigen ab. Die Karriere haengt am schwaechsten - er ist
+    # sicher dabei.
+    letzter = welt.spielerfahrer[-1]
+    werte = dict.fromkeys([f.schluessel for f in k.faehigkeiten], 20_000)
+    werte.update(dict.fromkeys(k.zusatzfaehigkeiten, 20_000))
+    karriere = kk.beginne(k, 2026, letzter.liga, werte, fahrernummer=letzter.nummer)
     lauf = abgeschlossener_lauf(k, welt, strecken, karriere)
-    # Die Tabelle ist nach Staerke geordnet; der Spieler steht mit lauter
-    # Nullen hinten und steigt ab.
     assert lauf.tabelle(5).platz_von(karriere.fahrernummer) > 27
 
     neu = lauf.naechste_saison()
-    assert neu.welt.spieler.liga == 6
+    assert neu.welt.fahrer[letzter.nummer].liga == 6
     assert karriere.liga == 6
 
 

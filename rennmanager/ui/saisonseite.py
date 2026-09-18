@@ -431,10 +431,13 @@ class Saisonseite(QWidget):
         """Hebt Spieler und gewaehlte Zeile im Diagramm hervor (Punkt 9)."""
         if not self._fahrernummern:
             return
-        spieler = self._welt.spieler
-        hervor = []
-        if spieler is not None and spieler.nummer in self._fahrernummern:
-            hervor.append(self._fahrernummern.index(spieler.nummer))
+        # Alle eigenen Fahrer dieser Liga treten hervor, nicht nur einer:
+        # Seit der Spieler Teamchef ist, hat er bis zu vier.
+        hervor = [
+            self._fahrernummern.index(f.nummer)
+            for f in self._welt.spielerfahrer
+            if f.nummer in self._fahrernummern
+        ]
         gewaehlt = jetzt.data(0, Qt.UserRole) if jetzt is not None else None
         if gewaehlt in self._fahrernummern:
             stelle = self._fahrernummern.index(gewaehlt)

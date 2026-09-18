@@ -8,9 +8,15 @@ Linie durch viele Punkte -, steht hier, damit sie gleich aussehen.
 **Fokus und Kontext.** Die Diagramme dieses Spiels zeigen 30 Reihen. Bei
 so vielen traegt Farbe keine Identitaet mehr: Benachbarte Toene sind nicht
 auseinanderzuhalten, fuer Farbenblinde erst gar nicht. Das Feld liegt
-deshalb immer grau im Hintergrund, und hervorgehoben werden hoechstens
-zwei Linien, die am Ende direkt beschriftet sind - so haengt die
+deshalb immer grau im Hintergrund, und hervorgehoben wird nur eine
+Handvoll Linien, die am Ende direkt beschriftet sind - so haengt die
 Identitaet nicht an der Farbe allein.
+
+Seit der Spieler Teamchef ist, sind es bis zu fuenf: seine **vier**
+Fahrer und ein in der Tabelle gewaehlter. Die vier eigenen tragen
+Abstufungen **einer** Teamfarbe (siehe ``welt._teamfarbe``) und lesen
+sich deshalb als ein Block, nicht als vier Einzelne - der gewaehlte
+Fahrer setzt sich mit seiner eigenen Farbe davon ab.
 
 Die Toene kommen aus der Referenzpalette des Diagrammleitfadens; dasselbe
 Bild zeichnet ``werkzeuge/rennverlauf.py`` mit matplotlib.
@@ -33,8 +39,9 @@ FELD = QColor("#c4c1b8")
 # Leitfaden: duenne Marken, zurueckgenommenes Gitter.
 BREITE_FELD = 1.0
 BREITE_FOKUS = 2.0
-# Hoechstens zwei Linien treten hervor.
-HOECHSTENS_FOKUS = 2
+# Hoechstens so viele Linien treten hervor: die vier Autos des
+# Spielerteams (GDD 12: autos_je_team) und ein gewaehlter Fahrer.
+HOECHSTENS_FOKUS = 5
 
 
 def flaeche_in(

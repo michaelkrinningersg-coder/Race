@@ -17,10 +17,12 @@ Paar aus Fahrer und Strecke und ueberdauert die Session. Die Simulation
 bekommt ihn deshalb als fertigen Tempofaktor uebergeben und muss nicht
 wissen, wem er gehoert.
 
-Die KI bekommt ihren Stand dagegen **einmal fest** gesetzt (Entscheidung
-zu Punkt 39): GDD 12 sagt "die KI verbessert sich vorerst nicht", und
-eine wachsende Streckenkenntnis waere genau das - ueber die Saisons
-wuerden alle 570 KI-Autos der Kalibriertabelle aus GDD 9 davonlaufen.
+Die KI bekam ihren Stand lange **einmal fest** gesetzt: GDD 12 sagte
+"die KI verbessert sich vorerst nicht". Mit Punkt 35 entwickelt sie sich,
+also lernt sie auch Strecken dazu - ``[ki] entwicklung`` schaltet beides
+gemeinsam. Der Anfangsstand bleibt: Die Startwelt wuerfelt Alter von 18
+bis 42, diese Fahrer haben eine Laufbahn hinter sich. **Newgens starten
+dagegen bei null** und muessen sich einfahren.
 
 Dazu kommt ein **Lerntempo je Fahrer** (Entscheidung zu Punkt 38). Die
 beiden Streuungen aus GDD 6 mitteln sich ueber eine Saison weg - nach 20
@@ -163,22 +165,25 @@ class Streckenkenntnis:
         """Setzt einen Stand - fuer das Laden eines Spielstands (GDD 15)."""
         self.runden[(fahrer, strecke)] = float(runden)
 
-    def setze_festen_anfang(
+    def setze_anfang(
         self,
         fahrer: tuple[int, ...],
         strecken: tuple[str, ...],
         seedquelle: Seedquelle,
+        fest: bool = True,
     ) -> None:
-        """Gibt der KI einen festen Anfangsstand je Strecke (GDD 12).
+        """Gibt der KI ihren Anfangsstand je Strecke.
 
-        "Die KI verbessert sich vorerst nicht" - dann darf auch ihre
-        Streckenkenntnis nicht wachsen, sonst liefen ueber die Saisons alle
-        570 KI-Autos der Kalibriertabelle aus GDD 9 davon. Der Stand wird
-        deshalb einmal gewuerfelt und dann festgehalten; er steht fuer
-        alles, was der Fahrer vor Karrierebeginn hier gefahren ist.
+        Die Startwelt wuerfelt Alter von 18 bis 42 - diese Fahrer haben
+        eine Laufbahn hinter sich, und der Stand steht fuer alles, was sie
+        vor Spielbeginn hier gefahren sind. Die Streuung ist breit: Auf
+        derselben Strecke kennt sich der eine bestens aus, der andere kaum.
 
-        Die Streuung ist breit: Auf derselben Strecke kennt sich der eine
-        bestens aus, der andere kaum.
+        :param fest: friert den Stand ein. Solange die KI sich nicht
+            entwickelt (GDD 12), darf auch ihre Streckenkenntnis nicht
+            wachsen - sonst liefen alle 570 KI-Autos ueber die Saisons der
+            Kalibriertabelle aus GDD 9 davon. Mit Punkt 35 entwickelt sie
+            sich, also lernt sie auch mit.
         """
         einstellung = self.konfiguration.wert("streckenkenntnis", "ki")
         voll = self.konfiguration.wert("streckenkenntnis", "volle_kenntnis_runden")
@@ -190,7 +195,8 @@ class Streckenkenntnis:
             for strecke in strecken:
                 faktor = 1.0 + float(wuerfel.uniform(-breite, breite))
                 self.runden[(nummer, strecke)] = max(mittel * faktor, 0.0)
-            self.fest.add(nummer)
+            if fest:
+                self.fest.add(nummer)
 
 
 def setze_ki_anfang(
@@ -200,13 +206,19 @@ def setze_ki_anfang(
     strecken: tuple[str, ...],
     seedquelle: Seedquelle,
 ) -> None:
-    """Gibt allen KI-Fahrern einer Welt ihren festen Stand (GDD 12).
+    """Gibt allen KI-Fahrern einer Welt ihren Anfangsstand.
 
-    Der Spieler bleibt aussen vor: Er entwickelt sich, also waechst seine
-    Streckenkenntnis mit jeder gefahrenen Runde.
+    Der Spieler bleibt aussen vor: Er faengt bei null an und faehrt sich
+    ein.
+
+    Ob der Stand danach fest bleibt, entscheidet ``[ki] entwicklung``.
+    Seit Punkt 35 lernt die KI mit - **Newgens starten dann bei null**
+    (Entscheidung des Auftraggebers). ``vergiss_fahrer`` sorgt dafuer: Ein
+    Newgen erbt die Nummer eines Zurueckgetretenen, nicht dessen Kenntnis.
+    Am Anfang seiner Laufbahn fehlen ihm damit bis zu 1,5 % Tempo, rund
+    1,3 Sekunden je Runde - er muss sich einfahren wie ein echter Rookie.
     """
-    if konfiguration.wert("ki", "entwicklung"):
-        # Sobald sich die KI entwickelt, lernt sie auch Strecken dazu.
-        return
     ki = tuple(f.nummer for f in welt.fahrer if not f.ist_spieler)
-    kenntnis.setze_festen_anfang(ki, strecken, seedquelle)
+    kenntnis.setze_anfang(
+        ki, strecken, seedquelle, fest=not konfiguration.wert("ki", "entwicklung")
+    )

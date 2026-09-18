@@ -11,6 +11,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
+    QComboBox,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
@@ -85,7 +86,33 @@ class Karriereseite(QWidget):
         teiler.setStretchFactor(1, 2)
         spalte.addWidget(teiler, stretch=1)
 
+        self._fuelle_fahrerwahl()
         self._zeichne()
+
+    # -- Die vier eigenen Autos --------------------------------------------
+    def _fuelle_fahrerwahl(self, namen: dict[int, str] | None = None) -> None:
+        """Traegt die eigenen Fahrer ein; der gewaehlte bleibt gewaehlt."""
+        self._fahrerwahl.blockSignals(True)
+        self._fahrerwahl.clear()
+        for nummer in self._karriere.fahrer:
+            beschriftung = (namen or {}).get(nummer, f"Fahrer {nummer}")
+            self._fahrerwahl.addItem(beschriftung, nummer)
+        stelle = self._fahrerwahl.findData(self._karriere.fahrernummer)
+        self._fahrerwahl.setCurrentIndex(stelle if stelle >= 0 else 0)
+        self._fahrerwahl.blockSignals(False)
+        # Bei einem einzigen Auto waere die Auswahl eine Zeile ohne Wahl.
+        self._fahrerwahl.setVisible(len(self._karriere.fahrer) > 1)
+
+    def _fahrer_gewechselt(self) -> None:
+        nummer = self._fahrerwahl.currentData()
+        if nummer is None or nummer == self._karriere.fahrernummer:
+            return
+        self._karriere.waehle_fahrer(int(nummer))
+        self._zeichne()
+
+    def zeige_namen(self, namen: dict[int, str]) -> None:
+        """Ersetzt 'Fahrer 401' durch den wirklichen Namen."""
+        self._fuelle_fahrerwahl(namen)
 
     # -- Aufbau ------------------------------------------------------------
     def _baue_kopf(self) -> QHBoxLayout:
@@ -95,6 +122,15 @@ class Karriereseite(QWidget):
         schrift.setBold(True)
         schrift.setPointSize(schrift.pointSize() + 2)
         self._datum.setFont(schrift)
+
+        # Jedes Auto gehoert seinem Fahrer und wird einzeln entwickelt -
+        # hier steht, an welchem der vier heute gearbeitet wird.
+        self._fahrerwahl = QComboBox()
+        self._fahrerwahl.setToolTip(
+            "Jedes Auto gehoert seinem Fahrer und wird fuer sich "
+            "entwickelt. Hier waehlen Sie, an welchem Sie arbeiten."
+        )
+        self._fahrerwahl.currentIndexChanged.connect(self._fahrer_gewechselt)
 
         self._weiter = QPushButton("Tag weiter")
         self._weiter.clicked.connect(self._tag_weiter)
@@ -107,6 +143,9 @@ class Karriereseite(QWidget):
         self._meldung.setWordWrap(True)
         self._meldung.setStyleSheet(f"color: {FARBE_RENNEN.name()};")
         zeile.addWidget(self._datum)
+        zeile.addSpacing(12)
+        zeile.addWidget(QLabel("Auto:"))
+        zeile.addWidget(self._fahrerwahl)
         zeile.addSpacing(12)
         zeile.addWidget(self._weiter)
         zeile.addWidget(self._springen)
@@ -481,8 +520,11 @@ def beginne(
     :param jahr: Jahr der ersten Saison; ohne Angabe das Startjahr aus der
         Konfiguration (GDD 2)
     """
-    spieler = welt.spieler
+    eigene = welt.spielerfahrer
+    spieler = eigene[0] if eigene else None
     liga = spieler.liga if spieler else konfiguration.wert("ligen", "startliga")
+    # Jedes Auto gehoert seinem Fahrer; alle vier fangen bei null an, also
+    # traegt der Anfangsstand fuer alle dasselbe.
     werte = dict(spieler.auto.werte) if spieler else None
     if werte is not None:
         werte.update(spieler.auto.wetterwerte)
@@ -493,4 +535,5 @@ def beginne(
         werte,
         seedquelle=seedquelle,
         fahrernummer=spieler.nummer if spieler else 0,
+        fahrer=tuple(f.nummer for f in eigene) if eigene else None,
     )

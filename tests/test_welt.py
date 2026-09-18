@@ -202,20 +202,38 @@ def test_geburtsdatum_ergibt_ein_uebliches_alter(welt, k) -> None:
 
 
 # -- Spieler ----------------------------------------------------------------
-def test_spieler_startet_mit_allen_werten_auf_null(welt, k) -> None:
-    """GDD 1: Der Spieler startet mit allen Werten auf 0 in Liga 20."""
-    spieler = welt.spieler
-    assert spieler is not None
-    assert spieler.liga == k.wert("ligen", "startliga")
-    assert set(spieler.auto.werte.values()) == {0}
-    assert set(spieler.auto.wetterwerte.values()) == {0}
+def test_alle_eigenen_fahrer_starten_mit_werten_auf_null(welt, k) -> None:
+    """Der Teamchef startet mit vier Fahrern auf 0 in der Startliga."""
+    eigene = welt.spielerfahrer
+    assert len(eigene) == k.wert("teams", "autos_je_team")
+    for fahrer in eigene:
+        assert fahrer.liga == k.wert("ligen", "startliga")
+        assert set(fahrer.auto.werte.values()) == {0}
+        assert set(fahrer.auto.wetterwerte.values()) == {0}
 
 
-def test_spieler_hat_drei_ki_teamkollegen(welt) -> None:
-    """GDD 12: Der Spieler faehrt in einem Team mit 3 KI-Fahrern."""
-    kollegen = welt.teamkollegen(welt.spieler)
+def test_dem_spieler_gehoert_ein_ganzes_team(welt) -> None:
+    """Alle vier Autos eines Teams gehoeren dem Chef - keine KI dazwischen."""
+    eigene = welt.spielerfahrer
+    assert len({f.team for f in eigene}) == 1
+    kollegen = welt.teamkollegen(eigene[0])
     assert len(kollegen) == 3
-    assert not any(f.ist_spieler for f in kollegen)
+    assert all(f.ist_spieler for f in kollegen)
+    assert welt.spielerteam is welt.teams[eigene[0].team]
+
+
+def test_das_spielerteam_nimmt_der_liga_keine_plaetze(welt, k) -> None:
+    """Getauscht statt neu verteilt: Jede Liga behaelt ihre 30 Plaetze."""
+    je_liga = k.wert("ligen", "autos_je_liga")
+    for liga in range(1, k.wert("ligen", "anzahl") + 1):
+        assert len(welt.liga(liga)) == je_liga
+    for team in welt.teams:
+        assert len(team.fahrer) == k.wert("teams", "autos_je_team")
+
+
+def test_der_spieler_faehrt_zunaechst_in_einer_liga(welt, k) -> None:
+    """Alle vier stehen am Anfang unten - daher genau eine Spielerliga."""
+    assert welt.spielerligen() == (k.wert("ligen", "startliga"),)
 
 
 def test_ohne_spielerliga_gibt_es_nur_ki(k) -> None:
@@ -293,9 +311,9 @@ def test_unvollstaendige_aufstellung_meldet_fehler(welt) -> None:
         w.starterfeld(welt, 10, (0, 1, 2))
 
 
-def test_starterfeld_kennzeichnet_den_spieler(welt, k) -> None:
+def test_starterfeld_kennzeichnet_die_eigenen_fahrer(welt, k) -> None:
     feld = w.starterfeld(welt, k.wert("ligen", "startliga"))
-    assert sum(1 for t in feld if t.ist_spieler) == 1
+    assert sum(1 for t in feld if t.ist_spieler) == k.wert("teams", "autos_je_team")
 
 
 def test_bereichswerte_lassen_sich_bilden(welt, k) -> None:

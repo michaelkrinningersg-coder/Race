@@ -1209,44 +1209,52 @@ def test_editor_rechnet_nach_einer_aenderung_neu(qtbot, konfig: kf.Konfiguration
 
 
 # -- Startdialog (Punkt 11) --------------------------------------------------
-def test_startdialog_fragt_name_land_und_geburtstag(qtbot, konfig) -> None:
-    """GDD 1: Wer der Spieler ist, bestimmt er selbst - mehr nicht."""
+def test_startdialog_fragt_teamname_und_vier_fahrer(qtbot, konfig) -> None:
+    """Punkt 11: Der Teamchef benennt sein Team und seine vier Fahrer."""
     from rennmanager.ui.startdialog import Startdialog
 
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
-    dialog = Startdialog(konfig, fenster.jahr, vorgabe=fenster.welt.spieler)
+    dialog = Startdialog(konfig, fenster.jahr, vorgabe=fenster.welt.spielerfahrer)
     qtbot.addWidget(dialog)
 
-    # Der bisherige Spieler steht als Vorgabe drin.
-    spieler = fenster.welt.spieler
-    assert dialog.vornamefeld.text() == spieler.vorname
-    assert dialog.nachnamefeld.text() == spieler.nachname
-    assert dialog.landauswahl.currentText() == spieler.land
+    # Ein Reiter je Auto, und die bisherigen Fahrer stehen als Vorgabe drin.
+    anzahl = konfig.wert("teams", "autos_je_team")
+    assert dialog.fahrerreiter.count() == anzahl
+    for stelle, eigener in enumerate(fenster.welt.spielerfahrer):
+        assert dialog.vornamefeld(stelle).text() == eigener.vorname
+        assert dialog.nachnamefeld(stelle).text() == eigener.nachname
+        assert dialog.landauswahl(stelle).currentText() == eigener.land
 
-    # Die Liga steht nicht zur Wahl - sie ist immer die aus GDD 1. Das
-    # Land ist die einzige Auswahlliste im Dialog.
+    # Die Liga steht nicht zur Wahl - nur die vier Laenderlisten.
     from PySide6.QtWidgets import QComboBox, QLabel
 
-    assert dialog.findChildren(QComboBox) == [dialog.landauswahl]
+    assert len(dialog.findChildren(QComboBox)) == anzahl
     texte = " ".join(marke.text() for marke in dialog.findChildren(QLabel))
     assert f"Liga {konfig.wert('ligen', 'startliga')}" in texte
 
 
-def test_startdialog_braucht_einen_namen(qtbot, konfig) -> None:
+def test_startdialog_braucht_teamname_und_alle_namen(qtbot, konfig) -> None:
     from rennmanager.ui.startdialog import Startdialog
 
     dialog = Startdialog(konfig, 2026)
     qtbot.addWidget(dialog)
+    anzahl = konfig.wert("teams", "autos_je_team")
     assert not dialog.knopf_beginnen.isEnabled()
 
-    dialog.vornamefeld.setText("Jan")
-    assert not dialog.knopf_beginnen.isEnabled()
-    dialog.nachnamefeld.setText("Berger")
+    dialog.teamnamefeld.setText("Krinninger Racing")
+    for stelle in range(anzahl):
+        assert not dialog.knopf_beginnen.isEnabled()
+        dialog.vornamefeld(stelle).setText(f"Jan{stelle}")
+        dialog.nachnamefeld(stelle).setText(f"Berger{stelle}")
     assert dialog.knopf_beginnen.isEnabled()
 
-    # Leerzeichen allein zaehlen nicht.
-    dialog.nachnamefeld.setText("   ")
+    # Leerzeichen allein zaehlen nicht - weder beim Team noch beim Fahrer.
+    dialog.nachnamefeld(anzahl - 1).setText("   ")
+    assert not dialog.knopf_beginnen.isEnabled()
+    dialog.nachnamefeld(anzahl - 1).setText("Berger")
+    assert dialog.knopf_beginnen.isEnabled()
+    dialog.teamnamefeld.setText("  ")
     assert not dialog.knopf_beginnen.isEnabled()
 
 
@@ -1272,21 +1280,31 @@ def test_neue_karriere_setzt_alles_auf_anfang(qtbot, konfig) -> None:
 
     fenster.beginne_neue_karriere(
         {
-            "vorname": "Jonas",
-            "nachname": "Weidinger",
-            "land": "Oesterreich",
-            "geburtstag": dt.date(2005, 4, 12),
+            "team": "Weidinger Racing",
+            "fahrer": [
+                {
+                    "vorname": "Jonas",
+                    "nachname": f"Weidinger{stelle}",
+                    "land": "Oesterreich",
+                    "geburtstag": dt.date(2005, 4, 12),
+                }
+                for stelle in range(konfig.wert("teams", "autos_je_team"))
+            ],
         }
     )
 
-    spieler = fenster.welt.spieler
-    assert spieler.name == "Jonas Weidinger"
-    assert spieler.land == "Oesterreich"
-    assert spieler.geburtstag == dt.date(2005, 4, 12)
-    assert spieler.liga == konfig.wert("ligen", "startliga")
-    # Das Auto traegt den neuen Namen, die Werte bleiben auf 0 (GDD 1).
-    assert spieler.auto.name == "Jonas Weidinger"
-    assert set(spieler.auto.werte.values()) == {0}
+    eigene = fenster.welt.spielerfahrer
+    assert len(eigene) == konfig.wert("teams", "autos_je_team")
+    assert fenster.welt.spielerteam.name == "Weidinger Racing"
+    for stelle, spieler in enumerate(eigene):
+        assert spieler.name == f"Jonas Weidinger{stelle}"
+        assert spieler.land == "Oesterreich"
+        assert spieler.geburtstag == dt.date(2005, 4, 12)
+        assert spieler.liga == konfig.wert("ligen", "startliga")
+        # Das Auto traegt den neuen Namen, die Werte bleiben auf 0.
+        assert spieler.auto.name == f"Jonas Weidinger{stelle}"
+        assert set(spieler.auto.werte.values()) == {0}
+    spieler = eigene[0]
 
     # Saison, Statistik und Karriere stehen wieder am Anfang.
     assert fenster.saisonseite.lauf.gefahren == 0
@@ -1303,10 +1321,15 @@ def test_neue_karriere_zeigt_den_namen_ueberall(qtbot, konfig) -> None:
     qtbot.addWidget(fenster)
     fenster.beginne_neue_karriere(
         {
-            "vorname": "Mara",
-            "nachname": "Holtkamp",
-            "land": "Niederlande",
-            "geburtstag": dt.date(2004, 7, 1),
+            "team": "Holtkamp Motorsport",
+            "fahrer": [
+                {
+                    "vorname": "Mara",
+                    "nachname": "Holtkamp",
+                    "land": "Niederlande",
+                    "geburtstag": dt.date(2004, 7, 1),
+                }
+            ],
         }
     )
 

@@ -12,6 +12,12 @@ Hier laeuft stattdessen **sein** Wochenende ab, in vier Schritten:
 4. **Ergebnis** - seine Wertung, die der Liga, und was das Wochenende
    eingebracht hat
 
+Seit der Spieler Teamchef ist, hat er bis zu vier Fahrer - und die
+koennen in vier verschiedenen Ligen stehen. Oben rechts waehlt er
+deshalb, **welches** seiner Rennen er live faehrt; die uebrigen laufen
+wie alle anderen im Schnellmodus mit und zaehlen genauso. Faehrt er nur
+in einer Liga, ist die Auswahl unsichtbar.
+
 Gefahren wird, was der Kalender vorgibt (GDD 2): Strecke, Rundenzahl,
 Aufstellung und Seed kommen aus der Saison, nicht aus einem Regler. Die
 Arbeit macht ``kern.saison.Wochenendlauf``; diese Seite ist die Fuehrung
@@ -25,6 +31,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QApplication,
+    QComboBox,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
@@ -113,13 +120,51 @@ class Rennwochenendeseite(QWidget):
         schrift.setBold(True)
         self._ueberschrift.setFont(schrift)
 
+        # Seit der Spieler Teamchef ist, kann er in bis zu vier Ligen
+        # gleichzeitig Fahrer haben. Live sieht er die Liga, die er hier
+        # waehlt; die uebrigen laufen wie immer im Schnellmodus mit.
+        self._ligawahl = QComboBox()
+        self._ligawahl.setToolTip(
+            "Die Ligen, in denen Ihre Fahrer starten. Das gewaehlte "
+            "Rennen fahren Sie live, die anderen laufen im Schnellmodus."
+        )
+        self._ligawahl.currentIndexChanged.connect(self._ligawahl_geaendert)
+
         self._weiter = QPushButton()
         self._weiter.clicked.connect(self._naechster_schritt)
 
         kasten.addWidget(self._ueberschrift)
         kasten.addStretch(1)
+        kasten.addWidget(self._ligawahl)
         kasten.addWidget(self._weiter)
         return zeile
+
+    def _fuelle_ligawahl(self) -> None:
+        """Traegt die Ligen der eigenen Fahrer ein, die gewaehlte bleibt."""
+        ligen = self._lauf.welt.spielerligen() or (1,)
+        bisher = self._ligawahl.currentData()
+        self._ligawahl.blockSignals(True)
+        self._ligawahl.clear()
+        for liga in ligen:
+            self._ligawahl.addItem(
+                f"Liga {liga} - {self._konfiguration.ligenname(liga)}", liga
+            )
+        stelle = self._ligawahl.findData(bisher)
+        self._ligawahl.setCurrentIndex(stelle if stelle >= 0 else 0)
+        self._ligawahl.blockSignals(False)
+        # Bei nur einer Liga waere die Auswahl eine Zeile ohne Wahl.
+        self._ligawahl.setVisible(len(ligen) > 1)
+
+    def _ligawahl_geaendert(self) -> None:
+        """Ein Wechsel stellt die Vorschau auf die neue Liga um.
+
+        Nur in Schritt 1 erreichbar (``_zeige_schritt`` sperrt sie
+        danach): Mitten im Wochenende die Liga zu tauschen hiesse, ein
+        gefahrenes Qualifying wegzuwerfen.
+        """
+        if self._schritt != 0:
+            return
+        self._rueste_zu()
 
     def _baue_schrittleiste(self) -> QWidget:
         """Vier Marken, die zeigen, wo im Wochenende man steht."""
@@ -193,6 +238,7 @@ class Rennwochenendeseite(QWidget):
         """Bereitet das naechste Wochenende vor, ohne es zu fahren."""
         self._schritt = 0
         self._wochenende = None
+        self._fuelle_ligawahl()
         if self._lauf.ist_fertig:
             self._zeige_saisonende()
             return
@@ -202,8 +248,12 @@ class Rennwochenendeseite(QWidget):
         self._zeige_schritt()
 
     def _spielerliga(self) -> int:
-        spieler = self._lauf.welt.spieler
-        return spieler.liga if spieler else 1
+        """Die Liga, die der Spieler dieses Wochenende live faehrt."""
+        gewaehlt = self._ligawahl.currentData()
+        ligen = self._lauf.welt.spielerligen()
+        if gewaehlt in ligen:
+            return int(gewaehlt)
+        return ligen[0] if ligen else 1
 
     def _plaetze(self) -> dict[int, int]:
         """Platz je Fahrer in der Tabelle der Spielerliga."""
@@ -251,6 +301,9 @@ class Rennwochenendeseite(QWidget):
             marke.setStyleSheet(f"color: {farbe.name()};")
         self._weiter.setText(WEITER[self._schritt])
         self._weiter.setEnabled(True)
+        # Die Liga laesst sich nur vor dem Qualifying wechseln - danach
+        # haengt ein gefahrenes Ergebnis daran.
+        self._ligawahl.setEnabled(self._schritt == 0)
         if self._wochenende is not None:
             self._ueberschrift.setText(
                 f"Rennen {self._wochenende.nummer} von "

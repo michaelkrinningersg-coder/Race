@@ -9,9 +9,14 @@ Vier Regeln, alle vom Auftraggeber entschieden:
 * **Ruecktritt** zwischen 34 und 42, je Fahrer einmal gestreut.
 * **Ein Newgen je Ruecktritt.** Newgens steigen ganz unten ein, in
   Liga 20; die vorhandenen Fahrer fuellen nach oben auf.
-* **Die Ligen duerfen nicht auseinanderlaufen.** Die Ligastaerke bleibt
-  der Korridor aus GDD 9; gewachsen wird *innerhalb* einer Liga.
-* **Der Spieler altert nicht** und tritt nicht zurueck (GDD 1).
+* **Die frei gewordenen Plaetze werden nach der Platzierung besetzt.**
+  Wer seine Liga gewonnen hat, rueckt zuerst nach.
+* **Jeder entwickelt sich nach seinem eigenen Talent** (siehe
+  ``talent.py``). Der Ligakorridor aus GDD 9 gilt nur noch beim
+  Weltstart; danach sortieren sich die Ligen ueber Auf- und Abstieg.
+* **Auch die eigenen Fahrer altern und treten zurueck.** Seit der
+  Spieler Teamchef ist, gibt es keinen Fahrer mehr, der ausgenommen
+  waere. Sie wachsen nur nicht von allein - dafuer sorgt das Training.
 
 Das Ruecktrittsalter wird nicht gespeichert, sondern aus Seed und
 Fahrernummer abgeleitet. Es steht damit von Anfang an fest, ueberlebt
@@ -32,6 +37,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from rennmanager.kern import kalender as kern_kalender
+from rennmanager.kern import talent as kern_talent
 from rennmanager.kern import welt as kern_welt
 from rennmanager.kern.auto import Auto, gesamtwert
 from rennmanager.kern.welt import Fahrer, Welt
@@ -85,15 +91,15 @@ def faellige(
 ) -> tuple[Fahrer, ...]:
     """Alle, die zum Stichtag des Jahres ueber ihrer Grenze sind.
 
-    Der Spieler ist nie dabei: Sein Alter steht fest und seine Karriere
-    endet nicht (GDD 1).
+    Auch die eigenen: Seit der Spieler Teamchef ist, altern seine vier
+    Fahrer wie alle anderen und hoeren irgendwann auf. Wer nachrueckt,
+    entscheidet er (Punkt 7 - Fahrer holen).
     """
     stichtag = kern_kalender.saisonstart(konfiguration, jahr)
     return tuple(
         fahrer
         for fahrer in welt.fahrer
-        if not fahrer.ist_spieler
-        and fahrer.alter_am(stichtag)
+        if fahrer.alter_am(stichtag)
         >= ruecktrittsalter(konfiguration, fahrer.nummer, seedquelle)
     )
 
@@ -124,50 +130,6 @@ def ruecktritte(
     )
     hoechstens = konfiguration.wert("generationen", "ruecktritte_je_saison_max")
     return tuple(geordnet[:hoechstens]), max(len(geordnet) - hoechstens, 0)
-
-
-# ---------------------------------------------------------------------------
-# Die Alterskurve
-# ---------------------------------------------------------------------------
-def formfaktor(konfiguration: Konfiguration, alter: int) -> float:
-    """Wo ein Fahrer in seiner Laufbahn steht, als Faktor um 1,0.
-
-    Aufbau bis zum Gipfel, dann ein Plateau, dann der Abbau. Der Wert ist
-    nicht absolut gemeint - gerechnet wird der **Schritt** von einem Jahr
-    zum naechsten (siehe ``jahresschritt``), und die Liga wird danach auf
-    ihre Staerke aus GDD 9 zurueckgeholt.
-    """
-    einstieg = konfiguration.wert("fahrernamen", "alter_min")
-    gipfel = konfiguration.wert("generationen", "gipfel_alter")
-    abbau = konfiguration.wert("generationen", "abbau_ab_alter")
-    ende = konfiguration.wert("generationen", "ruecktritt_max")
-    unten = konfiguration.wert("generationen", "faktor_bei_einstieg")
-    zuletzt = konfiguration.wert("generationen", "faktor_bei_ruecktritt")
-
-    if alter <= einstieg:
-        return unten
-    if alter < gipfel:
-        anteil = (alter - einstieg) / (gipfel - einstieg)
-        return unten + (1.0 - unten) * anteil
-    if alter <= abbau:
-        return 1.0
-    if alter >= ende:
-        return zuletzt
-    anteil = (alter - abbau) / (ende - abbau)
-    return 1.0 + (zuletzt - 1.0) * anteil
-
-
-def jahresschritt(konfiguration: Konfiguration, alter: int) -> float:
-    """Wie sich die Werte eines Fahrers in einem Jahr aendern.
-
-    Der Quotient zweier Punkte der Kurve, nicht die Kurve selbst: Sonst
-    muesste jeder Fahrer seinen Grundwert mitfuehren und haette zwei
-    Wahrheiten - den gespeicherten und den gefahrenen.
-    """
-    vorher = formfaktor(konfiguration, alter)
-    if vorher <= 0:  # pragma: no cover - die Kurve wird nie null
-        return 1.0
-    return formfaktor(konfiguration, alter + 1) / vorher
 
 
 # ---------------------------------------------------------------------------
@@ -247,86 +209,77 @@ def newgen(
 
 
 # ---------------------------------------------------------------------------
-# Entwicklung mit Normierung
+# Entwicklung nach dem Talent
 # ---------------------------------------------------------------------------
 def entwickelt(
-    konfiguration: Konfiguration, welt: Welt, jahr: int
+    konfiguration: Konfiguration, welt: Welt, jahr: int, seedquelle: Seedquelle
 ) -> Welt:
-    """Altert alle KI-Fahrer und holt jede Liga auf ihre Staerke zurueck.
+    """Altert alle Fahrer um ein Jahr, jeden nach seinem eigenen Talent.
 
-    Zwei Schritte. Erst bekommt jeder Fahrer seinen Jahresschritt aus der
-    Alterskurve - der Junge wird besser, der Alte schlechter. Danach wird
-    die Liga auf den Korridor aus GDD 9 **normiert**: Die Staerken der
-    Liga sind dieselben wie vorher, nur verteilt sie die Rangfolge neu.
+    Frueher fuhren alle dieselbe Alterskurve, und danach wurde jede Liga
+    auf ihren Korridor aus GDD 9 normiert. Beides ist weg (Entscheidung
+    des Auftraggebers): Jeder Fahrer hat jetzt sein eigenes Potential, und
+    seine Werte holen jedes Jahr einen Anteil des Abstands dorthin auf.
 
-    Ohne den zweiten Schritt liefen die Ligen auseinander, und die
-    Kalibrierung aus GDD 9 waere nach ein paar Jahren nichts mehr wert.
+    **Der Korridor aus GDD 9 gilt nur noch beim Weltstart.** Danach
+    sortieren sich die Ligen ueber Auf- und Abstieg - dann sind sie
+    Leistungsklassen und nicht mehr, wie gemessen, Altersklassen.
+
+    Das kostet die Ligatabelle aus GDD 9, und zwar deutlich. Gemessen
+    ueber dreissig Saisons mit echtem Rennbetrieb, Ist gegen Soll::
+
+        Liga  1     5    10    15     20
+              84%   59%  88%  149%  5182%
+
+    Der Grund ist strukturell: Ein Newgen-Jahrgang traegt im Schnitt ein
+    Potential von rund 33000 - Liga-10-Niveau - steigt aber geschlossen
+    in Liga 20 ein, deren Soll bei 82 liegt. Liga 20 ist damit kein
+    schwaches Feld mehr, sondern der Talentpool der ganzen Welt.
+
+    **Der Auftraggeber hat das so entschieden**, nachdem ihm die Zahlen
+    und drei Gegenmassnahmen vorlagen. Die Ligen sind ab jetzt das, was
+    die Talentverteilung aus ihnen macht; die Kontrolltabelle in
+    ``[ligen] kontrolle`` beschreibt nur noch den Weltstart.
+
+    Die Kalibrierung selbst bleibt unberuehrt: ``zieltempo(98000) =
+    180,00 km/h`` ist eine Funktion der Konstanten, nicht der Welt.
+
+    Was dafuer gewonnen ist - das Alter je Liga 1/5/10/15/20 -::
+
+        vorher  36  38  31  26  21   (eine Alterskurve fuer alle)
+        jetzt   33  32  29  26  22   (je Fahrer sein Talent)
+
+    Liga 1 bestand vorher nur noch aus 38- bis 43-Jaehrigen. Jetzt
+    erreicht ein Newgen die Spitze in im Schnitt 7,7 Jahren.
     """
     stichtag = kern_kalender.saisonstart(konfiguration, jahr)
-    je_liga = konfiguration.wert("ligen", "autos_je_liga")
-    neu: dict[int, Fahrer] = {}
-
-    for liga in sorted({f.liga for f in welt.fahrer}):
-        feld = [f for f in welt.fahrer if f.liga == liga]
-        # Vorlaeufige Staerke nach dem Jahresschritt. Der Spieler bleibt
-        # aussen vor: Er entwickelt sich ueber GDD 1 und 2, nicht ueber
-        # die Alterskurve.
-        vorlaeufig = {}
-        for fahrer in feld:
-            wert = gesamtwert(konfiguration, fahrer.auto)
-            schritt = (
-                1.0
-                if fahrer.ist_spieler
-                else jahresschritt(konfiguration, fahrer.alter_am(stichtag))
+    neu: list[Fahrer] = []
+    for fahrer in welt.fahrer:
+        talent = kern_talent.talent(konfiguration, fahrer.nummer, seedquelle)
+        if fahrer.ist_spieler:
+            # Die eigenen Fahrer wachsen **nicht** von allein: Sie
+            # entwickeln sich ueber das Training des Chefs (GDD 1 und 2),
+            # gedeckelt durch dasselbe Potential. Das Alter nimmt es
+            # ihnen aber genauso wieder - Ziel ist deshalb ihr heutiger
+            # Stand, und der sinkt ab ihrem Abbaualter.
+            talent = replace(
+                talent,
+                potential=dict(fahrer.auto.werte),
+                wetterpotential=dict(fahrer.auto.wetterwerte),
             )
-            vorlaeufig[fahrer.nummer] = wert * schritt
-
-        ziele = kern_welt.ligastaerken(konfiguration, liga, je_liga)
-        geordnet = sorted(feld, key=lambda f: (-vorlaeufig[f.nummer], f.nummer))
-        for platz, fahrer in enumerate(geordnet):
-            if fahrer.ist_spieler:
-                neu[fahrer.nummer] = fahrer
-                continue
-            ziel = ziele[platz] if platz < len(ziele) else ziele[-1]
-            neu[fahrer.nummer] = replace(
-                fahrer, auto=_auf_ziel(konfiguration, fahrer.auto, ziel)
+        neu.append(
+            replace(
+                fahrer,
+                auto=kern_talent.gewachsen(
+                    konfiguration,
+                    fahrer.auto,
+                    talent,
+                    fahrer.alter_am(stichtag),
+                    ruecktrittsalter(konfiguration, fahrer.nummer, seedquelle),
+                ),
             )
-
-    return Welt(
-        teams=welt.teams,
-        fahrer=tuple(neu[f.nummer] for f in welt.fahrer),
-        seed=welt.seed,
-    )
-
-
-def _auf_ziel(konfiguration: Konfiguration, auto: Auto, ziel: float) -> Auto:
-    """Hebt oder senkt ein Auto auf einen Zielmittelwert.
-
-    Derselbe Faktor auf alles: Das Profil des Fahrers - worin er stark und
-    worin er schwach ist - bleibt, nur sein Niveau wandert.
-
-    Das Kappen an der Skala wird ausgeglichen, sonst kaeme der Beste einer
-    Liga nie auf sein Soll: Gemessen hat er 28 seiner 32 Werte dicht unter
-    der Decke, und ihn um 5 % anzuheben brachte ohne Ausgleich nur 0,6 %.
-    Ueber dreissig Saisons sank Liga 1 dadurch 2,7 % unter ihren Wert aus
-    GDD 9.
-    """
-    jetzt = gesamtwert(konfiguration, auto)
-    faktor = (ziel / jetzt) if jetzt > 0 else 1.0
-    kleinster = konfiguration.wert("skala", "minimum")
-    groesster = konfiguration.wert("skala", "maximum")
-    return replace(
-        auto,
-        werte=kern_welt.auf_skala(
-            konfiguration, {s: w * faktor for s, w in auto.werte.items()}, ziel
-        ),
-        # Die Eigenschaften neben der Matrix zaehlen nicht zum
-        # Gesamtwert (GDD 4) - sie wandern nur mit, ohne Ausgleich.
-        wetterwerte={
-            s: int(min(max(round(w * faktor), kleinster), groesster))
-            for s, w in auto.wetterwerte.items()
-        },
-    )
+        )
+    return Welt(teams=welt.teams, fahrer=tuple(neu), seed=welt.seed)
 
 
 # ---------------------------------------------------------------------------
@@ -418,27 +371,32 @@ def naechste_generation(
     for stelle, (alter_fahrer, liga) in enumerate(zip(gehen, offen, strict=True)):
         ziele = kern_welt.ligastaerken(konfiguration, liga, je_liga)
         # Der Newgen erbt den Teamplatz des Zurueckgetretenen - so bleiben
-        # die Teams bei vier Autos (GDD 12).
+        # die Teams bei vier Autos (GDD 12). Faellt der Platz im
+        # Spielerteam frei, gehoert auch der Nachfolger dem Spieler: Das
+        # Team behaelt seine vier Autos, nur sitzen andere darin. Wen der
+        # Chef stattdessen holen will, entscheidet er spaeter selbst
+        # (Punkt 7 - Fahrer holen).
         neue.append(
-            newgen(
-                konfiguration,
-                nummer=alter_fahrer.nummer,
-                team=alter_fahrer.team,
-                liga=liga,
-                staerke=ziele[-1 - min(stelle, len(ziele) - 1)],
-                jahr=jahr,
-                seedquelle=seedquelle.zweig("generation", jahr),
-                vergebene_namen=namen,
-                vergebene_kuerzel=kuerzel,
+            replace(
+                newgen(
+                    konfiguration,
+                    nummer=alter_fahrer.nummer,
+                    team=alter_fahrer.team,
+                    liga=liga,
+                    staerke=ziele[-1 - min(stelle, len(ziele) - 1)],
+                    jahr=jahr,
+                    seedquelle=seedquelle.zweig("generation", jahr),
+                    vergebene_namen=namen,
+                    vergebene_kuerzel=kuerzel,
+                ),
+                ist_spieler=alter_fahrer.ist_spieler,
             )
         )
 
     zusammen = sorted(fahrer + neue, key=lambda f: f.nummer)
-    gealtert = _spieler_bleibt_jung(
-        konfiguration, Welt(teams=welt.teams, fahrer=tuple(zusammen), seed=welt.seed)
-    )
+    gealtert = Welt(teams=welt.teams, fahrer=tuple(zusammen), seed=welt.seed)
     return (
-        entwickelt(konfiguration, gealtert, jahr),
+        entwickelt(konfiguration, gealtert, jahr, seedquelle),
         Winterbericht(
             jahr=jahr,
             zurueckgetreten=tuple(f.nummer for f in gehen),
@@ -446,30 +404,4 @@ def naechste_generation(
             nachgerueckt=tuple(nachgerueckt),
             aufgeschoben=aufgeschoben,
         ),
-    )
-
-
-def _spieler_bleibt_jung(konfiguration: Konfiguration, welt: Welt) -> Welt:
-    """Schiebt den Geburtstag des Spielers um ein Jahr vor (GDD 1).
-
-    Der Auftraggeber hat entschieden: Sein Alter bleibt fest und seine
-    Karriere endet nicht. Statt das Alter ueberall zu einem Sonderfall zu
-    machen, wandert sein Geburtstag mit - dann stimmt jede Anzeige und
-    jede Rechnung von allein.
-    """
-    spieler = welt.spieler
-    if spieler is None:
-        return welt
-    try:
-        neuer = spieler.geburtstag.replace(year=spieler.geburtstag.year + 1)
-    except ValueError:  # 29. Februar
-        neuer = spieler.geburtstag.replace(
-            year=spieler.geburtstag.year + 1, day=28
-        )
-    return Welt(
-        teams=welt.teams,
-        fahrer=tuple(
-            replace(f, geburtstag=neuer) if f.ist_spieler else f for f in welt.fahrer
-        ),
-        seed=welt.seed,
     )

@@ -184,6 +184,11 @@ class Hauptfenster(QMainWindow):
                 self._jahr,
             )
         self._karriereseite = Karriereseite(self._konfiguration, self._karriere)
+        # Die Auswahl der vier eigenen Autos soll Namen tragen, nicht
+        # Nummern - die kennt nur die Welt.
+        self._karriereseite.zeige_namen(
+            {f.nummer: f.name for f in self._welt.spielerfahrer}
+        )
         # Punkt 17: Jeder Tageswechsel schreibt den Autosave.
         self._karriereseite.tag_gewechselt.connect(self.autosave)
         self._reiter.addTab(self._karriereseite, "Karriere")
@@ -532,7 +537,10 @@ class Hauptfenster(QMainWindow):
         Schwierigkeitsgrad durch die Hintertuer.
         """
         dialog = Startdialog(
-            self._konfiguration, self._jahr, vorgabe=self._welt.spieler, parent=self
+            self._konfiguration,
+            self._jahr,
+            vorgabe=self._welt.spielerfahrer,
+            parent=self,
         )
         if dialog.exec() != Startdialog.Accepted:
             return False
@@ -540,12 +548,26 @@ class Hauptfenster(QMainWindow):
         return True
 
     def beginne_neue_karriere(self, stammdaten: dict) -> None:
-        """Setzt Welt, Karriere und Statistik auf Anfang (GDD 1)."""
-        spieler = self._welt.spieler
-        if spieler is not None:
+        """Setzt Welt, Karriere und Statistik auf Anfang.
+
+        ``stammdaten`` kommt aus dem Startdialog: ein Teamname und die
+        Stammdaten der vier eigenen Fahrer.
+        """
+        eigene = self._welt.spielerfahrer
+        if eigene:
             self._welt = kern_welt.mit_fahrerdaten(
-                self._welt, {spieler.nummer: stammdaten}
+                self._welt,
+                {
+                    fahrer.nummer: felder
+                    for fahrer, felder in zip(
+                        eigene, stammdaten.get("fahrer", ()), strict=False
+                    )
+                },
             )
+            if stammdaten.get("team", "").strip():
+                self._welt = kern_welt.mit_teamname(
+                    self._welt, eigene[0].team, stammdaten["team"]
+                )
         self._jahr = kern_karriere.startjahr(self._konfiguration)
         self._karriere = None
         self._statistik = kern_statistik.Statistik(self._konfiguration)
@@ -556,9 +578,10 @@ class Hauptfenster(QMainWindow):
         self._geladene_tabellen = None
         self._gefahrene_rennen = 0
         self.setCentralWidget(self._baue_inhalt())
-        name = self._welt.spieler.name if self._welt.spieler else "Der Spieler"
+        mannschaft = self._welt.spielerteam
+        name = mannschaft.name if mannschaft is not None else "Das Team"
         self.statusBar().showMessage(
-            f"Neue Karriere: {name}, Liga "
+            f"Neue Karriere: {name} mit {len(self._welt.spielerfahrer)} Autos, Liga "
             f"{self._konfiguration.wert('ligen', 'startliga')}, Saison {self._jahr}",
             8000,
         )

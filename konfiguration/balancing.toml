@@ -933,8 +933,9 @@ profil_streuung = 0.25
 bereichs_streuung = 0.30
 # Die Wetterfaehigkeiten stehen neben der Matrix und streuen fuer sich.
 wetter_streuung = 0.45
-# KI verbessert sich vorerst nicht
-entwicklung = false
+# Punkt 35: Die KI entwickelt sich jetzt - jeder Fahrer nach seinem
+# eigenen Talent (siehe [talent]). Damit lernt sie auch Strecken dazu.
+entwicklung = true
 
 [fahrernamen]
 geschlecht = "maennlich"
@@ -976,15 +977,90 @@ ruecktritte_je_saison_max = 45
 newgen_alter_min = 18
 newgen_alter_max = 22
 
-# Die Alterskurve: ein Fahrer wird bis zum Gipfel besser, haelt sich, und
-# laesst danach nach. Gerechnet wird der *Schritt* von einem Jahr zum
-# naechsten auf die vorhandenen Werte - nicht die Kurve auf einen
-# gespeicherten Grundwert, sonst haette jeder Fahrer zwei Wahrheiten.
-gipfel_alter = 28
-abbau_ab_alter = 33
-# Faktor am Anfang und am Ende der Laufbahn, gemessen am Gipfel (1,0).
-faktor_bei_einstieg = 0.85
+# Faktor am Ende der Laufbahn, gemessen am Gipfel (1,0): Wer sein
+# Ruecktrittsalter erreicht, steht bei 85 % dessen, was er konnte.
 faktor_bei_ruecktritt = 0.85
+
+# ---------------------------------------------------------------------------
+# Punkt 35 - Das Talent eines Fahrers
+# ---------------------------------------------------------------------------
+# Bis hierher fuhr jeder Fahrer dieselbe Alterskurve. Damit entschied
+# innerhalb einer Liga allein das Alter, wer vorne stand - die Ligen
+# wurden Altersklassen statt Leistungsklassen. Ein Talent je Fahrer loest
+# das: Jeder hat sein eigenes Potential, sein eigenes Tempo und sein
+# eigenes Gipfelalter.
+#
+# Alles aus Seed und Fahrernummer abgeleitet, nichts gespeichert - damit
+# steht es von Anfang an fest und ueberlebt jeden Spielstand (GDD 15).
+[talent]
+# Entscheidung des Auftraggebers zur Ligastaerke: Seit die Entwicklung am
+# Talent haengt, wird **nicht mehr normiert**. Die Kontrolltabelle in
+# [ligen] beschreibt damit nur noch den Weltstart; danach sind die Ligen
+# das, was die Talentverteilung aus ihnen macht. Gemessen ueber dreissig
+# Saisons, Ist gegen Soll: L1 84 %, L5 59 %, L10 88 %, L15 149 %,
+# L20 5182 % - Liga 20 ist der Talentpool der Welt, kein schwaches Feld.
+# Die Kalibrierung selbst bleibt exakt: zieltempo(98000) = 180,00 km/h
+# haengt an den Konstanten, nicht an der Welt.
+#
+# Band "Extrem" (Entscheidung des Auftraggebers): grosse Unterschiede
+# zwischen den Laufbahnen, bis hin zum Fahrer, der mit 24 fertig ist, und
+# dem, der mit 36 noch aufsteigt.
+tempo_min = 0.3
+tempo_max = 2.0
+gipfel_min = 23
+gipfel_max = 33
+abbau_min = 28
+abbau_max = 38
+# Wie nah ein Fahrer seinem Potential zu seinem Gipfelalter gekommen ist.
+# Daraus wird das jaehrliche Schrittmass abgeleitet: Wer frueh seinen
+# Gipfel hat, waechst schneller. Deshalb braucht es keine eigene
+# Wachstumskonstante - Gipfelalter und Tempo sagen alles.
+reife_am_gipfel = 0.90
+
+# ---------------------------------------------------------------------------
+# Punkt 7 - Fahrer holen: Vertraege, Gehalt und Abloese
+# ---------------------------------------------------------------------------
+# Steht im GDD nirgends; alle Regeln hier kommen vom Auftraggeber:
+# Transferfenster im Winter, Gehalt plus Abloese, Potentiale voll
+# sichtbar, und ein Fahrer darf ablehnen.
+[transfer]
+# Vertragslaufzeiten. Sie haengen wie das Ruecktrittsalter an Seed und
+# Fahrernummer und muessen deshalb nicht gespeichert werden. Mit 1 bis 4
+# Saisons ist in jedem Winter rund ein Drittel des Feldes frei.
+laufzeit_min = 1
+laufzeit_max = 4
+
+# Das Gehalt eines Fahrers: ein Grundbetrag plus ein Anteil, der an
+# seinem Koennen und seinem Potential haengt. Ein Liga-1-Fahrer kommt so
+# auf gut das Sechsfache eines Liga-20-Fahrers.
+grundgehalt = 250_000
+gehaltsspanne = 5.0
+gewicht_koennen = 2.0
+gewicht_potential = 1.0
+# Ein junger Fahrer verlangt weniger, auch wenn er viel kann - er hat
+# noch nichts bewiesen. Voll wirksam mit 18, weg ab 28.
+jugendrabatt = 0.45
+
+# Abloese je verbleibender Vertragssaison, als Vielfaches des
+# Jahresgehalts. Ein Fahrer mit drei Restjahren kostet damit das
+# Dreifache eines Jahresgehalts obendrauf.
+abloese_je_saison = 1.0
+
+# Wie ein Fahrer ein Angebot abwaegt. Die drei Gewichte werden auf die
+# jeweilige Spanne bezogen: Ligavorteil an der Zahl der Ligen, Autovorteil
+# an der Skala, Geldvorteil am Marktwert.
+#
+# Das Geld wiegt am schwersten, und das muss es: Ein neuer Fahrer bringt
+# ein leeres Auto mit, der Autovorteil ist beim Spieler also fast immer
+# negativ. Wer einen Star holen will, muss ihn ueberzahlen.
+gewicht_liga = 1.4
+gewicht_auto = 0.8
+gewicht_geld = 0.5
+# Ab hier sagt er ja. Bei 0 wuerde jedes Angebot reichen, das nicht
+# schlechter ist als sein Status quo.
+schwelle = 0.05
+# Je bekannter ein Fahrer, desto mehr will er (Punkt 5).
+anspruch_bekanntheit = 0.8
 
 # ---------------------------------------------------------------------------
 # GDD 13 – Wertung, Auf- und Abstieg

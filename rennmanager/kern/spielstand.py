@@ -14,7 +14,7 @@ Tabelle                Inhalt
 ``fahrerwerte``        ihre Einzelwerte (GDD 5, 6 und 7)
 ``team``               die 150 Teams
 ``karriere``           Tag, Konto, Vertraege des Spielers
-``karrierewerte``      die Werte des Spielers
+``teamauto``           die Werte jedes eigenen Autos, je Fahrer
 ``buchung``            was der Spieler an welchem Tag getan hat
 ``ereignis``           laufende Ereignisse (GDD 14)
 ``defekt``             offene Defekte (GDD 14)
@@ -72,7 +72,7 @@ if TYPE_CHECKING:  # pragma: no cover
 # Version 4: Der Punkteverlauf der laufenden Saison (Tabelle
 # ``saisonverlauf``, Punkt 9). Aeltere Staende werden gelesen; ihr Verlauf
 # beginnt dann beim naechsten gefahrenen Rennen.
-SPIELSTAND_VERSION = 5
+SPIELSTAND_VERSION = 6
 
 # Punkt 17: Autosave und Schnellspeicher liegen an einem festen Ort,
 # damit sie ohne Dateidialog geschrieben werden koennen.
@@ -83,6 +83,11 @@ HISTORIE_AB_VERSION = 2
 POPULARITAET_AB_VERSION = 3
 VERLAUF_AB_VERSION = 4
 BILANZ_AB_VERSION = 5
+# Ab Version 6 fuehrt die Karriere ein Auto je Fahrer statt eines
+# einzigen: Der Spieler ist Teamchef mit vier Autos, und jedes wird fuer
+# sich entwickelt. Aeltere Staende tragen genau ein Auto - das des
+# einen Fahrers, der der Spieler damals war.
+TEAMAUTOS_AB_VERSION = 6
 
 SCHEMA = """
 CREATE TABLE kopf (
@@ -130,6 +135,13 @@ CREATE TABLE karriere (
 );
 CREATE TABLE wettertopf (wetter TEXT PRIMARY KEY, erfahrung INTEGER NOT NULL);
 CREATE TABLE karrierewert (schluessel TEXT PRIMARY KEY, wert INTEGER NOT NULL);
+CREATE TABLE teamauto (
+    fahrer INTEGER NOT NULL,
+    schluessel TEXT NOT NULL,
+    wert INTEGER NOT NULL,
+    belegt TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (fahrer, schluessel)
+);
 CREATE TABLE vertrag (
     platz TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -435,8 +447,15 @@ def _schreibe_karriere(verbindung: sqlite3.Connection, k: kern_karriere.Karriere
     verbindung.executemany(
         "INSERT INTO wettertopf VALUES (?, ?)", list(k.konto.wetter_erfahrung.items())
     )
+    # Ab Version 6: je eigenem Fahrer sein eigenes Auto. ``karrierewert``
+    # bleibt leer und nur als Lesepfad fuer aeltere Staende bestehen.
     verbindung.executemany(
-        "INSERT INTO karrierewert VALUES (?, ?)", list(k.werte.items())
+        "INSERT INTO teamauto VALUES (?, ?, ?, ?)",
+        [
+            (nummer, schluessel, wert, ",".join(sorted(k.belegte_plaetze.get(nummer, ()))))
+            for nummer, werte in sorted(k.autos.items())
+            for schluessel, wert in werte.items()
+        ],
     )
     verbindung.executemany(
         "INSERT INTO vertrag VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -697,6 +716,33 @@ def _lies_welt(verbindung: sqlite3.Connection, seed: int) -> Welt:
     return Welt(teams=teams, fahrer=fahrer, seed=seed)
 
 
+def _lies_teamautos(
+    verbindung: sqlite3.Connection, gewaehlt: int
+) -> tuple[dict[int, dict[str, int]], dict[int, set[str]]]:
+    """Die Autos der eigenen Fahrer, je Fahrer eines (ab Version 6).
+
+    Gibt zwei leere Abbildungen zurueck, wenn die Tabelle fehlt oder leer
+    ist - dann stammt der Stand aus einer aelteren Version und wird ueber
+    ``karrierewert`` gelesen.
+    """
+    try:
+        zeilen = list(verbindung.execute("SELECT * FROM teamauto"))
+    except sqlite3.OperationalError:  # Tabelle gibt es erst ab Version 6
+        return {}, {}
+    autos: dict[int, dict[str, int]] = {}
+    belegte: dict[int, set[str]] = {}
+    for zeile in zeilen:
+        autos.setdefault(zeile["fahrer"], {})[zeile["schluessel"]] = zeile["wert"]
+        belegte[zeile["fahrer"]] = {
+            teil for teil in (zeile["belegt"] or "").split(",") if teil
+        }
+    if autos and gewaehlt not in autos:  # pragma: no cover - Notbremse
+        raise SpielstandFehler(
+            f"Der Spielstand waehlt Fahrer {gewaehlt}, fuehrt aber nur {sorted(autos)}"
+        )
+    return autos, belegte
+
+
 def _lies_karriere(
     konfiguration: Konfiguration, verbindung: sqlite3.Connection, jahr: int
 ) -> kern_karriere.Karriere:
@@ -704,14 +750,28 @@ def _lies_karriere(
     if z is None:
         raise SpielstandFehler("Der Spielstand enthaelt keine Karriere")
 
-    werte = {
-        e["schluessel"]: e["wert"] for e in verbindung.execute("SELECT * FROM karrierewert")
-    }
+    autos, belegte = _lies_teamautos(verbindung, z["fahrernummer"])
+    if not autos:
+        # Ein Stand vor Version 6: genau ein Auto, das des damaligen
+        # Spielerfahrers. Es wandert unveraendert auf seine Nummer.
+        autos = {
+            z["fahrernummer"]: {
+                e["schluessel"]: e["wert"]
+                for e in verbindung.execute("SELECT * FROM karrierewert")
+            }
+        }
+        belegte = {z["fahrernummer"]: {t for t in z["belegt"].split(",") if t}}
+
     karriere = kern_karriere.beginne(
-        konfiguration, jahr, z["liga"], werte, fahrernummer=z["fahrernummer"]
+        konfiguration,
+        jahr,
+        z["liga"],
+        fahrernummer=z["fahrernummer"],
+        fahrer=tuple(sorted(autos)),
     )
+    karriere.autos = autos
+    karriere.belegte_plaetze = belegte
     karriere.heute = _datum(z["heute"])
-    karriere.belegt = {teil for teil in z["belegt"].split(",") if teil}
 
     toepfe = {
         e["wetter"]: e["erfahrung"] for e in verbindung.execute("SELECT * FROM wettertopf")

@@ -110,11 +110,41 @@ class Welt:
         return self.teams[fahrer.team]
 
     @property
+    def spielerfahrer(self) -> tuple[Fahrer, ...]:
+        """Die Fahrer des Spielerteams, in Startnummernfolge.
+
+        Seit dem Umbau zum Teamchef sind es vier statt einem. Sie stehen
+        alle in derselben Liga, solange der Spieler sie nicht auseinander
+        faehrt - aufsteigen kann jeder fuer sich.
+        """
+        return tuple(f for f in self.fahrer if f.ist_spieler)
+
+    @property
+    def spielerteam(self) -> Team | None:
+        """Das Team, das dem Spieler gehoert."""
+        eigene = self.spielerfahrer
+        return self.teams[eigene[0].team] if eigene else None
+
+    @property
     def spieler(self) -> Fahrer | None:
+        """Der erste Fahrer des Spielerteams.
+
+        Bleibt fuer alles, was genau einen Fahrer braucht - etwa die
+        Ueberschrift eines Fensters. Wer alle vier meint, nimmt
+        ``spielerfahrer``.
+        """
         return next((f for f in self.fahrer if f.ist_spieler), None)
 
+    def spielerligen(self) -> tuple[int, ...]:
+        """Die Ligen, in denen der Spieler faehrt - aufsteigend, ohne Doppel.
+
+        Danach richtet sich, welche Rennwochenenden er live sieht: alle,
+        in denen einer seiner Fahrer startet.
+        """
+        return tuple(sorted({f.liga for f in self.spielerfahrer}))
+
     def teamkollegen(self, fahrer: Fahrer) -> tuple[Fahrer, ...]:
-        """Die uebrigen Fahrer desselben Teams (GDD 12: Spieler plus 3 KI)."""
+        """Die uebrigen Fahrer desselben Teams (GDD 12: vier Autos je Team)."""
         team = self.teams[fahrer.team]
         return tuple(self.fahrer[i] for i in team.fahrer if i != fahrer.nummer)
 
@@ -382,6 +412,46 @@ def erzeuge(
     return Welt(teams=teams, fahrer=tuple(fahrer), seed=seedquelle.seed)
 
 
+def _hole_team_nach_unten(
+    teamplaetze: list[list[tuple[int, int]]], spielerliga: int, je_team: int
+) -> int:
+    """Schiebt die schwaechsten Plaetze der Spielerliga in **ein** Team.
+
+    Die 150 Teams sind ueber die Ligen gestreut - kein Team hat von sich
+    aus vier Plaetze in derselben Liga. Der Spieler soll aber mit allen
+    vier Autos unten anfangen, also werden die vier schwaechsten Plaetze
+    seiner Startliga in sein Team getauscht; die abgebenden Teams
+    bekommen dafuer die Plaetze, die sein Team hatte.
+
+    Getauscht statt neu verteilt: Jede Liga behaelt damit genau ihre 30
+    Plaetze, und die Staerkeverteilung der Welt bleibt, wie GDD 9 sie
+    vorgibt.
+
+    :return: die Nummer des Spielerteams
+    """
+    stellen = [
+        (team, n)
+        for team, plaetze in enumerate(teamplaetze)
+        for n, (liga, _) in enumerate(plaetze)
+        if liga == spielerliga
+    ]
+    if len(stellen) < je_team:
+        raise WeltFehler(
+            f"Liga {spielerliga} hat {len(stellen)} Plaetze, "
+            f"das Spielerteam braucht {je_team}"
+        )
+    # Der schwaechste zuerst - dort faengt der Spieler an.
+    stellen.sort(key=lambda stelle: teamplaetze[stelle[0]][stelle[1]][1])
+    ziel = stellen[:je_team]
+    spielerteam = ziel[0][0]
+
+    auswaerts = [stelle for stelle in ziel if stelle[0] != spielerteam]
+    frei = [(spielerteam, n) for n in range(je_team) if (spielerteam, n) not in ziel]
+    for (zt, zn), (ft, fn) in zip(auswaerts, frei, strict=True):
+        teamplaetze[zt][zn], teamplaetze[ft][fn] = teamplaetze[ft][fn], teamplaetze[zt][zn]
+    return spielerteam
+
+
 def _erzeuge_fahrer(
     konfiguration, namen, teamplaetze, zusatz, wuerfel, saisonjahr, spielerliga
 ) -> list[Fahrer]:
@@ -404,28 +474,18 @@ def _erzeuge_fahrer(
     fahrer: list[Fahrer] = []
     je_team = konfiguration.wert("teams", "autos_je_team")
 
-    # Der Spieler bekommt den letzten Platz seiner Liga (GDD 1: alle Werte
-    # auf 0, also hinterste Reihe).
-    spielernummer = None
-    if spielerliga is not None:
-        kandidaten = [
-            team * je_team + n
-            for team, plaetze in enumerate(teamplaetze)
-            for n, (liga, _) in enumerate(plaetze)
-            if liga == spielerliga
-        ]
-        if not kandidaten:
-            raise WeltFehler(f"Keine Plaetze in Liga {spielerliga}")
-        # Der schwaechste Platz dieser Liga.
-        spielernummer = min(
-            kandidaten,
-            key=lambda nummer: teamplaetze[nummer // je_team][nummer % je_team][1],
-        )
+    # Der Spieler ist Teamchef: Ihm gehoert ein ganzes Team mit vier
+    # Autos, und alle vier stehen mit Werten auf 0 in seiner Startliga.
+    spielerteam = (
+        _hole_team_nach_unten(teamplaetze, spielerliga, je_team)
+        if spielerliga is not None
+        else None
+    )
 
     for team, plaetze in enumerate(teamplaetze):
         for n, (liga, staerke) in enumerate(plaetze):
             nummer = team * je_team + n
-            ist_spieler = nummer == spielernummer
+            ist_spieler = team == spielerteam
 
             # Namen bleiben eindeutig.
             while True:
@@ -451,7 +511,8 @@ def _erzeuge_fahrer(
                 days=int(wuerfel.integers(0, 365))
             )
 
-            # Der Spieler startet laut GDD 1 mit allen Werten auf 0.
+            # Die eigenen Fahrer starten mit allen Werten auf 0 - sie
+            # muessen sich alles erarbeiten (GDD 1, jetzt fuer alle vier).
             if ist_spieler:
                 werte = {f.schluessel: 0 for f in konfiguration.faehigkeiten}
                 wetterwerte = dict.fromkeys(zusatz, 0)
@@ -595,6 +656,28 @@ def mit_fahrerdaten(welt: Welt, aenderungen: dict[int, dict]) -> Welt:
         # Der Anzeigename des Autos haengt am Fahrernamen.
         fahrer.append(replace(neu, auto=replace(neu.auto, name=neu.name)))
     return Welt(teams=welt.teams, fahrer=tuple(fahrer), seed=welt.seed)
+
+
+def mit_teamname(welt: Welt, team: int, name: str) -> Welt:
+    """Eine neue Welt, in der ein Team anders heisst.
+
+    Der Teamchef benennt sein Team selbst (Punkt 11). Alles andere am
+    Team - Hersteller, Farben, Budget, Fahrer - bleibt, wie die Welt es
+    gewuerfelt hat.
+    """
+    if not 0 <= team < len(welt.teams):
+        raise WeltFehler(f"Team {team} gibt es nicht")
+    sauber = name.strip()
+    if not sauber:
+        raise WeltFehler("Ein Team braucht einen Namen")
+    return Welt(
+        teams=tuple(
+            replace(mannschaft, name=sauber) if nummer == team else mannschaft
+            for nummer, mannschaft in enumerate(welt.teams)
+        ),
+        fahrer=welt.fahrer,
+        seed=welt.seed,
+    )
 
 
 def starterfeld(
