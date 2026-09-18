@@ -220,11 +220,13 @@ def test_am_rennende_wird_nicht_mehr_gestoppt(k, monza, feld, umgebung):
 # -- Reproduzierbarkeit -----------------------------------------------------
 def test_gleicher_seed_gleiche_stopps(k, monza, feld, umgebung):
     mittel, verschleiss = umgebung
-    strategien = tuple(strategie_mit(k, (8, 16)) for _ in range(5))
+    # So viele Strategien, wie Autos antreten - die Feldgroesse steht in
+    # der Konfiguration und ist im Test klein.
+    strategien = tuple(strategie_mit(k, (8, 16)) for _ in feld)
 
     def lauf():
         return rn.simuliere(
-            k, monza, feld[:5], RUNDEN, Seedquelle(2), mittel,
+            k, monza, feld, RUNDEN, Seedquelle(2), mittel,
             streckenverschleiss=verschleiss, strategien=strategien,
         )
 
@@ -239,9 +241,9 @@ def test_die_streuung_macht_zwei_gleiche_plaene_verschieden(k, monza, feld, umge
     auf null sieht man keine Streuung mehr.
     """
     mittel, verschleiss = umgebung
-    strategien = tuple(strategie_mit(k, (5,)) for _ in range(6))
+    strategien = tuple(strategie_mit(k, (5,)) for _ in feld)
     verlauf = rn.simuliere(
-        k, monza, feld[:6], RUNDEN, Seedquelle(2), mittel,
+        k, monza, feld, RUNDEN, Seedquelle(2), mittel,
         streckenverschleiss=verschleiss, strategien=strategien,
     )
     reste = {round(b.restprofil, 6) for b in verlauf.boxenstopps}
