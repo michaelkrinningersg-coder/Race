@@ -72,6 +72,12 @@ if TYPE_CHECKING:  # pragma: no cover
 # ``saisonverlauf``, Punkt 9). Aeltere Staende werden gelesen; ihr Verlauf
 # beginnt dann beim naechsten gefahrenen Rennen.
 SPIELSTAND_VERSION = 4
+
+# Punkt 17: Autosave und Schnellspeicher liegen an einem festen Ort,
+# damit sie ohne Dateidialog geschrieben werden koennen.
+ORDNER = ".rennmanager"
+AUTOSAVE = "autosave.sqlite"
+SCHNELLSPEICHER = "schnellspeicher.sqlite"
 HISTORIE_AB_VERSION = 2
 POPULARITAET_AB_VERSION = 3
 VERLAUF_AB_VERSION = 4
@@ -278,6 +284,27 @@ def _datum(text: str) -> dt.date:
 # ---------------------------------------------------------------------------
 # Speichern
 # ---------------------------------------------------------------------------
+def spielstandordner() -> Path:
+    """Wo Autosave und Schnellspeicher liegen (Punkt 17).
+
+    Ein fester Ort im Benutzerverzeichnis: Fuer Staende, die ohne Dialog
+    geschrieben werden, braucht es einen Platz, den das Spiel kennt. Die
+    von Hand gespeicherten Staende bleiben davon unberuehrt - fuer die
+    fragt der Dateidialog weiter nach.
+    """
+    return Path.home() / ORDNER
+
+
+def autosave() -> Path:
+    """Der eine Autosave-Stand, der ueberschrieben wird."""
+    return spielstandordner() / AUTOSAVE
+
+
+def schnellspeicher() -> Path:
+    """Der eine Schnellspeicherstand (F5 und F9)."""
+    return spielstandordner() / SCHNELLSPEICHER
+
+
 def speichere(stand: Spielstand, pfad: Path | str) -> Path:
     """Schreibt einen Spielstand als SQLite-Datei (GDD 15)."""
     pfad = Path(pfad)

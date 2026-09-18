@@ -812,6 +812,24 @@ und Punkte; Staende der Version 1 bleiben lesbar, die Zahlen, die es dort
 nicht gab, stehen auf 0. Auch das haelt ein Test fest - er baut einen
 gespeicherten Stand auf das alte Schema zurueck und laedt ihn.
 
+### Autosave und Schnellspeicher
+
+Zwei Staende schreibt das Spiel ohne Dialog, an einem festen Ort unter
+`~/.rennmanager`:
+
+| Datei | Wann |
+| --- | --- |
+| `autosave.sqlite` | nach jedem Tageswechsel und jedem Rennwochenende |
+| `schnellspeicher.sqlite` | auf **F5**; **F9** laedt ihn zurueck |
+
+Beide werden **ueberschrieben**, nicht fortgeschrieben: Ein Autosave, der
+mitwaechst, fuellte nach zwanzig Saisons das Verzeichnis. Von Hand
+gespeicherte Staende bleiben davon unberuehrt - fuer die fragt der
+Dateidialog weiter nach Ort und Namen.
+
+Ein misslungener Autosave haelt das Spiel nicht an, verschwindet aber auch
+nicht stillschweigend: Er meldet sich in der Statuszeile.
+
 ## Der Editor
 
 GDD 15 nennt unter den Balancing-Werkzeugen eine Debug-Ansicht. Der Reiter

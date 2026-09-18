@@ -388,3 +388,19 @@ def test_ein_stand_der_version_1_bleibt_lesbar(k, nach_zwei_saisons, tmp_path):
     # Die Zahlen, die es in Version 1 nicht gab, bleiben auf 0.
     assert alt.zeilen[0].siege == 0
     assert alt.zeilen[0].rennen == 0
+
+
+# --- Autosave und Schnellspeicher (Punkt 17) ------------------------------
+def test_die_festen_staende_liegen_an_einem_ort(spielstandordner) -> None:
+    """Ohne Dialog geschrieben heisst: an einem Ort, den das Spiel kennt."""
+    assert sp.autosave().parent == spielstandordner
+    assert sp.schnellspeicher().parent == spielstandordner
+    assert sp.autosave() != sp.schnellspeicher()
+    assert sp.autosave().name == sp.AUTOSAVE
+    assert sp.schnellspeicher().name == sp.SCHNELLSPEICHER
+
+
+def test_der_ordner_liegt_im_benutzerverzeichnis(spielstandordner) -> None:
+    """Ein fester Ort unter ``~/.rennmanager`` - kein Dialog noetig."""
+    assert spielstandordner.name == sp.ORDNER == ".rennmanager"
+    assert spielstandordner.parent == sp.Path.home()

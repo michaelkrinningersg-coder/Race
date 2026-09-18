@@ -8,7 +8,7 @@ der vergeht, ohne belegt zu sein, ist verloren.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QFormLayout,
@@ -53,6 +53,10 @@ def euro(betrag: float) -> str:
 
 class Karriereseite(QWidget):
     """Tageskalender, Entwicklung und Sponsoren."""
+
+    # Punkt 17: Ein Tageswechsel ist ein Spielstand wert - das Fenster
+    # schreibt darauf den Autosave.
+    tag_gewechselt = Signal()
 
     def __init__(
         self,
@@ -181,6 +185,7 @@ class Karriereseite(QWidget):
             return
         self._zeichne()
         self._melde_neues(offen)
+        self.tag_gewechselt.emit()
 
     def _zum_rennen(self) -> None:
         offen = len(self._karriere.meldungen)
@@ -191,6 +196,7 @@ class Karriereseite(QWidget):
             return
         self._zeichne()
         self._melde_neues(offen)
+        self.tag_gewechselt.emit()
 
     def _melde_neues(self, vorher: int) -> None:
         """Zeigt, was seit dem letzten Tageswechsel passiert ist (GDD 14).

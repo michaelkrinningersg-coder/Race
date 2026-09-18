@@ -131,6 +131,20 @@ class Hauptfenster(QMainWindow):
         datei.addAction(neu)
         datei.addSeparator()
 
+        # Punkt 17: Schnellspeichern und -laden ohne Dialog. Wer ein
+        # Wochenende neu fahren will, soll nicht jedes Mal durch einen
+        # Dateibrowser muessen.
+        schnell_speichern = QAction("&Schnellspeichern", self)
+        schnell_speichern.setShortcut("F5")
+        schnell_speichern.triggered.connect(self.schnellspeichern)
+        datei.addAction(schnell_speichern)
+
+        schnell_laden = QAction("Schnell&laden", self)
+        schnell_laden.setShortcut("F9")
+        schnell_laden.triggered.connect(self.schnellladen)
+        datei.addAction(schnell_laden)
+        datei.addSeparator()
+
         beenden = QAction("&Beenden", self)
         beenden.setShortcut("Ctrl+Q")
         beenden.triggered.connect(self.close)
@@ -162,6 +176,8 @@ class Hauptfenster(QMainWindow):
                 self._jahr,
             )
         self._karriereseite = Karriereseite(self._konfiguration, self._karriere)
+        # Punkt 17: Jeder Tageswechsel schreibt den Autosave.
+        self._karriereseite.tag_gewechselt.connect(self.autosave)
         self._reiter.addTab(self._karriereseite, "Karriere")
         self._sponsorenseite = Sponsorenseite(
             self._konfiguration,
@@ -272,6 +288,7 @@ class Hauptfenster(QMainWindow):
             f"{self._saisonseite.lauf.rennen_je_saison} Rennen",
             8000,
         )
+        self.autosave()
 
     def _reiter_gewechselt(self, stelle: int) -> None:
         seite = self._reiter.widget(stelle)
@@ -522,6 +539,47 @@ class Hauptfenster(QMainWindow):
             f"{self._konfiguration.wert('ligen', 'startliga')}, Saison {self._jahr}",
             8000,
         )
+
+    # -- Speichern ohne Dialog (Punkt 17) ----------------------------------
+    def schnellspeichern(self) -> Path | None:
+        """Schreibt den Schnellspeicherstand (F5)."""
+        return self._schreibe(kern_spielstand.schnellspeicher(), "Schnellspeicher")
+
+    def schnellladen(self) -> bool:
+        """Liest den Schnellspeicherstand zurueck (F9)."""
+        return self._lies(kern_spielstand.schnellspeicher(), "Schnellspeicher")
+
+    def autosave(self) -> Path | None:
+        """Schreibt den Autosave-Stand.
+
+        Laeuft nach jedem Tageswechsel und jedem Rennwochenende. Eine
+        einzige Datei, die ueberschrieben wird: Ein Autosave, der mitwaechst,
+        fuellte nach zwanzig Saisons das Verzeichnis.
+        """
+        return self._schreibe(kern_spielstand.autosave(), "Autosave", leise=True)
+
+    def _schreibe(self, pfad: Path, was: str, leise: bool = False) -> Path | None:
+        if self._karriere is None:  # pragma: no cover - ohne Karriere kein Stand
+            return None
+        try:
+            ziel = kern_spielstand.speichere(self.spielstand(), pfad)
+        except (kern_spielstand.SpielstandFehler, OSError) as fehler:
+            # Ein misslungener Autosave darf das Spiel nicht anhalten, aber
+            # stillschweigend verschwinden darf er auch nicht.
+            self.statusBar().showMessage(f"{was} fehlgeschlagen: {fehler}", 12000)
+            return None
+        self.statusBar().showMessage(f"{was}: {ziel}", 5000)
+        return ziel
+
+    def _lies(self, pfad: Path, was: str) -> bool:
+        try:
+            stand = kern_spielstand.lade(self._konfiguration, pfad)
+        except kern_spielstand.SpielstandFehler as fehler:
+            QMessageBox.warning(self, was, str(fehler))
+            return False
+        self.uebernimm(stand)
+        self.statusBar().showMessage(f"{was} geladen: {pfad}", 8000)
+        return True
 
     def _speichere(self) -> None:
         pfad, _ = QFileDialog.getSaveFileName(

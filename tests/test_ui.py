@@ -1324,3 +1324,89 @@ def test_neue_karriere_zeigt_den_namen_ueberall(qtbot, konfig) -> None:
         vorschau.topLevelItem(i).text(1) for i in range(vorschau.topLevelItemCount())
     }
     assert "Mara Holtkamp" in gezeigt
+
+
+# -- Autosave und Schnellspeicher (Punkt 17) --------------------------------
+def test_autosave_nach_jedem_tageswechsel(qtbot, konfig, spielstandordner) -> None:
+    """GDD 2: Ein Tag ist vorbei - der Stand soll ihn ueberleben."""
+    from rennmanager.kern import spielstand as kern_spielstand
+
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    assert not kern_spielstand.autosave().exists()
+
+    fenster.karriereseite._tag_weiter()
+    assert kern_spielstand.autosave().is_file()
+
+    # Der Stand passt zum Kalender - und wird beim naechsten Tag ersetzt.
+    stand = kern_spielstand.lade(konfig, kern_spielstand.autosave())
+    assert stand.karriere.heute == fenster.karriere.heute
+    fenster.karriereseite._tag_weiter()
+    zweiter = kern_spielstand.lade(konfig, kern_spielstand.autosave())
+    assert zweiter.karriere.heute == fenster.karriere.heute > stand.karriere.heute
+
+
+def test_autosave_nach_dem_rennwochenende(qtbot, konfig) -> None:
+    from rennmanager.kern import spielstand as kern_spielstand
+
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    for _ in range(3):
+        fenster.wochenendeseite.knopf_weiter.click()
+
+    stand = kern_spielstand.lade(konfig, kern_spielstand.autosave())
+    assert stand.gefahrene_rennen == 1
+
+
+def test_schnellspeichern_und_schnellladen(qtbot, konfig) -> None:
+    """F5 und F9 - ohne Dialog, damit man ein Wochenende neu fahren kann."""
+    from rennmanager.kern import spielstand as kern_spielstand
+
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    fenster.karriereseite.waehle("D1")
+    fenster.karriereseite._belege_tag()
+    vorher = fenster.karriere.wert("D1")
+    assert vorher > 0
+
+    assert fenster.schnellspeichern() == kern_spielstand.schnellspeicher()
+    assert kern_spielstand.schnellspeicher().is_file()
+
+    # Weiterspielen, dann zurueck auf den Schnellspeicherstand.
+    fenster.karriereseite._tag_weiter()
+    fenster.karriereseite.waehle("D2")
+    fenster.karriereseite._belege_tag()
+    assert fenster.karriere.wert("D2") > 0
+
+    assert fenster.schnellladen()
+    assert fenster.karriere.wert("D1") == vorher
+    assert fenster.karriere.wert("D2") == 0
+
+
+def test_schnellladen_ohne_stand_meldet_sich(qtbot, konfig, monkeypatch) -> None:
+    """Wer F9 drueckt, ohne je F5 gedrueckt zu haben, bekommt eine Meldung."""
+    from PySide6.QtWidgets import QMessageBox
+
+    gemeldet = []
+    monkeypatch.setattr(
+        QMessageBox, "warning", lambda *args, **kw: gemeldet.append(args[2])
+    )
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+
+    assert not fenster.schnellladen()
+    assert gemeldet and "nicht gefunden" in gemeldet[0]
+
+
+def test_die_tastenkuerzel_sind_gesetzt(qtbot, konfig) -> None:
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    kuerzel = {
+        aktion.text().replace("&", ""): aktion.shortcut().toString()
+        for menue in fenster.menuBar().findChildren(type(fenster.menuBar().actions()[0].menu()))
+        for aktion in menue.actions()
+        if aktion.text()
+    }
+    assert kuerzel["Schnellspeichern"] == "F5"
+    assert kuerzel["Schnellladen"] == "F9"
+    assert kuerzel["Neue Karriere ..."] == "Ctrl+N"
