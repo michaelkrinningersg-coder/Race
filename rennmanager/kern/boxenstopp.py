@@ -56,24 +56,86 @@ class BoxenstoppFehler(Exception):
 # ---------------------------------------------------------------------------
 # Wo die Boxengasse liegt
 # ---------------------------------------------------------------------------
+def _kurvenregel(arten: np.ndarray, gerade: int) -> tuple[int, int]:
+    """Der Abschnitt nach der Kurvenregel.
+
+    Von der Geraden **vor** Start/Ziel durch die Kurvenkombination
+    **danach** bis zur naechsten Geraden - so, wie eine Boxengasse auf
+    den meisten Strecken liegt.
+    """
+    anzahl = len(arten)
+    # Rueckwaerts bis zum Anfang der Geraden vor Start/Ziel.
+    von = 0
+    for schritt in range(1, anzahl + 1):
+        stelle = (-schritt) % anzahl
+        if arten[stelle] == gerade:
+            while arten[(stelle - 1) % anzahl] == gerade:
+                stelle = (stelle - 1) % anzahl
+            von = stelle
+            break
+
+    # Vorwaerts bis zur **naechsten** Geraden. Liegt Start/Ziel schon in
+    # einer, muss erst aus ihr heraus - sonst findet die Suche dieselbe
+    # Gerade wieder und der Abschnitt waere ein paar Meter lang.
+    stelle = 0
+    while stelle < anzahl and arten[stelle] == gerade:
+        stelle += 1
+    bis = stelle % anzahl
+    for schritt in range(stelle, stelle + anzahl):
+        wo = schritt % anzahl
+        if arten[wo] == gerade:
+            bis = wo
+            break
+    return von, bis
+
+
+def _nur_gerade(arten: np.ndarray, gerade: int, kleinste: int, groesste: int):
+    """Der Abschnitt allein auf der Geraden um Start und Ziel.
+
+    Der Rueckfall, wenn die Kurvenregel zu weit greift: Dann zweigt die
+    Boxengasse erst nach der letzten Kurvenkombination ab und fuehrt schon
+    vor der ersten wieder auf die Strecke.
+    """
+    anzahl = len(arten)
+    zurueck = 0
+    while zurueck < anzahl and arten[(-1 - zurueck) % anzahl] == gerade:
+        zurueck += 1
+    vorwaerts = 0
+    while vorwaerts < anzahl and arten[vorwaerts % anzahl] == gerade:
+        vorwaerts += 1
+
+    # Gekuerzt und verlaengert wird von beiden Seiten gleich, damit Start
+    # und Ziel in der Boxengasse liegen bleiben: Die Einfahrt rutscht auf
+    # einer langen Geraden nach hinten, die Ausfahrt nach vorn.
+    while zurueck + vorwaerts > groesste:
+        if zurueck >= vorwaerts:
+            zurueck -= 1
+        else:
+            vorwaerts -= 1
+    while zurueck + vorwaerts < kleinste:
+        if zurueck <= vorwaerts:
+            zurueck += 1
+        else:
+            vorwaerts += 1
+    return (-zurueck) % anzahl, vorwaerts % anzahl
+
+
 def abschnitt(konfiguration: Konfiguration, strecke: Strecke) -> tuple[int, int]:
     """Die Punktindizes der Boxengasse, ``(von, bis)`` mit ``bis``
     ausgeschlossen.
 
-    Start und Ziel liegen auf Punkt 0, und die Boxengasse laeuft parallel
-    dazu - also auf der Geraden um Start/Ziel herum. Die Regel des
-    Auftraggebers:
+    Zwei Regeln, in dieser Reihenfolge - so hat es der Auftraggeber
+    entschieden:
 
-    * Ist die Gerade **nach** Start/Ziel lang, fuehrt die Boxengasse schon
-      **vor** der ersten Kurvenkombination wieder auf die Strecke.
-    * Ist die Gerade **vor** Start/Ziel lang, zweigt sie erst **nach** der
-      letzten Kurvenkombination ab.
-    * Dazwischen: mindestens ``min_laenge_m``, hoechstens ``max_laenge_m``.
-
-    Die Untergrenze braucht es, weil Start/Ziel nicht ueberall mitten auf
-    einer langen Geraden liegt: In Silverstone endet sie 45 Meter dahinter,
-    und ohne Untergrenze waere die Boxengasse 45 Meter lang. Dann wird in
-    die Kurvenkombination hinein verlaengert.
+    1. **Die Kurvenregel.** Von der Geraden vor Start/Ziel durch die
+       Kurvenkombination danach bis zur naechsten Geraden. Kommt dabei
+       eine Boxengasse zwischen ``min_laenge_m`` und ``max_laenge_m``
+       heraus, bleibt es dabei - gemessen auf 14 der 20 Strecken.
+    2. **Sonst nur die Gerade.** Greift die Kurvenregel zu weit - Monza
+       kam auf 1350 Meter, Mexiko-Stadt auf 1299 -, zweigt die Boxengasse
+       erst nach der letzten Kurvenkombination ab und fuehrt schon vor der
+       ersten wieder auf die Strecke. Sind beide Teile zu lang, liegt sie
+       allein auf der langen Start-Ziel-Geraden.
 
     Der Abschnitt laeuft ueber die Start/Ziel-Linie hinweg; dann ist
     ``von > bis`` und er setzt sich am Rundenanfang fort - dieselbe
@@ -92,31 +154,11 @@ def abschnitt(konfiguration: Konfiguration, strecke: Strecke) -> tuple[int, int]
     kleinste = max(int(round(einstellung["min_laenge_m"] / ds)), 2)
     groesste = max(int(round(einstellung["max_laenge_m"] / ds)), kleinste)
 
-    # Zuerst: wie weit reicht die Gerade um Start/Ziel nach hinten und
-    # nach vorn? Liegt Start/Ziel in einer Kurve, sind beide null.
-    zurueck = 0
-    while zurueck < anzahl and arten[(-1 - zurueck) % anzahl] == gerade:
-        zurueck += 1
-    vorwaerts = 0
-    while vorwaerts < anzahl and arten[vorwaerts % anzahl] == gerade:
-        vorwaerts += 1
-
-    # Auf die erlaubte Laenge bringen: erst kuerzen, dann verlaengern.
-    # Gekuerzt wird von beiden Seiten gleich, damit Start und Ziel in der
-    # Boxengasse liegen bleiben - die Einfahrt rutscht auf einer langen
-    # Geraden nach hinten, die Ausfahrt nach vorn.
-    while zurueck + vorwaerts > groesste:
-        if zurueck >= vorwaerts:
-            zurueck -= 1
-        else:
-            vorwaerts -= 1
-    while zurueck + vorwaerts < kleinste:
-        if zurueck <= vorwaerts:
-            zurueck += 1
-        else:
-            vorwaerts += 1
-
-    return (-zurueck) % anzahl, vorwaerts % anzahl
+    von, bis = _kurvenregel(arten, gerade)
+    punkte = (bis - von) % anzahl or anzahl
+    if kleinste <= punkte <= groesste:
+        return von, bis
+    return _nur_gerade(arten, gerade, kleinste, groesste)
 
 
 def laenge_m(konfiguration: Konfiguration, strecke: Strecke) -> float:
