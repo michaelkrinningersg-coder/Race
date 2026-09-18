@@ -323,6 +323,7 @@ class _Lauf:
         kenntnisfaktor: tuple[float, ...] | None = None,
         tagesformbonus: tuple[float, ...] | None = None,
         rhythmusfaktor: tuple[float, ...] | None = None,
+        mischungen: tuple[kern_reifen.Mischung, ...] | None = None,
     ) -> None:
         self.k = konfiguration
         self.strecke = strecke
@@ -452,14 +453,22 @@ class _Lauf:
         # festen Rundenzeit, deshalb faellt er im zufallsfreien Modus mit
         # weg - sonst waere ein Auto im Rennen langsamer als in der
         # Einzelrunde und die Kalibrierung liefe ins Leere.
+        # Punkt 39: Der Verschleiss haengt an der Strecke und der
+        # Mischung, nicht mehr an der Renndistanz - sonst hielte ein Satz
+        # per Konstruktion genau ein Rennen und Stopps waeren sinnlos.
+        self.mischungen = list(
+            mischungen
+            if mischungen is not None
+            else [kern_reifen.standardmischung(konfiguration)] * self.anzahl
+        )
         self.verschleiss_je_meter = np.zeros(self.anzahl)
         if not ohne_zufall:
             self.verschleiss_je_meter = np.array(
                 [
                     kern_reifen.verschleiss_je_meter(
-                        konfiguration, auto, renndistanz, streckenverschleiss
+                        konfiguration, auto, misch, streckenverschleiss
                     )
-                    for auto in self.autos
+                    for auto, misch in zip(self.autos, self.mischungen, strict=True)
                 ]
             )
         self.verschleiss = np.zeros(self.anzahl)

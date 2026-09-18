@@ -24,6 +24,7 @@ ueber den Multiplikator aus GDD 7.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -38,6 +39,10 @@ if TYPE_CHECKING:  # pragma: no cover
 # Schluessel der neuen Fahrereigenschaft in Auto.wetterwerte - sie steht
 # wie die Wetterfaehigkeiten ausserhalb der Wirkungsmatrix.
 FLUESTERER = "reifenfluesterer"
+
+
+class ReifenFehler(Exception):
+    """Die Reifen lassen sich so nicht rechnen."""
 
 
 def streckenfaktor(konfiguration: Konfiguration, strecke: Strecke, mittelwert: float) -> float:
@@ -65,18 +70,74 @@ def mittlere_querbeschleunigung(strecken) -> float:
     return sum(werte) / len(werte)
 
 
-def verschleiss_je_meter(
-    konfiguration: Konfiguration,
-    auto: Auto,
-    renndistanz_m: float,
-    streckenfaktor_wert: float = 1.0,
-    wetterfaktor: float = 1.0,
-) -> float:
-    """Wie stark der Reifenzustand je gefahrenem Meter faellt.
+@dataclass(frozen=True)
+class Mischung:
+    """Eine Reifenmischung (Punkt 39)."""
 
-    Der Wert ist so geeicht, dass ein Auto mit dem Bereich ``ve`` bei 0
-    ueber die volle Renndistanz ``verschleiss_bei_null`` erreicht und eines
-    bei ``referenz`` nur ``verschleiss_bei_referenz``.
+    schluessel: str
+    name: str
+    kuerzel: str
+    farbe: str
+    # Faktor aufs Tempo bei frischen Reifen, gemessen an "hart" = 1,0.
+    tempo: float
+    # Faktor auf den Verschleiss - wer schneller faehrt, haelt kuerzer.
+    verschleiss: float
+    # Fuer welche Naesse sie gebaut ist: 0 trocken, 1 voll unter Wasser.
+    naesse: float
+
+
+def mischungen(konfiguration: Konfiguration) -> tuple[Mischung, ...]:
+    """Alle Mischungen aus der Konfiguration, in ihrer Reihenfolge."""
+    return tuple(
+        Mischung(**zeile)
+        for zeile in konfiguration.wert("reifen", "mischungen", "liste")
+    )
+
+
+def mischung(konfiguration: Konfiguration, schluessel: str) -> Mischung:
+    """Eine Mischung ueber ihren Schluessel."""
+    for eine in mischungen(konfiguration):
+        if eine.schluessel == schluessel:
+            return eine
+    raise ReifenFehler(f"Unbekannte Reifenmischung: {schluessel}")
+
+
+def standardmischung(konfiguration: Konfiguration) -> Mischung:
+    """Die Mischung, mit der gefahren wird, wenn keine gewaehlt wurde.
+
+    Die mittlere der Trockenmischungen - sie steht in der Konfiguration
+    an dritter Stelle von unten. Gebraucht wird sie ueberall dort, wo noch
+    keine Strategie vorliegt: in Tests, im Editor und in der Kalibrierung.
+    """
+    alle = mischungen(konfiguration)
+    trocken = [m for m in alle if m.naesse == 0.0]
+    if not trocken:  # pragma: no cover - es gibt immer Trockenmischungen
+        raise ReifenFehler("Keine Trockenmischung in der Konfiguration")
+    return trocken[len(trocken) // 2]
+
+
+def naesse_von(konfiguration: Konfiguration, wetter) -> float:
+    """Wie nass diese Wetterlage ist - 0 trocken bis 1 unter Wasser.
+
+    Mehrere Lagen zugleich (das Wetter kann je Sektor wechseln, GDD 7):
+    Es zaehlt die nasseste, denn danach richtet sich die Reifenwahl.
+    """
+    tabelle = konfiguration.wert("reifen", "mischungen", "naesse_je_lage")
+    if isinstance(wetter, str):
+        wetter = (wetter,)
+    return max((float(tabelle.get(lage, 0.0)) for lage in wetter), default=0.0)
+
+
+def _fehlgriff(konfiguration: Konfiguration, misch: Mischung, naesse: float) -> float:
+    """Wie weit die Mischung an der Lage vorbeigeht, 0 bis 1."""
+    return abs(naesse - misch.naesse)
+
+
+def haltbarkeit(konfiguration: Konfiguration, auto: Auto) -> float:
+    """Wie weit dieses Auto seine Reifen traegt, als Faktor um 1,0.
+
+    Aus dem Bereich ``ve`` der Wirkungsmatrix (F10 Reifenhaltbarkeit,
+    F14, F16, D14 Reifenmanagement).
     """
     einstellung = konfiguration.wert("reifen", "verschleiss")
     anteil = min(
@@ -85,10 +146,74 @@ def verschleiss_je_meter(
         ),
         1.0,
     )
-    ueber_distanz = einstellung["verschleiss_bei_null"] + anteil * (
-        einstellung["verschleiss_bei_referenz"] - einstellung["verschleiss_bei_null"]
+    bei_null = einstellung["verschleiss_bei_null"]
+    bei_referenz = einstellung["verschleiss_bei_referenz"]
+    ueber_distanz = bei_null + anteil * (bei_referenz - bei_null)
+    return bei_referenz / max(ueber_distanz, 1e-6)
+
+
+def stintweite_m(
+    konfiguration: Konfiguration,
+    auto: Auto,
+    misch: Mischung,
+    streckenfaktor_wert: float = 1.0,
+    wetterfaktor: float = 1.0,
+    naesse: float = 0.0,
+) -> float:
+    """Wie weit ein Satz dieser Mischung traegt, in Metern.
+
+    **Nicht mehr an der Renndistanz.** Vorher war der Verschleiss durch
+    die Renndistanz geteilt, ein Satz hielt also per Konstruktion genau
+    ein Rennen - Boxenstopps waeren sinnlos gewesen. Jetzt traegt ein
+    Stint eine feste Strecke, und wie viele Stopps ein Rennen kostet,
+    ergibt sich daraus: Liga 1 faehrt 293 km, Liga 20 nur 100.
+    """
+    einstellung = konfiguration.wert("reifen", "mischungen")
+    strafe = 1.0 + einstellung["naesse_strafe_verschleiss"] * _fehlgriff(
+        konfiguration, misch, naesse
     )
-    return ueber_distanz * streckenfaktor_wert * wetterfaktor / max(renndistanz_m, 1.0)
+    teiler = misch.verschleiss * streckenfaktor_wert * wetterfaktor * strafe
+    return (
+        einstellung["stint_basis_m"]
+        * haltbarkeit(konfiguration, auto)
+        / max(teiler, 1e-6)
+    )
+
+
+def verschleiss_je_meter(
+    konfiguration: Konfiguration,
+    auto: Auto,
+    misch: Mischung,
+    streckenfaktor_wert: float = 1.0,
+    wetterfaktor: float = 1.0,
+    naesse: float = 0.0,
+) -> float:
+    """Wie stark der Reifenzustand je gefahrenem Meter faellt.
+
+    Der Kehrwert der Stintweite: Nach ``stintweite_m`` Metern steht der
+    Zustand bei 0.
+    """
+    return 1.0 / max(
+        stintweite_m(
+            konfiguration, auto, misch, streckenfaktor_wert, wetterfaktor, naesse
+        ),
+        1.0,
+    )
+
+
+def mischungsfaktor(
+    konfiguration: Konfiguration, misch: Mischung, naesse: float = 0.0
+) -> float:
+    """Faktor aufs Tempo durch die Mischungswahl (Punkt 39).
+
+    Der Zeitgewinn der Mischung, gemindert um den Fehlgriff: Ein
+    Trockenreifen im Starkregen verliert zweistellig, ein Regenreifen auf
+    trockener Strecke ebenso.
+    """
+    strafe = konfiguration.wert(
+        "reifen", "mischungen", "naesse_strafe_tempo"
+    ) * _fehlgriff(konfiguration, misch, naesse)
+    return misch.tempo * (1.0 - strafe)
 
 
 def zustand(verschleiss: float) -> float:

@@ -1021,6 +1021,88 @@ reife_am_gipfel = 0.90
 anfang_anteil = 0.12
 
 # ---------------------------------------------------------------------------
+# Punkt 39 - Reifenmischungen
+# ---------------------------------------------------------------------------
+# Fuenf Mischungen: drei fuer trocken, zwei fuer nass. Jede hat einen
+# Zeitgewinn und einen Verschleissfaktor - wer schneller faehrt, haelt
+# kuerzer. Zwei verschiedene Mischungen sind Pflicht, deshalb kostet
+# jedes Rennen mindestens einen Stopp.
+#
+# **Der Verschleiss haengt jetzt an der Strecke, nicht an der
+# Renndistanz** (Entscheidung des Auftraggebers). Vorher war er durch die
+# Renndistanz geteilt, ein Satz hielt also per Konstruktion genau ein
+# Rennen. Jetzt haelt ein Stint eine feste Strecke, und wie viele Stopps
+# noetig sind, ergibt sich daraus: Liga 1 faehrt 293 km, Liga 20 nur 100 -
+# derselbe Reifen bedeutet dort einen Stopp und hier drei.
+[reifen.mischungen]
+# Wie weit ein Stint mit der mittleren Mischung traegt, beim Referenzauto
+# auf einer durchschnittlichen Strecke. Daraus folgt die Stoppzahl.
+#
+# Gegen das Ziel des Auftraggebers kalibriert - 1 bis 3 Stopps: Ueber
+# alle 20 Ligen, 20 Strecken und 3 Trockenmischungen liegen 1191 von 1200
+# Kombinationen bei 0 bis 3 Stopps. Die Nullen faengt die
+# Zwei-Mischungs-Pflicht ab, die neun Vierer sind reine Weich-Strategien
+# auf den haertesten Strecken - die waehlt niemand freiwillig.
+stint_basis_m = 165_000
+# Wie stark eine unpassende Mischung bestraft wird, je Einheit Abstand
+# zwischen der Naesse der Lage und der, fuer die der Reifen gebaut ist.
+naesse_strafe_tempo = 0.12
+# Gemildert von 2,5: Gemessen erzwang der alte Wert bei Regen bei allen
+# 30 Autos drei Stopps, weil selbst der passende Reifen noch danebenlag.
+naesse_strafe_verschleiss = 1.2
+# Wie nass eine Wetterlage ist, 0 trocken bis 1 voll unter Wasser. Steht
+# hier statt bei [wetter], weil es eine Reifensache ist.
+naesse_je_lage = { trocken = 0.0, heiss = 0.0, wechselhaft = 0.35, regen = 0.7, starkregen = 1.0 }
+
+[[reifen.mischungen.liste]]
+schluessel = "weich"
+name = "Weich"
+kuerzel = "W"
+farbe = "#D7191C"
+tempo = 1.010          # rund 0,9 s je Runde schneller als hart
+verschleiss = 1.30
+naesse = 0.0
+
+[[reifen.mischungen.liste]]
+schluessel = "mittel"
+name = "Mittel"
+kuerzel = "M"
+farbe = "#E8B93B"
+tempo = 1.005
+verschleiss = 1.00
+naesse = 0.0
+
+[[reifen.mischungen.liste]]
+schluessel = "hart"
+name = "Hart"
+kuerzel = "H"
+farbe = "#F2F0EB"
+tempo = 1.000
+verschleiss = 0.75
+naesse = 0.0
+
+[[reifen.mischungen.liste]]
+schluessel = "intermediate"
+name = "Intermediate"
+kuerzel = "I"
+farbe = "#2E9E4F"
+tempo = 0.985
+verschleiss = 1.10
+# Auf "wechselhaft" (0,35) gebaut, nicht auf die Mitte der Skala - sonst
+# passt zu keiner wirklichen Wetterlage ein Reifen genau.
+naesse = 0.4
+
+[[reifen.mischungen.liste]]
+schluessel = "regen"
+name = "Regen"
+kuerzel = "R"
+farbe = "#2B6CB0"
+tempo = 0.965
+verschleiss = 0.90
+# Zwischen "regen" (0,7) und "starkregen" (1,0) - er deckt beide ab.
+naesse = 0.85
+
+# ---------------------------------------------------------------------------
 # Punkt 39 - Boxenstopps
 # ---------------------------------------------------------------------------
 # Die Streckendateien enthalten keine Boxengasse. Der Auftraggeber hat
@@ -1049,6 +1131,32 @@ max_anteil_rundenzeit = 0.38
 # Sekunden, ein verpatzter kostet das Doppelte.
 standzeit_min_s = 3.0
 standzeit_max_s = 10.0
+
+# Die Strategieregeln des Auftraggebers.
+[boxenstopp.strategie]
+# Mindestens einer, weil zwei verschiedene Mischungen Pflicht sind.
+stopps_min = 1
+stopps_max = 3
+# In den ersten und letzten drei Runden wird nicht gestoppt.
+sperre_runden = 3
+# Die KI stoppt in einem Fenster statt auf den Punkt - sonst kaeme das
+# halbe Feld in derselben Runde herein und die Boxengasse waere ein Stau.
+ki_fenster_runden = 6
+# Bei diesen Lagen entfaellt die Pflicht zu zwei Mischungen: Wer auf
+# Intermediates oder Regenreifen wechselt, hat ohnehin gewechselt, und
+# ein Rennen unter Wasser soll niemanden zwingen, einmal auf
+# Trockenreifen herauszufahren. Das Wetter steht vor dem Rennen fest
+# (GDD 7), also steht auch diese Regel vor dem Rennen fest.
+ohne_pflicht_bei = ["regen", "starkregen", "wechselhaft"]
+# Wie weit eine Mischung von der Naesse der Lage abweichen darf, damit
+# die KI sie ueberhaupt in Betracht zieht. Bei 0,38 ergibt das:
+#   trocken      -> weich, mittel, hart
+#   wechselhaft  -> Trockenmischungen und Intermediates
+#   regen        -> Intermediates und Regenreifen
+#   starkregen   -> nur Regenreifen
+# Ohne die Grenze kamen gemessen Folgen wie Hart-Inter-Weich-Inter im
+# Trockenen heraus - ein Intermediate kostet dort 6 % Tempo.
+eignungsgrenze = 0.38
 
 # ---------------------------------------------------------------------------
 # Punkt 7 - Fahrer holen: Vertraege, Gehalt und Abloese

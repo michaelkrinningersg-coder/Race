@@ -100,6 +100,7 @@ def fahre_wochenende(
     kenntnisfaktor: tuple[float, ...] | None = None,
     tagesformbonus: tuple[float, ...] | None = None,
     rhythmusfaktor: tuple[float, ...] | None = None,
+    mischungen: tuple[kern_reifen.Mischung, ...] | None = None,
 ) -> Schnellergebnis:
     """Faehrt Qualifying und Rennen einer Liga im Schnellmodus (GDD 13).
 
@@ -110,6 +111,8 @@ def fahre_wochenende(
         ohne Zuschlag.
     :param rhythmusfaktor: Faktor auf die Querbeschleunigung in Kurven je
         Auto (Punkt 15). Ohne Angabe faehrt jedes Auto ohne Vorteil.
+    :param mischungen: Reifenmischung je Auto (Punkt 39). Ohne Angabe
+        faehrt jedes Auto die mittlere Trockenmischung.
     """
     if not teilnehmer:
         raise ValueError("Ohne Teilnehmer gibt es kein Rennwochenende")
@@ -221,14 +224,19 @@ def fahre_wochenende(
     faktor = streckenfaktor(konfiguration, strecke, streckenmittel)
     wuerfel = seedquelle.zweig("schnellrennen").generator()
 
-    renndistanz = runden * strecke.laenge_m
+    # Punkt 39: je Strecke und Mischung, nicht je Renndistanz.
+    gefahrene = list(
+        mischungen
+        if mischungen is not None
+        else [kern_reifen.standardmischung(konfiguration)] * anzahl
+    )
     verschleiss_je_runde = np.array(
         [
             kern_reifen.verschleiss_je_meter(
-                konfiguration, auto, renndistanz, streckenverschleiss
+                konfiguration, auto, misch, streckenverschleiss
             )
             * strecke.laenge_m
-            for auto in autos
+            for auto, misch in zip(autos, gefahrene, strict=True)
         ]
     )
 

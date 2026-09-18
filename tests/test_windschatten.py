@@ -89,16 +89,26 @@ def feld(k, wert_sog: int, anzahl: int = 12) -> tuple[kr.Teilnehmer, ...]:
 
 
 def test_mehr_sog_bringt_mehr_ueberholmanoever(k, strecke) -> None:
-    """Der Sog hebt den Tempovorteil - und damit die Erfolgschance (GDD 4)."""
+    """Der Sog hebt den Tempovorteil - und damit die Erfolgschance (GDD 4).
+
+    Gemessen ueber mehrere Seeds: Die Aussage ist systematisch, das
+    einzelne Rennen aber nicht. Mit nur einem Seed ging der Test lange
+    zufaellig auf und kippte, als sich der Reifenverschleiss aenderte -
+    obwohl der Sog gemessen 1971 auf 3184 Manoever hebt.
+    """
     mittel = kr.mittlerer_ueberholzonenanteil(k, (strecke,))
     referenz = k.wert("skala", "referenz")
 
     def manoever(wert: int) -> int:
-        verlauf = kr.simuliere(
-            k, strecke, feld(k, wert), runden=6, seedquelle=Seedquelle(3),
-            streckenmittel=mittel,
+        return sum(
+            len(
+                kr.simuliere(
+                    k, strecke, feld(k, wert), runden=6, seedquelle=Seedquelle(seed),
+                    streckenmittel=mittel,
+                ).manoever
+            )
+            for seed in range(1, 6)
         )
-        return len(verlauf.manoever)
 
     assert manoever(referenz) > manoever(0)
 
