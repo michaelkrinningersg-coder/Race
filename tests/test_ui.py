@@ -41,6 +41,36 @@ def grosse_konfiguration() -> kf.Konfiguration:
     return kf.lade()
 
 
+# --- Helfer, die ohne feste Weltgroesse auskommen (Punkt 77) --------------
+def waehle_liga(auswahl, liga: int) -> None:
+    """Waehlt eine Liga ueber ihre **Nummer**, nicht ueber den Listenplatz.
+
+    Feste Indizes trafen in der kleinen Welt ins Leere: ``setCurrentIndex(10)``
+    liess die Liste einfach leer, und der Test fiel weit spaeter mit einem
+    ``NoneType`` um die Ohren.
+    """
+    index = auswahl.findData(liga)
+    assert index >= 0, f"Liga {liga} steht nicht in der Auswahl"
+    auswahl.setCurrentIndex(index)
+
+
+def ein_fahrer(fenster, anteil: float = 0.5):
+    """Irgendein Fahrer aus dem Feld - anteilig statt an fester Stelle."""
+    fahrer = fenster.welt.fahrer
+    return fahrer[min(int(len(fahrer) * anteil), len(fahrer) - 1)]
+
+
+def mit_erfahrung(karriere, erfahrung: int = 1_000):
+    """Fuellt den Erfahrungstopf.
+
+    Seit Punkt 66 kostet jeder Zeitkauf auch Erfahrung, und am 1. Januar
+    hat der Spieler noch keine. Wer hier die Oberflaeche prueft und nicht
+    die Kasse, legt sich welche hin.
+    """
+    karriere.konto = karriere.konto.mit(erfahrung=erfahrung)
+    return karriere
+
+
 def test_fenster_oeffnet(qtbot, konfig: kf.Konfiguration) -> None:
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
@@ -325,12 +355,20 @@ def test_rangliste_zeigt_alle_autos(qtbot, konfig: kf.Konfiguration) -> None:
     seite = _kurzes_rennen(fenster)
     seite._springe(seite.verlauf.dauer_ms / 2)
 
+    from rennmanager.ui.rennseite import SPALTE_ZEIT
+
     liste = seite._rangliste
-    assert liste.topLevelItemCount() == konfig.wert("rennen", "autos")
-    assert [liste.topLevelItem(i).text(0) for i in range(5)] == ["1", "2", "3", "4", "5"]
-    # Der Fuehrende zeigt seine Gesamtzeit, die uebrigen einen Rueckstand.
-    assert not liste.topLevelItem(0).text(3).startswith("+")
-    assert liste.topLevelItem(1).text(3).startswith("+")
+    autos = konfig.wert("rennen", "autos")
+    assert liste.topLevelItemCount() == autos
+    oben = min(5, autos)
+    assert [liste.topLevelItem(i).text(0) for i in range(oben)] == [
+        str(platz) for platz in range(1, oben + 1)
+    ]
+    # Der Fuehrende zeigt seine Gesamtzeit, die uebrigen einen Abstand.
+    # Seit Punkt 76 steht dazwischen die Spalte mit dem Positionspfeil -
+    # die Nummer kommt deshalb aus dem Modul und nicht aus dem Kopf.
+    assert not liste.topLevelItem(0).text(SPALTE_ZEIT).startswith(("+", "-"))
+    assert liste.topLevelItem(1).text(SPALTE_ZEIT).startswith(("+", "-"))
 
 
 def test_zeitenmonitor_zeigt_runden_und_sektoren(qtbot, konfig: kf.Konfiguration) -> None:
@@ -340,12 +378,14 @@ def test_zeitenmonitor_zeigt_runden_und_sektoren(qtbot, konfig: kf.Konfiguration
     seite = _kurzes_rennen(fenster)
     seite._zum_ende()
 
+    from rennmanager.ui.rennseite import MONITOR_BESTE, MONITOR_LETZTE, MONITOR_SPALTEN
+
     monitor = seite._monitor
-    assert monitor.columnCount() == 7
+    assert monitor.columnCount() == MONITOR_SPALTEN
     assert monitor.topLevelItemCount() > 0
     erste = monitor.topLevelItem(0)
-    assert erste.text(1) != "-"  # letzte Runde
-    assert erste.text(2) != "-"  # beste Runde
+    assert erste.text(MONITOR_LETZTE) != "-"
+    assert erste.text(MONITOR_BESTE) != "-"
 
 
 def test_rennansicht_zeichnet_die_autos(qtbot, konfig: kf.Konfiguration) -> None:
@@ -382,6 +422,13 @@ def test_rennen_laeuft_von_selbst_los(qtbot, konfig: kf.Konfiguration) -> None:
     qtbot.addWidget(fenster)
     seite = _kurzes_rennen(fenster)
     assert konfig.wert("zeitraffer", "automatisch_starten")
+    # Erst wenn jemand hinschaut: Sonst liefe im Hintergrund ein Rennen,
+    # das keiner sieht, und waere vorbei, bevor man den Reiter oeffnet.
+    assert not seite._laeuft
+    fenster.show()
+    fenster._reiter.setCurrentWidget(fenster._wochenendeseite)
+    fenster._wochenendeseite._blaetter.setCurrentWidget(seite)
+    assert seite.isVisible()
     assert seite._laeuft
     seite._halte_an()
 
@@ -444,10 +491,12 @@ def test_qualifying_sortiert_live_ein(qtbot, konfig: kf.Konfiguration) -> None:
     qtbot.addWidget(fenster)
     seite = _gefahrenes_qualifying(fenster)
 
+    autos = konfig.wert("rennen", "autos")
     seite._regler.setValue(1)
     assert seite._rangliste.topLevelItemCount() == 1
-    seite._regler.setValue(10)
-    assert seite._rangliste.topLevelItemCount() == 10
+    mitte = max(2, autos // 2)
+    seite._regler.setValue(mitte)
+    assert seite._rangliste.topLevelItemCount() == mitte
     seite._regler.setValue(seite._regler.maximum())
     assert seite._rangliste.topLevelItemCount() == konfig.wert("rennen", "autos")
 
@@ -528,11 +577,15 @@ def test_weltseite_wechselt_die_liga(qtbot, konfig: kf.Konfiguration) -> None:
     qtbot.addWidget(fenster)
     seite = fenster.weltseite
 
-    seite.liga_auswahl.setCurrentIndex(1)
-    oben = [seite.liste.topLevelItem(i).text(2) for i in range(5)]
-    seite.liga_auswahl.setCurrentIndex(20)
-    unten = [seite.liste.topLevelItem(i).text(2) for i in range(5)]
-    assert oben != unten
+    zeilen = min(5, konfig.wert("ligen", "autos_je_liga"))
+
+    def namen() -> list[str]:
+        return [seite.liste.topLevelItem(i).text(2) for i in range(zeilen)]
+
+    waehle_liga(seite.liga_auswahl, 1)
+    oben = namen()
+    waehle_liga(seite.liga_auswahl, konfig.wert("ligen", "anzahl"))
+    assert oben != namen()
 
 
 def test_weltseite_zeigt_alle_600_fahrer(qtbot, konfig: kf.Konfiguration) -> None:
@@ -629,8 +682,14 @@ def test_karriereseite_startet_am_ersten_januar(qtbot, konfig: kf.Konfiguration)
     qtbot.addWidget(fenster)
     karriere = fenster.karriereseite.karriere
 
+    from rennmanager.kern import kassenbuch as kern_kassenbuch
+
     assert karriere.heute.month == 1 and karriere.heute.day == 1
-    assert karriere.konto.geld == konfig.wert("kosten", "startkapital_euro")
+    # Seit Punkt 72 zahlt das Teambudget in Raten; die erste liegt am
+    # ersten Tag schon auf dem Konto.
+    rate = kern_kassenbuch.monatsrate(konfig, karriere.teambudget)
+    assert rate > 0
+    assert karriere.konto.geld == konfig.wert("kosten", "startkapital_euro") + rate
     assert karriere.liga == fenster.welt.spieler.liga
 
 
@@ -647,6 +706,7 @@ def test_tag_belegen_ueber_die_oberflaeche(qtbot, konfig: kf.Konfiguration) -> N
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
     seite = fenster.karriereseite
+    mit_erfahrung(seite.karriere)
 
     seite.waehle("D1")
     seite._belege_tag()
@@ -658,19 +718,29 @@ def test_tag_belegen_ueber_die_oberflaeche(qtbot, konfig: kf.Konfiguration) -> N
     assert len(seite.karriere.belegt) == 2
 
 
-def test_tageswechsel_gibt_die_plaetze_frei(qtbot, konfig: kf.Konfiguration) -> None:
+def test_der_belegte_platz_haelt_bis_zum_rennen(qtbot, konfig: kf.Konfiguration) -> None:
+    """Punkt 66: Ein Tageswechsel gibt den Platz **nicht** mehr frei.
+
+    Vorher liess sich an jedem Tag bis zum Rennen ein weiterer Schritt
+    belegen; jetzt gibt es je Rennabstand einen Trainings- und einen
+    Werkstattschritt.
+    """
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
     seite = fenster.karriereseite
+    mit_erfahrung(seite.karriere)
 
     seite.waehle("D1")
     seite._belege_tag()
     assert seite.karriere.belegt
     seite._tag_weiter()
+    assert seite.karriere.belegt
+    # Erst der Tag nach dem Rennen raeumt die Plaetze wieder frei.
+    seite.karriere.bis_zum_rennen()
+    seite.karriere.verbuche_rennen(platz=1)
+    assert seite.karriere.belegt
+    seite.karriere.tag_weiter()
     assert not seite.karriere.belegt
-    seite.waehle("D1")
-    seite._belege_tag()
-    assert seite.karriere.wert("D1") == 20
 
 
 def test_sofortkauf_ueber_die_oberflaeche(qtbot, konfig: kf.Konfiguration) -> None:
@@ -747,12 +817,16 @@ def test_saisonseite_wechselt_die_liga(qtbot, konfig: kf.Konfiguration) -> None:
     seite.lauf.fahre_rennen()
     seite._aktualisiere()
 
-    seite.liga_auswahl.setCurrentIndex(0)
+    zeilen = konfig.wert("ligen", "autos_je_liga")
+
+    def namen() -> set[str]:
+        return {seite.tabelle.topLevelItem(i).text(1) for i in range(zeilen)}
+
+    waehle_liga(seite.liga_auswahl, 1)
     assert seite.liga_auswahl.currentData() == 1
-    namen_liga1 = {seite.tabelle.topLevelItem(i).text(1) for i in range(20)}
-    seite.liga_auswahl.setCurrentIndex(9)
-    namen_liga10 = {seite.tabelle.topLevelItem(i).text(1) for i in range(20)}
-    assert not namen_liga1 & namen_liga10
+    erste = namen()
+    waehle_liga(seite.liga_auswahl, konfig.wert("ligen", "anzahl"))
+    assert not erste & namen()
 
 
 def test_saisonseite_zeigt_den_kalenderstand(qtbot, konfig: kf.Konfiguration) -> None:
@@ -1000,7 +1074,7 @@ def test_editor_sucht_nach_namen(qtbot, konfig: kf.Konfiguration) -> None:
     seite = fenster.editorseite
 
     seite.liga_auswahl.setCurrentIndex(0)  # alle Ligen
-    ziel = fenster.welt.fahrer[100]
+    ziel = ein_fahrer(fenster)
     seite.suche.setText(ziel.nachname)
     namen = {
         seite.liste.topLevelItem(i).text(2) for i in range(seite.liste.topLevelItemCount())
@@ -1126,7 +1200,8 @@ def test_editor_zeigt_je_fahrer_die_rundenzeit(qtbot, konfig: kf.Konfiguration) 
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
     seite = fenster.editorseite
-    seite.liga_auswahl.setCurrentIndex(10)
+    # Liga 1 gibt es in jeder Weltgroesse, und der Spieler faehrt nie dort.
+    waehle_liga(seite.liga_auswahl, 1)
 
     name = seite.streckenauswahl.currentData()
     strecke = kern_strecke.lade(konfig, name)
@@ -1142,7 +1217,8 @@ def test_editor_rechnet_die_zeiten_je_strecke_neu(qtbot, konfig: kf.Konfiguratio
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
     seite = fenster.editorseite
-    seite.liga_auswahl.setCurrentIndex(10)
+    # Liga 1 gibt es in jeder Weltgroesse, und der Spieler faehrt nie dort.
+    waehle_liga(seite.liga_auswahl, 1)
 
     def zeiten() -> list[str]:
         return [
@@ -1164,7 +1240,8 @@ def test_editor_zeigt_den_rueckstand_zur_bestzeit(qtbot, konfig: kf.Konfiguratio
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
     seite = fenster.editorseite
-    seite.liga_auswahl.setCurrentIndex(10)
+    # Liga 1 gibt es in jeder Weltgroesse, und der Spieler faehrt nie dort.
+    waehle_liga(seite.liga_auswahl, 1)
 
     zeiten = [
         seite.liste.topLevelItem(i).data(5, Zeile.SORTIERROLLE)
@@ -1190,7 +1267,8 @@ def test_editor_sortiert_nach_rundenzeit(qtbot, konfig: kf.Konfiguration) -> Non
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
     seite = fenster.editorseite
-    seite.liga_auswahl.setCurrentIndex(10)
+    # Liga 1 gibt es in jeder Weltgroesse, und der Spieler faehrt nie dort.
+    waehle_liga(seite.liga_auswahl, 1)
 
     seite.liste.sortByColumn(5, Qt.AscendingOrder)
     zeiten = [
@@ -1204,15 +1282,18 @@ def test_editor_rechnet_nach_einer_aenderung_neu(qtbot, konfig: kf.Konfiguration
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
     seite = fenster.editorseite
-    seite.liga_auswahl.setCurrentIndex(10)
+    # Liga 1 gibt es in jeder Weltgroesse, und der Spieler faehrt nie dort.
+    waehle_liga(seite.liga_auswahl, 1)
 
     zeile = seite.liste.topLevelItem(0)
     seite.liste.setCurrentItem(zeile)
     nummer = zeile.data(0, Qt.UserRole)
     vorher = zeile.data(5, Zeile.SORTIERROLLE)
 
+    # Auf den Hoechstwert statt auf feste 90 000: In Liga 1 stehen die
+    # Fahrer schon darueber, und der Test maass dann das Gegenteil.
     for schluessel in seite.felder:
-        seite.felder[schluessel].setValue(90_000)
+        seite.felder[schluessel].setValue(seite.felder[schluessel].maximum())
     seite.knopf_uebernehmen.click()
 
     nachher = next(
@@ -1402,6 +1483,7 @@ def test_schnellspeichern_und_schnellladen(qtbot, konfig) -> None:
 
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
+    mit_erfahrung(fenster.karriere)
     fenster.karriereseite.waehle("D1")
     fenster.karriereseite._belege_tag()
     vorher = fenster.karriere.wert("D1")
@@ -1410,15 +1492,17 @@ def test_schnellspeichern_und_schnellladen(qtbot, konfig) -> None:
     assert fenster.schnellspeichern() == kern_spielstand.schnellspeicher()
     assert kern_spielstand.schnellspeicher().is_file()
 
-    # Weiterspielen, dann zurueck auf den Schnellspeicherstand.
+    # Weiterspielen, dann zurueck auf den Schnellspeicherstand. Der
+    # Fahrerplatz ist seit Punkt 66 bis zum Rennen belegt - also die
+    # Werkstatt.
     fenster.karriereseite._tag_weiter()
-    fenster.karriereseite.waehle("D2")
+    fenster.karriereseite.waehle("F10")
     fenster.karriereseite._belege_tag()
-    assert fenster.karriere.wert("D2") > 0
+    assert fenster.karriere.wert("F10") > 0
 
     assert fenster.schnellladen()
     assert fenster.karriere.wert("D1") == vorher
-    assert fenster.karriere.wert("D2") == 0
+    assert fenster.karriere.wert("F10") == 0
 
 
 def test_schnellladen_ohne_stand_meldet_sich(qtbot, konfig, monkeypatch) -> None:
@@ -1463,7 +1547,7 @@ def test_die_suche_findet_teiltreffer(qtbot, konfig) -> None:
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
     suche = fenster.fahrersuche
-    fahrer = fenster.welt.fahrer[123]
+    fahrer = ein_fahrer(fenster, 0.4)
 
     assert fahrer.nummer in suche.treffer(fahrer.nachname)
     assert fahrer.nummer in suche.treffer(fahrer.nachname[2:-1])
@@ -1477,7 +1561,7 @@ def test_die_eingabetaste_oeffnet_die_fahrerkarte(qtbot, konfig) -> None:
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
     suche = fenster.fahrersuche
-    fahrer = fenster.welt.fahrer[77]
+    fahrer = ein_fahrer(fenster, 0.6)
 
     suche.feld.setText(fahrer.name)
     suche.feld.returnPressed.emit()
@@ -1524,7 +1608,7 @@ def test_die_suche_nennt_liga_und_team(qtbot, konfig) -> None:
     """Nachnamen gibt es zweimal - die Zeile muss sie auseinanderhalten."""
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
-    fahrer = fenster.welt.fahrer[200]
+    fahrer = ein_fahrer(fenster, 0.8)
     team = fenster.welt.team_von(fahrer)
 
     from rennmanager.ui.fahrersuche import eintrag
@@ -1536,16 +1620,35 @@ def test_die_suche_nennt_liga_und_team(qtbot, konfig) -> None:
     assert team.name in zeile
 
 
-def test_fahrertreffer_stehen_vor_teamtreffern(qtbot, konfig) -> None:
-    """Die Suche trifft auch Teams - aber der Fahrer geht vor."""
-    fenster = Hauptfenster(konfig)
+def test_fahrertreffer_stehen_vor_teamtreffern(qtbot, grosse_konfiguration) -> None:
+    """Die Suche trifft auch Teams - aber der Fahrer geht vor.
+
+    Dieser eine Test braucht die **grosse** Welt: Dass sich ein Nachname
+    und ein Teamname ueberschneiden, ist eine Frage der Menge. Unter zwoelf
+    Fahrern und drei Teams kommt es schlicht nicht vor.
+    """
+    fenster = Hauptfenster(grosse_konfiguration)
     qtbot.addWidget(fenster)
     suche = fenster.fahrersuche
 
-    # Ein Nachname, der zugleich in einem Teamnamen steckt.
-    fahrer = next(f for f in fenster.welt.fahrer if "kamp" in f.nachname.casefold())
+    # Ein Nachname, der zugleich in einem Teamnamen steckt. Welcher das
+    # ist, haengt an der Welt - also aus ihr geholt statt eingetippt.
+    fahrer = next(
+        f
+        for f in fenster.welt.fahrer
+        if any(f.nachname in team.name for team in fenster.welt.teams)
+    )
     gefunden = suche.treffer(fahrer.nachname)
-    assert gefunden[0] == fahrer.nummer
+    # Denselben Nachnamen gibt es unter 600 Fahrern oefter - die Aussage
+    # ist die Reihenfolge: Wer ueber den Namen passt, steht vor jedem, der
+    # nur ueber den Teamnamen hereinkommt.
+    assert fahrer.nummer in gefunden
+    ueber_team = [
+        stelle
+        for stelle, nummer in enumerate(gefunden)
+        if fahrer.nachname.casefold() not in fenster.welt.fahrer[nummer].nachname.casefold()
+    ]
+    assert not ueber_team or gefunden.index(fahrer.nummer) < min(ueber_team)
 
     # Und die Teamtreffer sind trotzdem dabei. Gesucht wird ein
     # Teamname aus der Welt selbst - ein fest eingetragener haenge sonst

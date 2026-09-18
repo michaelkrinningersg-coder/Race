@@ -62,18 +62,18 @@ def keine_modalen_dialoge(monkeypatch):
 # nimmt sie entgegen, die Fixtures reichen nur die Voreinstellung durch.
 KLEINE_LIGEN = 3
 KLEINE_AUTOS_JE_LIGA = 4
-# Rennkalender und Renndistanz bleiben voreingestellt so, wie sie im Spiel
-# sind. Beide **koennen** verkleinert werden - gemessen faellt ein
-# ausfuehrliches Wochenende von 24,5 auf 8,8 Sekunden, wenn die Distanz
-# von 100 auf 30 km sinkt -, aber beide haben Nebenwirkungen:
-#
-# * Ein kurzer Kalender laesst die Saison im Test enden, und die
-#   Oberflaeche meldet das per Dialog.
-# * Eine kurze Distanz laesst keine Reifenstrategie mehr zu: Bei sechs
-#   Runden traegt kein Stopp, und die Variantenliste bleibt leer.
-#
-# Wer sie braucht, fordert sie an: ``verkleinert(rennen=3, distanz_km=30)``.
-KLEINE_RENNEN = None
+# Der Rennkalender wird auf **zwei** Rennen gekuerzt - erstes und letztes.
+# Mehr braucht keine Regel, die hier geprueft wird: Dass sich Punkte
+# summieren, zeigt das zweite Rennen; dass eine Saison endet, ebenfalls.
+# Dass die Saison dabei im Test wirklich zu Ende geht, ist gewollt - die
+# Oberflaeche meldet es per Dialog, und den faengt
+# ``keine_modalen_dialoge`` ab.
+KLEINE_RENNEN = 2
+# Die Renndistanz bleibt **echt**. Verkleinern braechte gemessen 24,5 auf
+# 8,8 Sekunden je ausfuehrlichem Wochenende, laesst aber keine
+# Reifenstrategie mehr zu: Bei sechs Runden traegt kein Boxenstopp, die
+# Variantenliste bleibt leer, und fuenf Tests fallen aus. Wer sie
+# trotzdem will, fordert sie an: ``verkleinert(distanz_km=30)``.
 KLEINE_DISTANZ_KM = None
 
 
@@ -94,8 +94,9 @@ def verkleinert(
     :param ligen: Zahl der Ligen
     :param autos_je_liga: Fahrer je Liga
     :param rennen: Rennen je Saison; ``None`` laesst den echten Kalender
-        stehen. Vorsicht: Ein kurzer Kalender laesst die Saison im Test
-        enden, und die Oberflaeche meldet das per Dialog.
+        stehen. Ein kurzer Kalender laesst die Saison im Test enden - die
+        Oberflaeche meldet das per Dialog, den ``keine_modalen_dialoge``
+        abfaengt.
     :param distanz_km: Renndistanz der untersten Liga; ``None`` laesst die
         echte Distanz stehen. Vorsicht: Unter etwa 60 km traegt kein
         Boxenstopp mehr, und die Reifenstrategie findet keine Variante.
@@ -109,12 +110,27 @@ def verkleinert(
     roh = copy.deepcopy(gross.roh)
     roh["ligen"]["anzahl"] = ligen
     roh["ligen"]["autos_je_liga"] = autos_je_liga
+    # Dieselbe Zahl aus zwei Blickwinkeln: Wie viele Autos eine Liga hat
+    # (GDD 5) und wie viele im Rennen stehen (GDD 4). In der echten
+    # Konfiguration sind beides 30; weichen sie ab, rechnen Preisgeld und
+    # Wertung mit einem Feld, das gar nicht antritt.
+    roh["rennen"]["autos"] = autos_je_liga
     # Der Spieler faengt in der untersten Liga an - in der kleinen Welt
     # ist das die dritte, nicht die zwanzigste. Ohne das verteilt
     # ``_sortiere_in_ligen`` die Fahrer auf eine Liga, die es nicht gibt.
     roh["ligen"]["startliga"] = ligen
     je_team = roh["teams"]["autos_je_team"]
     roh["teams"]["anzahl"] = (ligen * autos_je_liga) // je_team
+    # Auf- und Abstieg haengen an der Feldgroesse: Drei von dreissig sind
+    # ein Zehntel. Bliebe es bei drei, muesste bei vier Autos derselbe
+    # Fahrer zugleich auf- und absteigen - der Saisonwechsel bricht dann
+    # mit genau dieser Meldung ab. Also derselbe Anteil, mindestens einer,
+    # und beide zusammen nie mehr als das Feld hergibt.
+    anteil = roh["auf_abstieg"]["aufsteiger"] / gross.wert("ligen", "autos_je_liga")
+    wechsler = max(1, round(anteil * autos_je_liga))
+    wechsler = min(wechsler, max(1, (autos_je_liga - 1) // 2))
+    roh["auf_abstieg"]["aufsteiger"] = wechsler
+    roh["auf_abstieg"]["absteiger"] = wechsler
     if rennen is not None:
         roh["kalender"]["rennen_je_saison"] = rennen
     if distanz_km is not None:
@@ -125,7 +141,7 @@ def verkleinert(
 
 @pytest.fixture(scope="session")
 def kleine_konfiguration():
-    """Die voreingestellte kleine Welt: 3 Ligen, 4 Autos, 3 Rennen."""
+    """Die voreingestellte kleine Welt: 3 Ligen, 4 Autos, 2 Rennen."""
     return verkleinert()
 
 

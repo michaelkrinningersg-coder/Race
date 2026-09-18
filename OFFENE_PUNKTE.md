@@ -1756,10 +1756,50 @@ Renndistanz. Voreingestellt schrumpfen nur die ersten beiden:
 | Größe | Voreinstellung | Gemessen | Warum nicht kleiner |
 | --- | --- | --- | --- |
 | Ligen × Autos | 3 × 4 statt 20 × 30 | 54,27 s → 1,45 s je Wochenende | — |
+| Rennen je Saison | 2 statt 20 — erstes und letztes | 18:33 → 11:33 im ganzen Lauf | Zwei zeigen beides: dass Punkte sich summieren und dass eine Saison endet |
 | Renndistanz | echt (100 km) | 24,5 s → 8,8 s bei 30 km | Bei sechs Runden trägt kein Boxenstopp; die Reifenstrategie findet keine Variante, fünf Tests fallen aus |
-| Rennen je Saison | echt (20) | — | Die Saison endet im Test, die Oberfläche meldet es per Dialog |
+
+Dass die Saison im Test wirklich zu Ende geht, ist gewollt; die Dialoge,
+die das meldeten, fängt das Fixture oben ab. Zwei Dateien brauchen mehr:
+`test_bilanz.py` summiert über vier Rennen, und die Fahrerkarte zeigt den
+Punkteverlauf der **laufenden** Saison — nach dem letzten Rennen gehört er
+der Historie und das Diagramm ist leer. Beide fordern ihren Kalender
+selbst an: `verkleinert(rennen=4)`.
+
+Mitgewachsen ist auch der Auf- und Abstieg. Drei von dreißig sind ein
+Zehntel; blieben es drei, müsste bei vier Autos derselbe Fahrer zugleich
+auf- und absteigen, und der Saisonwechsel bräche mit genau dieser Meldung
+ab. `verkleinert()` rechnet denselben Anteil aufs kleine Feld: einer hoch,
+einer runter. Dasselbe gilt für `rennen.autos` — dieselbe Zahl wie
+`ligen.autos_je_liga`, nur aus dem Blickwinkel des einzelnen Rennens;
+blieb sie auf 30, rechneten Preisgeld und Wertung mit einem Feld, das gar
+nicht antrat.
 
 Die getesteten Regeln sind größeninvariant: Auf- und Abstieg,
 Punktevergabe und Tabellensortierung stimmen mit drei Ligen zu je vier
 Autos genauso. Wo die Größe selbst Gegenstand ist — die Ligastruktur über
-zwanzig Stufen —, steht `kf.lade()` daneben.
+zwanzig Stufen, oder die Frage, ob sich ein Nachname mit einem Teamnamen
+überschneidet —, steht `kf.lade()` daneben.
+
+**Was das kleine Feld aufgedeckt hat.** Drei Fehler, die in der großen
+Welt nur niemandem auffielen:
+
+* **Die Karte des Spielers ging nicht auf.** `verbinde_fahrerkarte`
+  prüfte die Fahrernummer mit `if nummer:` — und der Spieler hat die
+  Nummer **0**. Doppelklick und Rechtsklick auf seine eigene Zeile taten
+  deshalb nichts. In der großen Welt stand er selten in der ersten Zeile,
+  im kleinen Feld immer. Jetzt gilt `is not None`. Dieselbe Verwechslung
+  saß in der Rangliste des Rennens: Dort heißt 0 „kein Fahrer dahinter",
+  weil ein Feld aus `rennen.starterfeld` keine Fahrer hat — das ist jetzt
+  daran erkennbar, dass **alle** die 0 tragen, und nicht mehr an der
+  einzelnen Null.
+* **Die Gripkurve und ihre Tests liefen auseinander.** Das Optimum steht
+  seit dem Umbau bei 85 % Restprofil, vier Tests prüften weiter 80 %. Sie
+  fielen seitdem durch; niemand hatte sie nachgezogen. Die Tests lesen die
+  Stützstellen jetzt aus der Konfiguration, statt die Zahlen zu wiederholen.
+* **Ohne Erfahrung geht am 1. Januar gar nichts.** Seit Punkt 66 kostet
+  jeder Zeitkauf Erfahrung (2 EP für den ersten). Zu Saisonbeginn hat der
+  Spieler 0 EP, und Erfahrung gibt es nur fürs Fahren — bis zum ersten
+  Rennen lässt sich also kein einziger Tag belegen. Das folgt aus der
+  Entscheidung und ist kein Fehler im Code; ob es so bleiben soll, ist
+  eine Frage an den Auftraggeber.

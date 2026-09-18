@@ -24,14 +24,17 @@ LIGA = KLEINE_LIGEN
 
 
 @pytest.fixture(scope="module")
-def k(kleine_konfiguration) -> kf.Konfiguration:
-    """Punkt 77: laeuft auf der kleinen Welt aus ``conftest``.
+def k() -> kf.Konfiguration:
+    """Punkt 77: kleine Welt, aber vier Rennen je Saison.
 
-    Drei Ligen zu je vier Autos statt zwanzig zu je dreissig. Geprueft
-    wird, *ob* die Logik stimmt - dafuer genuegt das kleine Feld, und ein
-    Rennwochenende kostet 1,5 statt 54 Sekunden.
+    Diese Datei summiert ueber mehrere Rennwochenenden - die Bilanz ueber
+    vier Rennen ist hier Gegenstand, nicht Beiwerk. Der Kalender bleibt
+    deshalb laenger als die zwei Rennen der Voreinstellung; Ligen und
+    Feldgroesse schrumpfen wie ueberall.
     """
-    return kleine_konfiguration
+    from tests.conftest import verkleinert
+
+    return verkleinert(rennen=4)
 
 
 @pytest.fixture(scope="module")

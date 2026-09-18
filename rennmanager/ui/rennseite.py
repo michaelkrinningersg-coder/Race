@@ -987,7 +987,14 @@ class Rennseite(QWidget):
                 return None
             if not 0 <= int(stelle) < len(self._verlauf.teilnehmer):
                 return None
-            return self._verlauf.teilnehmer[int(stelle)].nummer or None
+            nummer = self._verlauf.teilnehmer[int(stelle)].nummer
+            # Ein Feld aus ``rennen.starterfeld`` hat keine Fahrer
+            # dahinter - dort traegt **jeder** die 0. Die Null eines
+            # echten Feldes gehoert dagegen dem Spieler, und seine Karte
+            # ging deshalb frueher nicht auf.
+            if nummer == 0 and all(t.nummer == 0 for t in self._verlauf.teilnehmer):
+                return None
+            return nummer
 
         return nummer_von
 

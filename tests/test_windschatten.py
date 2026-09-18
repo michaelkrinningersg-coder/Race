@@ -139,12 +139,13 @@ def gemischtes_feld(k, anzahl: int = 10) -> tuple[kr.Teilnehmer, ...]:
 
 
 def test_wer_ueberrundet_wird_nicht_aufgehalten(k, strecke) -> None:
-    """Punkt 12: Der Ueberrundende faehrt, als waere die Strecke frei.
+    """Punkt 12 und Punkt 68: Der Ueberrundende verliert nichts - er gewinnt.
 
-    Die Folgeregel aus GDD 4 haengt an der *zurueckgelegten Distanz*, nicht
-    an der Position auf der Strecke. Ein ueberrundetes Auto liegt damit
-    eine ganze Rundenlaenge zurueck und kommt dem Ueberrundenden nie in
-    das 0,05-Sekunden-Fenster. Dieser Test haelt das fest.
+    Frueher stand hier, der Verkehr aendere ueberhaupt nichts: Der Sog hing
+    an der *zurueckgelegten Distanz*, und ein Ueberrundeter liegt eine ganze
+    Runde zurueck. Seit Punkt 68 zaehlt die Position auf der Strecke: Der
+    Ueberrundende bekommt Sog, der Ueberrundete nicht. Der Verkehr darf ihn
+    also schneller machen - aufhalten darf er ihn in keiner Runde.
     """
     mittel = kr.mittlerer_ueberholzonenanteil(k, (strecke,))
     im_verkehr = kr.simuliere(
@@ -158,10 +159,17 @@ def test_wer_ueberrundet_wird_nicht_aufgehalten(k, strecke) -> None:
         k, strecke, gemischtes_feld(k)[:1], runden=12, seedquelle=Seedquelle(5),
         streckenmittel=mittel,
     )
-    assert (
-        im_verkehr.protokolle[0].rundenzeiten_ms
-        == allein.protokolle[0].rundenzeiten_ms
+    zeiten = list(
+        zip(
+            im_verkehr.protokolle[0].rundenzeiten_ms,
+            allein.protokolle[0].rundenzeiten_ms,
+            strict=True,
+        )
     )
+    # Keine einzige Runde kostet Zeit ...
+    assert all(mit_verkehr <= frei for mit_verkehr, frei in zeiten)
+    # ... und in den Runden, in denen er ueberrundet, bringt der Sog etwas.
+    assert min(mit_verkehr - frei for mit_verkehr, frei in zeiten) < 0
 
 
 def test_der_ueberrundende_faellt_in_keiner_runde_ab(k, strecke) -> None:

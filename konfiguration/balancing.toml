@@ -1880,7 +1880,7 @@ streuung_tempo = 0.002
 verlauf = "optimum_bei_85"
 zustand_stuetzstellen = [1.00, 0.95, 0.90, 0.85, 0.80, 0.70, 0.65, 0.60, 0.50, 0.40, 0.30, 0.20, 0.10, 0.00]
 grip_stuetzstellen   = [0.880, 0.970, 0.992, 1.000, 0.998, 0.986, 0.982, 0.975, 0.956, 0.928, 0.830, 0.690, 0.510, 0.300]
-# Der Boden ist genau ein Viertel des Startgrips: 0,235 = 0,25 * 0,940.
+# Der Boden liegt bei 0,300 - gut ein Drittel des frischen Reifens (0,880).
 exponent = 2.0
 # Der Tempoverlust steht nicht mehr hier: Er kommt aus der Gripkurve
 # oben. Zwei Modelle nebeneinander haetten gegeneinander gerechnet.

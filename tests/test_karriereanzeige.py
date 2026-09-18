@@ -27,6 +27,7 @@ from rennmanager.ui.kalenderstreifen import (  # noqa: E402
     Kalenderstreifen,
 )
 from rennmanager.ui.punkteansicht import Punkteansicht  # noqa: E402
+from tests.test_ui import mit_erfahrung  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -97,6 +98,7 @@ def test_kalenderstreifen_zeigt_belegte_tage(qtbot, konfig) -> None:
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
     seite = fenster.karriereseite
+    mit_erfahrung(seite.karriere)
     streifen = seite.kalenderstreifen
     davor = streifen.zaehle()
     assert davor["halb"] == 0

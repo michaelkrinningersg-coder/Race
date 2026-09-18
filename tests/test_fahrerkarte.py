@@ -26,14 +26,19 @@ from rennmanager.ui.laufbahnansicht import Laufbahnansicht  # noqa: E402
 
 
 @pytest.fixture(scope="module")
-def konfig(kleine_konfiguration) -> kf.Konfiguration:
-    """Punkt 77: laeuft auf der kleinen Welt aus ``conftest``.
+def konfig() -> kf.Konfiguration:
+    """Punkt 77: kleine Welt, aber vier Rennen je Saison.
 
-    Drei Ligen zu je vier Autos statt zwanzig zu je dreissig. Geprueft
-    wird, *ob* die Logik stimmt - dafuer genuegt das kleine Feld, und ein
-    Rennwochenende kostet 1,5 statt 54 Sekunden.
+    Drei Ligen zu je vier Autos statt zwanzig zu je dreissig - geprueft
+    wird, *ob* die Karte das Richtige liest, und dafuer genuegt das
+    kleine Feld. Beim Kalender geht es hier aber nicht: Der Punkteverlauf
+    gehoert der **laufenden** Saison, und mit zwei Rennen waere sie nach
+    dem zweiten schon zu Ende - der Verlauf steht dann in der Historie
+    und das Diagramm ist leer.
     """
-    return kleine_konfiguration
+    from tests.conftest import verkleinert
+
+    return verkleinert(rennen=4)
 
 
 @pytest.fixture
@@ -246,7 +251,8 @@ def test_doppelklick_oeffnet_aus_jeder_liste(fenster) -> None:
         zeile = liste.topLevelItem(0)
         assert zeile is not None
         nummer = zeile.data(0, Qt.UserRole)
-        assert nummer, f"Zeile ohne Fahrernummer in {liste}"
+        # Null ist eine gueltige Fahrernummer - der Spieler hat sie.
+        assert nummer is not None, f"Zeile ohne Fahrernummer in {liste}"
         liste.itemDoubleClicked.emit(zeile, 0)
         assert nummer in fenster._karten
         assert fenster._karten[nummer].fahrer.nummer == nummer

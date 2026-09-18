@@ -103,13 +103,15 @@ def verbinde_fahrerkarte(liste, oeffne, nummer_von=fahrernummer) -> None:
     """
 
     def doppelklick(zeile, _spalte: int = 0) -> None:
+        # Null ist eine gueltige Fahrernummer - der Spieler hat sie. Ein
+        # ``if nummer:`` liess ausgerechnet seine Karte nicht aufgehen.
         nummer = nummer_von(zeile)
-        if nummer:
+        if nummer is not None:
             oeffne(int(nummer))
 
     def menue(stelle) -> None:
         zeile = liste.itemAt(stelle)
-        if zeile is None or not nummer_von(zeile):
+        if zeile is None or nummer_von(zeile) is None:
             return
         klappe = QMenu(liste)
         eintrag = klappe.addAction("Fahrerkarte oeffnen")

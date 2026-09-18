@@ -39,9 +39,9 @@ def test_frische_reifen_kosten_nichts(k) -> None:
     auto = ka.gleichverteilt(k, 50_000)
     assert rf.zustand(0.0) == 1.0
     # Punkt 39: Ein frischer Reifen ist **nicht** der schnellste - das
-    # Optimum liegt bei 80 % Restprofil. Er ist aber nah dran.
+    # Optimum liegt bei 85 % Restprofil. Er ist aber nah dran.
     assert rf.tempofaktor(k, auto, 0.0) < 1.0
-    assert rf.tempofaktor(k, auto, 0.2) == pytest.approx(1.0)
+    assert rf.tempofaktor(k, auto, 0.15) == pytest.approx(1.0)
 
 
 def test_abgefahrene_reifen_kosten_tempo(k) -> None:
@@ -55,18 +55,29 @@ def test_abgefahrene_reifen_kosten_tempo(k) -> None:
     )
 
 
-def test_der_grip_hat_sein_optimum_bei_achtzig_prozent(k) -> None:
+def test_der_grip_hat_sein_optimum_bei_fuenfundachtzig_prozent(k) -> None:
     """Punkt 39: Ein frischer Reifen muss erst arbeiten.
 
     Genau das macht einen langen Stint wertvoll und einen fruehen Stopp
-    riskant. Die alte Parabel fiel ab der ersten Runde.
+    riskant. Die alte Parabel fiel ab der ersten Runde. Das Optimum steht
+    in der Konfiguration (Kurve "optimum_bei_85"), nicht hier.
     """
+    einstellung = k.wert("reifen", "verschleiss")
+    bestes_profil = max(
+        zip(
+            einstellung["grip_stuetzstellen"],
+            einstellung["zustand_stuetzstellen"],
+            strict=True,
+        )
+    )[1]
     werte = [(rf.grip(k, z / 100.0), z) for z in range(101)]
-    assert max(werte)[1] == 80
-    assert rf.grip(k, 1.0) < rf.grip(k, 0.8)
+    assert max(werte)[1] == round(bestes_profil * 100)
+    assert rf.grip(k, 1.0) < rf.grip(k, bestes_profil)
     assert rf.grip(k, 0.95) > rf.grip(k, 1.0)
-    # Bei null bleibt ein Viertel des Startgrips.
-    assert rf.grip(k, 0.0) == pytest.approx(rf.grip(k, 1.0) / 4.0, rel=0.02)
+    # Am Boden bleibt die unterste Stuetzstelle - deutlich unter der Haelfte
+    # des frischen Reifens.
+    assert rf.grip(k, 0.0) == pytest.approx(min(einstellung["grip_stuetzstellen"]))
+    assert rf.grip(k, 0.0) < rf.grip(k, 1.0) / 2.0
 
 
 def test_die_fehlerquote_folgt_derselben_kurve(k) -> None:
@@ -74,7 +85,7 @@ def test_die_fehlerquote_folgt_derselben_kurve(k) -> None:
     Stelle. Frueher stieg die Fehlerquote schon, waehrend die Reifen noch
     besser wurden."""
     auto = mit(k, rf.FLUESTERER, 0)
-    im_optimum = rf.fehlerfaktor(k, auto, 0.2)
+    im_optimum = rf.fehlerfaktor(k, auto, 0.15)
     frisch = rf.fehlerfaktor(k, auto, 0.0)
     abgefahren = rf.fehlerfaktor(k, auto, 0.9)
     assert im_optimum == pytest.approx(1.0)
@@ -83,17 +94,17 @@ def test_die_fehlerquote_folgt_derselben_kurve(k) -> None:
 
 
 def test_der_abfall_wird_gegen_ende_steiler(k) -> None:
-    """Die Form der Kurve: ab 60 % nimmt der Gripverlust je Prozent zu.
+    """Die Form der Kurve: ab dem Optimum nimmt der Gripverlust zu.
 
     Frueher stand hier eine Parabel, die schon ab dem ersten Meter fiel.
-    Jetzt faellt der Grip erst ab dem Optimum bei 80 %, dann flach, und
+    Jetzt faellt der Grip erst ab dem Optimum bei 85 %, dann flach, und
     gegen Ende steil.
     """
-    stufen = [0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.0]
+    stufen = [0.85, 0.65, 0.45, 0.25, 0.05]
     grips = [rf.grip(k, z) for z in stufen]
     # Ab dem Optimum faellt er durchgehend.
     assert grips == sorted(grips, reverse=True)
-    # Und je Zehntel immer staerker.
+    # Und je Fuenftel immer staerker.
     schritte = [grips[i] - grips[i + 1] for i in range(len(grips) - 1)]
     assert schritte == sorted(schritte)
 
