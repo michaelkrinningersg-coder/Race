@@ -52,8 +52,15 @@ Maschine - eingestellt in `pyproject.toml`, `pytest` allein genuegt also.
 Verteilt wird **je Datei** (`--dist loadfile`) und nicht je Test: Mehrere
 Dateien rechnen ein Rennen einmal in einem Fixture mit Modulgueltigkeit
 und zeigen es dann in jedem Test; auf mehrere Prozesse verstreut,
-rechnete jeder Prozess dasselbe Rennen noch einmal. Gemessen auf vier
-Kernen: **3:18 statt 9:10**.
+rechnete jeder Prozess dasselbe Rennen noch einmal.
+
+Weil je Datei verteilt wird, bestimmt die **laengste Datei**, wie lange
+der ganze Lauf dauert. Deshalb sind die beiden laengsten aufgeteilt: Die
+Oberflaechen-Tests stehen in vier Dateien (`test_ui`, `test_ui_rennen`,
+`test_ui_welt`, `test_ui_karriere`), die Boxenstopp-Tests in vier
+Dateien im Ordner `tests/boxenstopp/`. Was sie sich teilen, steht in
+`tests/oberflaeche.py` und in `tests/boxenstopp/conftest.py`. Gemessen
+auf vier Kernen: **2:39 statt 9:10**.
 
 Wer einen einzelnen Fehler sucht, haengt `-n0` an. Dann laeuft alles
 wieder in einem Prozess - mit lesbarer Ausgabe, brauchbarem `--pdb` und

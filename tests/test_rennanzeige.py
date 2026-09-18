@@ -51,10 +51,10 @@ def vierrundenrennen(konfig):
     gemessen 4,85 Sekunden mal siebzehn Tests. Gezeigt wird er weiter je
     Test frisch, damit kein Test die Anzeige des naechsten verstellt.
     """
-    from tests.test_ui import _rennverlauf
+    from tests.oberflaeche import rennverlauf
 
     fenster = Hauptfenster(konfig)
-    daten = _rennverlauf(fenster, runden=4)
+    daten = rennverlauf(fenster, runden=4)
     fenster.close()
     return daten
 
@@ -366,11 +366,11 @@ def test_die_pfeile_stehen_in_der_richtigen_farbe(gefahren) -> None:
 
 def test_in_der_ersten_runde_bleibt_die_spalte_leer(qtbot, konfig) -> None:
     """Es gibt noch keine vorige Runde, mit der sich vergleichen liesse."""
-    from tests.test_ui import _kurzes_rennen
+    from tests.oberflaeche import kurzes_rennen
 
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
-    seite = _kurzes_rennen(fenster, runden=4)
+    seite = kurzes_rennen(fenster, runden=4)
     seite._halte_an()
     seite._springe(0)
     for stelle in range(seite.rangliste.topLevelItemCount()):

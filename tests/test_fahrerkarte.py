@@ -181,7 +181,7 @@ def test_laufbahn_bleibt_vor_dem_saisonwechsel_leer(fenster) -> None:
 
 
 def test_laufbahn_zeigt_jede_abgeschlossene_saison(fenster, konfig) -> None:
-    from tests.test_ui import fahre_saison_zu_ende
+    from tests.oberflaeche import fahre_saison_zu_ende
 
     nummer = fenster.welt.spieler.nummer
     for _ in range(2):
@@ -262,9 +262,9 @@ def test_doppelklick_im_rennen_findet_den_fahrer(qtbot, konfig) -> None:
     """Die Rangliste fuehrt die Startnummer im Feld, nicht die des Fahrers."""
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
-    from tests.test_ui import _kurzes_rennen
+    from tests.oberflaeche import kurzes_rennen
 
-    seite = _kurzes_rennen(fenster)
+    seite = kurzes_rennen(fenster)
     seite._halte_an()
     seite._springe(seite.verlauf.dauer_ms * 0.6)
 
@@ -285,7 +285,7 @@ def test_zweiter_doppelklick_oeffnet_kein_zweites_fenster(fenster) -> None:
 
 def test_saisonwechsel_schliesst_offene_karten(fenster, konfig) -> None:
     """Nach Auf- und Abstieg ist die Welt eine neue."""
-    from tests.test_ui import fahre_saison_zu_ende
+    from tests.oberflaeche import fahre_saison_zu_ende
 
     fenster.oeffne_fahrerkarte(4)
     assert fenster._karten

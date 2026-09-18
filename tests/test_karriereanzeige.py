@@ -270,7 +270,7 @@ def test_punkteverlauf_zeichnet_und_haelt_den_leeren_fall_aus(qtbot) -> None:
 
 def test_punkteverlauf_wird_beim_saisonwechsel_geleert(qtbot, konfig) -> None:
     """GDD 13: Der Endstand wandert in die Historie, der Verlauf faengt neu an."""
-    from tests.test_ui import fahre_saison_zu_ende
+    from tests.oberflaeche import fahre_saison_zu_ende
 
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)

@@ -321,7 +321,7 @@ def test_die_bestmarken_nennen_strecke_karriere_und_saison(fenster, k) -> None:
 
 
 def test_die_bestmarken_kennen_die_beste_saison(fenster, k) -> None:
-    from tests.test_ui import fahre_saison_zu_ende
+    from tests.oberflaeche import fahre_saison_zu_ende
 
     fahre_saison_zu_ende(k, fenster.saisonseite)
     fenster.saisonseite.knopf_naechste_saison.click()
@@ -396,7 +396,7 @@ def test_die_ligamarken_kommen_aus_der_historie(fenster, k) -> None:
     Karrieresieger derselbe sein wie der Saisonsieger, solange erst eine
     Saison abgeschlossen ist.
     """
-    from tests.test_ui import fahre_saison_zu_ende
+    from tests.oberflaeche import fahre_saison_zu_ende
 
     fahre_saison_zu_ende(k, fenster.saisonseite)
     fenster.saisonseite.knopf_naechste_saison.click()
@@ -430,7 +430,7 @@ def test_die_ligamarken_kommen_aus_der_historie(fenster, k) -> None:
 
 
 def test_karriere_in_liga_summiert_nur_diese_liga(fenster, k) -> None:
-    from tests.test_ui import fahre_saison_zu_ende
+    from tests.oberflaeche import fahre_saison_zu_ende
 
     fahre_saison_zu_ende(k, fenster.saisonseite)
     fenster.saisonseite.knopf_naechste_saison.click()

@@ -222,7 +222,7 @@ def test_am_saisonende_ist_der_knopf_aus(fenster, konfig) -> None:
     Der Wechsel ins naechste Jahr steht im Reiter Saison; hier steht nur,
     dass die Saison gefahren ist.
     """
-    from tests.test_ui import fahre_saison_zu_ende
+    from tests.oberflaeche import fahre_saison_zu_ende
 
     seite = fenster.wochenendeseite
     # Setzt denselben Saisonlauf auf beendet, den auch die Seite haelt.

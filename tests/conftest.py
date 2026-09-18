@@ -139,6 +139,30 @@ def verkleinert(
     return replace(gross, roh=roh)
 
 
+@pytest.fixture(scope="module")
+def konfig(kleine_konfiguration):
+    """Die kleine Welt fuer alle Oberflaechen-Tests (Punkt 77).
+
+    Jeder dieser Tests baut ein ganzes ``Hauptfenster`` - und damit eine
+    Welt, eine Karriere und alle Seiten. In voller Groesse sind das 600
+    Fahrer je Fenster. Geprueft wird dort, ob die Oberflaeche das
+    Richtige liest und zeichnet; dafuer genuegen drei Ligen zu je vier
+    Autos. Wo die Groesse selbst Gegenstand ist, steht
+    ``grosse_konfiguration`` daneben - und wer etwas anderes braucht,
+    ueberschreibt ``konfig`` in seiner Datei (so machen es
+    ``test_rennanzeige`` und ``test_fahrerkarte``).
+    """
+    return kleine_konfiguration
+
+
+@pytest.fixture(scope="module")
+def grosse_konfiguration():
+    """Die echte Konfiguration mit 20 Ligen zu je 30 Autos."""
+    from rennmanager import konfiguration as kf
+
+    return kf.lade()
+
+
 @pytest.fixture(scope="session")
 def kleine_konfiguration():
     """Die voreingestellte kleine Welt: 3 Ligen, 4 Autos, 2 Rennen."""
