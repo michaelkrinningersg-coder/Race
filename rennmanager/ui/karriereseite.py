@@ -117,6 +117,10 @@ class Karriereseite(QWidget):
     def zeige_namen(self, namen: dict[int, str]) -> None:
         """Ersetzt 'Fahrer 401' durch den wirklichen Namen."""
         self._fuelle_fahrerwahl(namen)
+        # Punkt 56: Ereignisse treffen einzelne Fahrer; die Meldung nennt
+        # den Namen. Der Kern kennt nur Nummern.
+        self._karriere.benenne_fahrer(namen)
+        self._zeichne()
 
     # -- Aufbau ------------------------------------------------------------
     def _baue_kopf(self) -> QHBoxLayout:

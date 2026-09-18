@@ -70,12 +70,15 @@ def test_fehlerrate_bleibt_eine_wahrscheinlichkeit(k) -> None:
     assert zf.fehlerrate_je_runde(k, auto, wetterfaktor=100.0, reifenfaktor=100.0) <= 1.0
 
 
-def test_zeitverlust_liegt_im_band(k) -> None:
+def test_der_zeitverlust_ist_fest(k) -> None:
+    """Punkt 61: eine feste Zeit, keine Spanne - und zwar im Stand."""
+    fest = k.wert("fehler", "zeitverlust_ms")
     wuerfel = np.random.default_rng(1)
-    unten = k.wert("fehler", "zeitverlust_min_ms")
-    oben = k.wert("fehler", "zeitverlust_max_ms")
-    for _ in range(200):
-        assert unten <= zf.zeitverlust_ms(k, wuerfel) <= oben
+    assert fest > 0
+    for _ in range(20):
+        assert zf.zeitverlust_ms(k, wuerfel) == fest
+    # Auch ohne Wuerfel; der Parameter ist nur noch Altlast.
+    assert zf.zeitverlust_ms(k) == fest
 
 
 # -- Defekte ----------------------------------------------------------------
@@ -196,3 +199,53 @@ def test_ohne_zufall_gibt_es_keine_zwischenfaelle(k, strecken) -> None:
     )
     assert verlauf.zwischenfaelle == ()
     assert verlauf.reifenzustand[-1].min() == pytest.approx(1.0)
+
+
+# -- Punkt 61: Der Fehler kostet Zeit im Stand ------------------------------
+def test_ein_fehler_stellt_das_auto_und_laesst_es_wieder_anfahren(k) -> None:
+    """Kein Zeitabzug, sondern Stillstand mit Wiederanfahren.
+
+    Gemessen am Tempo: Es faellt auf 0, bleibt die feste Zeit dort und
+    steigt danach ueber die Beschleunigungskurve wieder an - nicht
+    sprunghaft auf das alte Tempo.
+    """
+    from rennmanager.kern import auto as kern_auto
+    from rennmanager.kern import rennen as kr
+    from rennmanager.kern import strecke as kern_strecke
+    from rennmanager.kern.zufall import Seedquelle
+
+    strecke = kern_strecke.lade(k, k.strecken[0]["name"])
+    feld = tuple(
+        kr.Teilnehmer(
+            auto=kern_auto.gleichverteilt(k, 50_000, kuerzel=f"A{i}"),
+            startplatz=i + 1,
+            farbe="#888888",
+        )
+        for i in range(2)
+    )
+    lauf = kr._Lauf(
+        k, strecke, feld, runden=3, seedquelle=Seedquelle(1),
+        streckenmittel=kr.mittlerer_ueberholzonenanteil(k, (strecke,)),
+    )
+    lauf.aktiv[:] = True
+    lauf.distanz[:] = [2000.0, 500.0]
+    lauf.reaktion[:] = 0.0
+    for _ in range(5):  # erst einmal auf Tempo kommen
+        lauf.schritt(0, 0.02)
+    schnell = float(lauf.tempo[0])
+    assert schnell > 0.0
+
+    lauf.pause_ms[0] = float(zf.zeitverlust_ms(k))
+    lauf.schritt(0, 0.02)
+    assert lauf.tempo[0] == 0.0  # steht sofort
+
+    # Waehrend der Pause bleibt es stehen.
+    schritte = int(zf.zeitverlust_ms(k) / 20) - 1
+    for _ in range(schritte):
+        lauf.schritt(0, 0.02)
+        assert lauf.tempo[0] == 0.0
+
+    # Danach faehrt es wieder an - aber nicht sofort auf das alte Tempo.
+    lauf.schritt(0, 0.02)
+    lauf.schritt(0, 0.02)
+    assert 0.0 < lauf.tempo[0] < schnell

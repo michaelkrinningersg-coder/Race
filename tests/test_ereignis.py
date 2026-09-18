@@ -341,3 +341,75 @@ def test_kopie_teilt_den_zustand_nicht(k):
     assert c.lage.laufende
     assert c.defekte
     assert not c.verlorene_tage
+
+
+# --- Punkt 56: Ereignisse treffen einzelne Fahrer -------------------------
+def test_ein_ereignis_trifft_einen_fahrer_nicht_das_team(k) -> None:
+    """Eine Erkaeltung hat einer, nicht alle vier.
+
+    Vorher fuehrte die Karriere **eine** Lage fuers ganze Team; jedes
+    Ereignis wirkte damit auf alle Autos zugleich.
+    """
+    from rennmanager.kern import karriere as kk
+    from rennmanager.kern.zufall import Seedquelle
+
+    c = kk.beginne(k, 2026, liga=20, fahrer=(1, 2, 3, 4), seedquelle=Seedquelle(7))
+    for _ in range(90):
+        try:
+            c.tag_weiter()
+        except kk.KarriereFehler:
+            break
+    betroffen = {
+        nummer
+        for nummer, lage in c.lage_je_fahrer.items()
+        if lage.aktive
+    }
+    assert c.meldungen, "In 90 Tagen muss etwas passiert sein"
+    # Nicht alle vier auf einmal - sonst waere es wieder das Team.
+    assert len(betroffen) < len(c.autos) or any(
+        len(c.lage_je_fahrer[a].aktive) != len(c.lage_je_fahrer[b].aktive)
+        for a in c.autos
+        for b in c.autos
+    )
+
+
+def test_die_meldung_nennt_den_getroffenen_fahrer(k) -> None:
+    from rennmanager.kern import karriere as kk
+    from rennmanager.kern.zufall import Seedquelle
+
+    c = kk.beginne(k, 2026, liga=20, fahrer=(1, 2, 3, 4), seedquelle=Seedquelle(7))
+    c.benenne_fahrer(
+        {1: "Aaron Abt", 2: "Bodo Berg", 3: "Cem Cetin", 4: "Dirk Daum"}
+    )
+    for _ in range(90):
+        try:
+            c.tag_weiter()
+        except kk.KarriereFehler:
+            break
+    assert c.meldungen
+    for meldung in c.meldungen:
+        assert meldung.fahrer in c.autos
+        assert meldung.fahrername in c.fahrernamen.values()
+        assert meldung.fahrername in meldung.zeile
+
+
+def test_jeder_fahrer_zaehlt_seine_ereignisse_selbst_herunter(k) -> None:
+    """Der Zyklus laeuft fuer alle, aber jeder hat seine eigenen."""
+    from rennmanager.kern import karriere as kk
+
+    c = kk.beginne(k, 2026, liga=20, fahrer=(1, 2))
+    schluessel = next(
+        eintrag["schluessel"]
+        for eintrag in ev.liste(k)
+        if ev.dauer_von(eintrag) is ev.Dauer.RENNWOCHENENDEN
+        and eintrag["dauer"]["anzahl"] > 1
+    )
+    c.waehle_fahrer(1)
+    c.lage.loese_aus(schluessel, c.heute)
+    offen = c.lage.aktive[0].rest
+
+    c.verbuche_rennen(platz=5, fahrer=1)
+    c.waehle_fahrer(1)
+    assert c.lage.aktive[0].rest == offen - 1
+    c.waehle_fahrer(2)
+    assert not c.lage.aktive

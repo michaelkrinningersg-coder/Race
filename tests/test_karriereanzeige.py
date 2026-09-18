@@ -30,8 +30,14 @@ from rennmanager.ui.punkteansicht import Punkteansicht  # noqa: E402
 
 
 @pytest.fixture(scope="module")
-def konfig() -> kf.Konfiguration:
-    return kf.lade()
+def konfig(kleine_konfiguration) -> kf.Konfiguration:
+    """Punkt 77: laeuft auf der kleinen Welt aus ``conftest``.
+
+    Drei Ligen zu je vier Autos statt zwanzig zu je dreissig. Geprueft
+    wird, *ob* die Logik stimmt - dafuer genuegt das kleine Feld, und ein
+    Rennwochenende kostet 1,5 statt 54 Sekunden.
+    """
+    return kleine_konfiguration
 
 
 def zeichne(widget) -> QImage:

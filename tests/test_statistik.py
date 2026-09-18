@@ -19,8 +19,14 @@ from rennmanager.kern.zufall import Seedquelle
 
 
 @pytest.fixture(scope="module")
-def k() -> kf.Konfiguration:
-    return kf.lade()
+def k(kleine_konfiguration) -> kf.Konfiguration:
+    """Punkt 77: laeuft auf der kleinen Welt aus ``conftest``.
+
+    Drei Ligen zu je vier Autos statt zwanzig zu je dreissig. Geprueft
+    wird, *ob* die Logik stimmt - dafuer genuegt das kleine Feld, und ein
+    Rennwochenende kostet 1,5 statt 54 Sekunden.
+    """
+    return kleine_konfiguration
 
 
 @pytest.fixture
@@ -184,7 +190,7 @@ def test_titel_und_laufbahn_lassen_sich_nachschlagen(k, statistik):
 def test_der_saisonlauf_fuellt_die_statistik(k):
     """Ein Rennwochenende muss Rekorde, Karriere und Punkte fuellen."""
     strecken = st.lade_alle(k)
-    welt = kw.erzeuge(k, Seedquelle(2).zweig("welt"), spielerliga=20)
+    welt = kw.erzeuge(k, Seedquelle(2).zweig("welt"), spielerliga=k.wert("ligen", "anzahl"))
     lauf = sa.Saisonlauf(k, welt, Seedquelle(2), jahr=2026, strecken=strecken)
     wochenende = lauf.fahre_rennen()
 
@@ -206,7 +212,7 @@ def test_der_saisonlauf_fuellt_die_statistik(k):
 def test_die_streckenkenntnis_waechst_mit_dem_saisonlauf(k):
     """GDD 6: mit jedem Start und jeder gefahrenen Runde."""
     strecken = st.lade_alle(k)
-    welt = kw.erzeuge(k, Seedquelle(2).zweig("welt"), spielerliga=20)
+    welt = kw.erzeuge(k, Seedquelle(2).zweig("welt"), spielerliga=k.wert("ligen", "anzahl"))
     lauf = sa.Saisonlauf(k, welt, Seedquelle(2), jahr=2026, strecken=strecken)
     wochenende = lauf.fahre_rennen()
 

@@ -17,14 +17,21 @@ from rennmanager.kern import strecke as st
 from rennmanager.kern import welt as kw
 from rennmanager.kern.wetter import Abschnitt, Wetterverlauf
 from rennmanager.kern.zufall import Seedquelle
+from tests.conftest import KLEINE_LIGEN
 
 SEED = 12
-LIGA = 20
+LIGA = KLEINE_LIGEN
 
 
 @pytest.fixture(scope="module")
-def k() -> kf.Konfiguration:
-    return kf.lade()
+def k(kleine_konfiguration) -> kf.Konfiguration:
+    """Punkt 77: laeuft auf der kleinen Welt aus ``conftest``.
+
+    Drei Ligen zu je vier Autos statt zwanzig zu je dreissig. Geprueft
+    wird, *ob* die Logik stimmt - dafuer genuegt das kleine Feld, und ein
+    Rennwochenende kostet 1,5 statt 54 Sekunden.
+    """
+    return kleine_konfiguration
 
 
 @pytest.fixture(scope="module")

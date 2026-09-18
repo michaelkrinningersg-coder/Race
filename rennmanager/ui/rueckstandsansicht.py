@@ -132,14 +132,30 @@ class Rueckstandsansicht(QWidget):
         werte = self._rueckstand[:, auf_runde] if auf_runde else self._rueckstand
         return float(np.nanmax(werte)) or 1.0
 
+    def _bis_zur_marke(self) -> int:
+        """Wie viele Stuetzstellen bis zum Stand der Wiedergabe gehoeren.
+
+        Das Diagramm zeigt nur, was schon gefahren ist - sonst stuende dem
+        Zuschauer der ganze Rennausgang vor Augen, waehrend die
+        Uebertragung noch in Runde drei laeuft. Ohne Marke (etwa im
+        Standbild ohne Wiedergabe) gilt der ganze Verlauf.
+        """
+        if self._marke_ms is None or self._zeiten is None:
+            return len(self._zeiten) if self._zeiten is not None else 0
+        bis = int(np.searchsorted(self._zeiten, self._marke_ms / 1000.0, "right"))
+        # Mindestens zwei Punkte, sonst gibt es keine Linie zu zeichnen.
+        return max(bis, 2)
+
     def _stelle(self, flaeche: QRectF, dauer: float, groesster: float, i: int):
         """Die Linie eines Autos als Folge von Bildpunkten.
 
         Was ueber die Achse hinausgeht, liegt am Rand - abgeschnitten wird
-        nichts, es ist nur nicht mehr aufgeloest.
+        nichts, es ist nur nicht mehr aufgeloest. Die Linie endet dort, wo
+        die Wiedergabe steht.
         """
-        x = flaeche.left() + self._zeiten / dauer * flaeche.width()
-        anteil = np.clip(self._rueckstand[:, i] / groesster, 0.0, 1.0)
+        bis = self._bis_zur_marke()
+        x = flaeche.left() + self._zeiten[:bis] / dauer * flaeche.width()
+        anteil = np.clip(self._rueckstand[:bis, i] / groesster, 0.0, 1.0)
         y = flaeche.top() + anteil * flaeche.height()
         return x, y
 

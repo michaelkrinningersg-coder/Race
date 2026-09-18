@@ -305,8 +305,13 @@ class Rennwochenendeseite(QWidget):
                 self._schritt = 1
             elif self._schritt == 1:
                 verlauf = self._wochenende.fahre_rennen()
+                # Punkt 73: Der Meisterschaftsstand **vor** diesem Rennen -
+                # daraus rechnet die Rennseite den Live-Stand.
                 self._rennen.zeige_verlauf(
-                    verlauf, self._wochenende.strecke, self._wochenende.qualifying
+                    verlauf,
+                    self._wochenende.strecke,
+                    self._wochenende.qualifying,
+                    tabelle=self._lauf.tabelle(self._wochenende.liga),
                 )
                 self._schritt = 2
             elif self._schritt == 2:

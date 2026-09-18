@@ -82,11 +82,18 @@ def test_beim_zweiten_sind_intervall_und_rueckstand_gleich(gefahren) -> None:
     assert zweiter.text(rs.SPALTE_INTERVALL) == zweiter.text(rs.SPALTE_ZEIT)
 
 
-def test_jedes_intervall_ist_positiv(gefahren) -> None:
+def test_jedes_intervall_traegt_ein_vorzeichen(gefahren) -> None:
+    """Punkt 75: echte Zeiten am Messpunkt - mit Vorzeichen.
+
+    Meist steht dort ein Plus. Wer zwischen zwei Messpunkten vorbeigeht,
+    war am letzten gemeinsamen Punkt aber noch hinten; dann steht ein
+    Minus, und das ist die Wahrheit, nicht ein Fehler. Geschaetzt oder
+    geglaettet wird nichts.
+    """
     _fenster, seite = gefahren
     for stelle in range(1, seite.rangliste.topLevelItemCount()):
         text = seite.rangliste.topLevelItem(stelle).text(rs.SPALTE_INTERVALL)
-        assert text.startswith("+"), text
+        assert text.startswith(("+", "-")), text
 
 
 # --- Punkt 3: Reifenbalken ------------------------------------------------
@@ -330,3 +337,88 @@ def test_in_der_ersten_runde_bleibt_die_spalte_leer(qtbot, konfig) -> None:
     seite._springe(0)
     for stelle in range(seite.rangliste.topLevelItemCount()):
         assert seite.rangliste.topLevelItem(stelle).text(rs.SPALTE_WECHSEL) == ""
+
+
+# --- Punkt 59: Die neue Aufteilung ----------------------------------------
+def test_rangliste_und_monitor_stehen_nebeneinander(gefahren) -> None:
+    """Beide haengen im selben waagerechten Teiler, nicht untereinander."""
+    from PySide6.QtWidgets import QSplitter
+
+    _fenster, seite = gefahren
+    teiler = seite.rangliste.parent()
+    while teiler is not None and not isinstance(teiler, QSplitter):
+        teiler = teiler.parent()
+    assert teiler is not None
+    assert teiler.orientation() == Qt.Horizontal
+    # Der Zeitenmonitor haengt im selben Teiler.
+    monitor = seite._monitorblaetter
+    assert monitor.parent() is teiler or monitor in (
+        teiler.widget(stelle) for stelle in range(teiler.count())
+    )
+
+
+def test_der_ticker_liegt_als_fussleiste_unten(gefahren) -> None:
+    """Die Zwischenfaelle stehen unter allem, in einem senkrechten Teiler."""
+    from PySide6.QtWidgets import QSplitter
+
+    _fenster, seite = gefahren
+    kasten = seite.ticker.parent()
+    while kasten is not None and not isinstance(kasten, QSplitter):
+        kasten = kasten.parent()
+    assert kasten is not None
+    assert kasten.orientation() == Qt.Vertical
+    # Und zwar als letztes, also unten.
+    assert kasten.widget(kasten.count() - 1).findChild(type(seite.ticker)) is not None
+
+
+# --- Punkt 73: Live-Meisterschaftsstand -----------------------------------
+def _mit_tabelle(seite, konfig):
+    """Gibt der Seite einen Meisterschaftsstand vor dem Rennen."""
+    from rennmanager.kern import wertung as wt
+
+    tabelle = wt.Tabelle(1)
+    tabelle.verbuche(
+        konfig,
+        [
+            wt.Rennergebnis(fahrer=t.nummer, rennplatz=platz, qualifyingplatz=platz)
+            for platz, t in enumerate(seite.verlauf.teilnehmer, start=1)
+        ],
+    )
+    seite.zeige_verlauf(seite.verlauf, seite._ansicht.strecke, tabelle=tabelle)
+    seite._halte_an()
+    seite._springe(seite.verlauf.dauer_ms * 0.7)
+    return tabelle
+
+
+def test_die_meisterschaft_zaehlt_die_punkte_der_lage_dazu(gefahren, konfig) -> None:
+    """Punkt 73: Stand bis hierher plus die Punkte fuer die Lage jetzt."""
+    _fenster, seite = gefahren
+    tabelle = _mit_tabelle(seite, konfig)
+    liste = seite._meisterschaft
+    assert liste.topLevelItemCount() == len(tabelle.eintraege)
+    # Jede Zeile traegt Punkte, und der Erste hat die meisten.
+    punkte = [
+        int(liste.topLevelItem(stelle).text(4))
+        for stelle in range(liste.topLevelItemCount())
+    ]
+    assert punkte == sorted(punkte, reverse=True)
+
+
+def test_die_meisterschaft_zeigt_den_zuwachs(gefahren, konfig) -> None:
+    """Die Spalte '+x' sagt, wie viel aus diesem Rennen dazukommt."""
+    _fenster, seite = gefahren
+    _mit_tabelle(seite, konfig)
+    liste = seite._meisterschaft
+    zuwaechse = [
+        liste.topLevelItem(stelle).text(5)
+        for stelle in range(liste.topLevelItemCount())
+    ]
+    mit_zuwachs = [z for z in zuwaechse if z]
+    assert mit_zuwachs
+    assert all(z.startswith("+") for z in mit_zuwachs)
+
+
+def test_ohne_tabelle_bleibt_die_meisterschaft_leer(gefahren) -> None:
+    """Ein Testrennen ohne Saison hat keinen Stand - und stuerzt nicht."""
+    _fenster, seite = gefahren
+    assert seite._meisterschaft.topLevelItemCount() == 0

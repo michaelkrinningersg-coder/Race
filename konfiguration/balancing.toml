@@ -378,6 +378,13 @@ sofortergebnis = true
 # Wiedergabe: Takt der Anzeige. 33 ms sind rund 30 Bilder je Sekunde, das
 # laeuft fluessig, ohne unnoetig Rechenzeit zu kosten.
 takt_ms = 33
+# Punkt 62: Rangliste und Zeitenmonitor werden seltener neu gefuellt als
+# die Karte. Bei jedem Bild sprangen die Zeiten so schnell um, dass sie
+# nicht zu lesen waren; 200 ms stehen ruhig genug. Einstellbar von 10 ms
+# bis 5 Sekunden - die Karte laeuft unabhaengig davon weiter fluessig.
+anzeige_takt_ms = 200
+anzeige_takt_min_ms = 10
+anzeige_takt_max_ms = 5000
 # Nach dem Berechnen laeuft das Rennen von selbst los.
 automatisch_starten = true
 # Vorgewaehlte Zeitrafferstufe: die kleinste, mit der das Rennen in etwa
@@ -1794,8 +1801,13 @@ max_anteil = 0.01
 # Der Wetter-Multiplikator aus [wetter.zustand] kommt obendrauf.
 rate_bei_null = 0.10
 rate_bei_maximum = 0.01
-zeitverlust_min_ms = 500
-zeitverlust_max_ms = 2000
+# Punkt 61: Ein Fehler kostet eine **feste** Zeit, und zwar im Stand:
+# Das Auto geht auf 0 km/h, steht diese Zeit und beschleunigt danach mit
+# seiner eigenen Beschleunigungskurve wieder an. Der wirkliche Verlust ist
+# deshalb groesser als die Zahl hier - das Wiederanfahren kommt obendrauf.
+# 1250 ms ist der Mittelwert der frueheren Spanne von 500 bis 2000 ms;
+# damit bleibt der Erwartungswert des Stillstands, wo er war.
+zeitverlust_ms = 1250
 
 [unfaelle.rate]
 # Entscheidung A: sehr selten, wie im GDD ausdruecklich verlangt. Die

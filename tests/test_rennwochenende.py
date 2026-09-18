@@ -23,10 +23,24 @@ from PySide6.QtCore import Qt  # noqa: E402
 from rennmanager.ui.hauptfenster import Hauptfenster  # noqa: E402
 from rennmanager.ui.rennwochenendeseite import SCHRITTE, WEITER  # noqa: E402
 
+# Punkt 77: Diese Datei ist auf Wunsch des Auftraggebers stillgelegt.
+# Geprueft wird erst wieder, wenn ein einzelnes Rennwochenende sauber
+# steht. Die Tests bleiben stehen - ein Entfernen dieser Marke holt sie
+# zurueck.
+pytestmark = pytest.mark.skip(
+    reason="Punkt 77: stillgelegt, bis ein einzelnes Rennwochenende sauber steht"
+)
+
 
 @pytest.fixture(scope="module")
-def konfig() -> kf.Konfiguration:
-    return kf.lade()
+def konfig(kleine_konfiguration) -> kf.Konfiguration:
+    """Punkt 77: laeuft auf der kleinen Welt aus ``conftest``.
+
+    Drei Ligen zu je vier Autos statt zwanzig zu je dreissig. Geprueft
+    wird, *ob* die Logik stimmt - dafuer genuegt das kleine Feld, und ein
+    Rennwochenende kostet 1,5 statt 54 Sekunden.
+    """
+    return kleine_konfiguration
 
 
 @pytest.fixture

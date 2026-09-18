@@ -153,3 +153,80 @@ def test_unvollstaendige_liga_faellt_auf(k, volle_tabellen):
     del volle_tabellen[7].eintraege[700]
     with pytest.raises(wt.WertungsFehler, match="Liga 7"):
         wt.pruefe_ligastaerken(k, volle_tabellen)
+
+
+# --- Punkt 73: Live-Meisterschaftsstand -----------------------------------
+def test_die_livewertung_zaehlt_die_punkte_der_lage_dazu(k) -> None:
+    """Stand bis hierher plus die Punkte fuer die derzeitige Position."""
+    tabelle = wt.Tabelle(1)
+    tabelle.verbuche(
+        k,
+        [
+            wt.Rennergebnis(fahrer=1, rennplatz=1, qualifyingplatz=1),
+            wt.Rennergebnis(fahrer=2, rennplatz=2, qualifyingplatz=2),
+        ],
+    )
+    vorher = {f: e.punkte for f, e in tabelle.eintraege.items()}
+
+    # Jetzt liegt der Zweite vorn.
+    lage = [
+        wt.Rennergebnis(fahrer=2, rennplatz=1, qualifyingplatz=2),
+        wt.Rennergebnis(fahrer=1, rennplatz=2, qualifyingplatz=1),
+    ]
+    zeilen = wt.livewertung(k, tabelle, lage)
+    stand = {z.fahrer: z for z in zeilen}
+
+    for nummer, zeile in stand.items():
+        erwartet = next(e for e in lage if e.fahrer == nummer)
+        assert zeile.zuwachs == wt.punkte_fuer(k, erwartet)
+        assert zeile.punkte == vorher[nummer] + zeile.zuwachs
+
+
+def test_die_livewertung_laesst_die_tabelle_unberuehrt(k) -> None:
+    """Eine Vorschau - das Rennen laeuft ja noch."""
+    tabelle = wt.Tabelle(1)
+    tabelle.verbuche(k, [wt.Rennergebnis(fahrer=1, rennplatz=1, qualifyingplatz=1)])
+    vorher = tabelle.eintraege[1].punkte
+    wt.livewertung(k, tabelle, [wt.Rennergebnis(fahrer=1, rennplatz=1, qualifyingplatz=1)])
+    assert tabelle.eintraege[1].punkte == vorher
+
+
+def test_die_veraenderung_sagt_die_gewonnenen_plaetze(k) -> None:
+    """Punkt 73: positiv heisst nach vorn."""
+    tabelle = wt.Tabelle(1)
+    tabelle.verbuche(
+        k,
+        [
+            wt.Rennergebnis(fahrer=1, rennplatz=1, qualifyingplatz=1),
+            wt.Rennergebnis(fahrer=2, rennplatz=2, qualifyingplatz=2),
+        ],
+    )
+    # Der Zweite gewinnt dieses Rennen deutlich und zieht vorbei.
+    zeilen = wt.livewertung(
+        k,
+        tabelle,
+        [
+            wt.Rennergebnis(fahrer=2, rennplatz=1, qualifyingplatz=1,
+                            schnellste_runde=True),
+            wt.Rennergebnis(fahrer=1, rennplatz=20, qualifyingplatz=20),
+        ],
+    )
+    zwei = next(z for z in zeilen if z.fahrer == 2)
+    eins = next(z for z in zeilen if z.fahrer == 1)
+    assert zwei.veraenderung > 0
+    assert eins.veraenderung < 0
+    assert zwei.platz == 1
+
+
+def test_die_schnellste_runde_zaehlt_mit(k) -> None:
+    tabelle = wt.Tabelle(1)
+    ohne = wt.livewertung(
+        k, tabelle, [wt.Rennergebnis(fahrer=1, rennplatz=5, qualifyingplatz=5)]
+    )[0]
+    mit = wt.livewertung(
+        k,
+        tabelle,
+        [wt.Rennergebnis(fahrer=1, rennplatz=5, qualifyingplatz=5,
+                         schnellste_runde=True)],
+    )[0]
+    assert mit.zuwachs > ohne.zuwachs

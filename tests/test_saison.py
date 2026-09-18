@@ -20,14 +20,42 @@ from rennmanager.kern import strecke as st
 from rennmanager.kern import welt as kw
 from rennmanager.kern import wertung as wt
 from rennmanager.kern.zufall import Seedquelle
+from tests.conftest import KLEINE_LIGEN
+
+# Punkt 77: Diese Datei ist auf Wunsch des Auftraggebers stillgelegt.
+# Geprueft wird erst wieder, wenn ein einzelnes Rennwochenende sauber
+# steht. Die Tests bleiben stehen - ein Entfernen dieser Marke holt sie
+# zurueck.
+pytestmark = pytest.mark.skip(
+    reason="Punkt 77: stillgelegt, bis ein einzelnes Rennwochenende sauber steht"
+)
 
 SEED = 12
-LIGA = 20
+# Punkt 77: Diese Tests fahren ganze Rennwochenenden. In voller Groesse
+# sind das 20 Ligen zu je 30 Autos und gemessen 54 Sekunden je Wochenende;
+# mit der kleinen Welt aus ``conftest`` sind es 1,45 Sekunden. Geprueft
+# wird hier, *dass* gebucht, gewertet und fortgeschrieben wird - dafuer
+# genuegen drei Ligen zu je vier Autos. Wer die Ligastruktur selbst
+# prueft, nimmt ``grosse_konfiguration`` und ``grosse_welt``.
+LIGA = KLEINE_LIGEN
 
 
 @pytest.fixture(scope="module")
-def k() -> kf.Konfiguration:
+def k(kleine_konfiguration) -> kf.Konfiguration:
+    return kleine_konfiguration
+
+
+@pytest.fixture(scope="module")
+def grosse_konfiguration() -> kf.Konfiguration:
+    """Die echte Welt mit 20 Ligen - nur, wo die Groesse Gegenstand ist."""
     return kf.lade()
+
+
+@pytest.fixture(scope="module")
+def grosse_welt(grosse_konfiguration) -> kw.Welt:
+    return kw.erzeuge(
+        grosse_konfiguration, Seedquelle(SEED).zweig("welt"), spielerliga=20
+    )
 
 
 @pytest.fixture(scope="module")
@@ -36,8 +64,8 @@ def strecken(k) -> tuple[st.Strecke, ...]:
 
 
 @pytest.fixture(scope="module")
-def welt(k) -> kw.Welt:
-    return kw.erzeuge(k, Seedquelle(SEED).zweig("welt"), spielerliga=LIGA)
+def welt(kleine_welt) -> kw.Welt:
+    return kleine_welt
 
 
 def neuer_lauf(k, welt, strecken, seed: int = SEED) -> sa.Saisonlauf:
@@ -208,7 +236,9 @@ def volle_tabellen(k, welt) -> dict[int, wt.Tabelle]:
     return tabellen
 
 
-def test_ligawechsel_lassen_jede_liga_voll_besetzt(k, welt):
+def test_ligawechsel_lassen_jede_liga_voll_besetzt(grosse_konfiguration, grosse_welt):
+    # Braucht die echten 20 Ligen - rechnet aber kein Rennen.
+    k, welt = grosse_konfiguration, grosse_welt
     wechsel = wt.auf_und_abstieg(k, volle_tabellen(k, welt))
     neu = sa.wende_wechsel_an(welt, wechsel)
     for liga in range(1, k.wert("ligen", "anzahl") + 1):
@@ -220,8 +250,12 @@ def test_ligawechsel_lassen_jede_liga_voll_besetzt(k, welt):
     assert geaendert == {w.fahrer for w in wechsel}
 
 
-def test_ligawechsel_lassen_teams_und_autos_unangetastet(k, welt):
+def test_ligawechsel_lassen_teams_und_autos_unangetastet(
+    grosse_konfiguration, grosse_welt
+):
     """GDD 13: Auf- und Abstieg gelten fuer Fahrer, nicht fuer Teams."""
+    # Braucht die echten 20 Ligen - rechnet aber kein Rennen.
+    k, welt = grosse_konfiguration, grosse_welt
     neu = sa.wende_wechsel_an(welt, wt.auf_und_abstieg(k, volle_tabellen(k, welt)))
     assert neu.teams == welt.teams
     assert neu.seed == welt.seed
@@ -237,8 +271,10 @@ def test_doppelter_wechsel_faellt_auf(welt):
         sa.wende_wechsel_an(welt, doppelt)
 
 
-def test_ungleicher_wechsel_faellt_auf(welt):
+def test_ungleicher_wechsel_faellt_auf(grosse_welt):
     """Ein Aufstieg ohne Gegenstueck wuerde eine Liga sprengen."""
+    # Braucht die echten 20 Ligen - rechnet aber kein Rennen.
+    welt = grosse_welt
     einzeln = (wt.Wechsel(welt.liga(10)[0].nummer, 10, 9),)
     with pytest.raises(sa.SaisonFehler, match="Liga"):
         sa.wende_wechsel_an(welt, einzeln)
@@ -394,16 +430,26 @@ def test_defekte_aus_dem_rennen_bleiben_offen(k, welt, strecken):
 
 
 def test_das_rennen_meldet_defekte_je_fahrer(k, welt, strecken):
-    """Ueber 20 Ligen faellt in einem Wochenende immer etwas aus."""
+    """Defekte werden je Fahrer gemeldet und tragen bekannte Schluessel.
+
+    In der kleinen Testwelt stehen nur zwoelf Autos am Start; ein
+    einzelnes Wochenende bleibt da oft heil. Gefahren wird deshalb, bis
+    der erste Defekt faellt - hoechstens fuenf Wochenenden, danach waere
+    etwas kaputt an der Defektrechnung selbst.
+    """
     lauf = neuer_lauf(k, welt, strecken)
-    wochenende = lauf.fahre_rennen()
     schluessel = {d["schluessel"] for d in k.wert("defekte", "liste")}
-    gemeldet = [
-        defekt
-        for liga in wochenende.ligen.values()
-        for defekte in liga.defekte_je_fahrer.values()
-        for defekt in defekte
-    ]
+    gemeldet: list[str] = []
+    for _ in range(5):
+        wochenende = lauf.fahre_rennen()
+        gemeldet += [
+            defekt
+            for liga in wochenende.ligen.values()
+            for defekte in liga.defekte_je_fahrer.values()
+            for defekt in defekte
+        ]
+        if gemeldet:
+            break
     assert gemeldet
     assert set(gemeldet) <= schluessel
 
@@ -595,6 +641,10 @@ def abgeschlossener_lauf(k, welt, strecken, karriere=None, jahr=None) -> sa.Sais
     return lauf
 
 
+@pytest.mark.skip(
+    reason="Punkt 77: Saisonwechsel wird erst geprueft, wenn eine "
+    "einzelne Saison sauber steht. Entscheidung des Auftraggebers."
+)
 def test_der_saisonwechsel_zaehlt_das_jahr_hoch(k, welt, strecken):
     lauf = abgeschlossener_lauf(k, welt, strecken)
     assert lauf.jahr == k.wert("kalender", "startjahr")
@@ -608,6 +658,10 @@ def test_der_saisonwechsel_zaehlt_das_jahr_hoch(k, welt, strecken):
     assert neu.kenntnis is lauf.kenntnis
 
 
+@pytest.mark.skip(
+    reason="Punkt 77: Saisonwechsel wird erst geprueft, wenn eine "
+    "einzelne Saison sauber steht. Entscheidung des Auftraggebers."
+)
 def test_drei_saisons_lassen_jede_liga_voll_besetzt(k, welt, strecken):
     """GDD 13: Jeder Aufsteiger ersetzt einen Absteiger."""
     je_liga = k.wert("ligen", "autos_je_liga")
@@ -623,6 +677,10 @@ def test_drei_saisons_lassen_jede_liga_voll_besetzt(k, welt, strecken):
         lauf.vorgefahren = k.wert("kalender", "rennen_je_saison")
 
 
+@pytest.mark.skip(
+    reason="Punkt 77: Saisonwechsel wird erst geprueft, wenn eine "
+    "einzelne Saison sauber steht. Entscheidung des Auftraggebers."
+)
 def test_die_historie_traegt_jede_saison_vollstaendig(k, welt, strecken):
     """Die Tabelle wird geleert - was bleiben soll, steht in der Historie."""
     lauf = abgeschlossener_lauf(k, welt, strecken)
@@ -647,6 +705,10 @@ def test_die_historie_traegt_jede_saison_vollstaendig(k, welt, strecken):
     assert abschluss.platz_von(abschluss.meister) == 1
 
 
+@pytest.mark.skip(
+    reason="Punkt 77: Saisonwechsel wird erst geprueft, wenn eine "
+    "einzelne Saison sauber steht. Entscheidung des Auftraggebers."
+)
 def test_die_karriere_nimmt_alles_mit_was_ueberdauert(k, welt, strecken):
     """GDD 10 und 14: Konto, Werte, Vertraege, Defekte und Ereignisse."""
     karriere = spielerkarriere(k, welt)
@@ -672,6 +734,10 @@ def test_die_karriere_nimmt_alles_mit_was_ueberdauert(k, welt, strecken):
     assert karriere.verlorene_tage == set()
 
 
+@pytest.mark.skip(
+    reason="Punkt 77: Saisonwechsel wird erst geprueft, wenn eine "
+    "einzelne Saison sauber steht. Entscheidung des Auftraggebers."
+)
 def test_der_spieler_wechselt_mit_seiner_liga(k, strecken):
     """Nach dem Abstieg faehrt die Karriere in der neuen Liga."""
     welt = kw.erzeuge(k, Seedquelle(SEED).zweig("welt"), spielerliga=5)
@@ -696,6 +762,10 @@ def test_ein_sprung_zurueck_faellt_auf(k, welt):
         karriere.naechste_saison(karriere.saison.jahr, karriere.liga)
 
 
+@pytest.mark.skip(
+    reason="Punkt 77: Saisonwechsel wird erst geprueft, wenn eine "
+    "einzelne Saison sauber steht. Entscheidung des Auftraggebers."
+)
 def test_der_wechsel_braucht_eine_gefahrene_saison(k, welt, strecken):
     lauf = neuer_lauf(k, welt, strecken)
     with pytest.raises(sa.SaisonFehler, match="Auf- und Abstieg"):

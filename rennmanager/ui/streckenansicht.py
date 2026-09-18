@@ -41,6 +41,11 @@ PUNKT_RADIUS_PX = 6.0
 SPIELER_RING_PX = 2.5
 # Seitlicher Versatz bei Duellen, damit sich Punkte nicht decken (GDD 4).
 DUELL_VERSATZ_PX = 5.0
+# Punkt 58: Der in Rangliste oder Zeitenmonitor gewaehlte Fahrer bekommt
+# einen goldenen Kreis um seinen Punkt.
+FARBE_AUSWAHL = QColor("#f2b705")
+AUSWAHL_RING_PX = 2.5
+AUSWAHL_ABSTAND_PX = 3.5
 LINIENSTAERKE_PX = 3.4
 ZONENSTAERKE_PX = 11.0
 
@@ -54,6 +59,8 @@ class Streckenansicht(QWidget):
         self._zeige_ueberholzonen = True
         self._tempo: np.ndarray | None = None
         self._autos: list[tuple[float, str, str, bool]] = []
+        # Punkt 58: Das Kuerzel des gewaehlten Fahrers, oder "".
+        self._hervorgehoben = ""
         self.setMinimumSize(420, 320)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setAutoFillBackground(True)
@@ -88,6 +95,17 @@ class Streckenansicht(QWidget):
         """
         self._autos = autos
         self.update()
+
+    def hebe_hervor(self, kuerzel: str) -> None:
+        """Umkreist den Punkt dieses Autos golden; "" nimmt die Marke weg."""
+        if kuerzel == self._hervorgehoben:
+            return
+        self._hervorgehoben = kuerzel or ""
+        self.update()
+
+    @property
+    def hervorgehoben(self) -> str:
+        return self._hervorgehoben
 
     def setze_ueberholzonen_sichtbar(self, sichtbar: bool) -> None:
         self._zeige_ueberholzonen = sichtbar
@@ -259,43 +277,37 @@ class Streckenansicht(QWidget):
     def _zeichne_autos(self, maler: QPainter, umrechnung: tuple[float, float, float]) -> None:
         """Zeichnet die Autos als Punkte in Teamfarbe mit Kuerzel (GDD 4).
 
-        Zwei Dinge muessen sich vertragen: Bei Duellen liegen die Autos
-        dicht beieinander, trotzdem soll jeder Punkt sichtbar bleiben.
-        Deshalb werden dicht gedraengte Punkte quer zur Fahrtrichtung
-        versetzt (GDD 4: "bei Duellen werden die Punkte leicht seitlich
-        versetzt"), und ein Kuerzel wird nur gesetzt, wenn dafuer Platz
-        ist. Der Punkt des Spielers und sein Kuerzel haben Vorrang.
+        **Immer zentriert auf der Linie**, auch beim Ueberholen - zur Not
+        uebereinander. Ein frueherer Entwurf schob dicht gedraengte Punkte
+        quer zur Fahrtrichtung auseinander; auf Wunsch des Auftraggebers
+        steht jeder Punkt jetzt genau dort, wo das Auto faehrt. Wer
+        vorn liegt, wird zuletzt gezeichnet und liegt damit obenauf.
+
+        Ein Kuerzel wird nur gesetzt, wenn dafuer Platz ist; der Spieler
+        und der gerade gewaehlte Fahrer haben Vorrang.
         """
         assert self._strecke is not None
         orte = [self._ort_auf_der_linie(distanz) for distanz, *_ in self._autos]
         bild = self._bildpunkte(np.array(orte), umrechnung)
-        quer = np.array([self._querrichtung(distanz) for distanz, *_ in self._autos])
+        stellen = [bild[nummer] for nummer in range(len(self._autos))]
 
-        # Von hinten nach vorn setzen, damit der Fuehrende obenauf liegt.
-        gesetzt: list[np.ndarray] = []
-        stellen: list[np.ndarray] = []
-        for nummer in range(len(self._autos) - 1, -1, -1):
-            stelle = bild[nummer].copy()
-            versatz = 0
-            while any(
-                float(np.hypot(*(stelle - belegt))) < 2 * PUNKT_RADIUS_PX
-                for belegt in gesetzt
-            ):
-                versatz += 1
-                if versatz > 12:
-                    break
-                seite = 1.0 if versatz % 2 else -1.0
-                weite = ((versatz + 1) // 2) * DUELL_VERSATZ_PX * seite
-                stelle = bild[nummer] + quer[nummer] * weite
-            gesetzt.append(stelle)
-            stellen.append(stelle)
-        stellen.reverse()
-
-        for nummer, stelle in enumerate(stellen):
-            _, _, farbe, ist_spieler = self._autos[nummer]
+        # Von hinten nach vorn zeichnen, damit der Fuehrende obenauf liegt.
+        for nummer in range(len(stellen) - 1, -1, -1):
+            stelle = stellen[nummer]
+            _, kuerzel, farbe, ist_spieler = self._autos[nummer]
             maler.setBrush(QColor(farbe))
             maler.setPen(QPen(FARBE_START, SPIELER_RING_PX) if ist_spieler else QPen(Qt.NoPen))
             maler.drawEllipse(QPointF(*stelle), PUNKT_RADIUS_PX, PUNKT_RADIUS_PX)
+            if kuerzel and kuerzel == self._hervorgehoben:
+                # Der gewaehlte Fahrer bekommt einen goldenen Kreis -
+                # so findet man sein Auto im Feld wieder.
+                maler.setBrush(Qt.NoBrush)
+                maler.setPen(QPen(FARBE_AUSWAHL, AUSWAHL_RING_PX))
+                maler.drawEllipse(
+                    QPointF(*stelle),
+                    PUNKT_RADIUS_PX + AUSWAHL_ABSTAND_PX,
+                    PUNKT_RADIUS_PX + AUSWAHL_ABSTAND_PX,
+                )
         maler.setBrush(Qt.NoBrush)
 
         self._zeichne_kuerzel(maler, stellen)
@@ -305,10 +317,16 @@ class Streckenansicht(QWidget):
         maler.setFont(QFont(self.font().family(), 7, QFont.Bold))
         breite, hoehe = 30.0, 12.0
 
-        # Spieler zuerst, danach von vorn nach hinten.
-        reihenfolge = sorted(
-            range(len(stellen)), key=lambda n: (not self._autos[n][3], n)
-        )
+        # Der gewaehlte Fahrer zuerst, dann der Spieler, dann von vorn
+        # nach hinten.
+        def vorrang(n: int) -> tuple:
+            return (
+                self._autos[n][1] != self._hervorgehoben,
+                not self._autos[n][3],
+                n,
+            )
+
+        reihenfolge = sorted(range(len(stellen)), key=vorrang)
         belegt: list[QRectF] = []
         for nummer in reihenfolge:
             stelle = stellen[nummer]
@@ -319,10 +337,18 @@ class Streckenansicht(QWidget):
                 hoehe,
             )
             ist_spieler = self._autos[nummer][3]
-            if not ist_spieler and any(feld.intersects(anderes) for anderes in belegt):
+            gewaehlt = self._autos[nummer][1] == self._hervorgehoben
+            if (
+                not ist_spieler
+                and not gewaehlt
+                and any(feld.intersects(anderes) for anderes in belegt)
+            ):
                 continue
             belegt.append(feld)
-            maler.setPen(QPen(FARBE_START if ist_spieler else FARBE_TEXT))
+            if gewaehlt:
+                maler.setPen(QPen(FARBE_AUSWAHL))
+            else:
+                maler.setPen(QPen(FARBE_START if ist_spieler else FARBE_TEXT))
             maler.drawText(feld, Qt.AlignCenter, self._autos[nummer][1])
 
     def _ort_auf_der_linie(self, distanz: float) -> np.ndarray:

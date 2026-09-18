@@ -15,7 +15,6 @@ from rennmanager.kern import strategie as sg
 from rennmanager.kern import strecke as kern_strecke
 from rennmanager.kern import tempo as kern_tempo
 from rennmanager.kern.zufall import Seedquelle
-from rennmanager.konfiguration import lade
 
 LIGA = 1
 # Ein kurzes Rennen: die Stopps interessieren, nicht die Renndistanz.
@@ -30,8 +29,13 @@ VERSCHLEISS = 3.0
 
 
 @pytest.fixture(scope="module")
-def k():
-    return lade()
+def k(kleine_konfiguration):
+    """Punkt 77: laeuft auf der kleinen Welt aus ``conftest``.
+
+    Drei Ligen zu je vier Autos statt zwanzig zu je dreissig. Geprueft
+    wird, *ob* die Logik stimmt - dafuer genuegt das kleine Feld.
+    """
+    return kleine_konfiguration
 
 
 @pytest.fixture(scope="module")

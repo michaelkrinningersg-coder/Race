@@ -192,6 +192,13 @@ class Rennverlauf:
     # Regen, Starkregen und wechselhaftem Wetter ist die Pflicht
     # aufgehoben.
     mischungspflicht: bool = False
+    # Punkt 75: Je Auto die Uhrzeiten an den Messpunkten, in der
+    # Reihenfolge der Ueberfahrten. Der Index ist ``Runde * Punkte je
+    # Runde + Nummer des Punkts``. Daraus wird der Abstand zweier Autos
+    # als Differenz zweier echter Zeiten an derselben Stelle gebildet -
+    # nicht aus Strecke geteilt durch Tempo.
+    messzeiten: tuple[tuple[int, ...], ...] = ()
+    messpunkte_je_runde: int = 0
 
     @property
     def anzahl(self) -> int:
@@ -277,6 +284,45 @@ class Rennverlauf:
             and ergebnis.zeit_ms is not None
             and ergebnis.zeit_ms <= zeit_ms
         )
+
+    def messpunkt_bis(self, teilnehmer: int, zeit_ms: float) -> int:
+        """Der letzte Messpunkt, den dieses Auto bis dahin passiert hat.
+
+        :return: die laufende Nummer, oder -1 vor dem ersten Punkt
+        """
+        if teilnehmer >= len(self.messzeiten):
+            return -1
+        zeiten = self.messzeiten[teilnehmer]
+        return int(bisect_right(zeiten, zeit_ms)) - 1
+
+    def zeit_an(self, teilnehmer: int, messpunkt: int) -> int | None:
+        """Wann dieses Auto an diesem Messpunkt war, oder ``None``."""
+        if teilnehmer >= len(self.messzeiten) or messpunkt < 0:
+            return None
+        zeiten = self.messzeiten[teilnehmer]
+        return zeiten[messpunkt] if messpunkt < len(zeiten) else None
+
+    def abstand_ms(self, hinten: int, vorne: int, zeit_ms: float) -> int | None:
+        """Der echte Zeitabstand zweier Autos (Punkt 75).
+
+        Gemessen wird am letzten Messpunkt, den das **hintere** Auto
+        passiert hat: Dort stand die Uhr fuer beide an derselben Stelle
+        der Strecke. Das Ergebnis schwankt nicht mehr mit der Stelle, an
+        der die beiden gerade sind - anders als eine Schaetzung aus
+        Strecke geteilt durch Tempo.
+
+        ``None``, solange keiner der beiden einen gemeinsamen Punkt hat -
+        auf den ersten Metern eines Rennens etwa, oder wenn der Abstand
+        ueber eine ganze Runde geht.
+        """
+        punkt = self.messpunkt_bis(hinten, zeit_ms)
+        if punkt < 0:
+            return None
+        meine = self.zeit_an(hinten, punkt)
+        seine = self.zeit_an(vorne, punkt)
+        if meine is None or seine is None:
+            return None
+        return int(meine - seine)
 
     def reihenfolge_zu(self, zeit_ms: float) -> list[int]:
         """Positionen zum Zeitpunkt: wer am weitesten ist, fuehrt (GDD 4).
@@ -583,6 +629,31 @@ class _Lauf:
         self.marken = np.array(
             [sektor.von * self.ds for sektor in strecke.sektoren[1:]] + [self.laenge]
         )
+
+        # --- Messpunkte fuer Rueckstand und Intervall (Punkt 75) ------
+        # Der Abstand zweier Autos wurde bisher aus Strecke und Tempo
+        # geschaetzt - und schwankte entsprechend, weil zwei Autos an
+        # verschiedenen Stellen verschieden schnell sind. Stattdessen
+        # wird an festen Punkten die Uhrzeit festgehalten; der Abstand
+        # ist dann die Differenz zweier echter Zeiten an **derselben**
+        # Stelle der Strecke.
+        #
+        # Die Punkte sind die Splits - Start/Ziel und die drei
+        # Sektorgrenzen - und dazwischen je einer in der Mitte, der
+        # selbst kein Split ist. So steht auch auf einer langen Geraden
+        # nicht minutenlang dieselbe Zahl.
+        # Achtung: nicht ``grenzen`` nennen - so heisst schon der
+        # Parameter mit den Fahrgrenzen der Autos.
+        abschnitte = [0.0, *[float(m) for m in self.marken]]
+        punkte: list[float] = []
+        for anfang, ende in zip(abschnitte[:-1], abschnitte[1:], strict=True):
+            punkte.append(anfang)
+            punkte.append((anfang + ende) / 2.0)
+        self.messpunkte = np.array(punkte)
+        self.naechster_messpunkt = np.zeros(self.anzahl, dtype=int)
+        # Je Auto die Uhrzeiten seiner Ueberfahrten, in der Reihenfolge
+        # der Punkte. Der Index ist ``Runde * Punkte + Nummer``.
+        self.messzeiten: list[list[int]] = [[] for _ in range(self.anzahl)]
 
         self.max_abstand_s = konfiguration.wert("ueberholen", "max_abstand_s")
         self.unfall_abstand_m = konfiguration.wert("unfaelle", "max_abstand_m")
@@ -1163,6 +1234,7 @@ class _Lauf:
         # Eine angefangene Pause nach einem Fehler laeuft ab.
         self.pause_ms = np.maximum(self.pause_ms - dt * 1000.0, 0.0)
 
+        self._pruefe_messpunkte(vorher, zeit_ms, dt)
         self._pruefe_marken(vorher, zeit_ms, dt)
         # Wer die Boxengasse verlassen hat, bekommt sein naechstes Fenster.
         self._raeume_boxengasse()
@@ -1564,6 +1636,35 @@ class _Lauf:
         )
         return True
 
+    def _pruefe_messpunkte(self, vorher: np.ndarray, zeit_ms: int, dt: float) -> None:
+        """Haelt die Uhrzeit an jedem Messpunkt fest (Punkt 75).
+
+        Dieselbe Interpolation wie bei den Sektormarken: Zwischen zwei
+        Schritten wird gleichmaessiges Tempo angenommen. Anders als dort
+        laufen die Punkte ueber die Runden durch - der Index sagt, um
+        welche Runde und welchen Punkt es geht.
+        """
+        anzahl = len(self.messpunkte)
+        runde = self.naechster_messpunkt // anzahl
+        stelle = self.naechster_messpunkt % anzahl
+        naechster = runde * self.laenge + self.messpunkte[stelle]
+        treffer = (self.distanz >= naechster) & (self.distanz > vorher) & self.aktiv
+        treffer &= ~self.im_ziel
+        if not treffer.any():
+            return
+
+        for i in np.flatnonzero(treffer):
+            i = int(i)
+            while True:
+                nummer = int(self.naechster_messpunkt[i])
+                ziel = (nummer // anzahl) * self.laenge + self.messpunkte[nummer % anzahl]
+                if self.distanz[i] < ziel:
+                    break
+                weite = self.distanz[i] - vorher[i]
+                anteil = (ziel - vorher[i]) / weite if weite > 0 else 0.0
+                self.messzeiten[i].append(int(round(zeit_ms + anteil * dt * 1000.0)))
+                self.naechster_messpunkt[i] = nummer + 1
+
     def _pruefe_marken(self, vorher: np.ndarray, zeit_ms: int, dt: float) -> None:
         """Erfasst Sektor- und Linienueberfahrten auf die Millisekunde genau.
 
@@ -1831,6 +1932,8 @@ def simuliere(
         mischungen=kuerzel,
         boxenstopps=tuple(lauf.boxenstopps),
         mischungspflicht=mischungspflicht,
+        messzeiten=tuple(tuple(zeiten) for zeiten in lauf.messzeiten),
+        messpunkte_je_runde=len(lauf.messpunkte),
     )
 
 

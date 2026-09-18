@@ -1658,3 +1658,76 @@ Auszahlungen je Rennwochenende — das ist so gewollt.
 steht der Spieler zu diesem Zeitpunkt aber noch beim Qualifying; bis er
 auf den Rennreiter wechselte, war das Rennen im Zeitraffer durchgelaufen
 und stand am Ende. Die Wiedergabe wartet jetzt auf `showEvent`.
+
+### 73. Fehler kostet Zeit im Stand, nicht als Abzug
+
+Nachgemessen: Das Modell hielt das schon so — `pause_ms` setzt das Tempo
+auf 0, und danach beschleunigt das Auto über seine eigene
+Beschleunigungskurve wieder an (gemessen 1,3 → 2,6 → 3,9 km/h). Geändert
+wurde nur die Zeit selbst: Sie war zwischen 500 und 2000 ms gewürfelt und
+ist jetzt **fest** bei 1250 ms — dem Mittelwert der alten Spanne, damit
+der Erwartungswert bleibt, wo er war.
+
+Was ein Fehler wirklich kostet, ist mehr als diese Zahl: Das Anfahren
+kommt obendrauf.
+
+### 74. Rückstand und Intervall an festen Messpunkten
+
+Beide Spalten wurden aus Strecke geteilt durch Tempo geschätzt und
+schwankten entsprechend — zwei Autos an verschiedenen Streckenpunkten
+sind verschieden schnell. Auf Wunsch des Auftraggebers stehen dort jetzt
+**echte Zeiten**:
+
+* Je Runde acht **Messpunkte**: die vier Splits (Start/Ziel und die drei
+  Sektorgrenzen) und dazwischen je einer in der Mitte, der selbst kein
+  Split ist.
+* An jedem hält die Simulation die Uhrzeit fest, interpoliert zwischen
+  zwei Zeitschritten — dieselbe Rechnung wie bei den Sektorzeiten.
+* Der Abstand zweier Autos ist die Differenz ihrer Zeiten am letzten
+  Messpunkt, den das **hintere** passiert hat.
+
+Damit summieren sich die Intervalle genau zum Rückstand. Gemessen an
+sechs Autos: 0,137 + 1,022 + 0,053 + 0,726 + 0,163 = 2,101 s, und genau
+2,101 s steht als Rückstand des Sechsten. Vorher waren es fünf Intervalle
+zu 11,6 s gegen 9,0 s Rückstand.
+
+**Ein Minus ist möglich und richtig so.** Zwischen zwei Messpunkten liegt
+rund ein Achtel Runde. Wer in dieser Zeit vorbeigeht, war am letzten
+gemeinsamen Punkt noch hinten; dann steht dort ein negativer Wert.
+Gemessen kam das in 11,6 % der Bilder vor, vor allem in der ersten Runde,
+wo der einzige gemeinsame Punkt die Startlinie ist und die Zeiten dort
+noch die Startaufstellung tragen. Geglättet wird nichts — so verlangt.
+
+### 75. Ereignisse treffen einzelne Fahrer
+
+Die Karriere führte **eine** Lage fürs ganze Team; jedes Ereignis wirkte
+damit auf alle vier Autos zugleich. Jetzt führt jeder Fahrer seine eigene
+(`lage_je_fahrer`), und ein ausgelöstes Ereignis trifft **einen**,
+gewürfelt aus der Seedquelle der Saison — derselbe Seed ergibt dieselbe
+Saison (GDD 15).
+
+Die Meldung nennt den Namen des Getroffenen. Weil die ersten Ereignisse
+auf den 1. Januar fallen und damit beim Start der Karriere entstehen —
+bevor die Oberfläche die Namen reichen konnte —, benennt
+`benenne_fahrer` schon geschriebene Meldungen nachträglich.
+
+**Spielstand:** Die Tabellen `ereignis` und `meldung` tragen jetzt eine
+Fahrernummer. Ein Stand vor Version 8 hat `-1`; dessen Ereignisse
+gehörten dem ganzen Team und wandern auf den damals gewählten Fahrer.
+
+### 76. Rennseite neu aufgeteilt, Live-Meisterschaft
+
+Rangliste und Zeitenmonitor stehen **nebeneinander**, die Zwischenfälle
+als Fußleiste darunter. Vorher lagen alle drei untereinander in einer
+schmalen Spalte; die Rangliste hat seit Punkt 60 zwölf Spalten und
+braucht Breite.
+
+Unter dem Zeitenmonitor liegt ein zweites Blatt **Meisterschaft**: der
+Stand bis zu diesem Rennen plus die Punkte, die jeder Fahrer für seine
+derzeitige Position bekäme — samt Qualifying und schnellster Runde
+(GDD 13). Grüner Pfeil hoch, roter runter, daneben die Zahl der Plätze;
+eine eigene Spalte zeigt mit „+x", wie viel aus diesem Rennen dazukommt.
+
+Eine **vorübergehende** Ansicht zum Abspielzeitpunkt: `livewertung`
+rechnet nur und lässt die Tabelle unberührt. Fortgeschrieben wird der
+Stand erst am Rennende, und zwar vom Saisonlauf.

@@ -22,7 +22,22 @@ from rennmanager.ui.tabellen import SortierbareZeile as Zeile  # noqa: E402
 
 
 @pytest.fixture(scope="module")
-def konfig() -> kf.Konfiguration:
+def konfig(kleine_konfiguration) -> kf.Konfiguration:
+    """Punkt 77: Die Oberflaechen-Tests laufen auf der kleinen Welt.
+
+    Jeder dieser Tests baut ein ganzes ``Hauptfenster`` - und damit eine
+    Welt, eine Karriere und alle Seiten. In voller Groesse sind das 600
+    Fahrer je Fenster, 86-mal in dieser Datei. Geprueft wird hier, ob die
+    Oberflaeche das Richtige liest und zeichnet; dafuer genuegen drei
+    Ligen zu je vier Autos. Wo die Groesse selbst Gegenstand ist, steht
+    ``grosse_konfiguration``.
+    """
+    return kleine_konfiguration
+
+
+@pytest.fixture(scope="module")
+def grosse_konfiguration() -> kf.Konfiguration:
+    """Die echte Konfiguration mit 20 Ligen zu je 30 Autos."""
     return kf.lade()
 
 

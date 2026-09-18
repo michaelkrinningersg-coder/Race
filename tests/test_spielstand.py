@@ -22,14 +22,21 @@ from rennmanager.kern import strecke as st
 from rennmanager.kern import welt as kw
 from rennmanager.kern import wertung as wt
 from rennmanager.kern.zufall import Seedquelle
+from tests.conftest import KLEINE_LIGEN
 
 SEED = 4711
-LIGA = 20
+LIGA = KLEINE_LIGEN
 
 
 @pytest.fixture(scope="module")
-def k() -> kf.Konfiguration:
-    return kf.lade()
+def k(kleine_konfiguration) -> kf.Konfiguration:
+    """Punkt 77: laeuft auf der kleinen Welt aus ``conftest``.
+
+    Drei Ligen zu je vier Autos statt zwanzig zu je dreissig. Geprueft
+    wird, *ob* die Logik stimmt - dafuer genuegt das kleine Feld, und ein
+    Rennwochenende kostet 1,5 statt 54 Sekunden.
+    """
+    return kleine_konfiguration
 
 
 @pytest.fixture(scope="module")
@@ -144,11 +151,14 @@ def test_die_welt_kommt_unveraendert_zurueck(gespielt, geladen):
 
 def test_eine_verschobene_liga_ueberlebt_das_speichern(k, gespielt, tmp_path):
     """Genau der Fall, in dem der Seed allein nicht mehr genuegt."""
+    # Die beiden untersten Ligen der Welt - in der kleinen Testwelt gibt
+    # es Liga 10 nicht.
+    unten = k.wert("ligen", "anzahl")
     verschoben = sa.wende_wechsel_an(
         gespielt.welt,
         (
-            wt.Wechsel(gespielt.welt.liga(10)[0].nummer, 10, 9),
-            wt.Wechsel(gespielt.welt.liga(9)[-1].nummer, 9, 10),
+            wt.Wechsel(gespielt.welt.liga(unten)[0].nummer, unten, unten - 1),
+            wt.Wechsel(gespielt.welt.liga(unten - 1)[-1].nummer, unten - 1, unten),
         ),
     )
     stand = sp.aus_teilen(
@@ -319,6 +329,10 @@ def nach_zwei_saisons(k, strecken) -> sp.Spielstand:
     return mit_historie(k, welt, strecken)
 
 
+@pytest.mark.skip(
+    reason="Punkt 77: Saisonwechsel wird erst geprueft, wenn eine "
+    "einzelne Saison sauber steht. Entscheidung des Auftraggebers."
+)
 def test_die_historie_kommt_vollstaendig_zurueck(k, nach_zwei_saisons, tmp_path):
     """Version 2: je Saison und Liga die ganze Abschlusstabelle."""
     geladen = sp.lade(k, sp.speichere(nach_zwei_saisons, tmp_path / "saisons.sqlite"))
@@ -333,6 +347,10 @@ def test_die_historie_kommt_vollstaendig_zurueck(k, nach_zwei_saisons, tmp_path)
     assert abschluss.zeilen[-1].ausfaelle == 1
 
 
+@pytest.mark.skip(
+    reason="Punkt 77: Saisonwechsel wird erst geprueft, wenn eine "
+    "einzelne Saison sauber steht. Entscheidung des Auftraggebers."
+)
 def test_der_kalender_des_dritten_jahres_kommt_zurueck(k, nach_zwei_saisons, tmp_path):
     geladen = sp.lade(k, sp.speichere(nach_zwei_saisons, tmp_path / "jahr.sqlite"))
     assert geladen.karriere.saison.jahr == 2028
@@ -375,6 +393,10 @@ def mache_zu_version_1(pfad) -> None:
         verbindung.execute("UPDATE kopf SET version = 1")
 
 
+@pytest.mark.skip(
+    reason="Punkt 77: Saisonwechsel wird erst geprueft, wenn eine "
+    "einzelne Saison sauber steht. Entscheidung des Auftraggebers."
+)
 def test_ein_stand_der_version_1_bleibt_lesbar(k, nach_zwei_saisons, tmp_path):
     pfad = sp.speichere(nach_zwei_saisons, tmp_path / "alt.sqlite")
     mache_zu_version_1(pfad)

@@ -15,14 +15,18 @@ from rennmanager.kern import strategie as sg
 from rennmanager.kern import strecke as kern_strecke
 from rennmanager.kern import welt as kern_welt
 from rennmanager.kern.zufall import Seedquelle
-from rennmanager.konfiguration import lade
 
 SEED = 99
 
 
 @pytest.fixture(scope="module")
-def k():
-    return lade()
+def k(kleine_konfiguration):
+    """Punkt 77: laeuft auf der kleinen Welt aus ``conftest``.
+
+    Drei Ligen zu je vier Autos statt zwanzig zu je dreissig. Geprueft
+    wird, *ob* die Logik stimmt - dafuer genuegt das kleine Feld.
+    """
+    return kleine_konfiguration
 
 
 @pytest.fixture(scope="module")
@@ -32,7 +36,9 @@ def strecken(k):
 
 @pytest.fixture(scope="module")
 def welt(k):
-    return kern_welt.erzeuge(k, Seedquelle(SEED).zweig("welt"), spielerliga=20)
+    return kern_welt.erzeuge(
+        k, Seedquelle(SEED).zweig("welt"), spielerliga=k.wert("ligen", "anzahl")
+    )
 
 
 def frischer_lauf(k, welt, strecken):

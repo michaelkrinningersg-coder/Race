@@ -57,10 +57,19 @@ class Meldung:
     text: str
     geld: int = 0
     erfahrung: int = 0
+    # Punkt 56: Wen es getroffen hat. 0 heisst: das ganze Team - das gibt
+    # es seit Punkt 56 nicht mehr, alte Staende koennen es aber noch
+    # tragen.
+    fahrer: int = 0
+    fahrername: str = ""
 
     @property
     def zeile(self) -> str:
-        teile = [f"{self.schluessel} {self.name}", self.text]
+        wen = self.fahrername or (f"Fahrer {self.fahrer}" if self.fahrer else "")
+        teile = [f"{self.schluessel} {self.name}"]
+        if wen:
+            teile.append(wen)
+        teile.append(self.text)
         if self.geld:
             teile.append(f"{self.geld:+,} EUR".replace(",", "."))
         if self.erfahrung:
@@ -132,7 +141,18 @@ class Karriere:
     # -- Schritt 10 --------------------------------------------------------
     # Die Ereignisse der Saison, einmal beim Start gewuerfelt (GDD 14).
     ereignisplan: dict[dt.date, tuple[str, ...]] = field(default_factory=dict)
-    lage: kern_ereignis.Lage | None = None
+    # Punkt 56: Ereignisse treffen **einzelne Fahrer**, nicht das ganze
+    # Team. Eine Erkaeltung hat einer, nicht alle vier; ein
+    # Motivationsschub genauso. Jeder fuehrt deshalb seine eigene Lage.
+    lage_je_fahrer: dict[int, kern_ereignis.Lage] = field(default_factory=dict)
+    # Die Seedquelle der Saison. Sie wuerfelt, wen ein Ereignis trifft -
+    # aus derselben Quelle wie der Ereignisplan, damit derselbe Seed
+    # dieselbe Saison ergibt (GDD 15). Ohne sie laeuft die Karriere ohne
+    # Ereignisse, und dann gibt es auch nichts zu wuerfeln.
+    seedquelle: Seedquelle | None = None
+    # Die Namen der eigenen Fahrer, nur fuer die Anzeige der Meldungen.
+    # Der Kern kennt sonst nur Nummern; die Namen stehen in der Welt.
+    fahrernamen: dict[int, str] = field(default_factory=dict)
     # Defekte, die aus einem Rennen offen geblieben sind (GDD 14).
     defekte: list[dict] = field(default_factory=list)
     # Tage, die E29 Reisechaos gekostet hat.
@@ -147,8 +167,6 @@ class Karriere:
     fahrervertraege: dict[int, tuple[int, int]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        if self.lage is None:
-            self.lage = kern_ereignis.Lage(self.konfiguration)
         if self.kenntnis is None:
             self.kenntnis = kern_streckenkenntnis.Streckenkenntnis(self.konfiguration)
         if self.fahrernummer not in self.autos:
@@ -165,6 +183,25 @@ class Karriere:
         return self.autos.setdefault(
             self.fahrernummer, leere_werte(self.konfiguration)
         )
+
+    @property
+    def lage(self) -> kern_ereignis.Lage:
+        """Die Ereignislage des gewaehlten Fahrers (Punkt 56).
+
+        Wie ``werte`` und ``vertraege`` eine Sicht auf den einen Fahrer,
+        an dem gerade gearbeitet oder gerechnet wird. Wer einen Fahrer
+        aufs Rennen schickt, bekommt damit auch nur dessen Ereignisse.
+        """
+        return self.lage_je_fahrer.setdefault(
+            self.fahrernummer, kern_ereignis.Lage(self.konfiguration)
+        )
+
+    @property
+    def alle_lagen(self) -> tuple[kern_ereignis.Lage, ...]:
+        """Die Lagen aller eigenen Fahrer - fuers Weiterzaehlen."""
+        for nummer in self.autos:
+            self.lage_je_fahrer.setdefault(nummer, kern_ereignis.Lage(self.konfiguration))
+        return tuple(self.lage_je_fahrer[nummer] for nummer in sorted(self.autos))
 
     @property
     def belegt(self) -> set[str]:
@@ -276,16 +313,70 @@ class Karriere:
         if war_renntag:
             self.belegte_plaetze.clear()
         if kern_ereignis.zyklusnummer(self.konfiguration, self.saison, naechster) != vorher:
-            self.lage.nach_zyklus()
+            # Punkt 56: Jeder Fahrer fuehrt seine eigene Lage - der Zyklus
+            # zaehlt bei allen weiter.
+            for lage in self.alle_lagen:
+                lage.nach_zyklus()
 
         for schluessel in self.ereignisplan.get(naechster, ()):
             self._loese_ereignis_aus(schluessel)
         return self.tag
 
     # -- Ereignisse (GDD 14) -----------------------------------------------
+    def benenne_fahrer(self, namen: dict[int, str]) -> None:
+        """Gibt der Karriere die Namen ihrer Fahrer (Punkt 56).
+
+        Der Kern kennt nur Nummern; die Namen stehen in der Welt. Sie
+        werden gebraucht, damit eine Meldung sagen kann, **wen** ein
+        Ereignis getroffen hat.
+
+        Schon geschriebene Meldungen werden nachtraeglich benannt: Die
+        ersten Ereignisse fallen auf den 1. Januar und entstehen damit
+        beim Start der Karriere - also bevor die Oberflaeche die Namen
+        reichen konnte.
+        """
+        self.fahrernamen = dict(namen)
+        self.meldungen = [
+            replace(m, fahrername=namen.get(m.fahrer, m.fahrername))
+            if m.fahrer and not m.fahrername
+            else m
+            for m in self.meldungen
+        ]
+
+    def _waehle_betroffenen(self, schluessel: str) -> int:
+        """Wen ein Ereignis trifft (Punkt 56).
+
+        Nicht das ganze Team, sondern **einen** Fahrer. Gewuerfelt wird
+        aus der Seedquelle, damit derselbe Seed dieselbe Saison ergibt
+        (GDD 15); ohne Seedquelle - etwa in Tests, die nur die Entwicklung
+        pruefen - trifft es den gerade gewaehlten Fahrer.
+        """
+        fahrer = sorted(self.autos)
+        if len(fahrer) <= 1 or self.seedquelle is None:
+            return self.fahrernummer
+        wuerfel = self.seedquelle.zweig(
+            "ereignistreffer", schluessel, self.heute.toordinal()
+        ).generator()
+        return fahrer[int(wuerfel.integers(0, len(fahrer)))]
+
     def _loese_ereignis_aus(self, schluessel: str) -> Meldung:
-        """Startet ein Ereignis und verbucht, was sofort wirkt."""
+        """Startet ein Ereignis und verbucht, was sofort wirkt.
+
+        Es trifft **einen** Fahrer (Punkt 56). Fuer die Dauer dieser
+        Methode ist er der gewaehlte, damit ``lage`` und ``werte`` auf
+        sein Auto zeigen.
+        """
         e = kern_ereignis.eintrag(self.konfiguration, schluessel)
+        vorher = self.fahrernummer
+        betroffen = self._waehle_betroffenen(schluessel)
+        self.fahrernummer = betroffen
+        try:
+            return self._loese_ereignis_aus_fuer(schluessel, e)
+        finally:
+            self.fahrernummer = vorher
+
+    def _loese_ereignis_aus_fuer(self, schluessel: str, e: dict) -> Meldung:
+        """Der eigentliche Ablauf, auf dem gewaehlten Fahrer."""
         aktiv = self.lage.loese_aus(schluessel, self.heute)
 
         geld = 0
@@ -330,6 +421,8 @@ class Karriere:
             text=aktiv.beschreibung(self.konfiguration),
             geld=geld,
             erfahrung=erfahrung,
+            fahrer=self.fahrernummer,
+            fahrername=self.fahrernamen.get(self.fahrernummer, ""),
         )
         self.meldungen.append(meldung)
         return meldung
@@ -776,7 +869,8 @@ class Karriere:
         # Ereignisse, die in Rennwochenenden laufen, sind eines weiter
         # (GDD 14).
         if zaehle_rennwochenende:
-            self.lage.nach_rennwochenende()
+            for lage in self.alle_lagen:
+                lage.nach_rennwochenende()
         return self.konto
 
     def verbuche_runden(
@@ -979,6 +1073,7 @@ def beginne(
         ereignisplan=plan,
         fahrernummer=fahrernummer,
         teambudget=teambudget,
+        seedquelle=seedquelle,
     )
     karriere.kassenbuch.buche(
         karriere.heute,
@@ -1013,10 +1108,15 @@ def kopiere(karriere: Karriere) -> Karriere:
         meldungen=list(karriere.meldungen),
         # Die laufenden Ereignisse werden einzeln kopiert: Ihr Restzaehler
         # wird an Ort und Stelle heruntergezaehlt, eine flache Kopie der
-        # Liste teilte ihn also mit dem Original.
-        lage=kern_ereignis.Lage(
-            karriere.konfiguration, [replace(a) for a in karriere.lage.aktive]
-        ),
+        # Liste teilte ihn also mit dem Original. Seit Punkt 56 fuehrt
+        # jeder Fahrer seine eigene Lage - kopiert werden alle.
+        lage_je_fahrer={
+            nummer: kern_ereignis.Lage(
+                karriere.konfiguration, [replace(a) for a in lage.aktive]
+            )
+            for nummer, lage in karriere.lage_je_fahrer.items()
+        },
+        fahrernamen=dict(karriere.fahrernamen),
         kenntnis=kern_streckenkenntnis.Streckenkenntnis(
             karriere.konfiguration, dict(karriere.kenntnis.runden)
         ),

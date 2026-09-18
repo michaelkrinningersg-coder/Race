@@ -201,11 +201,44 @@ Vier Dinge stehen neben der Streckenansicht, alle aus dem fertigen
   mit; ohne diese Zeitpunkte zeigte der Monitor die Werte vom Rennende,
   also Runden, die in der Uebertragung noch gar nicht gefahren waren.
 * **Rundenstand** "Runde X/Y" des Fuehrenden im Kopf der Seite.
-* **Rueckstandsdiagramm** als zweiter Reiter neben der Strecke.
+* **Rueckstandsdiagramm** als zweiter Reiter neben der Strecke; es zeigt
+  nur, was schon gefahren ist - sonst stuende dem Zuschauer der ganze
+  Rennausgang vor Augen, waehrend die Uebertragung in Runde drei laeuft.
+* **Live-Meisterschaft** als zweites Blatt unter dem Zeitenmonitor: der
+  Stand bis zu diesem Rennen plus die Punkte, die jeder fuer seine
+  derzeitige Position bekaeme, samt Qualifying und schnellster Runde.
+  Gruener Pfeil hoch, roter runter, dazu "+x" fuer den Zuwachs. Eine
+  Vorschau, die nichts fortschreibt - das tut am Rennende der Saisonlauf.
+
+Rangliste und Zeitenmonitor stehen **nebeneinander**, die Zwischenfaelle
+als Fussleiste darunter. Wie oft die Listen nachgezogen werden, ist
+einstellbar (200 ms voreingestellt, 10 ms bis 5 s); die Karte laeuft
+unabhaengig davon fluessig weiter.
 
 Ausgefallene Autos bleiben noch eine Minute auf der Streckengrafik stehen
 - lang genug, um zu sehen, wo es passiert ist - und werden danach
 abgeraeumt, statt regungslos liegen zu bleiben.
+
+#### Warum Rueckstand und Intervall an Messpunkten haengen
+
+Beide Zahlen wurden anfangs aus Strecke geteilt durch Tempo geschaetzt.
+Das schwankte stark, weil zwei Autos an verschiedenen Streckenpunkten
+verschieden schnell sind, und die Intervalle summierten sich **nicht**
+zum Rueckstand - gemessen fuenf Intervalle zu 11,6 s gegen 9,0 s
+Rueckstand.
+
+Stattdessen haelt die Simulation an **acht Messpunkten je Runde** die
+Uhrzeit fest: den vier Splits (Start/Ziel und die drei Sektorgrenzen) und
+dazwischen je einem in der Mitte, der selbst kein Split ist. Der Abstand
+zweier Autos ist die Differenz ihrer Zeiten am letzten Punkt, den das
+hintere passiert hat - zwei echte Zeiten an derselben Stelle der Strecke.
+Gemessen an sechs Autos summieren sich die Intervalle jetzt genau zum
+Rueckstand: 0,137 + 1,022 + 0,053 + 0,726 + 0,163 = 2,101 s.
+
+Ein **Minus** ist moeglich und richtig so: Wer zwischen zwei Messpunkten
+vorbeigeht, war am letzten gemeinsamen Punkt noch hinten. Gemessen kam
+das in 11,6 % der Bilder vor, vor allem in der ersten Runde, wo der
+einzige gemeinsame Punkt die Startlinie ist.
 
 #### Warum die Reihenfolge im Ziel nicht aus der Strecke kommt
 
@@ -361,6 +394,24 @@ die Begruendung dazu in OFFENE_PUNKTE.md.
 Die Streckenwirkung kommt aus der Querbeschleunigung der Runde: In
 Zandvoort enden die Reifen einer Liga-10-Session bei 11 bis 19 %, in
 Monza bei 62 bis 66 %.
+
+### Was ein Fehler kostet
+
+Kein Zeitabzug, sondern **Stillstand**: Das Auto geht auf 0 km/h, steht
+eine **feste** Zeit (``fehler.zeitverlust_ms``, 1250 ms) und faehrt
+danach mit seiner eigenen Beschleunigungskurve wieder an. Gemessen laeuft
+es nach der Pause ueber 1,3 → 2,6 → 3,9 km/h an, nicht sprunghaft zurueck
+aufs alte Tempo. Der wirkliche Verlust ist deshalb groesser als die
+1250 ms - das Anfahren kommt obendrauf.
+
+### Ereignisse treffen einzelne Fahrer
+
+GDD 14 laesst Ereignisse auf den Spieler wirken. Seit der Spieler ein
+Team mit vier Autos fuehrt, ist das nicht mehr eindeutig: Eine
+Erkaeltung hat **einer**, nicht alle vier. Jeder Fahrer fuehrt deshalb
+seine eigene Lage (``karriere.lage_je_fahrer``), und ein ausgeloestes
+Ereignis trifft einen, gewuerfelt aus der Seedquelle der Saison. Die
+Meldung nennt seinen Namen.
 
 ## Boxenstopps und Reifenstrategie (Punkt 39)
 

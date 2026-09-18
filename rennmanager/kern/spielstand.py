@@ -195,7 +195,10 @@ CREATE TABLE ereignisplan (datum TEXT NOT NULL, schluessel TEXT NOT NULL);
 CREATE TABLE ereignis (
     schluessel TEXT NOT NULL,
     ausgeloest_am TEXT NOT NULL,
-    rest INTEGER NOT NULL
+    rest INTEGER NOT NULL,
+    -- Ab Version 8: Ereignisse treffen einzelne Fahrer (Punkt 56).
+    -- -1 heisst: aus einem aelteren Stand, gilt fuers ganze Team.
+    fahrer INTEGER NOT NULL DEFAULT -1
 );
 CREATE TABLE defekt (schluessel TEXT NOT NULL);
 CREATE TABLE verlorener_tag (datum TEXT PRIMARY KEY);
@@ -205,7 +208,10 @@ CREATE TABLE meldung (
     name TEXT NOT NULL,
     text TEXT NOT NULL,
     geld INTEGER NOT NULL,
-    erfahrung INTEGER NOT NULL
+    erfahrung INTEGER NOT NULL,
+    -- Ab Version 8: wen das Ereignis getroffen hat (Punkt 56).
+    fahrer INTEGER NOT NULL DEFAULT 0,
+    fahrername TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE tabelle (
     liga INTEGER NOT NULL,
@@ -346,6 +352,14 @@ def _zahlen(text: str) -> tuple[int, ...]:
 
 def _text(zahlen) -> str:
     return ",".join(str(zahl) for zahl in zahlen)
+
+
+def _feld(zeile, name: str, standard):
+    """Ein Feld einer Zeile, oder der Standard aus einem aelteren Stand."""
+    try:
+        return zeile[name]
+    except (IndexError, KeyError):
+        return standard
 
 
 def _datum(text: str) -> dt.date:
@@ -544,8 +558,12 @@ def _schreibe_karriere(verbindung: sqlite3.Connection, k: kern_karriere.Karriere
         ],
     )
     verbindung.executemany(
-        "INSERT INTO ereignis VALUES (?, ?, ?)",
-        [(a.schluessel, a.ausgeloest_am.isoformat(), a.rest) for a in k.lage.aktive],
+        "INSERT INTO ereignis VALUES (?, ?, ?, ?)",
+        [
+            (a.schluessel, a.ausgeloest_am.isoformat(), a.rest, nummer)
+            for nummer, lage in sorted(k.lage_je_fahrer.items())
+            for a in lage.aktive
+        ],
     )
     verbindung.executemany(
         "INSERT INTO defekt VALUES (?)", [(d["schluessel"],) for d in k.defekte]
@@ -555,9 +573,12 @@ def _schreibe_karriere(verbindung: sqlite3.Connection, k: kern_karriere.Karriere
         [(datum.isoformat(),) for datum in sorted(k.verlorene_tage)],
     )
     verbindung.executemany(
-        "INSERT INTO meldung VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO meldung VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         [
-            (m.datum.isoformat(), m.schluessel, m.name, m.text, m.geld, m.erfahrung)
+            (
+                m.datum.isoformat(), m.schluessel, m.name, m.text,
+                m.geld, m.erfahrung, m.fahrer, m.fahrername,
+            )
             for m in k.meldungen
         ],
     )
@@ -910,13 +931,21 @@ def _lies_karriere(
         plan.setdefault(_datum(e["datum"]), []).append(e["schluessel"])
     karriere.ereignisplan = {datum: tuple(liste) for datum, liste in plan.items()}
 
-    karriere.lage = kern_ereignis.Lage(
-        konfiguration,
-        [
+    # Punkt 56: Je Fahrer eine Lage. Ein Stand vor Version 8 traegt
+    # ``fahrer = -1``; dessen Ereignisse gehoerten dem ganzen Team und
+    # wandern auf den damals gewaehlten Fahrer.
+    je_fahrer: dict[int, list] = {}
+    for e in verbindung.execute("SELECT * FROM ereignis"):
+        nummer = _feld(e, "fahrer", -1)
+        if nummer < 0:
+            nummer = z["fahrernummer"]
+        je_fahrer.setdefault(nummer, []).append(
             _lies_ereignis(konfiguration, e["schluessel"], e["ausgeloest_am"], e["rest"])
-            for e in verbindung.execute("SELECT * FROM ereignis")
-        ],
-    )
+        )
+    karriere.lage_je_fahrer = {
+        nummer: kern_ereignis.Lage(konfiguration, aktive)
+        for nummer, aktive in je_fahrer.items()
+    }
     karriere.defekte = [
         kern_zwischenfall.defekt_von(konfiguration, d["schluessel"])
         for d in verbindung.execute("SELECT * FROM defekt")
@@ -932,6 +961,8 @@ def _lies_karriere(
             text=m["text"],
             geld=m["geld"],
             erfahrung=m["erfahrung"],
+            fahrer=_feld(m, "fahrer", 0),
+            fahrername=_feld(m, "fahrername", ""),
         )
         for m in verbindung.execute("SELECT * FROM meldung")
     ]

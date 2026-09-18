@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QProgressBar,
     QPushButton,
+    QSpinBox,
     QSplitter,
     QTabWidget,
     QTreeWidget,
@@ -25,6 +26,7 @@ from PySide6.QtWidgets import (
 )
 
 from rennmanager.kern import strecke as kern_strecke
+from rennmanager.kern import wertung as kern_wertung
 from rennmanager.kern.rennen import Rennverlauf
 from rennmanager.kern.welt import Welt
 from rennmanager.kern.zeit import (
@@ -44,14 +46,28 @@ from rennmanager.ui.tabellen import Balkenzeichner, verbinde_fahrerkarte
 # Spalten der Rangliste.
 SPALTE_PLATZ = 0
 SPALTE_KUERZEL = 1
+# Punkt 60: Der Nachname - ein Kuerzel wie "MKR" sagt niemandem etwas.
+SPALTE_NAME = 2
 # Punkt 76: Gewonnene oder verlorene Plaetze seit Beginn dieser Runde.
-SPALTE_WECHSEL = 2
-SPALTE_RUNDE = 3
-SPALTE_ZEIT = 4
-SPALTE_INTERVALL = 5
-SPALTE_MISCHUNG = 6
-SPALTE_REIFEN = 7
-SPALTE_STATUS = 8
+SPALTE_WECHSEL = 3
+SPALTE_RUNDE = 4
+SPALTE_ZEIT = 5
+SPALTE_INTERVALL = 6
+# Punkt 60: Momentantempo und Schnitt ueber das bisherige Rennen.
+SPALTE_TEMPO = 7
+SPALTE_SCHNITT = 8
+SPALTE_MISCHUNG = 9
+SPALTE_REIFEN = 10
+SPALTE_STATUS = 11
+# Spalten des Zeitenmonitors.
+MONITOR_KUERZEL = 0
+MONITOR_NAME = 1
+MONITOR_LETZTE = 2
+MONITOR_BESTE = 3
+MONITOR_BESTRUNDE = 4
+MONITOR_SCHNITT = 5
+MONITOR_SEKTOR = 6
+MONITOR_SPALTEN = 10
 # Gruener Pfeil hoch, roter Pfeil runter - die Zahl daneben sagt, um wie
 # viele Plaetze. Die Farbe ist nie die einzige Auskunft.
 PFEIL_HOCH = "\u25b2"
@@ -111,12 +127,23 @@ class Rennseite(QWidget):
         self._strecken: dict[str, kern_strecke.Strecke] = {}
         self._verlauf: Rennverlauf | None = None
         self._qualifying = None
+        # Punkt 73: Der Meisterschaftsstand vor diesem Rennen.
+        self._tabelle = None
         self._zeit_ms = 0.0
         self._laeuft = False
         # Das Rennen laeuft erst los, wenn diese Seite auch zu sehen ist.
         # Sonst rauscht es im Hintergrund durch, waehrend der Spieler noch
         # beim Qualifying steht - und er findet es am Ende vor.
         self._startet_beim_zeigen = False
+        # Punkt 58: Welcher Fahrer gerade gewaehlt ist. Rangliste und
+        # Monitor werden bei jedem Bild neu gefuellt; ohne diese Marke
+        # waere die Auswahl nach 200 ms wieder weg.
+        self._gewaehlt: int | None = None
+        # Punkt 62: Rangliste und Zeitenmonitor werden seltener neu
+        # gefuellt als die Karte - sonst springen die Zeiten schneller
+        # um, als sie zu lesen sind.
+        self._anzeige_takt_ms = konfiguration.wert("zeitraffer", "anzeige_takt_ms")
+        self._letzte_tabellen_ms: float | None = None
 
         self._ansicht = Streckenansicht()
         # Punkt 2: Das Rueckstandsdiagramm liegt als zweiter Reiter neben
@@ -135,12 +162,22 @@ class Rennseite(QWidget):
         self._blaetter.addTab(self._ansicht, "Strecke")
         self._blaetter.addTab(self._rueckstand, "Rueckstand")
 
+        # Punkt 59: Rangliste und Zeitenmonitor stehen **nebeneinander**,
+        # die Zwischenfaelle als Fussleiste darunter. Vorher lagen alle
+        # drei untereinander in einer schmalen Spalte; die Rangliste hat
+        # seit Punkt 60 zwoelf Spalten und braucht Breite.
         teiler = QSplitter(Qt.Horizontal)
         teiler.addWidget(self._blaetter)
-        teiler.addWidget(self._baue_seitenleiste())
-        teiler.setStretchFactor(0, 3)
-        teiler.setStretchFactor(1, 2)
-        spalte.addWidget(teiler, stretch=1)
+        teiler.addWidget(self._baue_listen())
+        teiler.setStretchFactor(0, 2)
+        teiler.setStretchFactor(1, 3)
+
+        senkrecht = QSplitter(Qt.Vertical)
+        senkrecht.addWidget(teiler)
+        senkrecht.addWidget(self._baue_ticker())
+        senkrecht.setStretchFactor(0, 5)
+        senkrecht.setStretchFactor(1, 1)
+        spalte.addWidget(senkrecht, stretch=1)
 
     # -- Aufbau ------------------------------------------------------------
     def _baue_wiedergabe(self) -> QHBoxLayout:
@@ -167,6 +204,20 @@ class Rennseite(QWidget):
         # ist - aber nirgends, wie weit das Rennen insgesamt ist. Hier
         # steht die Runde des Fuehrenden und die Gesamtzahl.
         self._rundenstand = QLabel("Runde -/-")
+        # Punkt 62: Wie oft die Zeiten in den Listen nachgezogen werden.
+        self._takteingabe = QSpinBox()
+        self._takteingabe.setRange(
+            self._konfiguration.wert("zeitraffer", "anzeige_takt_min_ms"),
+            self._konfiguration.wert("zeitraffer", "anzeige_takt_max_ms"),
+        )
+        self._takteingabe.setSingleStep(10)
+        self._takteingabe.setSuffix(" ms")
+        self._takteingabe.setValue(self._anzeige_takt_ms)
+        self._takteingabe.setToolTip(
+            "Wie oft Rangliste und Zeitenmonitor nachgezogen werden. "
+            "Die Karte laeuft unabhaengig davon fluessig weiter."
+        )
+        self._takteingabe.valueChanged.connect(self._takt_geaendert)
         self._fortschritt = QProgressBar()
         self._fortschritt.setTextVisible(False)
 
@@ -181,19 +232,46 @@ class Rennseite(QWidget):
         zeile.addWidget(self._fortschritt, stretch=1)
         zeile.addWidget(QLabel("Wetter:"))
         zeile.addWidget(self._wetteranzeige)
+        zeile.addSpacing(12)
+        zeile.addWidget(QLabel("Takt:"))
+        zeile.addWidget(self._takteingabe)
         return zeile
 
-    def _baue_seitenleiste(self) -> QWidget:
-        seite = QWidget()
-        spalte = QVBoxLayout(seite)
-        spalte.setContentsMargins(0, 0, 0, 0)
+    def _tabellen_faellig(self, zeit: float) -> bool:
+        """Ob Rangliste, Monitor und Ticker jetzt nachgezogen werden.
 
+        Gemessen wird in **Rennzeit**, nicht in Echtzeit: Im Zeitraffer
+        laufen zwischen zwei Bildern viele Rennsekunden, und die Listen
+        sollen genauso oft stehenbleiben wie bei einfachem Tempo.
+        """
+        davor = self._letzte_tabellen_ms
+        if davor is None or abs(zeit - davor) >= self._anzeige_takt_ms:
+            self._letzte_tabellen_ms = zeit
+            return True
+        return False
+
+    def _takt_geaendert(self, wert: int) -> None:
+        """Uebernimmt einen neuen Anzeigetakt und zeichnet sofort neu."""
+        self._anzeige_takt_ms = int(wert)
+        self._letzte_tabellen_ms = None
+        self._zeichne()
+
+    def _baue_listen(self) -> QWidget:
+        """Rangliste links, Zeitenmonitor und Meisterschaft rechts."""
+        teiler = QSplitter(Qt.Horizontal)
+        teiler.addWidget(self._baue_rangliste())
+        teiler.addWidget(self._baue_monitor())
+        teiler.setStretchFactor(0, 3)
+        teiler.setStretchFactor(1, 2)
+        return teiler
+
+    def _baue_rangliste(self) -> QWidget:
         # GDD 4: Positionen, Gesamtzeit des Fuehrenden, Rueckstand der uebrigen
         self._rangliste = QTreeWidget()
         self._rangliste.setHeaderLabels(
             [
-                "Pos", "Auto", "+/-", "Rd", "Zeit / Rueckstand", "Intervall",
-                "Mischung", "Reifen", "Status",
+                "Pos", "Auto", "Fahrer", "+/-", "Rd", "Zeit / Rueckstand",
+                "Intervall", "km/h", "Ø km/h", "Mischung", "Reifen", "Status",
             ]
         )
         self._rangliste.setRootIsDecorated(False)
@@ -214,20 +292,39 @@ class Rennseite(QWidget):
         kasten = QGroupBox("Rangliste")
         kasten_spalte = QVBoxLayout(kasten)
         kasten_spalte.addWidget(self._rangliste)
-        spalte.addWidget(kasten, stretch=3)
+        return kasten
 
+    def _baue_monitor(self) -> QWidget:
+        """Zeitenmonitor und darunter der Live-Meisterschaftsstand."""
         # GDD 4: letzte Runde, beste Runde, 4 Sektorzeiten
         self._monitor = QTreeWidget()
         self._monitor.setHeaderLabels(
-            ["Auto", "Letzte Rd", "Beste Rd", "S1", "S2", "S3", "S4"]
+            [
+                "Auto", "Fahrer", "Letzte Rd", "Beste Rd", "in Rd", "Ø km/h",
+                "S1", "S2", "S3", "S4",
+            ]
         )
         self._monitor.setRootIsDecorated(False)
         self._monitor.setAlternatingRowColors(True)
-        monitorkasten = QGroupBox("Zeitenmonitor")
-        monitor_spalte = QVBoxLayout(monitorkasten)
-        monitor_spalte.addWidget(self._monitor)
-        spalte.addWidget(monitorkasten, stretch=2)
+        # Punkt 58: Auch aus dem Monitor heraus laesst sich ein Fahrer
+        # waehlen; die Karte markiert ihn genauso.
+        self._monitor.currentItemChanged.connect(self._auswahl_geaendert)
+        # Punkt 73: Der Meisterschaftsstand, als waere das Rennen jetzt
+        # zu Ende - als zweites Blatt unter dem Zeitenmonitor.
+        self._meisterschaft = QTreeWidget()
+        self._meisterschaft.setHeaderLabels(
+            ["Pos", "Auto", "Fahrer", "+/-", "Punkte", "davon jetzt"]
+        )
+        self._meisterschaft.setRootIsDecorated(False)
+        self._meisterschaft.setAlternatingRowColors(True)
+        self._meisterschaft.currentItemChanged.connect(self._auswahl_geaendert)
 
+        self._monitorblaetter = QTabWidget()
+        self._monitorblaetter.addTab(self._monitor, "Zeitenmonitor")
+        self._monitorblaetter.addTab(self._meisterschaft, "Meisterschaft")
+        return self._monitorblaetter
+
+    def _baue_ticker(self) -> QWidget:
         # Punkt 4: Fehler, Unfaelle und Defekte laufen mit, neueste zuerst.
         self._ticker = QTreeWidget()
         self._ticker.setHeaderLabels(["Zeit", "Rd", "Auto", "Was"])
@@ -238,9 +335,9 @@ class Rennseite(QWidget):
         )
         self._tickerkasten = QGroupBox("Zwischenfaelle")
         ticker_spalte = QVBoxLayout(self._tickerkasten)
+        ticker_spalte.setContentsMargins(6, 4, 6, 4)
         ticker_spalte.addWidget(self._ticker)
-        spalte.addWidget(self._tickerkasten, stretch=2)
-        return seite
+        return self._tickerkasten
 
     # -- Rennen uebernehmen ------------------------------------------------
     def zeige_verlauf(
@@ -248,18 +345,26 @@ class Rennseite(QWidget):
         verlauf: Rennverlauf,
         strecke: kern_strecke.Strecke,
         qualifying=None,
+        tabelle=None,
     ) -> None:
         """Uebernimmt ein fertig gerechnetes Rennen und spielt es ab.
 
         Gerechnet hat es der Kern - beim gefuehrten Wochenende der
         ``Wochenendlauf`` (Punkt 12). Die Seite ist reine Uebertragung.
+
+        :param tabelle: der Meisterschaftsstand **vor** diesem Rennen
+            (Punkt 73). Ohne ihn bleibt das Blatt "Meisterschaft" leer -
+            ein Testrennen ohne Saison hat keinen Stand.
         """
         self._halte_an()
         self._verlauf = verlauf
         self._qualifying = qualifying
+        self._tabelle = tabelle
         self._ansicht.zeige(strecke)
         self._rueckstand.zeige(verlauf)
-        self._auswahl_geaendert(None)
+        # Ein neues Rennen faengt ohne Auswahl an.
+        self._gewaehlt = None
+        self._zeige_auswahl()
         self._fortschritt.setRange(0, max(verlauf.dauer_ms, 1))
         for knopf in (self._abspielen, self._zurueck, self._sofort):
             knopf.setEnabled(True)
@@ -314,6 +419,8 @@ class Rennseite(QWidget):
 
     def _springe(self, zeit_ms: float) -> None:
         self._zeit_ms = zeit_ms
+        # Ein Sprung soll sofort zu sehen sein, nicht erst im naechsten Takt.
+        self._letzte_tabellen_ms = None
         self._zeichne()
 
     def _zum_ende(self) -> None:
@@ -364,10 +471,49 @@ class Rennseite(QWidget):
                 if self._noch_auf_der_karte(verlauf, i, zeit)
             ]
         )
-        self._fuelle_rangliste(verlauf, reihenfolge, distanzen, zeit)
-        self._fuelle_monitor(verlauf, reihenfolge, zeit)
-        self._fuelle_ticker(verlauf, zeit)
+        if self._tabellen_faellig(zeit):
+            self._fuelle_rangliste(verlauf, reihenfolge, distanzen, zeit)
+            self._fuelle_monitor(verlauf, reihenfolge, zeit)
+            self._fuelle_meisterschaft(verlauf, reihenfolge, zeit)
+            self._fuelle_ticker(verlauf, zeit)
         self._rueckstand.setze_marke(zeit)
+
+    def _nachname(self, teilnehmer) -> str:
+        """Der Nachname des Fahrers hinter einem Auto (Punkt 60).
+
+        Ein Kuerzel wie "MKR" sagt niemandem etwas; der Nachname schon.
+        Ein Feld aus ``rennen.starterfeld`` hat keinen Fahrer dahinter -
+        dann bleibt die Spalte leer.
+        """
+        nummer = getattr(teilnehmer, "nummer", 0)
+        if not nummer or self._welt is None or nummer >= len(self._welt.fahrer):
+            return ""
+        name = self._welt.fahrer[nummer].name
+        return name.rsplit(" ", 1)[-1] if name else ""
+
+    def _tempotext(self, verlauf: Rennverlauf, i: int, zeit: float) -> str:
+        """Das Momentantempo in km/h (Punkt 60)."""
+        tempo = self._tempo_naeherung(verlauf, i, zeit)
+        return f"{tempo * 3.6:.0f}" if tempo > 0.1 else "-"
+
+    @staticmethod
+    def _schnitttext(distanz: float, zeit: float) -> str:
+        """Der Schnitt ueber das bisherige Rennen in km/h (Punkt 60)."""
+        if zeit <= 0.0 or distanz <= 0.0:
+            return "-"
+        return f"{distanz / (zeit / 1000.0) * 3.6:.1f}"
+
+    @staticmethod
+    def _beste_rundennummer(
+        verlauf: Rennverlauf, i: int, zeit: float, beste: int | None
+    ) -> int:
+        """In welcher Runde die beste Zeit gefahren wurde (Punkt 60)."""
+        if beste is None:
+            return 0
+        protokoll = verlauf.protokolle[i]
+        bis = protokoll.gefahren_bis(zeit)
+        zeiten = protokoll.rundenzeiten_ms[:bis]
+        return zeiten.index(beste) + 1 if beste in zeiten else 0
 
     @staticmethod
     def _wechseltext(gewinn: int) -> str:
@@ -450,7 +596,10 @@ class Rennseite(QWidget):
         self, verlauf: Rennverlauf, reihenfolge: list[int], distanzen, zeit: float
     ) -> None:
         """GDD 4: Gesamtzeit des Fuehrenden, Rueckstand der uebrigen."""
+        self._merke_stand(self._rangliste)
+        self._rangliste.blockSignals(True)
         self._rangliste.clear()
+        self._rangliste.blockSignals(False)
         laenge = verlauf.strecke.laenge_m
         fuehrender = reihenfolge[0]
         vorne = float(distanzen[fuehrender])
@@ -476,10 +625,7 @@ class Rennseite(QWidget):
                 if rueckstandsrunden >= 1:
                     text = formatiere_runden_rueckstand(rueckstandsrunden)
                 else:
-                    # Rueckstand in Zeit: Strecke geteilt durch das Tempo des
-                    # Fuehrenden an dieser Stelle.
-                    tempo = self._tempo_naeherung(verlauf, fuehrender, zeit)
-                    text = formatiere_rueckstand(int((vorne - distanz) / max(tempo, 1e-6) * 1000))
+                    text = self._zeitabstand(verlauf, i, fuehrender, zeit)
 
             # GDD 4: Zwischenfaelle sind im Ranking markiert, die
             # Einzelheiten stehen im Mouseover.
@@ -495,10 +641,13 @@ class Rennseite(QWidget):
                 [
                     str(platz),
                     teilnehmer.kuerzel,
+                    self._nachname(teilnehmer),
                     self._wechseltext(gewinn),
                     str(runde),
                     text,
                     self._intervall(verlauf, reihenfolge, distanzen, zeit, platz),
+                    self._tempotext(verlauf, i, zeit),
+                    self._schnitttext(distanz, zeit),
                     self._mischungstext(verlauf, i, mischungen[i], zeit),
                     f"{reifen[i]:.0%}",
                     status,
@@ -532,6 +681,7 @@ class Rennseite(QWidget):
         for spalte in range(self._rangliste.columnCount()):
             if spalte != SPALTE_REIFEN:
                 self._rangliste.resizeColumnToContents(spalte)
+        self._stelle_auswahl_wieder_her(self._rangliste)
 
     @staticmethod
     def _pflicht_erfuellt(verlauf: Rennverlauf, i: int, zeit: float) -> bool:
@@ -587,16 +737,18 @@ class Rennseite(QWidget):
         weit der naechste Gegner entfernt ist - die Zahl, an der im Rennen
         haengt, ob ein Ueberholmanoever ueberhaupt in Reichweite ist.
 
-        Gerechnet wird mit dem Tempo des *Vordermanns*: Das Intervall ist
-        die Zeit, die es braucht, um dort zu sein, wo er gerade ist. Der
-        Rueckstand zur Spitze rechnet entsprechend mit dem Tempo des
-        Fuehrenden. Beide Bezuege sind der jeweils richtige - aber weil
-        zwei Autos an verschiedenen Streckenpunkten verschieden schnell
-        sind, summieren sich die Intervalle **nicht** genau zum
-        Rueckstand. Gemessen lagen fuenf Intervalle bei 11,6 s, der
-        Rueckstand des sechsten Autos bei 9,0 s. Dasselbe gilt fuer echte
-        Zeitmonitore; nur beim Zweiten stimmen beide Zahlen ueberein, weil
-        dort Vordermann und Fuehrender dasselbe Auto sind.
+        Gemessen wird am letzten **Messpunkt**, den das hintere Auto
+        passiert hat (Punkt 75): Dort stand die Uhr fuer beide an
+        derselben Stelle der Strecke. Damit summieren sich die Intervalle
+        genau zum Rueckstand - gemessen an sechs Autos: 0,137 + 1,022 +
+        0,053 + 0,726 + 0,163 = 2,101 s, und genau 2,101 s steht als
+        Rueckstand des Sechsten.
+
+        Frueher wurde aus Strecke geteilt durch Tempo geschaetzt. Das
+        schwankte stark, weil zwei Autos an verschiedenen Streckenpunkten
+        verschieden schnell sind, und die Intervalle summierten sich
+        **nicht** zum Rueckstand - gemessen fuenf Intervalle zu 11,6 s
+        gegen 9,0 s Rueckstand.
         """
         if platz <= 1:
             return "-"
@@ -606,6 +758,32 @@ class Rennseite(QWidget):
         laenge = verlauf.strecke.laenge_m
         if abstand >= laenge:
             return formatiere_runden_rueckstand(int(abstand // laenge))
+        return self._zeitabstand(verlauf, hinten, vorne, zeit)
+
+    def _zeitabstand(
+        self, verlauf: Rennverlauf, hinten: int, vorne: int, zeit: float
+    ) -> str:
+        """Der Zeitabstand zweier Autos am letzten gemeinsamen Messpunkt.
+
+        Auf den ersten Metern eines Rennens hat noch keiner einen Punkt
+        passiert; dann bleibt nur die alte Schaetzung aus Strecke und
+        Tempo. Sobald der erste Messpunkt faellt, stehen echte Zeiten da.
+
+        **Ein Minus ist moeglich und richtig so.** Zwischen zwei
+        Messpunkten liegt rund ein Achtel Runde. Wer in dieser Zeit
+        vorbeigeht, liegt jetzt vorn, war am letzten gemeinsamen Punkt
+        aber noch hinten - dann steht dort ein negativer Wert, und der
+        sagt genau das: seit dem letzten Split hat sich etwas geaendert.
+        Gemessen kam das in 11,6 % der Bilder vor, vor allem in der ersten
+        Runde, wo der einzige gemeinsame Punkt die Startlinie ist und die
+        Zeiten dort noch die Startaufstellung tragen. Geschaetzt wird
+        nichts - so hat es der Auftraggeber verlangt.
+        """
+        echt = verlauf.abstand_ms(hinten, vorne, zeit)
+        if echt is not None:
+            return formatiere_rueckstand(echt)
+        distanzen = verlauf.distanzen_zu(zeit)
+        abstand = float(distanzen[vorne]) - float(distanzen[hinten])
         tempo = self._tempo_naeherung(verlauf, vorne, zeit)
         return formatiere_rueckstand(int(abstand / max(tempo, 1e-6) * 1000))
 
@@ -645,7 +823,10 @@ class Rennseite(QWidget):
         dieser Monitor beantwortet. Wer noch keine Runde beendet hat,
         steht hinten.
         """
+        self._merke_stand(self._monitor)
+        self._monitor.blockSignals(True)
         self._monitor.clear()
+        self._monitor.blockSignals(False)
         staende = {i: verlauf.protokolle[i].stand_zu(zeit) for i in reihenfolge}
         # Alle Fahrer, nicht nur die ersten zehn: Wer sein eigenes Auto
         # auf Platz 18 sucht, will dessen Sektorzeiten genauso sehen.
@@ -653,27 +834,117 @@ class Rennseite(QWidget):
             reihenfolge,
             key=lambda i: (staende[i][1] is None, staende[i][1] or 0, i),
         )
+        laenge = verlauf.strecke.laenge_m
         for i in nach_bestzeit:
             letzte, beste, sektoren = staende[i]
+            runde = self._beste_rundennummer(verlauf, i, zeit, beste)
             spalten = [
                 verlauf.teilnehmer[i].kuerzel,
+                self._nachname(verlauf.teilnehmer[i]),
                 formatiere_dauer(letzte) if letzte else "-",
                 formatiere_dauer(beste) if beste else "-",
+                str(runde) if runde else "-",
+                f"{laenge / (beste / 1000.0) * 3.6:.1f}" if beste else "-",
             ]
             spalten += [formatiere_dauer(sektor) for sektor in sektoren]
-            spalten += ["-"] * (7 - len(spalten))
+            spalten += ["-"] * (MONITOR_SPALTEN - len(spalten))
             zeile = QTreeWidgetItem(self._monitor, spalten)
             zeile.setForeground(0, QColor(verlauf.teilnehmer[i].farbe))
+            zeile.setData(0, Qt.UserRole, i)
             # Die letzte Runde leuchtet auf, wenn sie zugleich die beste
             # dieses Fahrers war - eine persoenliche Bestzeit sieht man
             # so im Vorbeilaufen.
             if letzte is not None and letzte == beste:
-                zeile.setForeground(1, QColor(FARBE_PERSOENLICHE_BEST))
-                schrift = zeile.font(1)
+                zeile.setForeground(MONITOR_LETZTE, QColor(FARBE_PERSOENLICHE_BEST))
+                schrift = zeile.font(MONITOR_LETZTE)
                 schrift.setBold(True)
-                zeile.setFont(1, schrift)
-        for spalte in range(7):
+                zeile.setFont(MONITOR_LETZTE, schrift)
+        for spalte in range(MONITOR_SPALTEN):
             self._monitor.resizeColumnToContents(spalte)
+        self._stelle_auswahl_wieder_her(self._monitor)
+
+    def _fuelle_meisterschaft(
+        self, verlauf: Rennverlauf, reihenfolge: list[int], zeit: float
+    ) -> None:
+        """Der Meisterschaftsstand, als waere das Rennen jetzt zu Ende.
+
+        Eine **voruebergehende** Ansicht zum Abspielzeitpunkt: Zu den
+        Punkten bis zu diesem Rennen kommen die, die jeder Fahrer fuer
+        seine derzeitige Position bekaeme - samt schnellster Runde und
+        Qualifying (GDD 13). Fortgeschrieben wird der Stand erst am
+        Rennende, und zwar vom Saisonlauf, nicht von hier.
+        """
+        self._merke_stand(self._meisterschaft)
+        self._meisterschaft.blockSignals(True)
+        self._meisterschaft.clear()
+        self._meisterschaft.blockSignals(False)
+        if self._tabelle is None:
+            return
+
+        zeilen = kern_wertung.livewertung(
+            self._konfiguration, self._tabelle, self._rennlage(verlauf, reihenfolge, zeit)
+        )
+        nummern = {t.nummer: i for i, t in enumerate(verlauf.teilnehmer)}
+        for zeile in zeilen:
+            stelle = nummern.get(zeile.fahrer)
+            teilnehmer = verlauf.teilnehmer[stelle] if stelle is not None else None
+            eintrag = QTreeWidgetItem(
+                self._meisterschaft,
+                [
+                    str(zeile.platz),
+                    teilnehmer.kuerzel if teilnehmer else "",
+                    self._nachname(teilnehmer) if teilnehmer else "",
+                    self._wechseltext(zeile.veraenderung),
+                    str(zeile.punkte),
+                    f"+{zeile.zuwachs}" if zeile.zuwachs else "",
+                ],
+            )
+            if teilnehmer is not None:
+                eintrag.setForeground(1, QColor(teilnehmer.farbe))
+                eintrag.setData(0, Qt.UserRole, stelle)
+            if zeile.veraenderung:
+                eintrag.setForeground(
+                    3,
+                    QColor(
+                        FARBE_GEWONNEN if zeile.veraenderung > 0 else FARBE_VERLOREN
+                    ),
+                )
+        for spalte in range(self._meisterschaft.columnCount()):
+            self._meisterschaft.resizeColumnToContents(spalte)
+        self._stelle_auswahl_wieder_her(self._meisterschaft)
+
+    def _rennlage(
+        self, verlauf: Rennverlauf, reihenfolge: list[int], zeit: float
+    ) -> list:
+        """Die derzeitige Lage im Rennen als Rennergebnisse (Punkt 73)."""
+        quali = {}
+        if self._qualifying is not None:
+            for platz, stelle in enumerate(self._qualifying.aufstellung, start=1):
+                quali[stelle] = platz
+        schnellster = self._schnellste_runde_bis(verlauf, zeit)
+        bild = verlauf.bild_zu(zeit)
+        raus = verlauf.ausgefallen[bild]
+        return [
+            kern_wertung.Rennergebnis(
+                fahrer=verlauf.teilnehmer[i].nummer,
+                rennplatz=platz,
+                qualifyingplatz=quali.get(i, verlauf.teilnehmer[i].startplatz),
+                schnellste_runde=i == schnellster,
+                ausgefallen=bool(raus[i]),
+            )
+            for platz, i in enumerate(reihenfolge, start=1)
+        ]
+
+    @staticmethod
+    def _schnellste_runde_bis(verlauf: Rennverlauf, zeit: float) -> int | None:
+        """Wer bis hierher die schnellste Runde gefahren ist."""
+        bester = None
+        beste = None
+        for i in range(verlauf.anzahl):
+            _, runde, _ = verlauf.protokolle[i].stand_zu(zeit)
+            if runde is not None and (beste is None or runde < beste):
+                bester, beste = i, runde
+        return bester
 
     def _fuelle_ticker(self, verlauf: Rennverlauf, zeit: float) -> None:
         """Zwischenfaelle bis zur laufenden Rennzeit, neueste zuerst (Punkt 4)."""
@@ -721,7 +992,20 @@ class Rennseite(QWidget):
         return nummer_von
 
     def _auswahl_geaendert(self, jetzt, _davor=None) -> None:
-        """Hebt Spieler und gewaehltes Auto im Diagramm hervor (Punkt 2)."""
+        """Merkt sich den gewaehlten Fahrer und hebt ihn hervor.
+
+        Die Auswahl gilt fuer beide Listen und die Karte: Wer in der
+        Rangliste ein Auto anklickt, sieht es auch im Zeitenmonitor und
+        auf der Strecke markiert.
+        """
+        if jetzt is not None:
+            nummer = jetzt.data(0, Qt.UserRole)
+            if nummer is not None:
+                self._gewaehlt = int(nummer)
+        self._zeige_auswahl()
+
+    def _zeige_auswahl(self) -> None:
+        """Traegt die gemerkte Auswahl in Diagramm und Karte ein."""
         if self._verlauf is None:
             return
         hervor = [
@@ -729,10 +1013,42 @@ class Rennseite(QWidget):
             for i, teilnehmer in enumerate(self._verlauf.teilnehmer)
             if teilnehmer.ist_spieler
         ]
-        gewaehlt = jetzt.data(0, Qt.UserRole) if jetzt is not None else None
+        gewaehlt = self._gewaehlt
         if gewaehlt is not None and gewaehlt not in hervor:
-            hervor.append(int(gewaehlt))
+            hervor.append(gewaehlt)
         self._rueckstand.hebe_hervor(hervor)
+        # Punkt 58: Auf der Karte bekommt der gewaehlte Fahrer einen
+        # goldenen Kreis - das Diagramm zeigt Linien, die Karte Punkte.
+        self._ansicht.hebe_hervor(
+            self._verlauf.teilnehmer[gewaehlt].kuerzel
+            if gewaehlt is not None and gewaehlt < len(self._verlauf.teilnehmer)
+            else ""
+        )
+
+    def _stelle_auswahl_wieder_her(self, liste) -> None:
+        """Waehlt nach dem Neuaufbau dieselbe Zeile und denselben Stand.
+
+        Beide Listen werden bei jedem Bild geleert und neu gefuellt. Ohne
+        das hier waere die Auswahl nach 200 ms weg, und die Liste spraenge
+        bei jedem Bild an den Anfang zurueck - wer weiter unten sucht,
+        kaeme nie an.
+        """
+        balken = liste.verticalScrollBar()
+        stand = getattr(liste, "_stand", balken.value())
+        liste.blockSignals(True)
+        if self._gewaehlt is not None:
+            for stelle in range(liste.topLevelItemCount()):
+                zeile = liste.topLevelItem(stelle)
+                if zeile.data(0, Qt.UserRole) == self._gewaehlt:
+                    liste.setCurrentItem(zeile)
+                    break
+        balken.setValue(min(stand, balken.maximum()))
+        liste.blockSignals(False)
+
+    @staticmethod
+    def _merke_stand(liste) -> None:
+        """Haelt den Rollstand fest, bevor die Liste geleert wird."""
+        liste._stand = liste.verticalScrollBar().value()
 
     # -- Zugriff fuer Tests -------------------------------------------------
     @property

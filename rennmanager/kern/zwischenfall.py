@@ -91,14 +91,19 @@ def fehlerrate_je_runde(
     return min(grundrate * wetterfaktor * reifenfaktor, 1.0)
 
 
-def zeitverlust_ms(konfiguration: Konfiguration, wuerfel) -> int:
-    """Wie viel Zeit ein Fehler einmalig kostet (GDD 4)."""
-    einstellung = konfiguration.wert("fehler")
-    return int(
-        wuerfel.integers(
-            einstellung["zeitverlust_min_ms"], einstellung["zeitverlust_max_ms"] + 1
-        )
-    )
+def zeitverlust_ms(konfiguration: Konfiguration, wuerfel=None) -> int:
+    """Wie lange ein Auto nach einem Fehler steht (GDD 4, Punkt 61).
+
+    Eine **feste** Zeit, keine Spanne - so hat es der Auftraggeber
+    entschieden. Sie wird im Rennen nicht als Zeitabzug verrechnet,
+    sondern als Stillstand: Das Auto geht auf 0 km/h, steht diese Zeit und
+    faehrt danach mit seiner eigenen Beschleunigungskurve wieder an. Was
+    ein Fehler wirklich kostet, ist deshalb mehr als diese Zahl.
+
+    :param wuerfel: wird nicht mehr gebraucht; das Feld bleibt, damit
+        bestehende Aufrufe unveraendert durchlaufen.
+    """
+    return int(konfiguration.wert("fehler", "zeitverlust_ms"))
 
 
 # ---------------------------------------------------------------------------

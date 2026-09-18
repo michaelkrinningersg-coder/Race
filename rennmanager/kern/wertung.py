@@ -126,6 +126,79 @@ class Tabelle:
 
 
 # ---------------------------------------------------------------------------
+# Live-Meisterschaftsstand (Punkt 73)
+# ---------------------------------------------------------------------------
+@dataclass(frozen=True)
+class Livezeile:
+    """Eine Zeile des Meisterschaftsstands waehrend eines Rennens.
+
+    ``punkte`` ist der Stand **einschliesslich** der Punkte, die dieser
+    Fahrer fuer seine derzeitige Position bekaeme; ``zuwachs`` sind genau
+    diese Punkte. ``veraenderung`` sagt, wie viele Plaetze er in der
+    Meisterschaft gewinnt oder verliert, wenn das Rennen so ausgeht -
+    positiv heisst nach vorn.
+    """
+
+    fahrer: int
+    platz: int
+    punkte: int
+    zuwachs: int
+    platz_vorher: int
+    punkte_vorher: int
+
+    @property
+    def veraenderung(self) -> int:
+        return self.platz_vorher - self.platz
+
+
+def livewertung(
+    konfiguration: Konfiguration,
+    tabelle: Tabelle,
+    ergebnisse: list[Rennergebnis],
+) -> list[Livezeile]:
+    """Der Meisterschaftsstand, als waere das Rennen jetzt zu Ende.
+
+    Rein rechnerisch und ohne Nebenwirkung: Die Tabelle bleibt, wie sie
+    ist. Das Rennen laeuft ja noch - was hier steht, ist eine Vorschau auf
+    den Stand, wenn es so ausginge. Erst am Rennende schreibt
+    ``verbuche`` den Stand wirklich fort.
+
+    Qualifyingpunkte und die schnellste Runde zaehlen mit, weil sie
+    genauso in ``punkte_fuer`` stehen (GDD 13).
+
+    :param tabelle: der Stand **vor** diesem Rennen
+    :param ergebnisse: die derzeitige Lage im Rennen je Fahrer
+    """
+    vorher = {e.fahrer: platz for platz, e in enumerate(tabelle.stand(), start=1)}
+    punkte_vorher = {f: e.punkte for f, e in tabelle.eintraege.items()}
+
+    zuwachs = {e.fahrer: punkte_fuer(konfiguration, e) for e in ergebnisse}
+    platzierungen = {e.fahrer: e.rennplatz for e in ergebnisse}
+    beteiligt = set(punkte_vorher) | set(zuwachs)
+
+    def schluessel(fahrer: int) -> tuple:
+        # Wie ``stand``: Punkte zuerst; bei Gleichstand liegt vorn, wer im
+        # laufenden Rennen weiter vorn ist - das ist die Zahl, die sich
+        # gerade aendert.
+        gesamt = punkte_vorher.get(fahrer, 0) + zuwachs.get(fahrer, 0)
+        return (-gesamt, platzierungen.get(fahrer, 10**6), fahrer)
+
+    zeilen = []
+    for platz, fahrer in enumerate(sorted(beteiligt, key=schluessel), start=1):
+        zeilen.append(
+            Livezeile(
+                fahrer=fahrer,
+                platz=platz,
+                punkte=punkte_vorher.get(fahrer, 0) + zuwachs.get(fahrer, 0),
+                zuwachs=zuwachs.get(fahrer, 0),
+                platz_vorher=vorher.get(fahrer, platz),
+                punkte_vorher=punkte_vorher.get(fahrer, 0),
+            )
+        )
+    return zeilen
+
+
+# ---------------------------------------------------------------------------
 # Auf- und Abstieg
 # ---------------------------------------------------------------------------
 @dataclass(frozen=True)
