@@ -1035,7 +1035,16 @@ limit_kmh = 80
 # Rundenzeit -, und Silverstone auf 45 m, weil Start/Ziel dort kurz vor
 # dem Kurveneingang liegt. Echte Boxengassen liegen dazwischen.
 min_laenge_m = 500
-max_laenge_m = 1000
+max_laenge_m = 750
+# Ein ganzer Stopp - Durchfahrt plus mittlere Standzeit - darf hoechstens
+# diesen Anteil der Rundenzeit kosten. Gemessen wird an der
+# Referenzrundenzeit der Strecke, nicht am gerade fahrenden Auto.
+#
+# Ueber die Zeit statt ueber die Laenge, weil die Laenge die Zeit nicht
+# vorhersagt: Monza kostete bei 13 % Rundenlaenge 42 % Rundenzeit,
+# Catalunya bei 16 % nur 38 %. Schnelle Strecken bestrafen die
+# Boxengasse staerker.
+max_anteil_rundenzeit = 0.38
 # Standzeit, gleichverteilt gewuerfelt. Ein guter Stopp ist unter vier
 # Sekunden, ein verpatzter kostet das Doppelte.
 standzeit_min_s = 3.0
