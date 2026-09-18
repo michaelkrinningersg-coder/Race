@@ -1016,6 +1016,30 @@ abbau_max = 38
 # Gipfel hat, waechst schneller. Deshalb braucht es keine eigene
 # Wachstumskonstante - Gipfelalter und Tempo sagen alles.
 reife_am_gipfel = 0.90
+# Was ein Achtzehnjaehriger schon von seinem Potential mitbringt. Ohne
+# das stuende ein Einsteiger bei null und wuerde jede Runde ueberrundet.
+anfang_anteil = 0.12
+
+# ---------------------------------------------------------------------------
+# Punkt 39 - Boxenstopps
+# ---------------------------------------------------------------------------
+# Die Streckendateien enthalten keine Boxengasse. Der Auftraggeber hat
+# entschieden, sie aus der Geometrie abzuleiten: von der Geraden vor
+# Start/Ziel durch die Kurvenkombination danach bis zur naechsten
+# Geraden. Dort gilt das Limit; Bremsen davor und Beschleunigen danach
+# rechnet dasselbe Geschwindigkeitsprofil wie sonst.
+[boxenstopp]
+limit_kmh = 80
+# Spanne der Boxengassenlaenge. Ohne sie kam Monza mit der ganzen
+# Start-Ziel-Geraden auf 1350 m und 44 s Durchfahrt - mehr als eine halbe
+# Rundenzeit -, und Silverstone auf 45 m, weil Start/Ziel dort kurz vor
+# dem Kurveneingang liegt. Echte Boxengassen liegen dazwischen.
+min_laenge_m = 500
+max_laenge_m = 1000
+# Standzeit, gleichverteilt gewuerfelt. Ein guter Stopp ist unter vier
+# Sekunden, ein verpatzter kostet das Doppelte.
+standzeit_min_s = 3.0
+standzeit_max_s = 10.0
 
 # ---------------------------------------------------------------------------
 # Punkt 7 - Fahrer holen: Vertraege, Gehalt und Abloese
@@ -1030,11 +1054,15 @@ reife_am_gipfel = 0.90
 laufzeit_min = 1
 laufzeit_max = 4
 
-# Das Gehalt eines Fahrers: ein Grundbetrag plus ein Anteil, der an
-# seinem Koennen und seinem Potential haengt. Ein Liga-1-Fahrer kommt so
-# auf gut das Sechsfache eines Liga-20-Fahrers.
-grundgehalt = 250_000
-gehaltsspanne = 5.0
+# Das Gehalt eines Fahrers haengt an dem, was er **verdienen** kann: ein
+# Anteil der Siegpraemie der Liga, in die sein Koennen gehoert - und der
+# Liga, in die sein Potential ihn noch bringen kann. Ein fester
+# Grundbetrag taete es nicht, denn ein Sieg in Liga 20 bringt 4.000 EUR
+# und einer in Liga 1 das Dreihundertfache.
+#
+# Bei 0,75 kostet ein Spitzenfahrer rund ein Fuenftel dessen, was eine
+# gute Saison in seiner Liga einbringt.
+anteil_der_siegpraemie = 0.75
 gewicht_koennen = 2.0
 gewicht_potential = 1.0
 # Ein junger Fahrer verlangt weniger, auch wenn er viel kann - er hat

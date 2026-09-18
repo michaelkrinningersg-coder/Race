@@ -104,7 +104,11 @@ class Karriere:
     liga: int
     konto: Konto
     autos: dict[int, dict[str, int]]
-    vertraege: dict[str, kern_sponsoren.Vertrag] = field(default_factory=dict)
+    # Sponsoren sitzen auf den Plaetzen **eines** Autos (GDD 10). Jedes
+    # Auto gehoert seinem Fahrer, also traegt jeder seine eigenen.
+    vertraege_je_fahrer: dict[int, dict[str, kern_sponsoren.Vertrag]] = field(
+        default_factory=dict
+    )
     buchungen: list[Tagesbuchung] = field(default_factory=list)
     # Belegte Plaetze des laufenden Tages, je Fahrer: An einem Tag wird
     # an **einem** Auto gearbeitet, und jedes hat seine eigenen Plaetze.
@@ -122,6 +126,10 @@ class Karriere:
     kenntnis: kern_streckenkenntnis.Streckenkenntnis | None = None
     # Nummer des Fahrers in der Welt - fuer die Streckenkenntnis.
     fahrernummer: int = 0
+    # Punkt 7: Was der Chef seinen Fahrern zahlt, je Fahrer Gehalt je
+    # Saison und Restlaufzeit in Saisons. Wer hier fehlt, faehrt zum
+    # Nulltarif - das sind die vier, mit denen das Spiel beginnt.
+    fahrervertraege: dict[int, tuple[int, int]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.lage is None:
@@ -147,6 +155,15 @@ class Karriere:
     def belegt(self) -> set[str]:
         """Die heute belegten Plaetze des gewaehlten Fahrers."""
         return self.belegte_plaetze.setdefault(self.fahrernummer, set())
+
+    @property
+    def vertraege(self) -> dict[str, kern_sponsoren.Vertrag]:
+        """Die Sponsorenvertraege auf dem Auto des gewaehlten Fahrers."""
+        return self.vertraege_je_fahrer.setdefault(self.fahrernummer, {})
+
+    @vertraege.setter
+    def vertraege(self, neue: dict[str, kern_sponsoren.Vertrag]) -> None:
+        self.vertraege_je_fahrer[self.fahrernummer] = neue
 
     @property
     def fahrer(self) -> tuple[int, ...]:
@@ -175,6 +192,9 @@ class Karriere:
         """
         self.autos.pop(nummer, None)
         self.belegte_plaetze.pop(nummer, None)
+        # Die Sponsoren sassen auf seinem Auto - auch sie gehen mit.
+        self.vertraege_je_fahrer.pop(nummer, None)
+        self.fahrervertraege.pop(nummer, None)
         self.defekte = [d for d in self.defekte if d.get("fahrer", nummer) != nummer]
         if nachfolger is not None:
             self.autos[nachfolger] = leere_werte(self.konfiguration)
@@ -585,41 +605,68 @@ class Karriere:
         platz: int,
         ueberholmanoever: int = 0,
         kilometer_je_wetter: dict[str, float] | None = None,
+        fahrer: int | None = None,
+        liga: int | None = None,
     ) -> Konto:
-        """Schreibt Preisgeld, Startgeld, Erfahrung und Sponsoren gut (GDD 10)."""
-        geld = kern_einnahmen.preisgeld(self.konfiguration, self.liga, platz)
-        geld += kern_einnahmen.startgeld(self.konfiguration, self.liga)
-        geld += kern_sponsoren.auszahlung(self.vertraege, platz)
-        erfahrung = kern_einnahmen.erfahrung_fuer(
-            self.konfiguration, self.liga, platz, ueberholmanoever
-        )
+        """Schreibt Preisgeld, Startgeld, Erfahrung und Sponsoren gut (GDD 10).
 
-        toepfe = {}
-        for wetter, kilometer in (kilometer_je_wetter or {}).items():
-            toepfe[wetter] = kern_einnahmen.wetter_erfahrung(
-                self.konfiguration, self.liga, kilometer, platz
+        Alles laeuft in **ein** Konto: Der Teamchef verdient an allen
+        seinen Autos. Preisgeld und Erfahrung haengen aber an der Liga des
+        einzelnen Fahrers, und die Sponsoren sitzen auf seinem Auto.
+
+        :param fahrer: wessen Rennen gebucht wird. Ohne Angabe der
+            gewaehlte - so bleiben Aufrufe mit einem Auto unveraendert.
+        :param liga: seine Liga. Ohne Angabe die des Teams.
+        """
+        vorher = self.fahrernummer
+        if fahrer is not None:
+            self.fahrernummer = fahrer
+        seine_liga = liga if liga is not None else self.liga
+        try:
+            geld = kern_einnahmen.preisgeld(self.konfiguration, seine_liga, platz)
+            geld += kern_einnahmen.startgeld(self.konfiguration, seine_liga)
+            geld += kern_sponsoren.auszahlung(self.vertraege, platz)
+            erfahrung = kern_einnahmen.erfahrung_fuer(
+                self.konfiguration, seine_liga, platz, ueberholmanoever
             )
 
-        self.konto = self.konto.mit(geld=geld, erfahrung=erfahrung, **toepfe)
-        self.vertraege = kern_sponsoren.nach_rennen(self.vertraege)
+            toepfe = {}
+            for wetter, kilometer in (kilometer_je_wetter or {}).items():
+                toepfe[wetter] = kern_einnahmen.wetter_erfahrung(
+                    self.konfiguration, seine_liga, kilometer, platz
+                )
+
+            self.konto = self.konto.mit(geld=geld, erfahrung=erfahrung, **toepfe)
+            self.vertraege = kern_sponsoren.nach_rennen(self.vertraege)
+        finally:
+            self.fahrernummer = vorher
         # Ereignisse, die in Rennwochenenden laufen, sind eines weiter
         # (GDD 14).
         self.lage.nach_rennwochenende()
         return self.konto
 
-    def verbuche_runden(self, strecke: str, runden: int, seedquelle: Seedquelle) -> float:
+    def verbuche_runden(
+        self,
+        strecke: str,
+        runden: int,
+        seedquelle: Seedquelle,
+        fahrer: int | None = None,
+    ) -> float:
         """Schreibt gefahrene Runden der Streckenkenntnis gut (GDD 6).
 
-        E10 Testfahrt geglueckt hebt den Zuwachs der naechsten Strecke.
+        E10 Testfahrt geglueckt hebt den Zuwachs der naechsten Strecke -
+        das Ereignis gehoert dem Team, gilt also fuer alle vier.
+
+        :param fahrer: wessen Runden gebucht werden. Ohne Angabe die des
+            gewaehlten.
         """
+        nummer = self.fahrernummer if fahrer is None else fahrer
         zuschlag = 1.0 + self.lage.streckenkenntnisbonus()
-        gewachsen = self.kenntnis.verbuche(self.fahrernummer, strecke, runden, seedquelle)
+        gewachsen = self.kenntnis.verbuche(nummer, strecke, runden, seedquelle)
         if zuschlag != 1.0:
             zusatz = gewachsen * (zuschlag - 1.0)
             self.kenntnis.setze(
-                self.fahrernummer,
-                strecke,
-                self.kenntnis.stand(self.fahrernummer, strecke) + zusatz,
+                nummer, strecke, self.kenntnis.stand(nummer, strecke) + zusatz
             )
             gewachsen += zusatz
         return gewachsen
@@ -673,6 +720,55 @@ class Karriere:
         # was auf ihn faellt, muesste sonst ausfallen.
         for schluessel in self.ereignisplan.get(self.heute, ()):
             self._loese_ereignis_aus(schluessel)
+
+    # -- Fahrervertraege (Punkt 7) -----------------------------------------
+    @property
+    def gehaltssumme(self) -> int:
+        """Was alle Fahrervertraege zusammen je Saison kosten."""
+        return sum(gehalt for gehalt, _ in self.fahrervertraege.values())
+
+    def verpflichte(
+        self, nummer: int, gehalt: int, laufzeit: int, abloese: int = 0
+    ) -> None:
+        """Nimmt einen Fahrer unter Vertrag und zahlt die Abloese.
+
+        Er bringt ein leeres, nicht upgegradetes Auto mit - so hat es der
+        Auftraggeber entschieden. Wer verdraengt wird, entscheidet der
+        Chef selbst, indem er vorher ``fahrer_geht`` ruft.
+        """
+        if abloese > self.konto.geld:
+            raise KarriereFehler(
+                f"Die Abloese von {abloese} EUR ist nicht gedeckt "
+                f"({self.konto.geld} EUR auf dem Konto)"
+            )
+        if abloese:
+            self.konto = self.konto.mit(geld=-abloese)
+        self.autos.setdefault(nummer, leere_werte(self.konfiguration))
+        self.belegte_plaetze.setdefault(nummer, set())
+        self.vertraege_je_fahrer.setdefault(nummer, {})
+        self.fahrervertraege[nummer] = (int(gehalt), int(laufzeit))
+
+    def zahle_gehaelter(self) -> int:
+        """Bucht die Jahresgehaelter ab und zaehlt die Vertraege herunter.
+
+        Einmal je Saisonwechsel. Ohne Geld wird trotzdem gezahlt - GDD 10
+        kennt keine Schulden und keinen Bankrott, das Konto geht nur auf
+        null. Ein ausgelaufener Vertrag verschwindet; der Fahrer bleibt,
+        bis der Chef ihn gehen laesst oder verlaengert.
+
+        :return: die gezahlte Summe
+        """
+        summe = min(self.gehaltssumme, max(self.konto.geld, 0))
+        if summe:
+            self.konto = self.konto.mit(geld=-summe)
+        weiter = {}
+        for nummer, (gehalt, laufzeit) in self.fahrervertraege.items():
+            if nummer not in self.autos:
+                continue  # Er ist gegangen, sein Vertrag mit ihm.
+            if laufzeit > 1:
+                weiter[nummer] = (gehalt, laufzeit - 1)
+        self.fahrervertraege = weiter
+        return summe
 
     def unterschreibe(self, angebot: kern_sponsoren.Angebot) -> None:
         """Nimmt ein Sponsorenangebot an; ein Platz traegt einen Vertrag."""
@@ -749,7 +845,10 @@ def kopiere(karriere: Karriere) -> Karriere:
         karriere,
         konto=karriere.konto,
         autos={n: dict(w) for n, w in karriere.autos.items()},
-        vertraege=dict(karriere.vertraege),
+        vertraege_je_fahrer={
+            n: dict(v) for n, v in karriere.vertraege_je_fahrer.items()
+        },
+        fahrervertraege=dict(karriere.fahrervertraege),
         buchungen=list(karriere.buchungen),
         belegte_plaetze={n: set(p) for n, p in karriere.belegte_plaetze.items()},
         defekte=list(karriere.defekte),

@@ -33,7 +33,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from rennmanager.kern import einnahmen as kern_einnahmen
 from rennmanager.kern import talent as kern_talent
+from rennmanager.kern import welt as kern_welt
 from rennmanager.kern.auto import gesamtwert
 from rennmanager.kern.welt import Fahrer, Welt
 from rennmanager.kern.zufall import Seedquelle
@@ -129,22 +131,32 @@ def marktwert(
     der Abloese - genau die Abwaegung, die den Transfermarkt ausmacht.
     """
     einstellung = konfiguration.wert("transfer")
-    skala = konfiguration.wert("skala", "maximum")
-    jetzt = gesamtwert(konfiguration, fahrer.auto) / skala
-    spaeter = talent.gipfelstaerke / skala
-
-    anteil = (
+    # Ein Fahrer kostet einen Anteil dessen, was er **verdienen** kann.
+    # Ein fester Grundbetrag taete es nicht: Ein Sieg in Liga 20 bringt
+    # 4.000 EUR, einer in Liga 1 das Dreihundertfache. Gerechnet wird
+    # deshalb ueber die Liga, in die sein Koennen gehoert - und ueber die,
+    # in die sein Potential ihn noch bringen kann.
+    jetzt = kern_einnahmen.siegpraemie(
+        konfiguration,
+        kern_welt.liga_zu_staerke(konfiguration, gesamtwert(konfiguration, fahrer.auto)),
+    )
+    spaeter = kern_einnahmen.siegpraemie(
+        konfiguration,
+        kern_welt.liga_zu_staerke(konfiguration, talent.gipfelstaerke),
+    )
+    grundlage = (
         jetzt * einstellung["gewicht_koennen"]
         + spaeter * einstellung["gewicht_potential"]
     ) / (einstellung["gewicht_koennen"] + einstellung["gewicht_potential"])
 
     # Junge Fahrer verlangen weniger, auch wenn sie viel koennen: Sie
-    # haben noch nichts bewiesen.
-    reif = min(max((alter - konfiguration.wert("fahrernamen", "alter_min")) / 10.0, 0.0), 1.0)
+    # haben noch nichts bewiesen. Voll wirksam mit 18, weg ab 28.
+    reif = min(
+        max((alter - konfiguration.wert("fahrernamen", "alter_min")) / 10.0, 0.0), 1.0
+    )
     jugendrabatt = 1.0 - einstellung["jugendrabatt"] * (1.0 - reif)
 
-    voll = einstellung["grundgehalt"] * (1.0 + anteil * einstellung["gehaltsspanne"])
-    return int(round(voll * jugendrabatt))
+    return int(round(grundlage * einstellung["anteil_der_siegpraemie"] * jugendrabatt))
 
 
 def abloese(konfiguration: Konfiguration, gehalt: int, restlaufzeit: int) -> int:
@@ -174,7 +186,7 @@ def angebot(
     """
     fahrer = welt.fahrer[nummer]
     stichtag_alter = _alter(konfiguration, fahrer, jahr)
-    talent = kern_talent.talent(konfiguration, nummer, seedquelle)
+    talent = kern_talent.talent(konfiguration, nummer, fahrer.geburtstag, seedquelle)
     verlangt = marktwert(konfiguration, fahrer, talent, stichtag_alter)
     geboten = verlangt if gehalt is None else int(gehalt)
     rest = restlaufzeit(konfiguration, nummer, seedquelle, jahr)
@@ -228,7 +240,7 @@ def pruefe(
     ligavorteil = (fahrer.liga - ziel_liga) / ligen
     autovorteil = (ziel_auto_wert - gesamtwert(konfiguration, fahrer.auto)) / skala
 
-    talent = kern_talent.talent(konfiguration, nummer, seedquelle)
+    talent = kern_talent.talent(konfiguration, nummer, fahrer.geburtstag, seedquelle)
     verlangt = marktwert(
         konfiguration, fahrer, talent, _alter(konfiguration, fahrer, jahr)
     )

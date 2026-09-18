@@ -9,6 +9,7 @@ from collections import Counter
 import pytest
 
 from rennmanager import konfiguration as kf
+from rennmanager.kern import kalender as kern_kalender
 from rennmanager.kern import welt as w
 from rennmanager.kern.auto import bereichswert, pruefe
 from rennmanager.kern.zufall import Seedquelle
@@ -19,9 +20,12 @@ def k() -> kf.Konfiguration:
     return kf.lade()
 
 
+SEED = 4711
+
+
 @pytest.fixture(scope="module")
 def welt(k) -> w.Welt:
-    return w.erzeuge(k, Seedquelle(4711), spielerliga=k.wert("ligen", "startliga"))
+    return w.erzeuge(k, Seedquelle(SEED), spielerliga=k.wert("ligen", "startliga"))
 
 
 # -- Umfang -----------------------------------------------------------------
@@ -62,15 +66,60 @@ def test_hersteller_sind_ueber_die_ligen_verteilt(welt, k) -> None:
 
 
 # -- Staerke ----------------------------------------------------------------
-def test_ligastaerke_folgt_der_kalibriertabelle(welt, k) -> None:
-    """GDD 9: Staerke zwischen dem Letzten und dem Besten der Liga."""
+def test_die_potentialleiter_folgt_der_kalibriertabelle(welt, k) -> None:
+    """GDD 9 beschreibt jetzt die **Potentiale**, nicht die Startwerte.
+
+    Seit die Werte aus dem Talent kommen (Punkt 35), steht jeder Fahrer
+    auf seinem eigenen Laufbahnpunkt und damit unter seinem Potential -
+    die Startwerte liegen deshalb unter der Kontrolltabelle. Was die
+    Tabelle weiter beschreibt, ist die Leiter der Potentiale: Sortiert
+    man alle 600, kommt sie zurueck.
+    """
+    from rennmanager.kern import talent as kern_talent
+
+    quelle = Seedquelle(SEED)
+    je_liga = k.wert("ligen", "autos_je_liga")
+    potentiale = sorted(
+        (
+            kern_talent.talent(k, f.nummer, f.geburtstag, quelle).gipfelstaerke
+            for f in welt.fahrer
+            if not f.ist_spieler
+        ),
+        reverse=True,
+    )
     for zeile in k.wert("ligen", "kontrolle"):
-        mittel = [
-            statistics.mean(f.auto.werte.values()) for f in welt.liga(zeile["liga"])
-        ]
-        # Das Rauschen der Profilstreuung laesst etwas Spielraum.
-        assert min(mittel) == pytest.approx(zeile["s_letzter"], abs=4_000)
-        assert max(mittel) == pytest.approx(zeile["s_bester"], abs=4_000)
+        anfang = (zeile["liga"] - 1) * je_liga
+        feld = potentiale[anfang : anfang + je_liga]
+        if not feld:
+            continue
+        soll = (zeile["s_bester"] + zeile["s_letzter"]) / 2
+        assert statistics.mean(feld) == pytest.approx(soll, rel=0.25)
+
+
+def test_jeder_steht_auf_seinem_eigenen_laufbahnpunkt(welt, k) -> None:
+    """Der Grund fuer den Umbau: Vorher passten Wert und Talent nicht.
+
+    Gemessen hatte der Beste in Liga 1 den Wert 98130 bei einem Potential
+    von 70000 - er wurde ab der ersten Saison schlechter. Jetzt ist die
+    Abweichung null: Wert = Potential mal Reife mal Zielfaktor.
+    """
+    from rennmanager.kern import generationen as kern_generationen
+    from rennmanager.kern import talent as kern_talent
+    from rennmanager.kern.auto import gesamtwert
+
+    quelle = Seedquelle(SEED)
+    stichtag = kern_kalender.saisonstart(k, 2026)
+    for fahrer in welt.fahrer:
+        if fahrer.ist_spieler:
+            continue
+        talent = kern_talent.talent(k, fahrer.nummer, fahrer.geburtstag, quelle)
+        soll = kern_talent.stand_mit(
+            k,
+            talent,
+            fahrer.alter_am(stichtag),
+            kern_generationen.ruecktrittsalter(k, fahrer.nummer, quelle),
+        )
+        assert gesamtwert(k, fahrer.auto) == pytest.approx(soll, abs=1.0)
 
 
 def test_hoehere_ligen_sind_staerker(welt, k) -> None:
@@ -125,22 +174,26 @@ def test_das_bereichsprofil_macht_spezialisten(welt, k) -> None:
 
 
 def test_das_bereichsprofil_aendert_die_staerke_nicht(welt, k) -> None:
-    """Ein Spezialist verteilt seine Ligastaerke um, statt mehr oder
-    weniger davon zu haben.
+    """Ein Spezialist verteilt seine Staerke um, statt mehr davon zu haben.
 
     Das Kappen an der Skala aus GDD 9 wird ausgeglichen: In Liga 1 liegt
     die Staerke nahe am Maximum, und ohne Ausgleich fielen dort die hohen
-    Werte weg - der schwaechste Fahrer landete 5 % unter seinem Sollwert,
-    also gut 3 km/h zu langsam.
+    Werte weg - der Fahrer landete 5 % unter seinem Sollwert, also gut
+    3 km/h zu langsam. Geprueft wird das am Talentprofil: Es traegt
+    denselben Mittelwert wie das Potential, auf das es skaliert wurde.
     """
-    kontrolle = {zeile["liga"]: zeile for zeile in k.wert("ligen", "kontrolle")}
-    kleinster = k.wert("skala", "minimum")
-    for liga, zeile in kontrolle.items():
-        mittel = [statistics.mean(f.auto.werte.values()) for f in welt.liga(liga)]
-        assert max(mittel) == pytest.approx(zeile["s_bester"], abs=1)
-        # Ganz unten in Liga 20 bremst der Skalenboden bei 0.
-        untergrenze = max(zeile["s_letzter"], kleinster)
-        assert min(mittel) == pytest.approx(untergrenze, abs=max(untergrenze * 0.01, 10))
+    from rennmanager.kern import talent as kern_talent
+
+    quelle = Seedquelle(SEED)
+    for liga in (1, 10, 20):
+        for fahrer in welt.liga(liga)[:5]:
+            if fahrer.ist_spieler:
+                continue
+            talent = kern_talent.talent(k, fahrer.nummer, fahrer.geburtstag, quelle)
+            werte, _ = kern_talent.profil(k, talent, talent.gipfelstaerke)
+            assert statistics.mean(werte.values()) == pytest.approx(
+                talent.gipfelstaerke, abs=1
+            )
 
 
 def test_alle_autos_sind_gueltig(welt, k) -> None:

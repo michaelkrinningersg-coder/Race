@@ -42,6 +42,7 @@ from rennmanager.kern import rhythmus as kern_rhythmus
 from rennmanager.kern import statistik as kern_statistik
 from rennmanager.kern import strecke as kern_strecke
 from rennmanager.kern import streckenkenntnis as kern_streckenkenntnis
+from rennmanager.kern import transfer as kern_transfer
 from rennmanager.kern import welt as kern_welt
 from rennmanager.kern import wertung as kern_wertung
 from rennmanager.kern import wetter as kern_wetter
@@ -834,20 +835,23 @@ class Saisonlauf:
         ) + self.konfiguration.wert("qualifying", "gezeitete_runden")
         gefahrene = daten.runden + quali_runden
         kenntnisseed = daten.seedquelle.zweig("kenntnis")
-        spieler = self._spielernummer(liga)
-        # Der Spieler bucht ueber die Karriere, weil E10 Testfahrt
-        # geglueckt seinen Zuwachs hebt (GDD 14). Sein Seedzweig ist
+        eigene = self._spielernummern(liga)
+        # Die eigenen Fahrer buchen ueber die Karriere, weil E10 Testfahrt
+        # geglueckt ihren Zuwachs hebt (GDD 14). Ihr Seedzweig ist
         # derselbe wie im Feld, damit derselbe Seed dieselbe Saison
         # ergibt (GDD 15).
         self.kenntnis.verbuche_feld(
-            tuple(n for n in daten.nummern if n != spieler),
+            tuple(n for n in daten.nummern if n not in eigene),
             rahmen.strecke.name,
             gefahrene,
             kenntnisseed,
         )
-        if spieler is not None:
+        for spieler in eigene:
             self.karriere.verbuche_runden(
-                rahmen.strecke.name, gefahrene, kenntnisseed.zweig("fahrer", spieler)
+                rahmen.strecke.name,
+                gefahrene,
+                kenntnisseed.zweig("fahrer", spieler),
+                fahrer=spieler,
             )
             self._verbuche_karriere(ergebnis, spieler)
 
@@ -958,14 +962,22 @@ class Saisonlauf:
         if self.karriere is not None and self.karriere.kenntnis is not self.kenntnis:
             self.karriere.kenntnis = self.kenntnis
 
-    def _spielernummer(self, liga: int) -> int | None:
-        """Die Fahrernummer des Spielers, wenn er in dieser Liga faehrt."""
-        if self.karriere is None or self.karriere.liga != liga:
-            return None
-        return self.karriere.fahrernummer
+    def _spielernummern(self, liga: int) -> tuple[int, ...]:
+        """Die eigenen Fahrer, die in dieser Liga starten.
+
+        Seit der Spieler Teamchef ist, koennen mehrere seiner vier im
+        selben Rennen stehen - und jeder verdient fuer sich.
+        """
+        if self.karriere is None:
+            return ()
+        return tuple(
+            f.nummer
+            for f in self.welt.fahrer
+            if f.ist_spieler and f.liga == liga and f.nummer in self.karriere.autos
+        )
 
     def _verbuche_karriere(self, wochenende: Ligawochenende, spieler: int) -> None:
-        """Schreibt dem Spieler gut, was das Rennwochenende gebracht hat.
+        """Schreibt einem eigenen Fahrer gut, was sein Wochenende brachte.
 
         GDD 10: Preisgeld, Startgeld, Sponsorenauszahlung und Erfahrung -
         Letztere auch aus den Ueberholmanoevern und den Kilometern je
@@ -984,6 +996,8 @@ class Saisonlauf:
             platz=ergebnis.rennplatz,
             ueberholmanoever=wochenende.manoever_je_fahrer.get(spieler, 0),
             kilometer_je_wetter=wochenende.kilometer_je_fahrer.get(spieler),
+            fahrer=spieler,
+            liga=wochenende.liga,
         )
 
     def fahre_saison(self, ausfuehrliche_liga: int | None = None) -> tuple[Wochenende, ...]:
@@ -1082,6 +1096,22 @@ class Saisonlauf:
                     self.konfiguration
                 )
 
+    def transfermarkt(self) -> tuple[int, ...]:
+        """Wer im kommenden Winter zu haben ist (Punkt 7).
+
+        Frei sind alle, deren Vertrag mit dieser Saison auslaeuft; wer
+        noch laeuft, kostet eine Abloese. Die Newgens des Jahrgangs kommen
+        dazu, sobald der Generationswechsel vollzogen ist - vorher gibt es
+        sie noch nicht.
+        """
+        return kern_transfer.verfuegbare(
+            self.konfiguration,
+            self.welt,
+            self.jahr + 1,
+            self.seedquelle,
+            newgens=self.letzter_winter.newgens if self.letzter_winter else (),
+        )
+
     def naechste_saison(self) -> Saisonlauf:
         """Der Saisonlauf des Folgejahres (GDD 13).
 
@@ -1121,6 +1151,10 @@ class Saisonlauf:
                 eigener.liga if eigener is not None else self.karriere.liga,
                 self.seedquelle.zweig("karriere", jahr),
             )
+        if self.karriere is not None:
+            # Punkt 7: Die Jahresgehaelter laufen aus dem Konto, einmal je
+            # Saisonwechsel. Ausgelaufene Vertraege verschwinden dabei.
+            self.karriere.zahle_gehaelter()
         folge = Saisonlauf(
             self.konfiguration,
             welt,

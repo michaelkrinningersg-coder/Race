@@ -50,6 +50,7 @@ from rennmanager.ui.sponsorenseite import Sponsorenseite
 from rennmanager.ui.startdialog import Startdialog
 from rennmanager.ui.statistikseite import Statistikseite
 from rennmanager.ui.streckenseite import Streckenseite
+from rennmanager.ui.transferseite import Transferseite
 from rennmanager.ui.weltseite import Weltseite
 
 # Qt-Spinboxen rechnen mit 32-Bit-Ganzzahlen; der Hauptseed wird in der
@@ -221,6 +222,14 @@ class Hauptfenster(QMainWindow):
         self._wochenendeseite.wochenende_gefahren.connect(self._wochenende_gefahren)
         self._reiter.addTab(self._wochenendeseite, "Rennwochenende")
         self._reiter.addTab(self._saisonseite, "Saison")
+        # Punkt 7: Der Transfermarkt steht neben der Saison, weil er zu
+        # ihrem Ende gehoert - verpflichtet wird im Winter.
+        self._transferseite = Transferseite(
+            self._konfiguration, self._saisonseite.lauf
+        )
+        self._transferseite.fahrerkarte_gewuenscht.connect(self.oeffne_fahrerkarte)
+        self._transferseite.verpflichtet.connect(self._fahrer_verpflichtet)
+        self._reiter.addTab(self._transferseite, "Transfermarkt")
         self._statistikseite = Statistikseite(
             self._konfiguration, self._welt, self._statistik
         )
@@ -546,6 +555,18 @@ class Hauptfenster(QMainWindow):
             return False
         self.beginne_neue_karriere(dialog.stammdaten())
         return True
+
+    def _fahrer_verpflichtet(self, nummer: int) -> None:
+        """Ein Transfer ist durch - Konto und Karriereseite nachziehen."""
+        self._karriereseite.zeige_namen(
+            {f.nummer: f.name for f in self._welt.spielerfahrer}
+        )
+        fahrer = self._welt.fahrer[nummer]
+        self.statusBar().showMessage(
+            f"{fahrer.name} unterschreibt - er faehrt ab der naechsten Saison "
+            "in einem leeren Auto.",
+            8000,
+        )
 
     def beginne_neue_karriere(self, stammdaten: dict) -> None:
         """Setzt Welt, Karriere und Statistik auf Anfang.

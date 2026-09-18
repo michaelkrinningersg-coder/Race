@@ -72,7 +72,7 @@ if TYPE_CHECKING:  # pragma: no cover
 # Version 4: Der Punkteverlauf der laufenden Saison (Tabelle
 # ``saisonverlauf``, Punkt 9). Aeltere Staende werden gelesen; ihr Verlauf
 # beginnt dann beim naechsten gefahrenen Rennen.
-SPIELSTAND_VERSION = 6
+SPIELSTAND_VERSION = 7
 
 # Punkt 17: Autosave und Schnellspeicher liegen an einem festen Ort,
 # damit sie ohne Dateidialog geschrieben werden koennen.
@@ -88,6 +88,10 @@ BILANZ_AB_VERSION = 5
 # sich entwickelt. Aeltere Staende tragen genau ein Auto - das des
 # einen Fahrers, der der Spieler damals war.
 TEAMAUTOS_AB_VERSION = 6
+# Ab Version 7 sitzen die Sponsoren auf dem Auto **eines** Fahrers, und
+# die Fahrervertraege aus Punkt 7 kommen dazu. Aeltere Staende tragen
+# einen Sponsorensatz - der des einen Fahrers, der der Spieler war.
+TEAMVERTRAEGE_AB_VERSION = 7
 
 SCHEMA = """
 CREATE TABLE kopf (
@@ -143,7 +147,8 @@ CREATE TABLE teamauto (
     PRIMARY KEY (fahrer, schluessel)
 );
 CREATE TABLE vertrag (
-    platz TEXT PRIMARY KEY,
+    fahrer INTEGER NOT NULL DEFAULT -1,
+    platz TEXT NOT NULL,
     name TEXT NOT NULL,
     grundbetrag INTEGER NOT NULL,
     praemie_sieg INTEGER NOT NULL,
@@ -151,7 +156,13 @@ CREATE TABLE vertrag (
     praemie_top10 INTEGER NOT NULL,
     laufzeit_rennen INTEGER NOT NULL,
     gueltig_bis_woche INTEGER NOT NULL,
-    verbleibende_rennen INTEGER NOT NULL
+    verbleibende_rennen INTEGER NOT NULL,
+    PRIMARY KEY (fahrer, platz)
+);
+CREATE TABLE fahrervertrag (
+    fahrer INTEGER PRIMARY KEY,
+    gehalt INTEGER NOT NULL,
+    laufzeit INTEGER NOT NULL
 );
 CREATE TABLE buchung (
     datum TEXT NOT NULL,
@@ -458,9 +469,10 @@ def _schreibe_karriere(verbindung: sqlite3.Connection, k: kern_karriere.Karriere
         ],
     )
     verbindung.executemany(
-        "INSERT INTO vertrag VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO vertrag VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             (
+                nummer,
                 platz,
                 v.angebot.name,
                 v.angebot.grundbetrag,
@@ -471,7 +483,15 @@ def _schreibe_karriere(verbindung: sqlite3.Connection, k: kern_karriere.Karriere
                 v.angebot.gueltig_bis_woche,
                 v.verbleibende_rennen,
             )
-            for platz, v in k.vertraege.items()
+            for nummer, satz in sorted(k.vertraege_je_fahrer.items())
+            for platz, v in satz.items()
+        ],
+    )
+    verbindung.executemany(
+        "INSERT INTO fahrervertrag VALUES (?, ?, ?)",
+        [
+            (nummer, gehalt, laufzeit)
+            for nummer, (gehalt, laufzeit) in sorted(k.fahrervertraege.items())
         ],
     )
     verbindung.executemany(
@@ -780,8 +800,15 @@ def _lies_karriere(
         geld=z["geld"], erfahrung=z["erfahrung"], wetter_erfahrung=toepfe
     )
 
-    karriere.vertraege = {
-        v["platz"]: kern_sponsoren.Vertrag(
+    # Ab Version 7 traegt jede Zeile ihren Fahrer; aeltere Staende haben
+    # die Spalte nicht und gehoeren dem damaligen Spielerfahrer.
+    saetze: dict[int, dict] = {}
+    for v in verbindung.execute("SELECT * FROM vertrag"):
+        schluessel = v.keys()
+        nummer = v["fahrer"] if "fahrer" in schluessel else z["fahrernummer"]
+        if nummer < 0:
+            nummer = z["fahrernummer"]
+        saetze.setdefault(nummer, {})[v["platz"]] = kern_sponsoren.Vertrag(
             angebot=kern_sponsoren.Angebot(
                 platz=v["platz"],
                 name=v["name"],
@@ -794,8 +821,15 @@ def _lies_karriere(
             ),
             verbleibende_rennen=v["verbleibende_rennen"],
         )
-        for v in verbindung.execute("SELECT * FROM vertrag")
-    }
+    karriere.vertraege_je_fahrer = saetze
+
+    try:
+        karriere.fahrervertraege = {
+            f["fahrer"]: (f["gehalt"], f["laufzeit"])
+            for f in verbindung.execute("SELECT * FROM fahrervertrag")
+        }
+    except sqlite3.OperationalError:  # Tabelle gibt es erst ab Version 7
+        karriere.fahrervertraege = {}
 
     karriere.buchungen = [
         kern_karriere.Tagesbuchung(

@@ -1532,8 +1532,16 @@ def test_fahrertreffer_stehen_vor_teamtreffern(qtbot, konfig) -> None:
     gefunden = suche.treffer(fahrer.nachname)
     assert gefunden[0] == fahrer.nummer
 
-    # Und die Teamtreffer sind trotzdem dabei.
-    ueber_team = suche.treffer("Rosskamp")
+    # Und die Teamtreffer sind trotzdem dabei. Gesucht wird ein
+    # Teamname aus der Welt selbst - ein fest eingetragener haenge sonst
+    # daran, in welcher Reihenfolge die Welt ihre Namen vergibt.
+    mannschaft = next(
+        team
+        for team in fenster.welt.teams
+        if not any(f.nachname in team.name for f in fenster.welt.fahrer)
+    )
+    erstes_wort = mannschaft.name.split()[0]
+    ueber_team = suche.treffer(erstes_wort)
     assert len(ueber_team) > 1
     namen = {fenster.welt.team_von(fenster.welt.fahrer[n]).name for n in ueber_team}
-    assert "Rosskamp Engineering" in namen
+    assert mannschaft.name in namen

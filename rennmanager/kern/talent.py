@@ -36,6 +36,7 @@ Mechanismus fuer beides.
 
 from __future__ import annotations
 
+import datetime as dt
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
@@ -52,6 +53,7 @@ class Talent:
     """Das Talent eines Fahrers - abgeleitet, nicht gespeichert."""
 
     nummer: int
+    geburtstag: dt.date
     # Je Eigenschaft der Wert, den dieser Fahrer hoechstens erreicht.
     potential: dict[str, int]
     wetterpotential: dict[str, int]
@@ -111,14 +113,25 @@ def gipfelstaerke(konfiguration: Konfiguration, wuerfel) -> float:
 # ---------------------------------------------------------------------------
 # Das Talent eines Fahrers
 # ---------------------------------------------------------------------------
-def talent(konfiguration: Konfiguration, nummer: int, seedquelle: Seedquelle) -> Talent:
-    """Das Talent dieses Fahrers, aus Seed und Fahrernummer.
+def talent(
+    konfiguration: Konfiguration,
+    nummer: int,
+    geburtstag: dt.date,
+    seedquelle: Seedquelle,
+) -> Talent:
+    """Das Talent dieses Fahrers, aus Seed, Fahrernummer und Geburtstag.
 
     Der Zweig heisst nach seiner Sache, nicht nach der Aufrufreihenfolge -
     dasselbe Talent kommt heraus, egal wann danach gefragt wird.
+
+    **Warum der Geburtstag dazugehoert:** Ein Newgen erbt die Nummer des
+    Zurueckgetretenen, damit die Welt bei 600 Fahrern bleibt. Haenge das
+    Talent allein an der Nummer, erbte er auch dessen Talent - Platz 64
+    waere auf ewig derselbe Fahrertyp. Der Geburtstag macht ihn zu einem
+    eigenen Menschen, und er aendert sich ueber eine Laufbahn nie.
     """
     einstellung = konfiguration.wert("talent")
-    wuerfel = seedquelle.zweig("talent", nummer).generator()
+    wuerfel = seedquelle.zweig("talent", nummer, geburtstag.toordinal()).generator()
 
     gipfel = gipfelstaerke(konfiguration, wuerfel)
     potential, wetterpotential = kern_welt.wuerfle_werte(
@@ -140,6 +153,7 @@ def talent(konfiguration: Konfiguration, nummer: int, seedquelle: Seedquelle) ->
 
     return Talent(
         nummer=nummer,
+        geburtstag=geburtstag,
         potential=potential,
         wetterpotential=wetterpotential,
         schrittmass=_schrittmass(konfiguration, gipfelalter, tempo),
@@ -182,6 +196,73 @@ def zielfaktor(
     ende = max(ruecktrittsalter, talent.abbaualter + 1)
     anteil = min((alter - talent.abbaualter) / (ende - talent.abbaualter), 1.0)
     return 1.0 + (zuletzt - 1.0) * anteil
+
+
+def reifegrad(konfiguration: Konfiguration, talent: Talent, alter: int) -> float:
+    """Wie nah dieser Fahrer seinem Potential in diesem Alter schon ist.
+
+    Derselbe Lueckenschluss wie in ``gewachsen``, nur in einem Schritt vom
+    Einstiegsalter aus gerechnet. Beide Formeln stimmen exakt ueberein::
+
+        Wert(a+1) = Wert(a) + (Potential - Wert(a)) * Schrittmass
+                  = Potential * reifegrad(a+1)
+
+    Deshalb startet eine Welt, deren Werte aus ``stand_mit`` kommen, nicht
+    nur stimmig - sie bleibt es auch, wenn die Jahre darueber laufen.
+
+    Ein Einsteiger bringt schon etwas mit (``anfang_anteil``): Ohne das
+    stuenden Achtzehnjaehrige bei null und wuerden jede Runde ueberrundet.
+    """
+    einstieg = konfiguration.wert("fahrernamen", "alter_min")
+    anfang = konfiguration.wert("talent", "anfang_anteil")
+    jahre = max(alter - einstieg, 0)
+    geschlossen = 1.0 - (1.0 - talent.schrittmass) ** jahre
+    return anfang + (1.0 - anfang) * geschlossen
+
+
+def stand_mit(
+    konfiguration: Konfiguration, talent: Talent, alter: int, ruecktrittsalter: int
+) -> float:
+    """Der Gesamtwert, auf dem dieser Fahrer in diesem Alter steht.
+
+    Daraus baut die Welterzeugung ihre 600 Fahrer: Jeder steht auf einem
+    plausiblen Punkt **seiner eigenen** Laufbahn statt auf einem Wert, der
+    nichts mit seinem Talent zu tun hat.
+
+    Der Nebeneffekt ist der eigentliche Gewinn: Ein Neunzehnjaehriger mit
+    Liga-1-Potential hat erst einen Bruchteil davon, landet dadurch von
+    allein weit unten - und ist damit das versteckte Talent, nach dem im
+    Transfermarkt gesucht wird. Ohne jede Sonderregel.
+    """
+    return (
+        talent.gipfelstaerke
+        * reifegrad(konfiguration, talent, alter)
+        * zielfaktor(konfiguration, talent, alter, ruecktrittsalter)
+    )
+
+
+def profil(
+    konfiguration: Konfiguration, talent: Talent, wert: float
+) -> tuple[dict[str, int], dict[str, int]]:
+    """Das Potentialprofil dieses Fahrers, herunterskaliert auf ``wert``.
+
+    Worin er stark und worin er schwach ist, steht schon im Potential -
+    hier wird nur das Niveau gesetzt. Ein Fahrer sieht damit in jedem
+    Alter aus wie er selbst, nur kleiner oder groesser.
+    """
+    gipfel = talent.gipfelstaerke
+    anteil = (wert / gipfel) if gipfel > 0 else 0.0
+    kleinster = konfiguration.wert("skala", "minimum")
+    groesster = konfiguration.wert("skala", "maximum")
+    return (
+        kern_welt.auf_skala(
+            konfiguration, {s: p * anteil for s, p in talent.potential.items()}, wert
+        ),
+        {
+            s: int(min(max(round(p * anteil), kleinster), groesster))
+            for s, p in talent.wetterpotential.items()
+        },
+    )
 
 
 def gewachsen(

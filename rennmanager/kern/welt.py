@@ -184,6 +184,22 @@ def ligastaerken(konfiguration: Konfiguration, liga: int, anzahl: int) -> list[i
     ]
 
 
+def liga_zu_staerke(konfiguration: Konfiguration, wert: float) -> int:
+    """In welche Liga ein Fahrer mit diesem Gesamtwert gehoert.
+
+    Die Umkehrung von ``ligastaerken``: Sie sagt, was eine Liga kann;
+    diese sagt, wohin ein Koennen gehoert. Der Transfermarkt haengt sein
+    Gehalt daran - was ein Fahrer wert ist, misst sich daran, was er
+    verdienen kann (Punkt 7).
+    """
+    ligen = konfiguration.wert("ligen", "anzahl")
+    je_liga = konfiguration.wert("ligen", "autos_je_liga")
+    for liga in range(1, ligen + 1):
+        if wert >= ligastaerken(konfiguration, liga, je_liga)[-1]:
+            return liga
+    return ligen
+
+
 def _bestes_tempo(konfiguration: Konfiguration, liga: int) -> float:
     basis = konfiguration.wert("ligen", "bester_liga20_kmh")
     zuwachs = konfiguration.wert("ligen", "zuwachs_je_liga_kmh")
@@ -391,100 +407,169 @@ def erzeuge(
     wuerfel = seedquelle.zweig("welt").generator()
     zusatz = list(konfiguration.zusatzfaehigkeiten)
 
-    # Alle 600 Plaetze mit ihrer Liga und Staerke aufbauen.
-    plaetze: list[tuple[int, int]] = []
-    for liga in range(1, ligen + 1):
-        plaetze.extend((liga, staerke) for staerke in ligastaerken(konfiguration, liga, je_liga))
-
-    # Die Plaetze auf die Teams verteilen. Weil gemischt wird, fahren die
-    # vier Autos eines Teams meist in verschiedenen Ligen - genau wie es
-    # GDD 12 erlaubt.
-    reihenfolge = list(wuerfel.permutation(len(plaetze)))
-    teamplaetze = [
-        [plaetze[reihenfolge[team * je_team + n]] for n in range(je_team)]
-        for team in range(team_anzahl)
-    ]
+    # Punkt 35: Jeder Fahrer steht auf einem Punkt **seiner eigenen**
+    # Laufbahn - Talent und Alter ergeben seinen Wert, der Wert seine
+    # Liga. Vorher bekam er einen Wert aus der Ligaleiter und ein Talent,
+    # das nichts damit zu tun hatte: Der Beste in Liga 1 hatte Wert 98130
+    # bei einem Potential von 70000 und wurde ab der ersten Saison
+    # schlechter, waehrend in Liga 20 Fahrer mit Wert 105 und Potential
+    # 18014 sassen. Die Welt raeumte sich in den ersten Saisons selbst um.
+    #
+    # Der Gewinn nebenbei: Ein Neunzehnjaehriger mit Liga-1-Potential hat
+    # erst einen Bruchteil davon und landet dadurch von allein weit unten.
+    # Genau das ist das versteckte Talent, nach dem im Transfermarkt
+    # gesucht wird - ohne eine einzige Sonderregel.
+    spielerteam = (
+        int(wuerfel.integers(0, team_anzahl)) if spielerliga is not None else None
+    )
+    ligen_je_fahrer = _sortiere_in_ligen(
+        konfiguration,
+        seedquelle,
+        gesamt=gesamt,
+        je_liga=je_liga,
+        je_team=je_team,
+        spielerteam=spielerteam,
+        spielerliga=spielerliga,
+        saisonjahr=saisonjahr,
+    )
 
     fahrer = _erzeuge_fahrer(
-        konfiguration, namen, teamplaetze, zusatz, wuerfel, saisonjahr, spielerliga
+        konfiguration,
+        namen,
+        ligen_je_fahrer,
+        zusatz,
+        wuerfel,
+        saisonjahr,
+        spielerteam,
+        seedquelle,
     )
-    teams = _erzeuge_teams(konfiguration, namen, teamplaetze, fahrer, wuerfel)
+    teams = _erzeuge_teams(
+        konfiguration, namen, team_anzahl, je_team, fahrer, wuerfel
+    )
     return Welt(teams=teams, fahrer=tuple(fahrer), seed=seedquelle.seed)
 
 
-def _hole_team_nach_unten(
-    teamplaetze: list[list[tuple[int, int]]], spielerliga: int, je_team: int
-) -> int:
-    """Schiebt die schwaechsten Plaetze der Spielerliga in **ein** Team.
+def startalter(konfiguration: Konfiguration, nummer: int, seedquelle: Seedquelle) -> int:
+    """Das Alter dieses Fahrers beim Weltstart (GDD 12).
 
-    Die 150 Teams sind ueber die Ligen gestreut - kein Team hat von sich
-    aus vier Plaetze in derselben Liga. Der Spieler soll aber mit allen
-    vier Autos unten anfangen, also werden die vier schwaechsten Plaetze
-    seiner Startliga in sein Team getauscht; die abgebenden Teams
-    bekommen dafuer die Plaetze, die sein Team hatte.
-
-    Getauscht statt neu verteilt: Jede Liga behaelt damit genau ihre 30
-    Plaetze, und die Staerkeverteilung der Welt bleibt, wie GDD 9 sie
-    vorgibt.
-
-    :return: die Nummer des Spielerteams
+    Am Seed und an der Fahrernummer, nicht an der Aufrufreihenfolge: Die
+    Liga eines Fahrers haengt jetzt an seinem Alter, und die Ligen muessen
+    feststehen, bevor die Fahrer gebaut werden.
     """
-    stellen = [
-        (team, n)
-        for team, plaetze in enumerate(teamplaetze)
-        for n, (liga, _) in enumerate(plaetze)
-        if liga == spielerliga
-    ]
-    if len(stellen) < je_team:
-        raise WeltFehler(
-            f"Liga {spielerliga} hat {len(stellen)} Plaetze, "
-            f"das Spielerteam braucht {je_team}"
+    wuerfel = seedquelle.zweig("startalter", nummer).generator()
+    return int(
+        wuerfel.integers(
+            konfiguration.wert("fahrernamen", "alter_min"),
+            konfiguration.wert("fahrernamen", "alter_max") + 1,
         )
-    # Der schwaechste zuerst - dort faengt der Spieler an.
-    stellen.sort(key=lambda stelle: teamplaetze[stelle[0]][stelle[1]][1])
-    ziel = stellen[:je_team]
-    spielerteam = ziel[0][0]
+    )
 
-    auswaerts = [stelle for stelle in ziel if stelle[0] != spielerteam]
-    frei = [(spielerteam, n) for n in range(je_team) if (spielerteam, n) not in ziel]
-    for (zt, zn), (ft, fn) in zip(auswaerts, frei, strict=True):
-        teamplaetze[zt][zn], teamplaetze[ft][fn] = teamplaetze[ft][fn], teamplaetze[zt][zn]
-    return spielerteam
+
+def startgeburtstag(
+    konfiguration: Konfiguration, nummer: int, seedquelle: Seedquelle, saisonjahr: int
+) -> dt.date:
+    """Der Geburtstag dieses Fahrers beim Weltstart (GDD 12).
+
+    Wie das Alter an der Fahrernummer: Das Talent haengt am Geburtstag,
+    die Liga am Talent - beides muss feststehen, bevor die Fahrer gebaut
+    werden.
+
+    Das Alter gilt zum Saisonstart. Der Geburtstag liegt deshalb im Jahr
+    *vor* dem Stichtag minus Alter - vom 1. Januar aus gerechnet waere
+    jeder, der spaeter im Jahr Geburtstag hat, am Saisonstart noch ein
+    Jahr juenger als gewuerfelt.
+    """
+    stichtag = dt.date(
+        saisonjahr,
+        konfiguration.wert("kalender", "saisonstart_monat"),
+        konfiguration.wert("kalender", "saisonstart_tag"),
+    )
+    alter = startalter(konfiguration, nummer, seedquelle)
+    wuerfel = seedquelle.zweig("geburtstag", nummer).generator()
+    return stichtag.replace(year=stichtag.year - alter) - dt.timedelta(
+        days=int(wuerfel.integers(0, 365))
+    )
+
+
+def _sortiere_in_ligen(
+    konfiguration: Konfiguration,
+    seedquelle: Seedquelle,
+    gesamt: int,
+    je_liga: int,
+    je_team: int,
+    spielerteam: int | None,
+    spielerliga: int | None,
+    saisonjahr: int,
+) -> dict[int, int]:
+    """Verteilt die Fahrernummern nach ihrer Startstaerke auf die Ligen.
+
+    Der Staerkste kommt in Liga 1, der Schwaechste in Liga 20. Die vier
+    Autos eines Teams landen dadurch meist in verschiedenen Ligen - genau
+    wie GDD 12 es erlaubt, nur nicht mehr zufaellig, sondern verdient.
+
+    Die vier Fahrer des Spielers stehen auf null und kaemen damit ohnehin
+    ganz unten heraus; sie werden trotzdem ausdruecklich in ihre Startliga
+    gesetzt, damit die Regel auch dann gilt, wenn jemand eine andere
+    Startliga einstellt.
+    """
+    # Spaet importiert: talent.py greift auf dieses Modul zurueck.
+    from rennmanager.kern import generationen as kern_generationen
+    from rennmanager.kern import talent as kern_talent
+
+    eigene = (
+        list(range(spielerteam * je_team, spielerteam * je_team + je_team))
+        if spielerteam is not None
+        else []
+    )
+    staerke = {}
+    for nummer in range(gesamt):
+        if nummer in eigene:
+            continue
+        geburtstag = startgeburtstag(konfiguration, nummer, seedquelle, saisonjahr)
+        talent = kern_talent.talent(konfiguration, nummer, geburtstag, seedquelle)
+        alter = startalter(konfiguration, nummer, seedquelle)
+        staerke[nummer] = kern_talent.stand_mit(
+            konfiguration,
+            talent,
+            alter,
+            kern_generationen.ruecktrittsalter(konfiguration, nummer, seedquelle),
+        )
+
+    ligen = {nummer: spielerliga for nummer in eigene}
+    frei = [spielerliga] * 0
+    for liga in range(1, gesamt // je_liga + 1):
+        offen = je_liga - sum(1 for zugeteilt in ligen.values() if zugeteilt == liga)
+        frei.extend([liga] * offen)
+
+    geordnet = sorted(staerke, key=lambda n: (-staerke[n], n))
+    for nummer, liga in zip(geordnet, frei, strict=True):
+        ligen[nummer] = liga
+    return ligen
 
 
 def _erzeuge_fahrer(
-    konfiguration, namen, teamplaetze, zusatz, wuerfel, saisonjahr, spielerliga
+    konfiguration, namen, ligen_je_fahrer, zusatz, wuerfel, saisonjahr,
+    spielerteam, seedquelle
 ) -> list[Fahrer]:
     vornamen = namen["fahrer"]["vornamen"]
     nachnamen = namen["fahrer"]["nachnamen"]
     europa = namen["fahrer"]["laender"]["europa"]
     nordamerika = namen["fahrer"]["laender"]["nordamerika"]
     anteil_na = konfiguration.wert("fahrernamen", "anteil_nordamerika")
-    alter_min = konfiguration.wert("fahrernamen", "alter_min")
-    alter_max = konfiguration.wert("fahrernamen", "alter_max")
-    # Stichtag fuers Alter ist der Saisonstart aus GDD 2.
-    stichtag = dt.date(
-        saisonjahr,
-        konfiguration.wert("kalender", "saisonstart_monat"),
-        konfiguration.wert("kalender", "saisonstart_tag"),
-    )
-
     vergeben: set[tuple[str, str]] = set()
     kuerzel_vergeben: set[str] = set()
     fahrer: list[Fahrer] = []
     je_team = konfiguration.wert("teams", "autos_je_team")
+    teams = len(ligen_je_fahrer) // je_team
 
-    # Der Spieler ist Teamchef: Ihm gehoert ein ganzes Team mit vier
-    # Autos, und alle vier stehen mit Werten auf 0 in seiner Startliga.
-    spielerteam = (
-        _hole_team_nach_unten(teamplaetze, spielerliga, je_team)
-        if spielerliga is not None
-        else None
-    )
+    # Spaet importiert: talent.py greift auf dieses Modul zurueck.
+    from rennmanager.kern import generationen as kern_generationen
+    from rennmanager.kern import talent as kern_talent
 
-    for team, plaetze in enumerate(teamplaetze):
-        for n, (liga, staerke) in enumerate(plaetze):
+    for team in range(teams):
+        for n in range(je_team):
             nummer = team * je_team + n
+            liga = ligen_je_fahrer[nummer]
             ist_spieler = team == spielerteam
 
             # Namen bleiben eindeutig.
@@ -502,13 +587,11 @@ def _erzeuge_fahrer(
                 if wuerfel.random() < anteil_na
                 else europa[int(wuerfel.integers(0, len(europa)))]
             )
-            alter = int(wuerfel.integers(alter_min, alter_max + 1))
-            # Das Alter gilt zum Saisonstart (GDD 12). Der Geburtstag liegt
-            # deshalb im Jahr *vor* dem Stichtag minus Alter - vom 1. Januar
-            # aus gerechnet waere jeder, der spaeter im Jahr Geburtstag hat,
-            # am Saisonstart noch ein Jahr juenger als gewuerfelt.
-            geburtstag = stichtag.replace(year=stichtag.year - alter) - dt.timedelta(
-                days=int(wuerfel.integers(0, 365))
+            # Alter und Geburtstag haengen an der Fahrernummer, nicht an
+            # der Reihenfolge: Die Liga wurde vorher daraus bestimmt.
+            alter = startalter(konfiguration, nummer, seedquelle)
+            geburtstag = startgeburtstag(
+                konfiguration, nummer, seedquelle, saisonjahr
             )
 
             # Die eigenen Fahrer starten mit allen Werten auf 0 - sie
@@ -517,7 +600,23 @@ def _erzeuge_fahrer(
                 werte = {f.schluessel: 0 for f in konfiguration.faehigkeiten}
                 wetterwerte = dict.fromkeys(zusatz, 0)
             else:
-                werte, wetterwerte = wuerfle_werte(konfiguration, staerke, wuerfel, zusatz)
+                # Sein Profil ist sein Potential, herunterskaliert auf
+                # das, was er in diesem Alter davon erreicht hat.
+                talent = kern_talent.talent(
+                    konfiguration, nummer, geburtstag, seedquelle
+                )
+                werte, wetterwerte = kern_talent.profil(
+                    konfiguration,
+                    talent,
+                    kern_talent.stand_mit(
+                        konfiguration,
+                        talent,
+                        alter,
+                        kern_generationen.ruecktrittsalter(
+                            konfiguration, nummer, seedquelle
+                        ),
+                    ),
+                )
 
             fahrer.append(
                 Fahrer(
@@ -540,7 +639,9 @@ def _erzeuge_fahrer(
     return fahrer
 
 
-def _erzeuge_teams(konfiguration, namen, teamplaetze, fahrer, wuerfel) -> tuple[Team, ...]:
+def _erzeuge_teams(
+    konfiguration, namen, team_anzahl, je_team, fahrer, wuerfel
+) -> tuple[Team, ...]:
     erste = namen["team"]["erste_teile"]
     zweite = namen["team"]["zweite_teile"]
     laender = namen["fahrer"]["laender"]["europa"] + namen["fahrer"]["laender"]["nordamerika"]
@@ -556,7 +657,8 @@ def _erzeuge_teams(konfiguration, namen, teamplaetze, fahrer, wuerfel) -> tuple[
 
     vergeben: set[str] = set()
     teams: list[Team] = []
-    for nummer, plaetze in enumerate(teamplaetze):
+    for nummer in range(team_anzahl):
+        eigene = [fahrer[nummer * je_team + n] for n in range(je_team)]
         while True:
             name = (
                 f"{erste[int(wuerfel.integers(0, len(erste)))]} "
@@ -569,7 +671,7 @@ def _erzeuge_teams(konfiguration, namen, teamplaetze, fahrer, wuerfel) -> tuple[
         marke = hersteller[int(wuerfel.integers(0, len(hersteller)))]
         # Das Budget folgt den Ligen, in denen die vier Autos fahren
         # (GDD 10: bei der KI nur Anzeige).
-        grundlage = sum(_siegpraemie(praemien, liga) for liga, _ in plaetze) / len(plaetze)
+        grundlage = sum(_siegpraemie(praemien, f.liga) for f in eigene) / len(eigene)
         faktor = 1.0 + float(wuerfel.uniform(-streuung, streuung))
         teams.append(
             Team(
@@ -578,12 +680,11 @@ def _erzeuge_teams(konfiguration, namen, teamplaetze, fahrer, wuerfel) -> tuple[
                 land=laender[int(wuerfel.integers(0, len(laender)))],
                 hersteller=marke.name,
                 herstellerfarbe=marke.farbe,
-                farbe=_teamfarbe(marke.farbe, nummer, len(teamplaetze)),
+                farbe=_teamfarbe(marke.farbe, nummer, team_anzahl),
                 budget=int(round(grundlage * in_siegpraemien * faktor)),
-                fahrer=tuple(nummer * je_team + n for n in range(len(plaetze))),
+                fahrer=tuple(f.nummer for f in eigene),
             )
         )
-    del fahrer
     return tuple(teams)
 
 

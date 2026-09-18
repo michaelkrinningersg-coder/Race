@@ -140,16 +140,22 @@ def newgen(
     nummer: int,
     team: int,
     liga: int,
-    staerke: int,
     jahr: int,
     seedquelle: Seedquelle,
+    seedquelle_talent: Seedquelle,
     vergebene_namen: set[tuple[str, str]],
     vergebene_kuerzel: set[str],
 ) -> Fahrer:
     """Ein neuer Fahrer fuer die unterste Liga.
 
-    Gebaut wie die 600 aus GDD 12, nur jung: Name, Land und Werte kommen
-    aus denselben Listen und derselben Streuung.
+    Gebaut wie die 600 der Startwelt, nur jung: Name und Land aus
+    denselben Listen, und die Werte aus **seinem** Talent in **seinem**
+    Alter.
+
+    :param seedquelle: Name, Land und Geburtstag - haengt am Jahrgang
+    :param seedquelle_talent: die Hauptquelle, aus der Talent und
+        Ruecktrittsalter kommen. Sie muessen an der Fahrernummer haengen
+        und nicht am Jahrgang, sonst haette ein Fahrer zwei Talente.
     """
     namen = kern_welt.lade_namen(konfiguration)
     vornamen = namen["fahrer"]["vornamen"]
@@ -187,9 +193,23 @@ def newgen(
         days=int(wuerfel.integers(0, 365))
     )
 
-    zusatz = list(konfiguration.zusatzfaehigkeiten)
-    werte, wetterwerte = kern_welt.wuerfle_werte(
-        konfiguration, staerke, wuerfel, zusatz
+    # Sein Profil ist sein Potential, herunterskaliert auf das, was er in
+    # seinem Alter davon erreicht hat - genau wie bei den 600 der
+    # Startwelt. Die Ligastaerke spielt keine Rolle mehr: Ein Newgen ist
+    # so gut, wie sein Talent und sein Alter es hergeben, nicht so gut,
+    # wie die Liga es vorsieht, in der er zufaellig landet.
+    talent = kern_talent.talent(
+        konfiguration, nummer, geburtstag, seedquelle_talent
+    )
+    werte, wetterwerte = kern_talent.profil(
+        konfiguration,
+        talent,
+        kern_talent.stand_mit(
+            konfiguration,
+            talent,
+            alter,
+            ruecktrittsalter(konfiguration, nummer, seedquelle_talent),
+        ),
     )
     return Fahrer(
         nummer=nummer,
@@ -255,7 +275,9 @@ def entwickelt(
     stichtag = kern_kalender.saisonstart(konfiguration, jahr)
     neu: list[Fahrer] = []
     for fahrer in welt.fahrer:
-        talent = kern_talent.talent(konfiguration, fahrer.nummer, seedquelle)
+        talent = kern_talent.talent(
+            konfiguration, fahrer.nummer, fahrer.geburtstag, seedquelle
+        )
         if fahrer.ist_spieler:
             # Die eigenen Fahrer wachsen **nicht** von allein: Sie
             # entwickeln sich ueber das Training des Chefs (GDD 1 und 2),
@@ -368,8 +390,7 @@ def naechste_generation(
         raise GenerationenFehler(
             f"{len(gehen)} Ruecktritte, aber {len(offen)} freie Plaetze"
         )
-    for stelle, (alter_fahrer, liga) in enumerate(zip(gehen, offen, strict=True)):
-        ziele = kern_welt.ligastaerken(konfiguration, liga, je_liga)
+    for alter_fahrer, liga in zip(gehen, offen, strict=True):
         # Der Newgen erbt den Teamplatz des Zurueckgetretenen - so bleiben
         # die Teams bei vier Autos (GDD 12). Faellt der Platz im
         # Spielerteam frei, gehoert auch der Nachfolger dem Spieler: Das
@@ -383,9 +404,9 @@ def naechste_generation(
                     nummer=alter_fahrer.nummer,
                     team=alter_fahrer.team,
                     liga=liga,
-                    staerke=ziele[-1 - min(stelle, len(ziele) - 1)],
                     jahr=jahr,
                     seedquelle=seedquelle.zweig("generation", jahr),
+                    seedquelle_talent=seedquelle,
                     vergebene_namen=namen,
                     vergebene_kuerzel=kuerzel,
                 ),

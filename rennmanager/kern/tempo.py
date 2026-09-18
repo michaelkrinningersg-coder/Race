@@ -157,7 +157,10 @@ def kurvenlimit(
 
 
 def geschwindigkeitsprofil(
-    strecke: Strecke, grenzen: Grenzen, grip: np.ndarray | float = 1.0
+    strecke: Strecke,
+    grenzen: Grenzen,
+    grip: np.ndarray | float = 1.0,
+    limit: np.ndarray | None = None,
 ) -> np.ndarray:
     """Berechnet die Geschwindigkeit je Streckenpunkt in m/s.
 
@@ -168,8 +171,12 @@ def geschwindigkeitsprofil(
     :param grip: Grip-Faktor aus dem Wetter, je Punkt oder fuer die ganze
         Runde. Bei gleichem Grip ueberall ist das Ergebnis exakt das
         ``grip``-fache des trockenen Profils.
+    :param limit: ein fertiges Punktlimit statt des Kurvenlimits. Die
+        Boxengasse aus Punkt 39 deckelt damit ihren Abschnitt auf 80 km/h;
+        Bremsen davor und Beschleunigen danach entstehen aus denselben
+        beiden Durchlaeufen von allein.
     """
-    v = kurvenlimit(strecke, grenzen, grip)
+    v = kurvenlimit(strecke, grenzen, grip) if limit is None else np.array(limit, dtype=float)
     anzahl = len(v)
     ds = strecke.punktabstand_m
     grip_quadrat = np.broadcast_to(np.square(np.asarray(grip, dtype=float)), (anzahl,))
