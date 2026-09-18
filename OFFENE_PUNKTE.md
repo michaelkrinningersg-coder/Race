@@ -1781,6 +1781,32 @@ Autos genauso. Wo die Größe selbst Gegenstand ist — die Ligastruktur über
 zwanzig Stufen, oder die Frage, ob sich ein Nachname mit einem Teamnamen
 überschneidet —, steht `kf.lade()` daneben.
 
+**Nicht das Feld war teuer, sondern die Wiederholung.** Der zweite Blick
+galt den Laufzeiten je Test. `test_rennanzeige.py` rechnete in einem
+`function`-Fixture siebzehnmal **denselben** Vierrundenlauf — gemessen
+4,85 s je Test, 82 s für nichts. Der Lauf steht jetzt in einem
+`module`-Fixture und wird je Test nur noch **gezeigt**; die Seite bleibt
+frisch, damit kein Test die Anzeige des nächsten verstellt. Dieselbe
+Doppelung steckte in den Stoppläufen (zweimal derselbe Lauf mit
+Mischungspflicht), in `test_boxenstopp_rennen.py` (Reifen und Mischung)
+und in `test_reifenwahl.py` (zwei Tests, je ein eigenes Wochenende).
+
+| Datei | vorher | nachher |
+| --- | --- | --- |
+| `test_rennanzeige.py` | 141,6 s | 60,7 s |
+| `test_reifenwahl.py` | ~40 s | 25,4 s |
+| `test_boxenstopp_rennen.py` | 126,2 s | 117,6 s |
+
+`test_rennanzeige.py` bleibt dabei bewusst auf der **großen** Welt: Vier
+Runden mit dreißig Autos bringen 18 Zwischenfälle und zwei Überrundete,
+dieselben vier Runden mit vier Autos nur zwei Zwischenfälle und keinen
+Überrundeten — der Ticker und die Achse des Rückstandsdiagramms hätten
+nichts mehr zu zeigen, und zwei Tests übersprangen sich still. Ein
+dritter,
+`test_ohne_strategie_bleibt_die_mischungsspalte_leer`, ist ersatzlos
+entfallen: Er übersprang sich in **jeder** Größe, weil jeder Verlauf
+Mischungen trägt.
+
 **Was das kleine Feld aufgedeckt hat.** Drei Fehler, die in der großen
 Welt nur niemandem auffielen:
 

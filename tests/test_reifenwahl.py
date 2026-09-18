@@ -115,11 +115,24 @@ def test_die_wahl_kommt_im_rennen_an(k, welt, strecken):
     assert geplant == list(gewaehlt.stopps)
 
 
-def test_ohne_wahl_entscheidet_das_team(k, welt, strecken):
+@pytest.fixture(scope="module")
+def ohne_wahl_gefahren(k, welt, strecken):
+    """Ein Wochenende ohne Reifenwahl, ganz gefahren - einmal fuer beide Tests.
+
+    Punkt 77: Zwei Tests rechneten dafuer je ein eigenes Wochenende,
+    gemessen zwoelf Sekunden das Stueck. Der Blick auf die Wahl vor dem
+    Start aendert am Rennen nichts (GDD 15) und wird hier aufgehoben,
+    damit der zweite Test danach noch etwas zu waehlen versucht.
+    """
     wochenende = frischer_lauf(k, welt, strecken)
     wochenende.fahre_qualifying()
     assert wochenende.reifenwahl == {}
-    verlauf = wochenende.fahre_rennen()
+    vor = wochenende.strategiewahl()
+    return wochenende, wochenende.fahre_rennen(), vor
+
+
+def test_ohne_wahl_entscheidet_das_team(ohne_wahl_gefahren):
+    _wochenende, verlauf, _vor = ohne_wahl_gefahren
     assert verlauf.boxenstopps, "Ohne Wahl muss trotzdem gestoppt werden"
 
 
@@ -148,12 +161,9 @@ def test_eine_unerlaubte_strategie_wird_abgewiesen(k, welt, strecken):
         wochenende.waehle_reifen(eigene, sg.Strategie((hart,), ()))
 
 
-def test_nach_dem_start_steht_die_wahl_fest(k, welt, strecken):
+def test_nach_dem_start_steht_die_wahl_fest(welt, ohne_wahl_gefahren):
     """Der Verlauf ist gerechnet; ein Eingriff kaeme zu spaet."""
-    wochenende = frischer_lauf(k, welt, strecken)
-    wochenende.fahre_qualifying()
-    vor = wochenende.strategiewahl()
-    wochenende.fahre_rennen()
+    wochenende, _verlauf, vor = ohne_wahl_gefahren
     gewaehlt = vor.strategien.varianten[0]
     with pytest.raises(ks.SaisonFehler):
         wochenende.waehle_reifen(

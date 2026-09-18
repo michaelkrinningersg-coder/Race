@@ -243,6 +243,18 @@ def _kurzes_rennen(fenster, runden: int = 2, umgedreht: bool = False):
     Runden und 17 Sekunden; die Anzeige-Tests brauchen das nicht, also
     kommt hier ein Zweirundenrennen aus dem Kern.
     """
+    verlauf, strecke = _rennverlauf(fenster, runden, umgedreht)
+    seite = fenster.rennseite
+    seite.zeige_verlauf(verlauf, strecke)
+    return seite
+
+
+def _rennverlauf(fenster, runden: int = 2, umgedreht: bool = False):
+    """Nur der Lauf, ohne Anzeige - damit er sich teilen laesst.
+
+    Punkt 77: Wer denselben Lauf in zwanzig Tests zeigt, soll ihn einmal
+    rechnen. Gemessen kostet ein Vierrundenrennen 4,8 Sekunden.
+    """
     from rennmanager.kern import rennen as kern_rennen
     from rennmanager.kern import strecke as kern_strecke
     from rennmanager.kern import tempo as kern_tempo
@@ -285,9 +297,7 @@ def _kurzes_rennen(fenster, runden: int = 2, umgedreht: bool = False):
             haupt.zweig("rennwetter"),
         ),
     )
-    seite = fenster.rennseite
-    seite.zeige_verlauf(verlauf, strecke)
-    return seite
+    return verlauf, strecke
 
 
 def test_rennseite_berechnet_ein_rennen(qtbot, konfig: kf.Konfiguration) -> None:

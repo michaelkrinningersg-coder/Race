@@ -118,33 +118,38 @@ def test_der_geplante_stopp_wird_gefahren(k, monza, feld, umgebung):
         assert all(not b.notstopp for b in stopps)
 
 
-def test_der_stopp_setzt_die_reifen_zurueck(k, monza, feld, umgebung):
-    mittel, verschleiss = umgebung
-    verlauf = rn.simuliere(
-        k, monza, feld[:1], RUNDEN, Seedquelle(2), mittel,
-        streckenverschleiss=verschleiss,
-        strategien=(strategie_mit(k, (12,)),),
-    )
-    stopp = verlauf.stopps_von(0)[0]
-    davor = verlauf.reifen_zu(stopp.zeit_ms - 1_000)[0]
-    danach = verlauf.reifen_zu(stopp.zeit_ms + 20_000)[0]
-    assert davor < 1.0
-    assert danach > davor
+@pytest.fixture(scope="module")
+def einzelstopp(k, monza, feld, umgebung):
+    """Ein Auto, ein geplanter Stopp in Runde 12 - einmal gefahren.
 
-
-def test_die_mischung_steht_im_verlauf(k, monza, feld, umgebung):
+    Punkt 77: Reifen und Mischung wurden vorher in zwei getrennten
+    Laeufen geprueft, die sich nur in der Mischungspflicht unterschieden.
+    Die aendert am Fahren nichts, also genuegt ein Lauf fuer beides - das
+    spart gemessen acht Sekunden.
+    """
     mittel, verschleiss = umgebung
-    verlauf = rn.simuliere(
+    return rn.simuliere(
         k, monza, feld[:1], RUNDEN, Seedquelle(2), mittel,
         streckenverschleiss=verschleiss,
         strategien=(strategie_mit(k, (12,)),),
         mischungspflicht=True,
     )
-    stopp = verlauf.stopps_von(0)[0]
-    assert verlauf.mischung_zu(0)[0] == "W"
-    assert verlauf.mischung_zu(stopp.zeit_ms + 20_000)[0] == "H"
-    assert verlauf.gefahrene_mischungen(0, verlauf.dauer_ms) == ("W", "H")
-    assert verlauf.mischungspflicht
+
+
+def test_der_stopp_setzt_die_reifen_zurueck(einzelstopp):
+    stopp = einzelstopp.stopps_von(0)[0]
+    davor = einzelstopp.reifen_zu(stopp.zeit_ms - 1_000)[0]
+    danach = einzelstopp.reifen_zu(stopp.zeit_ms + 20_000)[0]
+    assert davor < 1.0
+    assert danach > davor
+
+
+def test_die_mischung_steht_im_verlauf(einzelstopp):
+    stopp = einzelstopp.stopps_von(0)[0]
+    assert einzelstopp.mischung_zu(0)[0] == "W"
+    assert einzelstopp.mischung_zu(stopp.zeit_ms + 20_000)[0] == "H"
+    assert einzelstopp.gefahrene_mischungen(0, einzelstopp.dauer_ms) == ("W", "H")
+    assert einzelstopp.mischungspflicht
 
 
 def test_ein_stopp_kostet_durchfahrt_halt_und_standzeit(

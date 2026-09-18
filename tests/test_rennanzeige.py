@@ -29,22 +29,48 @@ from rennmanager.ui.tabellen import Balkenzeichner  # noqa: E402
 
 @pytest.fixture(scope="module")
 def konfig() -> kf.Konfiguration:
+    """Punkt 77: Diese Datei bleibt bei der **grossen** Welt.
+
+    Gemessen: Vier Runden mit dreissig Autos bringen 18 Zwischenfaelle und
+    zwei Ueberrundete, dieselben vier Runden mit vier Autos nur zwei
+    Zwischenfaelle und keinen Ueberrundeten. Der Ticker und die Achse des
+    Rueckstandsdiagramms haetten dann nichts mehr zu zeigen - zwei Tests
+    uebersprangen sich still. Teuer war ohnehin nicht das Feld, sondern
+    dass jeder Test denselben Lauf neu rechnete; das steht jetzt in
+    ``vierrundenrennen``.
+    """
     return kf.lade()
 
 
+@pytest.fixture(scope="module")
+def vierrundenrennen(konfig):
+    """Vier Runden, **einmal** gerechnet.
+
+    Punkt 77: Der Lauf ist in jedem Test derselbe - gleicher Seed,
+    gleiche Welt, gleiche Strecke. Frueher rechnete ihn jedes Fixture neu;
+    gemessen 4,85 Sekunden mal siebzehn Tests. Gezeigt wird er weiter je
+    Test frisch, damit kein Test die Anzeige des naechsten verstellt.
+    """
+    from tests.test_ui import _rennverlauf
+
+    fenster = Hauptfenster(konfig)
+    daten = _rennverlauf(fenster, runden=4)
+    fenster.close()
+    return daten
+
+
 @pytest.fixture
-def gefahren(qtbot, konfig):
-    """Ein kurzes Rennen, abgespielt bis zur Mitte.
+def gefahren(qtbot, konfig, vierrundenrennen):
+    """Dasselbe Rennen, abgespielt bis zur Mitte.
 
     Die Rennseite rechnet seit Punkt 12 nichts mehr; sie bekommt den
     Verlauf gereicht. Vier Runden reichen fuer alles, was hier geprueft
     wird - ein echtes Wochenende waere 19 Runden und 17 Sekunden.
     """
-    from tests.test_ui import _kurzes_rennen
-
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
-    seite = _kurzes_rennen(fenster, runden=4)
+    seite = fenster.rennseite
+    seite.zeige_verlauf(*vierrundenrennen)
     seite._halte_an()
     seite._springe(seite.verlauf.dauer_ms * 0.6)
     return fenster, seite
@@ -109,8 +135,8 @@ def test_die_reifenspalte_traegt_einen_anteil(gefahren) -> None:
 
 
 # --- Punkt 39: Mischung und Mischungspflicht -------------------------------
-def _mit_stopps(qtbot, konfig, pflicht: bool):
-    """Ein kurzes Rennen, in dem wirklich gewechselt wird."""
+def _stopprennen(konfig, pflicht: bool):
+    """Ein kurzes Rennen, in dem wirklich gewechselt wird - nur gerechnet."""
     from rennmanager.kern import reifen as kern_reifen
     from rennmanager.kern import strategie as kern_strategie
     from rennmanager.kern import strecke as kern_strecke
@@ -118,9 +144,9 @@ def _mit_stopps(qtbot, konfig, pflicht: bool):
     from rennmanager.kern.zufall import Seedquelle
 
     fenster = Hauptfenster(konfig)
-    qtbot.addWidget(fenster)
     strecke = kern_strecke.lade(konfig, konfig.strecken[0]["name"])
     feld = kern_welt.starterfeld(fenster.welt, fenster.welt.spieler.liga)[:6]
+    fenster.close()
     weich = kern_reifen.mischung(konfig, "weich")
     hart = kern_reifen.mischung(konfig, "hart")
     strategie = kern_strategie.Strategie(mischungen=(weich, hart), stopps=(6,))
@@ -134,25 +160,35 @@ def _mit_stopps(qtbot, konfig, pflicht: bool):
         strategien=tuple(strategie for _ in feld),
         mischungspflicht=pflicht,
     )
+    return verlauf, strecke
+
+
+@pytest.fixture(scope="module")
+def stopprennen(konfig):
+    """Mit Mischungspflicht - zwei Tests rechneten denselben Lauf zweimal."""
+    return _stopprennen(konfig, pflicht=True)
+
+
+@pytest.fixture(scope="module")
+def stopprennen_ohne_pflicht(konfig):
+    """Bei Regen ist die Pflicht aufgehoben; sonst derselbe Lauf."""
+    return _stopprennen(konfig, pflicht=False)
+
+
+def _mit_stopps(qtbot, konfig, daten):
+    """Zeigt einen der beiden Stopplaeufe auf einer frischen Seite."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
     seite = fenster.rennseite
-    seite.zeige_verlauf(verlauf, strecke)
+    seite.zeige_verlauf(*daten)
     seite._halte_an()
-    return fenster, seite, verlauf
+    return fenster, seite, daten[0]
 
 
 def test_die_rangliste_hat_eine_mischungsspalte(gefahren) -> None:
     _fenster, seite = gefahren
     kopf = seite.rangliste.headerItem().text(SPALTE_MISCHUNG)
     assert kopf == "Mischung"
-
-
-def test_ohne_strategie_bleibt_die_mischungsspalte_leer(gefahren) -> None:
-    """Ohne Strategie faehrt jedes Auto einen Satz - da gibt es nichts zu zeigen."""
-    _fenster, seite = gefahren
-    if seite.verlauf.mischungen:
-        pytest.skip("Dieser Verlauf traegt Mischungen")
-    for stelle in range(seite.rangliste.topLevelItemCount()):
-        assert seite.rangliste.topLevelItem(stelle).text(SPALTE_MISCHUNG) == "-"
 
 
 def _spalte_je_auto(seite, spalte):
@@ -164,8 +200,8 @@ def _spalte_je_auto(seite, spalte):
     return werte
 
 
-def test_die_spalte_zeigt_mischung_und_stoppzahl(qtbot, konfig) -> None:
-    _fenster, seite, verlauf = _mit_stopps(qtbot, konfig, pflicht=True)
+def test_die_spalte_zeigt_mischung_und_stoppzahl(qtbot, konfig, stopprennen) -> None:
+    _fenster, seite, verlauf = _mit_stopps(qtbot, konfig, stopprennen)
     stopp = verlauf.boxenstopps[0]
 
     seite._springe(stopp.zeit_ms - 20_000)
@@ -183,10 +219,10 @@ def test_die_spalte_zeigt_mischung_und_stoppzahl(qtbot, konfig) -> None:
         assert text.startswith(erwartet), f"Auto {i}: {text}"
 
 
-def test_die_offene_mischungspflicht_steht_in_warnfarbe(qtbot, konfig) -> None:
+def test_die_offene_mischungspflicht_steht_in_warnfarbe(qtbot, konfig, stopprennen) -> None:
     from rennmanager.ui.rennseite import FARBE_PFLICHT_ERFUELLT, FARBE_PFLICHT_OFFEN, HAKEN
 
-    _fenster, seite, verlauf = _mit_stopps(qtbot, konfig, pflicht=True)
+    _fenster, seite, verlauf = _mit_stopps(qtbot, konfig, stopprennen)
     stopp = verlauf.boxenstopps[0]
 
     seite._springe(stopp.zeit_ms - 20_000)
@@ -200,11 +236,13 @@ def test_die_offene_mischungspflicht_steht_in_warnfarbe(qtbot, konfig) -> None:
     assert zeile.text(SPALTE_MISCHUNG).endswith(HAKEN)
 
 
-def test_ohne_pflicht_steht_die_spalte_von_anfang_an_auf_gruen(qtbot, konfig) -> None:
+def test_ohne_pflicht_steht_die_spalte_von_anfang_an_auf_gruen(
+    qtbot, konfig, stopprennen_ohne_pflicht
+) -> None:
     """Bei Regen, Starkregen und wechselhaft ist die Pflicht aufgehoben."""
     from rennmanager.ui.rennseite import FARBE_PFLICHT_ERFUELLT, HAKEN
 
-    _fenster, seite, verlauf = _mit_stopps(qtbot, konfig, pflicht=False)
+    _fenster, seite, verlauf = _mit_stopps(qtbot, konfig, stopprennen_ohne_pflicht)
     seite._springe(0)
     zeile = seite.rangliste.topLevelItem(0)
     assert zeile.foreground(SPALTE_MISCHUNG).color().name() == FARBE_PFLICHT_ERFUELLT
