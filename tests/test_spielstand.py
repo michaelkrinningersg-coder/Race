@@ -60,7 +60,11 @@ def gespielt(k, strecken) -> sp.Spielstand:
         karriere.tag_weiter()
     karriere.uebernimm_defekte(("X5", "X13"))
     karriere.kaufe("F1")
-    karriere.verbuche_rennen(platz=12, ueberholmanoever=3)
+    # Ein Platz, den es im Feld auch gibt: In der kleinen Welt stehen
+    # vier Autos am Start, und das Preisgeld kennt keinen zwoelften.
+    karriere.verbuche_rennen(
+        platz=min(12, k.wert("rennen", "autos")), ueberholmanoever=3
+    )
 
     lauf = sa.Saisonlauf(k, welt, haupt, jahr=2026, strecken=strecken)
     lauf.fahre_rennen()
