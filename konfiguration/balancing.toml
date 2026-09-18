@@ -1196,6 +1196,17 @@ stopps_max = 3
 stopps_max_notfall = 4
 # In den ersten und letzten drei Runden wird nicht gestoppt.
 sperre_runden = 3
+# Zwei Grenzen fuer die weichste Trockenmischung (Entscheidung des
+# Auftraggebers). Sie soll da verschwinden, wo sie ohnehin nicht traegt:
+#
+# 1. Wer mit mehr als so vielen Stopps plant, faehrt nicht auf Weich. Eine
+#    Vier-Stopp-Strategie auf dem weichsten Gummi ist kein Plan, sondern
+#    ein Eingestaendnis.
+weich_hoechstens_stopps = 3
+# 2. Und ab diesem Streckenfaktor (GDD 3) faellt Weich ganz weg - dort
+#    bleiben nur Mittel und Hart. Von den zwanzig Strecken trifft das die
+#    verschleissstaerksten.
+weich_hoechstens_streckenfaktor = 1.15
 # Das Boxenstoppfenster: Auf die berechnete optimale Stopprunde kommt ein
 # zufaelliges Delta von +/- diesem Anteil der Renndistanz, aufgerundet,
 # mindestens aber zwei Runden. Wichtig ist die Reihenfolge: Erst wird die

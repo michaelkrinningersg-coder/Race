@@ -468,6 +468,15 @@ unter den ueberlebenden waehlt jedes Auto zufaellig. Deshalb faehrt nicht
 das ganze Feld dasselbe, und trotzdem faehrt niemand offensichtlichen
 Unsinn.
 
+**Zwei Grenzen fuer die weichste Trockenmischung.** Sie faellt weg, wo
+sie ohnehin nicht traegt: bei einer Strategie mit **mehr als drei
+Stopps** - wer so oft herein muss, hat auf dem weichsten Gummi nichts
+verloren -, und auf jeder Strecke mit einem **Streckenfaktor ueber
+1,15**. Das sind fuenf der zwanzig: Zandvoort (1,263), Budapest (1,210),
+Shanghai und Oschersleben (je 1,168) und Catalunya (1,160). Dort bleiben
+Mittel und Hart. Die Regenreifen ruehrt das nicht an - die Regel zielt
+auf den Verschleiss der Strecke, nicht auf die Wetterlage.
+
 Die Vorausberechnung rechnet mit **9 Sekunden** Standzeit, der Mitte der
 Spanne: Sie kennt die einzelnen Wuerfe noch nicht, und die Mitte
 bevorzugt keine Strategie.

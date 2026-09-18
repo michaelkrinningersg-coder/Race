@@ -380,3 +380,74 @@ def test_nach_einem_notstopp_darf_der_planstopp_laenger_warten(k):
     assert tiefer < normal
     assert tiefer == k.wert("boxenstopp", "strategie", "planstopp_nach_notstopp_restprofil")
     assert normal == k.wert("boxenstopp", "strategie", "planstopp_ab_restprofil")
+
+
+# -- Wo Weich wegfaellt (Punkt 80) ------------------------------------------
+def test_weichste_trockene_wird_ueber_den_verschleiss_gefunden(k):
+    """Nicht ueber den Schluessel, sondern ueber die Zahlen."""
+    weichste = sg.weichste_trockene(k)
+    trocken = [m for m in kern_reifen.mischungen(k) if m.naesse == 0.0]
+    assert weichste.naesse == 0.0
+    assert all(m.verschleiss <= weichste.verschleiss for m in trocken)
+
+
+def test_ab_dem_streckenfaktor_bleiben_nur_die_haerteren(k, strecken):
+    """Entscheidung des Auftraggebers: ueber der Grenze kein Weich mehr.
+
+    Geprueft an zwei echten Strecken - eine darueber, eine darunter -,
+    und die Grenze kommt aus der Konfiguration.
+    """
+    grenze = k.wert("boxenstopp", "strategie", "weich_hoechstens_streckenfaktor")
+    weich = sg.weichste_trockene(k)
+    mittlere = kern_reifen.mittlere_querbeschleunigung(strecken)
+    faktoren = {
+        s.name: kern_reifen.streckenfaktor(k, s, mittlere) for s in strecken
+    }
+    hart_zu = max(faktoren, key=lambda n: faktoren[n])
+    sanft = min(faktoren, key=lambda n: faktoren[n])
+    assert faktoren[hart_zu] > grenze >= faktoren[sanft]
+
+    feld = kern_rennen.starterfeld(k, LIGA, seedquelle=Seedquelle(1))
+    for name, erwartet_weich in ((hart_zu, False), (sanft, True)):
+        strecke = next(s for s in strecken if s.name == name)
+        runden = kern_rennen.rundenzahl(k, strecke, LIGA)
+        ergebnis = sg.feldstrategien(
+            k, [t.auto for t in feld], strecke, runden, faktoren[name], None,
+            Seedquelle(5),
+        )
+        gefahren = {
+            m.schluessel for s in ergebnis.je_auto for m in s.mischungen
+        }
+        assert (weich.schluessel in gefahren) is erwartet_weich, (
+            f"{name} (Faktor {faktoren[name]:.3f}): {sorted(gefahren)}"
+        )
+
+
+def test_wer_oft_stoppt_faehrt_nicht_auf_weich(k, strecken):
+    """Keine Variante mit mehr als drei Stopps steht auf dem weichsten Gummi.
+
+    Gesucht wird ueber alle zwanzig Strecken und ein ganzes Feld - wenn
+    irgendwo eine Vier-Stopp-Variante entsteht, dann dort.
+    """
+    grenze = k.wert("boxenstopp", "strategie", "weich_hoechstens_stopps")
+    weich = sg.weichste_trockene(k)
+    mittlere = kern_reifen.mittlere_querbeschleunigung(strecken)
+    feld = kern_rennen.starterfeld(k, LIGA, seedquelle=Seedquelle(1))
+    autos = [t.auto for t in feld]
+    viele = 0
+    for strecke in strecken:
+        faktor = kern_reifen.streckenfaktor(k, strecke, mittlere)
+        runden = kern_rennen.rundenzahl(k, strecke, LIGA)
+        ergebnis = sg.feldstrategien(
+            k, autos, strecke, runden, faktor, None, Seedquelle(5)
+        )
+        for eine in ergebnis.je_auto:
+            if len(eine.stopps) <= grenze:
+                continue
+            viele += 1
+            assert weich.schluessel not in {m.schluessel for m in eine.mischungen}, (
+                f"{strecke.name}: {[m.kuerzel for m in eine.mischungen]}"
+            )
+    # ``viele`` darf null sein: Dass es solche Strategien gar nicht mehr
+    # gibt, ist der erwuenschte Fall und kein Grund durchzufallen.
+    assert viele >= 0

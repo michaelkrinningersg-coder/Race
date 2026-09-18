@@ -2028,3 +2028,56 @@ Was in der Werkzeugausgabe jetzt **steigt**, ist die Zahl der Stopps
 sondern die Regel bei der Arbeit: Ein Auto auf Hart, das herein muss,
 bekommt wieder Hart. Der Stopp holt frisches Gummi, nicht eine andere
 Mischung — und das war vorher genau die Wahl, die verboten werden sollte.
+
+### 80. Wo Weich wegfällt
+
+Zwei Entscheidungen des Auftraggebers, beide mit demselben Ziel: die
+Vier- und Fünf-Stopp-Rennen zurückdrängen.
+
+1. Eine Variante, die mit **mehr als drei Stopps** plant, darf nicht auf
+   der weichsten Trockenmischung stehen. Wer so oft herein muss, hat auf
+   dem weichsten Gummi nichts verloren.
+2. Auf jeder Strecke mit einem **Streckenfaktor über 1,15** (GDD 3) fällt
+   Weich ganz weg — dort bleiben Mittel und Hart.
+
+Beide Werte stehen als `weich_hoechstens_stopps = 3` und
+`weich_hoechstens_streckenfaktor = 1.15` in der Konfiguration.
+
+**Welche Strecken das trifft:** fünf der zwanzig. Zandvoort (1,263),
+Budapest (1,210), Shanghai und Oschersleben (je 1,168), Catalunya
+(1,160). Sao Paulo liegt mit 1,132 knapp darunter und behält Weich.
+
+`weichste_trockene()` sucht die Mischung nicht über ihren Schlüssel,
+sondern über die Zahlen: unter allen ohne Nässe die mit dem höchsten
+Verschleiß. Käme eine vierte Trockenmischung dazu, stimmte das weiter.
+Die Regenreifen rührt die Regel nicht an — sie zielt auf den Verschleiß
+der Strecke, nicht auf die Wetterlage.
+
+**Gemessen**, Liga 1, 30 Autos, Weltseed 1, nur trocken/heiß:
+
+| Strecke | Faktor | Stopps | davon Zwang | Verteilung je Auto | Restprofil 25/Median/75 |
+| --- | --- | --- | --- | --- | --- |
+| **Zandvoort** | **1,263** | 98 → **91** | 21 → **10** | 5×:1→**0**, 4×:12→**7**, 3×:13→**19** | 26,0 → **31,9** / 35,5 / 57,1 → **42,5** |
+| Sao Paulo | 1,132 | 75 | 6 | unverändert | 35,8 / 48,3 / 58,6 |
+| Nürburgring | 1,074 | 87 | 12 | unverändert | 32,1 / 37,1 / 52,7 |
+| Silverstone | 0,890 | 78 | 6 | unverändert | 35,6 / 43,5 / 53,7 |
+| Monza | 0,537 | 47 | 3 | unverändert | 46,9 / 55,1 / 63,9 |
+
+Von den fünf Stichprobenstrecken liegt nur Zandvoort über 1,15 — dort
+wirkt die Regel, überall sonst ändert sich nichts. **Auf Zandvoort
+verschwindet Weich vollständig aus dem Feld**, die Fünf-Stopp-Autos
+gehen von einem auf keines zurück, die Vier-Stopp-Autos von zwölf auf
+sieben, und die Zwangsstopps halbieren sich von 21 auf 10. Sieben Stopps
+weniger im ganzen Rennen.
+
+Bemerkenswert ist die Spanne beim Restprofil: Sie zieht sich von
+26–57 auf **32–43** Prozent zusammen. Vorher fiel das Feld auseinander —
+einige schlichen auf abgefahrenen weichen Reifen, andere warfen halbvolle
+weg. Jetzt stoppt fast jeder in demselben Fenster.
+
+Die anderen vier betroffenen Strecken stehen nicht in der Stichprobe; das
+Werkzeug zieht sie nach Perzentilen, und dort liegt nur das Maximum über
+der Grenze. Zur Gegenprobe deshalb **Budapest** (1,210) einzeln
+gefahren: höchstens drei Stopps im ganzen Feld (2 Autos mit einem,
+8 mit zwei, 19 mit drei), nur vier Zwangsstopps, kein Weich. Genau das
+Bild, das die Regel erzeugen soll.

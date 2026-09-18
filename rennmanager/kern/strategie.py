@@ -543,6 +543,14 @@ def varianten(
                 brauchbar.append(m)
     if not brauchbar:
         brauchbar = _nach_eignung(konfiguration, float(feld[0]))[:1]
+    # Entscheidung des Auftraggebers: Ab einem bestimmten Streckenfaktor
+    # traegt die weichste Trockenmischung nicht mehr - dort bleiben nur
+    # die haerteren. Die Regenreifen bleiben unberuehrt; die Regel zielt
+    # auf den Verschleiss der Strecke, nicht auf die Lage.
+    if streckenfaktor > einstellung["weich_hoechstens_streckenfaktor"]:
+        ohne_weich = _ohne_weichste(konfiguration, brauchbar)
+        if ohne_weich:
+            brauchbar = ohne_weich
 
     # Die Stinttabellen haengen nur an der Mischung, nicht an der Folge -
     # einmal gebaut, gelten sie fuer alle. Ohne das rechnete jede der 117
@@ -589,6 +597,20 @@ def varianten(
     return [v for v in gefunden if v.zeit_ms <= grenze]
 
 
+def _ohne_weichste(
+    konfiguration: Konfiguration, mischungen: list[Mischung]
+) -> list[Mischung]:
+    """Dieselbe Liste ohne die weichste Trockenmischung.
+
+    Gibt eine leere Liste zurueck, wenn danach nichts uebrig bleibt - der
+    Aufrufer entscheidet dann, dass die Regel hier nicht greifen kann.
+    """
+    weichste = weichste_trockene(konfiguration)
+    if weichste is None:
+        return list(mischungen)
+    return [m for m in mischungen if m.schluessel != weichste.schluessel]
+
+
 def _suche(
     konfiguration: Konfiguration,
     auto: Auto,
@@ -615,10 +637,16 @@ def _suche(
     konstant = all(tabelle.konstant for tabelle in tabellen.values())
     gefunden: list[Variante] = []
     for stopps in range(einstellung["stopps_min"], hoechstens + 1):
+        # Entscheidung des Auftraggebers: Wer so oft hereinkommen muss,
+        # hat auf dem weichsten Gummi nichts verloren. Die Mischung faellt
+        # fuer diese Stoppzahl weg, die niedrigeren behalten sie.
+        erlaubt = brauchbar
+        if stopps > einstellung["weich_hoechstens_stopps"]:
+            erlaubt = _ohne_weichste(konfiguration, brauchbar) or brauchbar
         saetze = (
-            combinations_with_replacement(brauchbar, stopps + 1)
+            combinations_with_replacement(erlaubt, stopps + 1)
             if konstant
-            else product(brauchbar, repeat=stopps + 1)
+            else product(erlaubt, repeat=stopps + 1)
         )
         for satz in saetze:
             if pflicht_zwei and len({m.schluessel for m in satz}) < 2:
@@ -836,6 +864,19 @@ def notstopp(
     if abs(gefahren.naesse - naesse) <= einstellung["eignungsgrenze"]:
         return False
     return seit_letztem_stopp >= einstellung["abstand_min_runden"]
+
+
+def weichste_trockene(konfiguration: Konfiguration) -> Mischung | None:
+    """Die weichste Mischung, die fuer trockene Strecke gebaut ist.
+
+    Nicht ueber den Schluessel gesucht, sondern ueber die Zahlen: unter
+    allen Mischungen ohne Naesse die mit dem hoechsten Verschleiss. Kaeme
+    eine vierte Trockenmischung dazu, stimmte das weiter.
+    """
+    trocken = [m for m in kern_reifen.mischungen(konfiguration) if m.naesse == 0.0]
+    if not trocken:  # pragma: no cover - es gibt immer Trockenmischungen
+        return None
+    return max(trocken, key=lambda m: m.verschleiss)
 
 
 def nicht_weicher_als(gewuenscht: Mischung, untergrenze: Mischung) -> Mischung:
