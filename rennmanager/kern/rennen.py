@@ -880,7 +880,16 @@ class _Lauf:
         self.vorne_bei_rundenbeginn[i] = jetzt_vorne
 
     def _setze_reifen(self, i: int) -> None:
-        """Rechnet den Reifenzustand eines Autos in Tempo und Fehlerquote um."""
+        """Rechnet den Reifenzustand eines Autos in Tempo und Fehlerquote um.
+
+        Im zufallsfreien Modus bleibt beides bei 1,0. Seit die Gripkurve
+        ihr Optimum bei 80 % Restprofil hat (Punkt 39), heisst "kein
+        Verschleiss" naemlich nicht mehr "voller Grip": Ein frischer
+        Reifen steht bei 0,94, und die Kalibrierrunde aus GDD 9 waere
+        damit 6 % zu langsam.
+        """
+        if self.ohne_zufall:
+            return
         auto = self.autos[i]
         self.reifen_tempo[i] = kern_reifen.tempofaktor(self.k, auto, float(self.verschleiss[i]))
         self.reifen_fehler[i] = kern_reifen.fehlerfaktor(self.k, auto, float(self.verschleiss[i]))

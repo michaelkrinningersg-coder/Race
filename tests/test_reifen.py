@@ -38,39 +38,66 @@ def mit(k, schluessel: str, wert: int, grund: int = 50_000) -> Auto:
 def test_frische_reifen_kosten_nichts(k) -> None:
     auto = ka.gleichverteilt(k, 50_000)
     assert rf.zustand(0.0) == 1.0
-    assert rf.tempofaktor(k, auto, 0.0) == pytest.approx(1.0)
-    assert rf.fehlerfaktor(k, auto, 0.0) == pytest.approx(1.0)
+    # Punkt 39: Ein frischer Reifen ist **nicht** der schnellste - das
+    # Optimum liegt bei 80 % Restprofil. Er ist aber nah dran.
+    assert rf.tempofaktor(k, auto, 0.0) < 1.0
+    assert rf.tempofaktor(k, auto, 0.2) == pytest.approx(1.0)
 
 
 def test_abgefahrene_reifen_kosten_tempo(k) -> None:
     """GDD 4: Verschleiss senkt das Tempo und erhoeht die Fehlerquote."""
     auto = mit(k, rf.FLUESTERER, 0)
     einstellung = k.wert("reifen", "verschleiss")
-    assert rf.tempofaktor(k, auto, 1.0) == pytest.approx(
-        1.0 - einstellung["tempoverlust_voll"]
-    )
+    boden = min(einstellung["grip_stuetzstellen"]) / rf.bestgrip(k)
+    assert rf.tempofaktor(k, auto, 1.0) == pytest.approx(boden)
     assert rf.fehlerfaktor(k, auto, 1.0) == pytest.approx(
         1.0 + einstellung["fehlerzuschlag_voll"]
     )
 
 
-def test_wirkung_waechst_progressiv(k) -> None:
-    """Entscheidung B: erst flach, letztes Drittel steil."""
+def test_der_grip_hat_sein_optimum_bei_achtzig_prozent(k) -> None:
+    """Punkt 39: Ein frischer Reifen muss erst arbeiten.
+
+    Genau das macht einen langen Stint wertvoll und einen fruehen Stopp
+    riskant. Die alte Parabel fiel ab der ersten Runde.
+    """
+    werte = [(rf.grip(k, z / 100.0), z) for z in range(101)]
+    assert max(werte)[1] == 80
+    assert rf.grip(k, 1.0) < rf.grip(k, 0.8)
+    assert rf.grip(k, 0.95) > rf.grip(k, 1.0)
+    # Bei null bleibt ein Viertel des Startgrips.
+    assert rf.grip(k, 0.0) == pytest.approx(rf.grip(k, 1.0) / 4.0, rel=0.02)
+
+
+def test_die_fehlerquote_folgt_derselben_kurve(k) -> None:
+    """Abgefahrene Reifen kosten Zeit **und** machen Fehler - ab derselben
+    Stelle. Frueher stieg die Fehlerquote schon, waehrend die Reifen noch
+    besser wurden."""
     auto = mit(k, rf.FLUESTERER, 0)
-    verlust = [1.0 - rf.tempofaktor(k, auto, anteil) for anteil in (0.25, 0.5, 0.75, 1.0)]
-    # Die Zuwaechse werden von Stufe zu Stufe groesser.
-    zuwaechse = [danach - davor for davor, danach in zip(verlust, verlust[1:], strict=False)]
-    assert zuwaechse == sorted(zuwaechse)
-    # Nach der Haelfte ist erst ein Viertel des Verlusts aufgelaufen.
-    assert verlust[1] == pytest.approx(verlust[3] / 4, rel=0.01)
+    im_optimum = rf.fehlerfaktor(k, auto, 0.2)
+    frisch = rf.fehlerfaktor(k, auto, 0.0)
+    abgefahren = rf.fehlerfaktor(k, auto, 0.9)
+    assert im_optimum == pytest.approx(1.0)
+    assert frisch > im_optimum
+    assert abgefahren > frisch
 
 
-def test_zustand_bleibt_im_band(k) -> None:
-    assert rf.zustand(-0.5) == 1.0
-    assert rf.zustand(2.0) == 0.0
+def test_der_abfall_wird_gegen_ende_steiler(k) -> None:
+    """Die Form der Kurve: ab 60 % nimmt der Gripverlust je Prozent zu.
+
+    Frueher stand hier eine Parabel, die schon ab dem ersten Meter fiel.
+    Jetzt faellt der Grip erst ab dem Optimum bei 80 %, dann flach, und
+    gegen Ende steil.
+    """
+    stufen = [0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.0]
+    grips = [rf.grip(k, z) for z in stufen]
+    # Ab dem Optimum faellt er durchgehend.
+    assert grips == sorted(grips, reverse=True)
+    # Und je Zehntel immer staerker.
+    schritte = [grips[i] - grips[i + 1] for i in range(len(grips) - 1)]
+    assert schritte == sorted(schritte)
 
 
-# -- Verschleissrate --------------------------------------------------------
 def test_gute_reifenwerte_bauen_langsamer_ab(k) -> None:
     """Der Bereich ve traegt den Verschleiss - vor allem F10 und D14."""
     m = rf.standardmischung(k)
@@ -165,10 +192,11 @@ def test_fluesterer_senkt_die_wirkung_nicht_den_verschleiss(k) -> None:
 
 def test_fluesterer_daempft_hoechstens_wie_vorgegeben(k) -> None:
     max_daempfung = k.wert("reifen", "fluesterer", "max_daempfung")
-    verlust_voll = k.wert("reifen", "verschleiss", "tempoverlust_voll")
+    einstellung = k.wert("reifen", "verschleiss")
+    voller_verlust = 1.0 - min(einstellung["grip_stuetzstellen"]) / rf.bestgrip(k)
     bester = mit(k, rf.FLUESTERER, 100_000)
     assert 1.0 - rf.tempofaktor(k, bester, 1.0) == pytest.approx(
-        verlust_voll * (1.0 - max_daempfung), rel=0.02
+        voller_verlust * (1.0 - max_daempfung), rel=0.02
     )
 
 

@@ -1059,7 +1059,7 @@ schluessel = "weich"
 name = "Weich"
 kuerzel = "W"
 farbe = "#D7191C"
-tempo = 1.010          # rund 0,9 s je Runde schneller als hart
+tempo = 1.020          # rund 1,8 s je Runde schneller als hart
 verschleiss = 1.30
 naesse = 0.0
 
@@ -1068,7 +1068,7 @@ schluessel = "mittel"
 name = "Mittel"
 kuerzel = "M"
 farbe = "#E8B93B"
-tempo = 1.005
+tempo = 1.010
 verschleiss = 1.00
 naesse = 0.0
 
@@ -1137,11 +1137,38 @@ standzeit_max_s = 10.0
 # Mindestens einer, weil zwei verschiedene Mischungen Pflicht sind.
 stopps_min = 1
 stopps_max = 3
+# Geht es rechnerisch mit drei Stopps nicht auf - auf sehr
+# verschleissstarken Strecken oder mit einem sehr schonungslosen Auto -,
+# darf ein vierter dazukommen. Das ist dann das Maximum.
+stopps_max_notfall = 4
 # In den ersten und letzten drei Runden wird nicht gestoppt.
 sperre_runden = 3
-# Die KI stoppt in einem Fenster statt auf den Punkt - sonst kaeme das
-# halbe Feld in derselben Runde herein und die Boxengasse waere ein Stau.
-ki_fenster_runden = 6
+# Das Boxenstoppfenster: Auf die berechnete optimale Stopprunde kommt ein
+# zufaelliges Delta von +/- diesem Anteil der Renndistanz, aufgerundet,
+# mindestens aber zwei Runden. Wichtig ist die Reihenfolge: Erst wird die
+# beste Kombination gerechnet, **dann** kommt das Delta drauf - nicht
+# umgekehrt.
+fenster_anteil = 0.05
+fenster_min_runden = 2
+# So viel Restprofil soll ein Stint planmaessig uebrig lassen - auch im
+# Ziel. Nur wenn das Zufallsfenster den letzten Stopp nach vorn zieht,
+# faellt es darunter. Damit fallen auf verschleissstarken Strecken die
+# Ein-Stopp-Strategien von selbst heraus.
+mindest_restprofil = 0.30
+# Wie weit eine Variante hinter der besten liegen darf, bevor sie
+# ausscheidet: ein Sockel plus ein Anteil je 100 km Renndistanz. Bei
+# 100 km sind das 30 s, bei 200 km 45 s, bei 300 km 60 s - so hat es der
+# Auftraggeber vorgegeben. Liegen die Varianten dicht beieinander,
+# bleiben alle drei Stoppzahlen moeglich; liegen sie weit auseinander,
+# bleibt nur die beste.
+variantenschwelle_sockel_s = 15.0
+variantenschwelle_je_100km_s = 15.0
+# Wetterwechsel: Hoechstens so viele Runden faehrt ein Auto auf dem
+# falschen Reifen, bevor es hereinkommt.
+falscher_reifen_max_runden = 3
+# Und so viele Runden muessen zwischen zwei Stopps liegen - sonst kaeme
+# ein Auto bei schnellem Wetterwechsel zweimal hintereinander herein.
+abstand_min_runden = 3
 # Bei diesen Lagen entfaellt die Pflicht zu zwei Mischungen: Wer auf
 # Intermediates oder Regenreifen wechselt, hat ohnehin gewechselt, und
 # ein Rennen unter Wasser soll niemanden zwingen, einmal auf
@@ -1149,14 +1176,14 @@ ki_fenster_runden = 6
 # (GDD 7), also steht auch diese Regel vor dem Rennen fest.
 ohne_pflicht_bei = ["regen", "starkregen", "wechselhaft"]
 # Wie weit eine Mischung von der Naesse der Lage abweichen darf, damit
-# die KI sie ueberhaupt in Betracht zieht. Bei 0,38 ergibt das:
+# die KI sie ueberhaupt in Betracht zieht. Bei 0,30 ergibt das:
 #   trocken      -> weich, mittel, hart
-#   wechselhaft  -> Trockenmischungen und Intermediates
+#   wechselhaft  -> nur Intermediates (sie sind dort die schnellsten)
 #   regen        -> Intermediates und Regenreifen
 #   starkregen   -> nur Regenreifen
 # Ohne die Grenze kamen gemessen Folgen wie Hart-Inter-Weich-Inter im
 # Trockenen heraus - ein Intermediate kostet dort 6 % Tempo.
-eignungsgrenze = 0.38
+eignungsgrenze = 0.30
 
 # ---------------------------------------------------------------------------
 # Punkt 7 - Fahrer holen: Vertraege, Gehalt und Abloese
@@ -1653,17 +1680,32 @@ wahrscheinlichkeit_max = 0.95
 
 # --- Punkt 4: Wetterprofil je Strecke (GDD 3 und 16) ----------------------
 # Entscheidung A: drei Klimaprofile. Gewichte je Wetterlage.
+# Punkt 39: Darueber liegt eine Saisonebene. "gewichte" gilt weiter, wo
+# ohne Saison gewuerfelt wird (Tests, Editor); im Spiel wuerfelt jede
+# Saison aus "band" ihre eigenen Gewichte. So gibt es nasse und trockene
+# Jahre, statt dass jedes Jahr gleich aussieht.
 [wetter.profil.heiss_trocken]
 strecken = ["Sakhir", "Yas Marina", "Mexiko-Stadt", "Austin", "Sao Paulo", "Melbourne", "Shanghai"]
 gewichte = { starkregen = 2, regen = 8, wechselhaft = 15, trocken = 45, heiss = 30 }
+# Wueste: wechselhaftes Wetter praktisch nie.
+band = { starkregen = [0, 1], regen = [0, 3], wechselhaft = [0, 2], trocken = [40, 60], heiss = [35, 55], wechselneigung = [0.00, 0.02] }
 
 [wetter.profil.gemaessigt]
 strecken = ["Catalunya", "Monza", "Budapest", "Suzuka", "Montreal", "Spielberg"]
 gewichte = { starkregen = 5, regen = 15, wechselhaft = 20, trocken = 45, heiss = 15 }
+band = { starkregen = [0, 2], regen = [1, 5], wechselhaft = [2, 8], trocken = [55, 75], heiss = [16, 32], wechselneigung = [0.05, 0.25] }
 
 [wetter.profil.regenreich]
 strecken = ["Spa", "Zandvoort", "Silverstone", "Nuerburgring", "Hockenheim", "Norisring", "Oschersleben"]
 gewichte = { starkregen = 10, regen = 25, wechselhaft = 25, trocken = 35, heiss = 5 }
+# Hier ist die Wechselneigung am hoechsten - bis zu den 40 %, die der
+# Auftraggeber als Obergrenze gesetzt hat.
+band = { starkregen = [0, 3], regen = [3, 9], wechselhaft = [4, 13], trocken = [55, 72], heiss = [5, 14], wechselneigung = [0.10, 0.40] }
+
+# Hoechstens zwei Wechsel je Rennen, und immer nur eine Stufe der Kette -
+# einen Sprung von trocken auf Starkregen gibt es nicht.
+[wetter.saison]
+wechsel_max = 2
 
 # --- Punkt 5: Streckennaesse (GDD 7) --------------------------------------
 [wetter.naesse]
@@ -1736,19 +1778,36 @@ je_auto_und_rennen_bei_maximum = 0.005
 #
 #   zustand:      1,0 frisch bis 0,0 abgefahren
 #   verschleiss:  1 - zustand
-#   tempoverlust: tempoverlust_voll * verschleiss ^ exponent
+#   tempoverlust: aus der Gripkurve unten
 #
 # Wie schnell der Verschleiss waechst, haengt vom Bereich ve der
 # Wirkungsmatrix ab (F10 Reifenhaltbarkeit, F14, F16, D14
 # Reifenmanagement). Ein Auto bei S = 0 faehrt die Reifen ueber die
 # Renndistanz voll ab, eines bei S = referenz nur zum Teil - die Spanne
 # steht unten.
-verlauf = "progressiv"
+# Punkt 39: Die alte Parabel ist abgeloest. Der Grip haengt jetzt an einer
+# Kurve mit **Optimum bei 80 % Restprofil** - ein frischer Reifen ist
+# also nicht der schnellste. Das ist die wichtigste Aenderung am
+# Reifenmodell: Erst dadurch ist ein langer Stint etwas wert und ein
+# frueher Stopp ein Risiko.
+#
+# Die Form kommt vom Auftraggeber:
+#   100-95  steiler Gripanstieg
+#    95-80  flacher werdender Anstieg bis zum Optimum
+#    80-65  flacher werdender Abfall
+#   ab  60  der Abfall wird je Prozent staerker
+#   bei  0  hoechstens noch ein Viertel des Startgrips
+#
+# Stuetzstellen: Restprofil -> Grip. Dazwischen wird linear interpoliert;
+# die Stuetzstellen stehen dicht genug, dass die Kurve rund laeuft.
+verlauf = "optimum_bei_80"
+zustand_stuetzstellen = [1.00, 0.95, 0.90, 0.80, 0.70, 0.65, 0.60, 0.50, 0.40, 0.30, 0.20, 0.10, 0.00]
+grip_stuetzstellen   = [0.940, 0.985, 0.996, 1.000, 0.988, 0.978, 0.963, 0.925, 0.870, 0.790, 0.670, 0.480, 0.235]
+# Der Boden ist genau ein Viertel des Startgrips: 0,235 = 0,25 * 0,940.
 exponent = 2.0
-# Tempoverlust bei voellig abgefahrenen Reifen. Deutlich mehr als die
-# frueheren 3 %: Ohne spuerbaren Abbau faechert das Feld nur auf und es
-# gibt in der zweiten Rennhaelfte keine Positionswechsel mehr.
-tempoverlust_voll = 0.12
+# Der Tempoverlust steht nicht mehr hier: Er kommt aus der Gripkurve
+# oben. Zwei Modelle nebeneinander haetten gegeneinander gerechnet.
+# Zuschlag auf die Fehlerquote am Kurvenboden.
 fehlerzuschlag_voll = 1.0
 # Verschleiss ueber die volle Renndistanz, je nach Bereich ve:
 #   bei S = 0         verschleiss_bei_null       (Reifen sind am Ende hin)

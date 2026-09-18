@@ -231,21 +231,58 @@ def _daempfung(konfiguration: Konfiguration, auto: Auto) -> float:
     return einstellung["max_daempfung"] * anteil
 
 
-def tempofaktor(konfiguration: Konfiguration, auto: Auto, verschleiss: float) -> float:
-    """Faktor auf das Tempo bei diesem Verschleiss (GDD 4).
+def grip(konfiguration: Konfiguration, zustandswert: float) -> float:
+    """Der Grip bei diesem Restprofil - die Kurve aus Punkt 39.
 
-    Der Verlust waechst progressiv: erst flach, gegen Ende steil. Der
-    Reifenfluesterer senkt ihn um bis zu 60 %.
+    **Das Optimum liegt bei 80 % Restprofil, nicht bei 100.** Ein frischer
+    Reifen muss erst arbeiten; danach faellt er erst flach und gegen Ende
+    steil ab. Bei null ist noch ein Viertel des Startgrips uebrig - ein
+    abgefahrener Reifen ist langsam, aber nicht unfahrbar.
+
+    Das ist die wichtigste Aenderung am Reifenmodell: Erst dadurch ist ein
+    langer Stint etwas wert und ein frueher Stopp ein Risiko. Die alte
+    Parabel fiel ab der ersten Runde und machte jeden Stopp zum Gewinn.
     """
     einstellung = konfiguration.wert("reifen", "verschleiss")
-    abgefahren = 1.0 - zustand(verschleiss)
-    verlust = einstellung["tempoverlust_voll"] * abgefahren ** einstellung["exponent"]
-    return 1.0 - verlust * (1.0 - _daempfung(konfiguration, auto))
+    stellen = einstellung["zustand_stuetzstellen"]
+    werte = einstellung["grip_stuetzstellen"]
+    # np.interp will aufsteigende x-Werte; die Tabelle laeuft absteigend.
+    return float(
+        np.interp(
+            float(np.clip(zustandswert, 0.0, 1.0)), list(reversed(stellen)),
+            list(reversed(werte))
+        )
+    )
+
+
+def bestgrip(konfiguration: Konfiguration) -> float:
+    """Der Grip im Optimum - die Bezugsgroesse der Kurve."""
+    return max(konfiguration.wert("reifen", "verschleiss", "grip_stuetzstellen"))
+
+
+def tempofaktor(konfiguration: Konfiguration, auto: Auto, verschleiss: float) -> float:
+    """Faktor auf das Tempo bei diesem Verschleiss (GDD 4, Punkt 39).
+
+    Gemessen am Optimum der Kurve: Im Optimum 1,0, davor und danach
+    weniger. Der Reifenfluesterer senkt den Verlust um bis zu 60 % - er
+    aendert die Kurve nicht, nur ihre Wirkung.
+    """
+    anteil = grip(konfiguration, zustand(verschleiss)) / bestgrip(konfiguration)
+    return 1.0 - (1.0 - anteil) * (1.0 - _daempfung(konfiguration, auto))
 
 
 def fehlerfaktor(konfiguration: Konfiguration, auto: Auto, verschleiss: float) -> float:
-    """Multiplikator auf die Fehlerquote bei diesem Verschleiss (GDD 4)."""
+    """Multiplikator auf die Fehlerquote bei diesem Verschleiss (GDD 4).
+
+    Dieselbe Kurve wie das Tempo: Abgefahrene Reifen kosten nicht nur
+    Zeit, sie machen Fehler - und zwar ab derselben Stelle. Frueher hing
+    die Fehlerquote an einer eigenen Parabel und stieg schon, waehrend die
+    Reifen noch besser wurden.
+    """
     einstellung = konfiguration.wert("reifen", "verschleiss")
-    abgefahren = 1.0 - zustand(verschleiss)
-    zuschlag = einstellung["fehlerzuschlag_voll"] * abgefahren ** einstellung["exponent"]
+    anteil = grip(konfiguration, zustand(verschleiss)) / bestgrip(konfiguration)
+    boden = min(einstellung["grip_stuetzstellen"]) / bestgrip(konfiguration)
+    # 0 im Optimum, 1 am Kurvenboden.
+    tiefe = (1.0 - anteil) / max(1.0 - boden, 1e-6)
+    zuschlag = einstellung["fehlerzuschlag_voll"] * tiefe
     return 1.0 + zuschlag * (1.0 - _daempfung(konfiguration, auto))
