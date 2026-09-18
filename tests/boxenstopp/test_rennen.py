@@ -160,3 +160,79 @@ def test_zwischen_zwei_zwangsstopps_liegt_der_mindestabstand(k, monza, feld, umg
     abstand = k.wert("boxenstopp", "strategie", "abstand_min_runden")
     runden = [b.runde for b in verlauf.stopps_von(0)]
     assert all(b - a >= abstand for a, b in zip(runden, runden[1:], strict=False))
+
+
+# -- Nach dem Zwangsstopp ---------------------------------------------------
+def test_nach_einem_zwangsstopp_wird_es_nicht_wieder_weicher(k, monza, feld, umgebung):
+    """Entscheidung des Auftraggebers: kein Rueckschritt auf weicheren Gummi.
+
+    Das Auto startet auf Weich und faehrt den Satz ab; der Zwangsstopp
+    legt Hart auf. Der Plan will danach wieder Weich - das gibt es nicht
+    mehr, denn zwei Mischungen sind zu dem Zeitpunkt schon gefahren.
+    """
+    mittel, verschleiss = umgebung
+    weich = kern_reifen.mischung(k, "weich")
+    nur_weich = sg.Strategie(mischungen=(weich, weich, weich), stopps=(12, 18))
+    verlauf = rn.simuliere(
+        k, monza, feld[:1], RUNDEN, Seedquelle(2), mittel,
+        streckenverschleiss=verschleiss,
+        strategien=(nur_weich,),
+    )
+    stopps = verlauf.stopps_von(0)
+    zwang = [b for b in stopps if b.notstopp]
+    assert zwang, "Bei diesem Verschleiss muss der Satz das Auto hereinzwingen"
+    assert zwang[0].nach == "H", "Der Zwangsstopp nimmt im Trockenen die haerteste"
+    # Alles, was danach kommt, bleibt auf Hart - obwohl der Plan Weich sagt.
+    danach = [b for b in stopps if b.runde > zwang[0].runde]
+    assert danach, "Der Plan sieht nach dem Zwangsstopp noch einen Stopp vor"
+    assert all(b.nach == "H" for b in danach), [b.nach for b in danach]
+
+
+def test_die_mischungspflicht_geht_der_haerteregel_vor(k, monza, feld, umgebung):
+    """Sonst liesse sich die Pflicht nach einem Zwangsstopp nicht erfuellen.
+
+    Wer auf Hart startet und dessen Zwangsstopp wieder Hart auflegt, hat
+    erst **eine** Mischung gefahren. Die zweite kann dann nur weicher
+    sein - hier muss die Haerteregel weichen.
+    """
+    mittel, verschleiss = umgebung
+    hart = kern_reifen.mischung(k, "hart")
+    mittelhart = kern_reifen.mischung(k, "mittel")
+    plan = sg.Strategie(mischungen=(hart, mittelhart, mittelhart), stopps=(12, 18))
+    verlauf = rn.simuliere(
+        k, monza, feld[:1], RUNDEN, Seedquelle(2), mittel,
+        streckenverschleiss=verschleiss,
+        strategien=(plan,),
+        mischungspflicht=True,
+    )
+    stopps = verlauf.stopps_von(0)
+    zwang = [b for b in stopps if b.notstopp]
+    assert zwang and zwang[0].nach == "H"
+    assert "M" in verlauf.gefahrene_mischungen(0, verlauf.dauer_ms), (
+        "Die zweite Mischung muss kommen duerfen, sonst ist die Pflicht nicht erfuellbar"
+    )
+
+
+def test_nach_einem_zwangsstopp_wartet_der_planstopp_laenger(k, monza, feld, umgebung):
+    """Der frische Satz wird nicht schon bei 65 Prozent wieder abgegeben.
+
+    Entscheidung des Auftraggebers: nach einem Zwangsstopp erst unter
+    60 Prozent. Geprueft wird gegen den Wert aus der Konfiguration.
+    """
+    mittel, verschleiss = umgebung
+    verlauf = rn.simuliere(
+        k, monza, feld[:4], RUNDEN, Seedquelle(2), mittel,
+        streckenverschleiss=verschleiss,
+        strategien=tuple(strategie_mit(k, (8, 16)) for _ in range(4)),
+    )
+    tiefer = k.wert("boxenstopp", "strategie", "planstopp_nach_notstopp_restprofil")
+    geprueft = 0
+    for i in range(4):
+        stopps = verlauf.stopps_von(i)
+        for vorher, nachher in zip(stopps, stopps[1:], strict=False):
+            if vorher.notstopp and not nachher.notstopp:
+                assert nachher.restprofil <= tiefer, (
+                    f"Auto {i}, Runde {nachher.runde}: {nachher.restprofil:.3f} > {tiefer}"
+                )
+                geprueft += 1
+    assert geprueft, "Kein Planstopp nach einem Zwangsstopp - der Test prueft nichts"

@@ -893,6 +893,17 @@ class _Lauf:
         self.stint = np.zeros(self.anzahl, dtype=int)
         self.stopp_nummer = np.zeros(self.anzahl, dtype=int)
         self.runde_letzter_stopp = np.zeros(self.anzahl, dtype=int)
+        # Ob der letzte **gefahrene** Stopp ein Notstopp war. Danach darf
+        # der naechste geplante Stopp laenger warten: Der Satz ist frisch.
+        self.letzter_war_notstopp = np.zeros(self.anzahl, dtype=bool)
+        # Welche Mischungen ein Auto schon gefahren hat. Zwei verschiedene
+        # sind im Trockenen Pflicht - und sie sind die Ausnahme von der
+        # Haerteregel unten.
+        self.kuerzel_gefahren: list[set[str]] = [{m.kuerzel} for m in self.mischungen]
+        # Die Mischung, die ein Zwangsstopp im Trockenen aufgezogen hat.
+        # Ab da geht es nicht wieder weicher (Entscheidung des
+        # Auftraggebers); None heisst: noch kein solcher Stopp.
+        self.haerte_untergrenze: list[kern_reifen.Mischung | None] = [None] * self.anzahl
         if not self.faehrt_stopps:
             self.profil_box = self.profile
             return
@@ -990,6 +1001,7 @@ class _Lauf:
             )
         )
         self.mischungen[i] = neu
+        self.kuerzel_gefahren[i].add(neu.kuerzel)
         self.verschleiss[i] = 0.0
         self._setze_verschleissrate(i)
         self._setze_reifen(i)
@@ -1003,6 +1015,7 @@ class _Lauf:
         halt = standzeit + self.bremsverlust[i]
         self.pause_ms[i] = max(float(self.pause_ms[i]), float(halt))
         self.runde_letzter_stopp[i] = int(self.runden_gefahren[i])
+        self.letzter_war_notstopp[i] = notstopp
 
     def _pruefe_boxenstopp(self, i: int, ueberfahrt: float) -> None:
         """Geplanter Stopp oder Notstopp (Punkt 39).
@@ -1074,6 +1087,39 @@ class _Lauf:
             return geplant
         return kern_strategie.passende_mischung(self.k, naesse)
 
+    def _haelt_die_haerte(self, i: int, gewuenscht, ueberfahrt: float):
+        """Nach einem Zwangsstopp nicht wieder auf weicheren Gummi (Punkt 78).
+
+        Entscheidung des Auftraggebers: Wer sich einen Satz abgefahren
+        hat, hat bewiesen, dass die Strecke ihm zu viel abverlangt - er
+        bekommt danach keine weichere Mischung mehr. Das gilt fuer jeden
+        weiteren Stopp, nicht nur fuer den naechsten.
+
+        **Nur bei heiss und trocken.** Sobald es nass ist, entscheidet die
+        Lage: Ein Regenreifen ist nicht weicher als ein Slick, er ist
+        etwas anderes.
+
+        **Ausnahme: die Mischungspflicht.** Wer erst eine Mischung
+        gefahren hat, muss noch eine zweite aufziehen - und wenn der
+        Zwangsstopp schon die haerteste aufgelegt hat, kann die zweite
+        nur weicher sein. Sonst liesse sich die Pflicht nicht mehr
+        erfuellen.
+        """
+        untergrenze = self.haerte_untergrenze[i]
+        if untergrenze is None:
+            return gewuenscht
+        if self._naesse_zu(ueberfahrt) != 0.0:
+            return gewuenscht
+        if len(self.kuerzel_gefahren[i]) < 2:
+            return gewuenscht
+        return kern_strategie.nicht_weicher_als(gewuenscht, untergrenze)
+
+    def _naesse_zu(self, ueberfahrt: float) -> float:
+        """Wie nass es zu diesem Zeitpunkt ist - 0,0 heisst trocken oder heiss."""
+        if self.wetter is None:
+            return 0.0
+        return kern_reifen.naesse_von(self.k, self.wetter.zustand_zu(ueberfahrt))
+
     def _verschiebt_planstopp(self, i: int, runde: int) -> bool:
         """Schiebt einen geplanten Stopp, solange der Satz zu gut dafuer ist.
 
@@ -1090,7 +1136,9 @@ class _Lauf:
             return False
         if int(self.box_runde[i]) != runde + 1:
             return False
-        schwelle = self.k.wert("boxenstopp", "strategie", "planstopp_ab_restprofil")
+        schwelle = kern_strategie.verschiebeschwelle(
+            self.k, nach_notstopp=bool(self.letzter_war_notstopp[i])
+        )
         naechste = float(
             self.verschleiss[i]
             + self.verschleiss_je_meter[i] * self.laenge * self.wetter_verschleiss
@@ -1127,6 +1175,10 @@ class _Lauf:
                 else 0.0
             )
             neu = kern_strategie.passende_mischung(self.k, naesse)
+            if neu.naesse == 0.0:
+                # Nur im Trockenen: Was hier aufgezogen wird, ist von nun
+                # an die weichste erlaubte Mischung.
+                self.haerte_untergrenze[i] = neu
             self._wechsle_reifen(i, ueberfahrt, neu, True)
             self.box_offen[i] = False
             self._schiebe_stopp(i)
@@ -1142,7 +1194,8 @@ class _Lauf:
         # kommt der auf, der passt - sonst faehrt ein Auto bei einem
         # Planstopp im Regen wieder Slicks auf und muss zwei Runden
         # spaeter zum Notstopp herein.
-        self._wechsle_reifen(i, ueberfahrt, self._zur_lage(geplant, ueberfahrt), False)
+        neu = self._haelt_die_haerte(i, self._zur_lage(geplant, ueberfahrt), ueberfahrt)
+        self._wechsle_reifen(i, ueberfahrt, neu, False)
         # Das Fenster bleibt bis zur Ausfahrt stehen; erst danach wird der
         # naechste Stopp geplant (siehe _raeume_boxengasse).
         self.box_offen[i] = False

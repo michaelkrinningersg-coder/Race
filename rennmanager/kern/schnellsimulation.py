@@ -267,6 +267,11 @@ def fahre_wochenende(
             else [kern_reifen.standardmischung(konfiguration)] * anzahl
         )
     gefahrene = [gestreut(i, m) for i, m in enumerate(gewaehlt)]
+    # Wie in der vollen Simulation: welche Mischungen schon gefahren
+    # sind, und was ein Zwangsstopp im Trockenen als weichste erlaubte
+    # Mischung festgelegt hat.
+    kuerzel_gefahren: list[set[str]] = [{m.kuerzel} for m in gefahrene]
+    haerte_untergrenze: list[kern_reifen.Mischung | None] = [None] * anzahl
 
     def je_runde(i: int, naesse: float) -> float:
         """Profilverlust je Runde - die Naesse geht hier ein, nicht obendrauf.
@@ -303,6 +308,9 @@ def fahre_wochenende(
     stint_stand = np.zeros(anzahl, dtype=int)
     stopp_nummer = np.zeros(anzahl, dtype=int)
     runde_letzter_stopp = np.zeros(anzahl, dtype=int)
+    # Ob der letzte gefahrene Stopp ein Notstopp war - danach darf der
+    # naechste geplante Stopp laenger warten, wie in der vollen Simulation.
+    letzter_war_notstopp = np.zeros(anzahl, dtype=bool)
     notstopp_faellig = np.zeros(anzahl, dtype=bool)
     stopps_je_auto = np.zeros(anzahl, dtype=int)
 
@@ -417,7 +425,9 @@ def fahre_wochenende(
                 kuenftig = 1.0 - float(
                     verschleiss[i] + verschleiss_je_runde[i] * wetter_verschleiss
                 )
-                if kuenftig > einstellung["planstopp_ab_restprofil"]:
+                if kuenftig > kern_strategie.verschiebeschwelle(
+                    konfiguration, nach_notstopp=bool(letzter_war_notstopp[i])
+                ):
                     spaeteste = runden - einstellung["sperre_runden"]
                     stopps = list(strat.stopps)
                     if runde + 2 <= spaeteste:
@@ -461,6 +471,9 @@ def fahre_wochenende(
                 naesse = kern_reifen.naesse_von(konfiguration, zustand)
                 neu = kern_strategie.passende_mischung(konfiguration, naesse)
                 notstopp_faellig[i] = False
+                letzter_war_notstopp[i] = True
+                if neu.naesse == 0.0:
+                    haerte_untergrenze[i] = neu
                 strategie_stand[i] = kern_strategie.nach_notstopp(
                     konfiguration, strat, stelle, runde, runden
                 )
@@ -478,6 +491,15 @@ def fahre_wochenende(
                 grenze = konfiguration.wert("boxenstopp", "strategie", "eignungsgrenze")
                 if abs(neu.naesse - naesse) > grenze:
                     neu = kern_strategie.passende_mischung(konfiguration, naesse)
+                # Nach einem Zwangsstopp im Trockenen nicht wieder weicher
+                # werden - ausser die Mischungspflicht steht noch aus.
+                if (
+                    haerte_untergrenze[i] is not None
+                    and naesse == 0.0
+                    and len(kuerzel_gefahren[i]) >= 2
+                ):
+                    neu = kern_strategie.nicht_weicher_als(neu, haerte_untergrenze[i])
+                letzter_war_notstopp[i] = False
 
             standzeit = kern_boxenstopp.standzeit_ms(
                 konfiguration,
@@ -485,6 +507,7 @@ def fahre_wochenende(
             )
             gesamtzeit[i] += stoppgrundlast[i] + standzeit
             gefahrene[i] = gestreut(i, neu)
+            kuerzel_gefahren[i].add(neu.kuerzel)
             verschleiss[i] = 0.0
             verschleiss_je_runde[i] = je_runde(i, naesse_lage)
             runde_letzter_stopp[i] = runde

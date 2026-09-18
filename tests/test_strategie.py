@@ -347,3 +347,36 @@ def test_gleicher_seed_gleiche_strategien(k, zandvoort, strecken):
     erst = sg.feldstrategien(k, autos, zandvoort, runden, faktor, None, Seedquelle(5))
     nochmal = sg.feldstrategien(k, autos, zandvoort, runden, faktor, None, Seedquelle(5))
     assert erst.je_auto == nochmal.je_auto
+
+
+# -- Die Regeln nach einem Zwangsstopp (Punkt 78) ---------------------------
+def test_nicht_weicher_als_nimmt_die_haertere(k):
+    """Weicher heisst: hoeherer Verschleiss."""
+    weich = kern_reifen.mischung(k, "weich")
+    mittel = kern_reifen.mischung(k, "mittel")
+    hart = kern_reifen.mischung(k, "hart")
+    # Der Wunsch ist weicher als die Untergrenze - es bleibt bei der Untergrenze.
+    assert sg.nicht_weicher_als(weich, hart) is hart
+    assert sg.nicht_weicher_als(mittel, hart) is hart
+    # Gleich hart oder haerter darf durch.
+    assert sg.nicht_weicher_als(hart, hart) is hart
+    assert sg.nicht_weicher_als(hart, mittel) is hart
+
+
+def test_nicht_weicher_als_vergleicht_nur_innerhalb_einer_naesseklasse(k):
+    """Ein Regenreifen ist nicht haerter als ein Slick, er ist etwas anderes."""
+    weich = kern_reifen.mischung(k, "weich")
+    regen = kern_reifen.mischung(k, "regen")
+    # Regen hat rechnerisch weniger Verschleiss als Weich - trotzdem darf
+    # die Haerteregel im Regen nicht dazwischenfunken.
+    assert regen.verschleiss < weich.verschleiss
+    assert sg.nicht_weicher_als(regen, weich) is regen
+    assert sg.nicht_weicher_als(weich, regen) is weich
+
+
+def test_nach_einem_notstopp_darf_der_planstopp_laenger_warten(k):
+    tiefer = sg.verschiebeschwelle(k, nach_notstopp=True)
+    normal = sg.verschiebeschwelle(k, nach_notstopp=False)
+    assert tiefer < normal
+    assert tiefer == k.wert("boxenstopp", "strategie", "planstopp_nach_notstopp_restprofil")
+    assert normal == k.wert("boxenstopp", "strategie", "planstopp_ab_restprofil")

@@ -562,6 +562,16 @@ Drei Dinge halten sich nicht an den Plan:
   Runde weiter, bis er darunter faellt. Sonst gaebe es nach einem
   Notstopp wenige Runden spaeter einen fast neuen Satz ab, nur weil der
   Plan das so vorsah.
+* **Was ein Notstopp danach aendert.** Er wirkt ueber den Stopp hinaus,
+  gleich zweifach. Der naechste geplante Stopp wartet noch laenger -
+  bis **60 statt 65 Prozent**, denn der Satz ist eben erst aufgezogen
+  worden. Und bei **heiss und trocken** geht es von da an nicht wieder
+  auf weicheren Gummi zurueck: Wer sich einen Satz abgefahren hat, hat
+  gezeigt, dass die Strecke ihm zu viel abverlangt. Das gilt fuer jeden
+  weiteren Stopp im Rennen, nicht nur fuer den naechsten. Eine Ausnahme
+  gibt es: Wer bis dahin erst **eine** Mischung gefahren hat, darf
+  weicher werden - sonst liesse sich die Pflicht zu zwei Mischungen nicht
+  mehr erfuellen, wenn der Notstopp schon die haerteste aufgelegt hat.
 
 **Nachsehen, was dabei herauskommt.** `python -m werkzeuge.boxenstopps`
 faehrt fuenf Rennen der Liga 1 und schreibt je Fahrer auf, auf welcher

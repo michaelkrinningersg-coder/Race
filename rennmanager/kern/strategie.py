@@ -838,6 +838,38 @@ def notstopp(
     return seit_letztem_stopp >= einstellung["abstand_min_runden"]
 
 
+def nicht_weicher_als(gewuenscht: Mischung, untergrenze: Mischung) -> Mischung:
+    """Die haertere von beiden - die Regel nach einem Zwangsstopp (Punkt 78).
+
+    Entscheidung des Auftraggebers: Wer sich einen Satz abgefahren hat,
+    darf danach nicht wieder auf eine weichere Mischung zurueck. Weicher
+    heisst hier: hoeherer Verschleiss.
+
+    Verglichen wird nur **innerhalb** einer Naesseklasse. Ein Regenreifen
+    ist nicht "haerter" als ein weicher Slick, er ist etwas anderes; bei
+    Nasse entscheidet die Lage, nicht die Haerte.
+    """
+    if gewuenscht.naesse != untergrenze.naesse:
+        return gewuenscht
+    if gewuenscht.verschleiss <= untergrenze.verschleiss:
+        return gewuenscht
+    return untergrenze
+
+
+def verschiebeschwelle(konfiguration: Konfiguration, *, nach_notstopp: bool) -> float:
+    """Ab welchem Restprofil ein geplanter Stopp nicht mehr verschoben wird.
+
+    Normalerweise ``planstopp_ab_restprofil``. Stand aber eben erst ein
+    **Notstopp** an, gilt der tiefere Wert: Der Satz ist frisch, und ihn
+    wenige Runden spaeter schon wieder abzugeben hiesse, zweimal fuer
+    denselben Reifenwechsel zu zahlen (Entscheidung des Auftraggebers).
+    """
+    einstellung = konfiguration.wert("boxenstopp", "strategie")
+    if nach_notstopp:
+        return einstellung["planstopp_nach_notstopp_restprofil"]
+    return einstellung["planstopp_ab_restprofil"]
+
+
 def notstopp_verschleiss(
     konfiguration: Konfiguration, restprofil: float, seit_letztem_stopp: int
 ) -> bool:

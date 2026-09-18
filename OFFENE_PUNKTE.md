@@ -1962,3 +1962,69 @@ in die geplante Runde, und wenn er fällt, ist das Restprofil höchstens so
 hoch wie die Schwelle aus der Konfiguration. Gemessen über acht
 Verschleißfaktoren von 0,3 bis 2,5 hält das durchweg — der Stopp landet
 immer bei 61 bis 65 Prozent, ganz gleich, in welcher Runde das ist.
+
+### 79. Nach einem Zwangsstopp: härter bleiben, länger warten
+
+Der Messlauf aus Punkt 78 zeigte zwei Dinge, die zusammengehören. Ein
+Auto, das sich einen Satz abgefahren hat, bekam beim nächsten Stopp
+wieder eine weichere Mischung — und gab den frischen Satz schon bei
+72 Prozent ab. Über die fünf Strecken: **69 Stopps** folgten auf einen
+Zwangsstopp, davon **37 weicher**, 32 gleich, **0 härter**, und **47**
+davon mit mehr als 60 Prozent Restprofil.
+
+**Zwei Entscheidungen des Auftraggebers.**
+
+1. Bei **heiß und trocken** darf nach einem Zwangsstopp keine weichere
+   Mischung mehr aufgezogen werden als die, die der Zwangsstopp montiert
+   hat — für jeden weiteren Stopp, nicht nur den nächsten. **Ausnahme:**
+   Wer bis dahin erst eine Mischung gefahren ist, darf weicher werden;
+   sonst wäre die Pflicht zu zwei Mischungen nicht mehr erfüllbar,
+   nachdem der Zwangsstopp die härteste aufgelegt hat.
+2. Der geplante Stopp **direkt nach** einem Zwangsstopp wartet bis unter
+   **60** statt 65 Prozent.
+
+**Der Zwangsstopp selbst brauchte nichts.** Er wählt über
+`passende_mischung()`, und die nimmt bei gleicher Eignung die haltbarste
+— im Trockenen also immer Hart. Nachgezählt: 52 Zwangsstopps auf
+Trockenmischungen, **null** davon weicher oder gleich weich, obwohl es
+härter ginge. Die Regel greift beim Stopp danach, nicht bei ihm.
+
+`nicht_weicher_als()` vergleicht nur **innerhalb einer Nässeklasse**. Ein
+Regenreifen hat rechnerisch weniger Verschleiß als ein weicher Slick,
+ist aber nicht "härter" — er ist etwas anderes. Bei Nässe entscheidet
+weiter die Lage.
+
+`verschiebeschwelle()` gibt die tiefere Schwelle zurück, sobald der
+letzte gefahrene Stopp ein Notstopp war. Beide Modelle führen dafür
+denselben Zustand mit (`letzter_war_notstopp`, `haerte_untergrenze`,
+`kuerzel_gefahren`) — sonst führen die Liga des Spielers und die
+neunzehn anderen zwei verschiedene Regelwerke.
+
+**Gemessen danach**, Liga 1, 30 Autos, Weltseed 1, nur trocken/heiß:
+
+| Strecke | Stopps | davon Zwang | Verteilung je Auto | Restprofil beim Stopp 25/Median/75 |
+| --- | --- | --- | --- | --- |
+| Zandvoort | 104 → **98** | 25 → **21** | 5×: 6 → **1**, 4×: 7 → **12** | 26,0 / **35,5** / 57,1 |
+| Sao Paulo | 75 → **75** | 6 → **6** | unverändert | 35,8 / **48,3** / 58,6 |
+| Nürburgring | 88 → **87** | 12 → **12** | 4×: 6 → **5**, 3×: 19 → **20** | 32,1 / **37,1** / 52,7 |
+| Silverstone | 78 → **78** | 6 → **6** | unverändert | 35,6 / **43,5** / 53,7 |
+| Monza | 47 → **47** | 3 → **3** | unverändert | 46,9 / **55,1** / 63,9 |
+
+Die Wirkung sitzt dort, wo die Zwangsstopps sitzen: auf Zandvoort. Dort
+fällt die Zahl der Fünf-Stopp-Autos von sechs auf **eines**, und sechs
+Stopps verschwinden ganz. Wo es kaum Zwangsstopps gibt — Silverstone,
+Monza, Sao Paulo — ändert sich nichts, wie es sein soll.
+
+**Beide Regeln nachgezählt**, über alle fünf Rennen:
+
+* Weicher nach einem Zwangsstopp: 37 → **4**, und alle vier sind die
+  Ausnahme (Auto hatte erst eine Mischung gefahren, alle vier H→W).
+  **Null Verstöße.**
+* Planstopp direkt nach einem Zwangsstopp: 38 Stück, davon über 60 Prozent
+  Restprofil: **null**. Vorher lagen 47 von 69 darüber.
+
+Was in der Werkzeugausgabe jetzt **steigt**, ist die Zahl der Stopps
+"ohne Mischungswechsel" (Zandvoort 14 → 16). Das ist kein Rückschritt,
+sondern die Regel bei der Arbeit: Ein Auto auf Hart, das herein muss,
+bekommt wieder Hart. Der Stopp holt frisches Gummi, nicht eine andere
+Mischung — und das war vorher genau die Wahl, die verboten werden sollte.
