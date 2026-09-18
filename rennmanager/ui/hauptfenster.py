@@ -46,6 +46,7 @@ from rennmanager.ui.rennwochenendeseite import Rennwochenendeseite
 from rennmanager.ui.rundenseite import Rundenseite
 from rennmanager.ui.saisonseite import Saisonseite
 from rennmanager.ui.sponsorenseite import Sponsorenseite
+from rennmanager.ui.startdialog import Startdialog
 from rennmanager.ui.statistikseite import Statistikseite
 from rennmanager.ui.streckenseite import Streckenseite
 from rennmanager.ui.weltseite import Weltseite
@@ -122,6 +123,12 @@ class Hauptfenster(QMainWindow):
         laden.setShortcut("Ctrl+O")
         laden.triggered.connect(self._lade)
         datei.addAction(laden)
+        datei.addSeparator()
+
+        neu = QAction("&Neue Karriere ...", self)
+        neu.setShortcut("Ctrl+N")
+        neu.triggered.connect(self.neue_karriere)
+        datei.addAction(neu)
         datei.addSeparator()
 
         beenden = QAction("&Beenden", self)
@@ -475,6 +482,45 @@ class Hauptfenster(QMainWindow):
             kenntnis=self._kenntnis,
             gefahrene_rennen=self._saisonseite.lauf.gefahren,
             popularitaet=self._popularitaet,
+        )
+
+    def neue_karriere(self) -> bool:
+        """Fragt Name, Land und Geburtstag und beginnt von vorn (Punkt 11).
+
+        Alles andere wuerfelt der Seed: Welt, Teams, Gegner. Die Startliga
+        ist fest die aus der Konfiguration - freie Wahl waere der
+        Schwierigkeitsgrad durch die Hintertuer.
+        """
+        dialog = Startdialog(
+            self._konfiguration, self._jahr, vorgabe=self._welt.spieler, parent=self
+        )
+        if dialog.exec() != Startdialog.Accepted:
+            return False
+        self.beginne_neue_karriere(dialog.stammdaten())
+        return True
+
+    def beginne_neue_karriere(self, stammdaten: dict) -> None:
+        """Setzt Welt, Karriere und Statistik auf Anfang (GDD 1)."""
+        spieler = self._welt.spieler
+        if spieler is not None:
+            self._welt = kern_welt.mit_fahrerdaten(
+                self._welt, {spieler.nummer: stammdaten}
+            )
+        self._jahr = kern_karriere.startjahr(self._konfiguration)
+        self._karriere = None
+        self._statistik = kern_statistik.Statistik(self._konfiguration)
+        self._kenntnis = kern_streckenkenntnis.Streckenkenntnis(
+            self._konfiguration, seedquelle=self._seedquelle.zweig("lerntempo")
+        )
+        self._popularitaet = kern_popularitaet.Popularitaet(self._konfiguration)
+        self._geladene_tabellen = None
+        self._gefahrene_rennen = 0
+        self.setCentralWidget(self._baue_inhalt())
+        name = self._welt.spieler.name if self._welt.spieler else "Der Spieler"
+        self.statusBar().showMessage(
+            f"Neue Karriere: {name}, Liga "
+            f"{self._konfiguration.wert('ligen', 'startliga')}, Saison {self._jahr}",
+            8000,
         )
 
     def _speichere(self) -> None:

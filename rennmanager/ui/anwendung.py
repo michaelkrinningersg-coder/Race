@@ -195,4 +195,8 @@ def starte(argumente: list[str] | None = None) -> int:
 
     fenster = Hauptfenster(konfiguration)
     fenster.show()
+    # Punkt 11: Beim Start fragt das Spiel, wer der Spieler ist. Wer
+    # abbricht, faehrt mit dem gewuerfelten Fahrer weiter - die Welt steht
+    # schon, es fehlt nur der Name.
+    fenster.neue_karriere()
     return anwendung.exec()

@@ -253,6 +253,21 @@ Eigenschafts-Zufall je einmal pro Session (GDD 7 und 11). Fuer die
 Kalibrierung und die Massensimulation laesst sich der Zufall abschalten:
 `rennen.simuliere(..., ohne_zufall=True)`, wie GDD 9 es verlangt.
 
+### Neue Karriere
+
+Beim Start fragt das Spiel, wer der Spieler ist: **Vorname, Nachname,
+Land und Geburtstag** - mehr nicht. `Datei -> Neue Karriere` (Strg+N)
+fragt spaeter noch einmal und setzt alles auf Anfang: Welt, Karriere,
+Statistik, Streckenkenntnis und Popularitaet.
+
+Die Startliga steht **nicht** zur Wahl; sie ist immer die aus der
+Konfiguration (Liga 20). Freie Wahl waere der Schwierigkeitsgrad durch
+die Hintertuer - wer in Liga 5 anfinge, liesse die halbe Karriere aus
+GDD 13 einfach aus. Die Laender kommen aus derselben Liste wie die der
+599 KI-Fahrer, damit der Spieler kein Land traegt, das es in dieser Welt
+sonst nicht gibt; an zweien haengt mehr als Farbe, denn wer im Land einer
+der 20 Strecken wohnt, hat dort seine Heimstrecke (Punkt 49).
+
 ### Das gefuehrte Rennwochenende
 
 In der Oberflaeche laeuft ein Rennwochenende in vier Schritten ab, in

@@ -1206,3 +1206,121 @@ def test_editor_rechnet_nach_einer_aenderung_neu(qtbot, konfig: kf.Konfiguration
         if seite.liste.topLevelItem(i).data(0, Qt.UserRole) == nummer
     )
     assert nachher < vorher
+
+
+# -- Startdialog (Punkt 11) --------------------------------------------------
+def test_startdialog_fragt_name_land_und_geburtstag(qtbot, konfig) -> None:
+    """GDD 1: Wer der Spieler ist, bestimmt er selbst - mehr nicht."""
+    from rennmanager.ui.startdialog import Startdialog
+
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    dialog = Startdialog(konfig, fenster.jahr, vorgabe=fenster.welt.spieler)
+    qtbot.addWidget(dialog)
+
+    # Der bisherige Spieler steht als Vorgabe drin.
+    spieler = fenster.welt.spieler
+    assert dialog.vornamefeld.text() == spieler.vorname
+    assert dialog.nachnamefeld.text() == spieler.nachname
+    assert dialog.landauswahl.currentText() == spieler.land
+
+    # Die Liga steht nicht zur Wahl - sie ist immer die aus GDD 1. Das
+    # Land ist die einzige Auswahlliste im Dialog.
+    from PySide6.QtWidgets import QComboBox, QLabel
+
+    assert dialog.findChildren(QComboBox) == [dialog.landauswahl]
+    texte = " ".join(marke.text() for marke in dialog.findChildren(QLabel))
+    assert f"Liga {konfig.wert('ligen', 'startliga')}" in texte
+
+
+def test_startdialog_braucht_einen_namen(qtbot, konfig) -> None:
+    from rennmanager.ui.startdialog import Startdialog
+
+    dialog = Startdialog(konfig, 2026)
+    qtbot.addWidget(dialog)
+    assert not dialog.knopf_beginnen.isEnabled()
+
+    dialog.vornamefeld.setText("Jan")
+    assert not dialog.knopf_beginnen.isEnabled()
+    dialog.nachnamefeld.setText("Berger")
+    assert dialog.knopf_beginnen.isEnabled()
+
+    # Leerzeichen allein zaehlen nicht.
+    dialog.nachnamefeld.setText("   ")
+    assert not dialog.knopf_beginnen.isEnabled()
+
+
+def test_startdialog_bietet_nur_laender_der_welt_an(qtbot, konfig) -> None:
+    """Der Spieler soll kein Land tragen, das es sonst nirgends gibt."""
+    from rennmanager.ui.startdialog import Startdialog
+
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    angeboten = set(Startdialog.laender(konfig))
+    gefahren = {f.land for f in fenster.welt.fahrer}
+    assert gefahren <= angeboten
+
+
+def test_neue_karriere_setzt_alles_auf_anfang(qtbot, konfig) -> None:
+    """GDD 1: Der Spieler faengt bei null an."""
+    import datetime as dt
+
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    fenster.saisonseite.lauf.fahre_rennen()
+    assert fenster.saisonseite.lauf.gefahren == 1
+
+    fenster.beginne_neue_karriere(
+        {
+            "vorname": "Jonas",
+            "nachname": "Weidinger",
+            "land": "Oesterreich",
+            "geburtstag": dt.date(2005, 4, 12),
+        }
+    )
+
+    spieler = fenster.welt.spieler
+    assert spieler.name == "Jonas Weidinger"
+    assert spieler.land == "Oesterreich"
+    assert spieler.geburtstag == dt.date(2005, 4, 12)
+    assert spieler.liga == konfig.wert("ligen", "startliga")
+    # Das Auto traegt den neuen Namen, die Werte bleiben auf 0 (GDD 1).
+    assert spieler.auto.name == "Jonas Weidinger"
+    assert set(spieler.auto.werte.values()) == {0}
+
+    # Saison, Statistik und Karriere stehen wieder am Anfang.
+    assert fenster.saisonseite.lauf.gefahren == 0
+    assert fenster.statistik.saisons == ()
+    assert fenster.statistik.zahlen(spieler.nummer).rennen == 0
+    assert fenster.karriere.heute.month == 1 and fenster.karriere.heute.day == 1
+    assert fenster.jahr == konfig.wert("kalender", "startjahr")
+
+
+def test_neue_karriere_zeigt_den_namen_ueberall(qtbot, konfig) -> None:
+    import datetime as dt
+
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    fenster.beginne_neue_karriere(
+        {
+            "vorname": "Mara",
+            "nachname": "Holtkamp",
+            "land": "Niederlande",
+            "geburtstag": dt.date(2004, 7, 1),
+        }
+    )
+
+    seite = fenster.weltseite
+    seite.liga_auswahl.setCurrentIndex(konfig.wert("ligen", "startliga"))
+    namen = {
+        seite.liste.topLevelItem(i).text(2)
+        for i in range(seite.liste.topLevelItemCount())
+    }
+    assert "Mara Holtkamp" in namen
+
+    # Und im gefuehrten Wochenende.
+    vorschau = fenster.wochenendeseite.vorschauliste
+    gezeigt = {
+        vorschau.topLevelItem(i).text(1) for i in range(vorschau.topLevelItemCount())
+    }
+    assert "Mara Holtkamp" in gezeigt

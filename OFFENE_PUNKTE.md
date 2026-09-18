@@ -1433,7 +1433,7 @@ Anzeigefeld mit; die Simulation liest sie nie, und ein Feld aus
 | Freie Wahl von Strecke, Liga, Runden, Seed, Aufstellung | **Ganz weg.** Zum Kalibrieren bleiben `--pruefe` und die Werkzeuge unter `werkzeuge/` |
 | Knopf „Rennwochenende" auf der Saisonseite | **Verschwindet.** Gefahren wird nur noch geführt; „Restliche Saison" bleibt für den Rest des Jahres |
 | Ersetzt der Reiter auch die Saisonseite? | **Nein.** Nur Qualifying und Rennen verschwinden, Saison bleibt eigener Reiter |
-| Startdialog (Punkt 11) | **Name, Land, Geburtstag.** Startliga fest 20, kein Seed-Feld |
+| Startdialog (Punkt 11) | **Name, Land, Geburtstag.** Startliga fest 20, kein Seed-Feld — der Seed bleibt im Kopf des Fensters, wo er schon steht |
 
 ### Dabei behoben: Schon das Aufschlagen des Reiters kostete Zeit
 
