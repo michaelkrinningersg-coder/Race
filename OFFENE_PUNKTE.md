@@ -1823,9 +1823,11 @@ Welt nur niemandem auffielen:
   seit dem Umbau bei 85 % Restprofil, vier Tests prüften weiter 80 %. Sie
   fielen seitdem durch; niemand hatte sie nachgezogen. Die Tests lesen die
   Stützstellen jetzt aus der Konfiguration, statt die Zahlen zu wiederholen.
-* **Ohne Erfahrung geht am 1. Januar gar nichts.** Seit Punkt 66 kostet
-  jeder Zeitkauf Erfahrung (2 EP für den ersten). Zu Saisonbeginn hat der
-  Spieler 0 EP, und Erfahrung gibt es nur fürs Fahren — bis zum ersten
-  Rennen lässt sich also kein einziger Tag belegen. Das folgt aus der
-  Entscheidung und ist kein Fehler im Code; ob es so bleiben soll, ist
-  eine Frage an den Auftraggeber.
+* **Ohne Erfahrung ging am 1. Januar gar nichts.** Seit Punkt 66 kostet
+  jeder Zeitkauf Erfahrung (2 EP für den ersten). Zu Saisonbeginn hatte
+  der Spieler 0 EP, und Erfahrung gibt es nur fürs Fahren — bis zum ersten
+  Rennen ließ sich kein einziger Tag belegen. Entscheidung des
+  Auftraggebers: **ein Sockel von 20 EP zum Start**, als
+  `kosten.startkapital_erfahrung` neben dem Startkapital. Das trägt eine
+  Handvoll erster Schritte; ab dem ersten Rennen spielt er keine Rolle
+  mehr (Platz 12 bringt 243 EP, ein Sieg 775).

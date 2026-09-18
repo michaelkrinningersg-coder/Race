@@ -220,6 +220,7 @@ def test_startgeld_ist_ein_sockel(k) -> None:
 
 def test_startkapital(k) -> None:
     assert ei.startkapital(k) == 1_000
+    assert ei.starterfahrung(k) == 20
 
 
 # -- Sponsoren --------------------------------------------------------------
@@ -298,12 +299,30 @@ def test_karriere_startet_am_ersten_januar(k) -> None:
     c = kr.beginne(k, 2026, liga=20)
     assert c.heute.month == 1 and c.heute.day == 1
     assert c.konto.geld == ei.startkapital(k)
+    assert c.konto.erfahrung == ei.starterfahrung(k)
     assert set(c.werte.values()) == {0}
+
+
+def test_der_erfahrungssockel_traegt_den_ersten_tag(k) -> None:
+    """Entscheidung des Auftraggebers: 20 EP zum Start.
+
+    Seit ein belegter Tag auch Erfahrung kostet (Punkt 66), stuende der
+    Spieler am 1. Januar sonst mit null da - und koennte bis zum ersten
+    Rennen keinen einzigen Tag belegen. Der Sockel muss mindestens den
+    ersten Trainings- **und** den ersten Werkstattschritt tragen.
+    """
+    c = kr.beginne(k, 2026, liga=20)
+    c.belege_tag("D1")
+    c.belege_tag("F10")
+    assert c.wert("D1") == 10
+    assert c.wert("F10") == 10
+    assert c.konto.erfahrung >= 0
 
 
 def test_tag_belegen_hebt_den_wert(k) -> None:
     c = kr.beginne(k, 2026, liga=20)
-    # Ein belegter Tag kostet seit Punkt 69 auch etwas Erfahrung.
+    # Ein belegter Tag kostet seit Punkt 69 auch etwas Erfahrung. Hier
+    # geht es um die Plaetze, nicht um die Kasse - also ein Vorrat.
     c.konto = c.konto.mit(erfahrung=1_000)
     c.belege_tag("D1")
     assert c.wert("D1") == 10

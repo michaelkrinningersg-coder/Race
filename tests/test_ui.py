@@ -60,17 +60,6 @@ def ein_fahrer(fenster, anteil: float = 0.5):
     return fahrer[min(int(len(fahrer) * anteil), len(fahrer) - 1)]
 
 
-def mit_erfahrung(karriere, erfahrung: int = 1_000):
-    """Fuellt den Erfahrungstopf.
-
-    Seit Punkt 66 kostet jeder Zeitkauf auch Erfahrung, und am 1. Januar
-    hat der Spieler noch keine. Wer hier die Oberflaeche prueft und nicht
-    die Kasse, legt sich welche hin.
-    """
-    karriere.konto = karriere.konto.mit(erfahrung=erfahrung)
-    return karriere
-
-
 def test_fenster_oeffnet(qtbot, konfig: kf.Konfiguration) -> None:
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
@@ -716,7 +705,6 @@ def test_tag_belegen_ueber_die_oberflaeche(qtbot, konfig: kf.Konfiguration) -> N
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
     seite = fenster.karriereseite
-    mit_erfahrung(seite.karriere)
 
     seite.waehle("D1")
     seite._belege_tag()
@@ -738,7 +726,6 @@ def test_der_belegte_platz_haelt_bis_zum_rennen(qtbot, konfig: kf.Konfiguration)
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
     seite = fenster.karriereseite
-    mit_erfahrung(seite.karriere)
 
     seite.waehle("D1")
     seite._belege_tag()
@@ -1493,7 +1480,6 @@ def test_schnellspeichern_und_schnellladen(qtbot, konfig) -> None:
 
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
-    mit_erfahrung(fenster.karriere)
     fenster.karriereseite.waehle("D1")
     fenster.karriereseite._belege_tag()
     vorher = fenster.karriere.wert("D1")

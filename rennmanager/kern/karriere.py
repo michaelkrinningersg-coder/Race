@@ -1068,7 +1068,10 @@ def beginne(
         saison=saison,
         heute=saison.tage[0].datum,
         liga=liga,
-        konto=Konto(geld=kern_einnahmen.startkapital(konfiguration)),
+        konto=Konto(
+            geld=kern_einnahmen.startkapital(konfiguration),
+            erfahrung=kern_einnahmen.starterfahrung(konfiguration),
+        ),
         autos={nummer: dict(werte) for nummer in nummern},
         ereignisplan=plan,
         fahrernummer=fahrernummer,

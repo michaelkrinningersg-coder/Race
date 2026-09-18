@@ -123,6 +123,7 @@ def pruefe() -> int:
         f"Wirtschaft:    Siegpraemie Liga 20 {euro(kern_einnahmen.siegpraemie(konfiguration, 20))}"
         f", Liga 1 {euro(kern_einnahmen.siegpraemie(konfiguration, 1))}"
         f", Startkapital {euro(kern_einnahmen.startkapital(konfiguration))}"
+        f" und {kern_einnahmen.starterfahrung(konfiguration)} EP"
     )
     # Ereignisse einer Saison: prueft GDD 14 im Bundle.
     plan = kern_ereignis.plane_saison(konfiguration, saison, Seedquelle(3))

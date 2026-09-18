@@ -798,6 +798,14 @@ k0_erfahrung_zeit = 2.0
 # Nur Einzelkauf, kein Mehrfachkauf
 mehrfachkauf = false
 startkapital_euro = 1000
+# Erfahrungssockel zum Start (Entscheidung des Auftraggebers). Seit ein
+# belegter Tag auch Erfahrung kostet, stuende der Spieler am 1. Januar
+# sonst mit null da: Der erste Zeitkauf kostet 2 EP, Erfahrung gibt es
+# aber erst fuers Fahren. Die ersten zehn Tage einer Karriere waeren
+# damit tot. Zwanzig reichen fuer einen Handvoll erster Schritte; ab dem
+# ersten Rennen spielt der Sockel keine Rolle mehr (Platz 12 bringt 243,
+# ein Sieg 775 EP).
+startkapital_erfahrung = 20
 
 # Kontrollwerte aus der Tabelle in GDD 9
 [[kosten.kontrolle]]

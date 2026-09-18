@@ -237,9 +237,12 @@ def test_einmaliges_geld_landet_auf_dem_konto(k):
 
 def test_einmalige_erfahrung_landet_auf_dem_konto(k):
     c = kk.beginne(k, 2026, liga=20)
+    # Das Konto faengt nicht mehr bei null an - seit dem
+    # Erfahrungssockel zaehlt der Zuwachs, nicht der Stand.
+    vorher = c.konto.erfahrung
     meldung = c._loese_ereignis_aus("E9")  # Mentor-Tipp
     assert meldung.erfahrung > 0
-    assert c.konto.erfahrung == meldung.erfahrung
+    assert c.konto.erfahrung - vorher == meldung.erfahrung
 
 
 def test_dauerhaftes_ereignis_hebt_den_wert_selbst(k):

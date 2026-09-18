@@ -13,6 +13,7 @@ import datetime as dt
 import pytest
 
 from rennmanager import konfiguration as kf
+from rennmanager.kern import einnahmen as ke
 from rennmanager.kern import ereignis as ev
 from rennmanager.kern import karriere as kk
 from rennmanager.kern import saison as sa
@@ -723,7 +724,7 @@ def test_die_karriere_nimmt_alles_mit_was_ueberdauert(k, welt, strecken):
     lauf.naechste_saison()
 
     assert karriere.konto.geld == 6_000  # Startkapital 1.000 plus 5.000
-    assert karriere.konto.erfahrung == 800
+    assert karriere.konto.erfahrung == ke.starterfahrung(k) + 800
     assert karriere.werte["F1"] == 33_000
     assert [d["schluessel"] for d in karriere.defekte] == ["X1"]
     assert [a.schluessel for a in karriere.lage.aktive] == ["E5"]

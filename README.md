@@ -649,6 +649,13 @@ Zwei Entscheidungen des Auftraggebers weichen vom GDD ab:
   gibt jedem Tag zwei Plaetze; gemeint ist jetzt der Abstand zwischen zwei
   Rennen. Je Abstand gibt es also einen Trainings- und einen
   Werkstattschritt, nicht einen je Tag.
+* **Ein Erfahrungssockel von 20 EP zum Start**
+  (`kosten.startkapital_erfahrung`). Er folgt aus der ersten
+  Entscheidung: Ohne ihn stuende der Spieler am 1. Januar mit null
+  Erfahrung da, der erste Zeitkauf kostet aber 2 EP, und Erfahrung gibt es
+  erst fuers Fahren - die Tage bis zum ersten Rennen waeren tot. Danach
+  faellt der Sockel nicht mehr ins Gewicht: Platz 12 bringt 243 EP, ein
+  Sieg 775.
 
 ## Talente und Generationen
 

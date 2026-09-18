@@ -158,3 +158,13 @@ def wetter_erfahrung(
 def startkapital(konfiguration: Konfiguration) -> int:
     """GDD 10: Startkapital 1.000 Euro."""
     return int(konfiguration.wert("kosten", "startkapital_euro"))
+
+
+def starterfahrung(konfiguration: Konfiguration) -> int:
+    """Der Erfahrungssockel zum Start (Entscheidung des Auftraggebers).
+
+    Das GDD kennt ihn nicht - er wurde noetig, als ein belegter Tag auch
+    Erfahrung zu kosten begann (Punkt 66). Ohne ihn liesse sich vor dem
+    ersten Rennen kein einziger Tag belegen.
+    """
+    return int(konfiguration.wert("kosten", "startkapital_erfahrung"))
