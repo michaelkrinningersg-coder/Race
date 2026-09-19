@@ -212,13 +212,28 @@ Vier Dinge stehen neben der Streckenansicht, alle aus dem fertigen
   kritisch), nicht aus einer Serienpalette: Der Balken sagt "kritisch",
   nicht "Auto Nummer drei".
 * **Zwischenfall-Ticker**: Fehler, Unfaelle und Defekte bis zur laufenden
-  Rennzeit, neueste zuerst.
+  Rennzeit, neueste zuerst. Er steht als Blatt **Meldungen** rechts bei
+  den Tabellen; bis Punkt 82 war er eine Fussleiste unter der ganzen
+  Seite und nahm ihnen Hoehe weg.
 * **Zeitenmonitor** mit letzter Runde, bester Runde und den vier
   Sektorzeiten - alles **zum Abspielzeitpunkt**, sortiert nach der besten
   Runde. Die letzte Runde leuchtet gruen auf, wenn sie zugleich die beste
   dieses Fahrers war. Dafuer fuehrt das Rundenprotokoll ``rundenende_ms``
   mit; ohne diese Zeitpunkte zeigte der Monitor die Werte vom Rennende,
   also Runden, die in der Uebertragung noch gar nicht gefahren waren.
+  Wer einen Sektor als **Schnellster des ganzen Feldes** gefahren ist,
+  bekommt ihn lila - gesucht ueber alle bisher gefahrenen Runden aller
+  Autos, nicht nur ueber die letzte.
+* **Bestmoegliche Runde** als eigenes Blatt: dieselben Sektoren, aber die
+  **persoenlich** besten je Fahrer - sie muessen nicht aus derselben
+  Runde stammen. Ihre Summe ist die Zeit, die er haette fahren koennen,
+  und die Spalte "Luecke" sagt, wieviel zwischen ihr und seiner
+  wirklichen Bestzeit liegt. Sortiert nach der moeglichen Zeit: Dort
+  steht, wer das schnellste Auto haette, nicht wer es am besten
+  zusammengebracht hat.
+* **Spalte Team** in Rangliste, Zeitenmonitor, Bestmoeglicher Runde und
+  Meisterschaft - wer fuer wen faehrt, stand im Rennen bis Punkt 82
+  nirgends.
 * **Rundenstand** "Runde X/Y" des Fuehrenden im Kopf der Seite.
 * **Rueckstandsdiagramm** als zweiter Reiter neben der Strecke; es zeigt
   nur, was schon gefahren ist - sonst stuende dem Zuschauer der ganze

@@ -48,26 +48,39 @@ SPALTE_PLATZ = 0
 SPALTE_KUERZEL = 1
 # Punkt 60: Der Nachname - ein Kuerzel wie "MKR" sagt niemandem etwas.
 SPALTE_NAME = 2
+# Punkt 82: Das Team dazu - wer fuer wen faehrt, sieht man sonst nirgends.
+SPALTE_TEAM = 3
 # Punkt 76: Gewonnene oder verlorene Plaetze seit Beginn dieser Runde.
-SPALTE_WECHSEL = 3
-SPALTE_RUNDE = 4
-SPALTE_ZEIT = 5
-SPALTE_INTERVALL = 6
+SPALTE_WECHSEL = 4
+SPALTE_RUNDE = 5
+SPALTE_ZEIT = 6
+SPALTE_INTERVALL = 7
 # Punkt 60: Momentantempo und Schnitt ueber das bisherige Rennen.
-SPALTE_TEMPO = 7
-SPALTE_SCHNITT = 8
-SPALTE_MISCHUNG = 9
-SPALTE_REIFEN = 10
-SPALTE_STATUS = 11
+SPALTE_TEMPO = 8
+SPALTE_SCHNITT = 9
+SPALTE_MISCHUNG = 10
+SPALTE_REIFEN = 11
+SPALTE_STATUS = 12
 # Spalten des Zeitenmonitors.
 MONITOR_KUERZEL = 0
 MONITOR_NAME = 1
-MONITOR_LETZTE = 2
-MONITOR_BESTE = 3
-MONITOR_BESTRUNDE = 4
-MONITOR_SCHNITT = 5
-MONITOR_SEKTOR = 6
-MONITOR_SPALTEN = 10
+MONITOR_TEAM = 2
+MONITOR_LETZTE = 3
+MONITOR_BESTE = 4
+MONITOR_BESTRUNDE = 5
+MONITOR_SCHNITT = 6
+MONITOR_SEKTOR = 7
+MONITOR_SPALTEN = 11
+# Spalten des Blattes "Bestmoegliche Runde" (Punkt 82): dieselben
+# Sektoren, aber die persoenlich besten - und was sie zusammen ergaeben.
+IDEAL_KUERZEL = 0
+IDEAL_NAME = 1
+IDEAL_TEAM = 2
+IDEAL_BESTE = 3
+IDEAL_MOEGLICH = 4
+IDEAL_GEWINN = 5
+IDEAL_SEKTOR = 6
+IDEAL_SPALTEN = 10
 # Gruener Pfeil hoch, roter Pfeil runter - die Zahl daneben sagt, um wie
 # viele Plaetze. Die Farbe ist nie die einzige Auskunft.
 PFEIL_HOCH = "\u25b2"
@@ -82,6 +95,10 @@ TICKER_ZEILEN = 12
 AUSFALL_SICHTBAR_MS = 60_000
 # Die letzte Runde leuchtet auf, wenn sie die beste dieses Fahrers war.
 FARBE_PERSOENLICHE_BEST = "#2e7d32"
+# Punkt 82: Wer einen Sektor als Schnellster des ganzen Feldes gefahren
+# ist, bekommt ihn lila - wie in der Uebertragung. Gruen bleibt die
+# persoenliche Bestzeit, lila steht ueber allem.
+FARBE_BESTER_SEKTOR = "#8e24aa"
 # Platz fuer den Reifenbalken samt Prozentzahl daneben.
 BREITE_REIFEN = 96
 # Punkt 39: Zwei Mischungen sind im Trockenen Pflicht. Solange ein Auto
@@ -162,22 +179,18 @@ class Rennseite(QWidget):
         self._blaetter.addTab(self._ansicht, "Strecke")
         self._blaetter.addTab(self._rueckstand, "Rueckstand")
 
-        # Punkt 59: Rangliste und Zeitenmonitor stehen **nebeneinander**,
-        # die Zwischenfaelle als Fussleiste darunter. Vorher lagen alle
-        # drei untereinander in einer schmalen Spalte; die Rangliste hat
-        # seit Punkt 60 zwoelf Spalten und braucht Breite.
+        # Punkt 59: Rangliste und Zeitenmonitor stehen **nebeneinander**.
+        # Vorher lagen alle Listen untereinander in einer schmalen Spalte;
+        # die Rangliste hat seit Punkt 60 zwoelf Spalten und braucht
+        # Breite. Punkt 82: Die Zwischenfaelle standen bis dahin als
+        # Fussleiste darunter und nahmen den Tabellen Hoehe weg - sie
+        # sind jetzt ein Blatt neben den anderen.
         teiler = QSplitter(Qt.Horizontal)
         teiler.addWidget(self._blaetter)
         teiler.addWidget(self._baue_listen())
         teiler.setStretchFactor(0, 2)
         teiler.setStretchFactor(1, 3)
-
-        senkrecht = QSplitter(Qt.Vertical)
-        senkrecht.addWidget(teiler)
-        senkrecht.addWidget(self._baue_ticker())
-        senkrecht.setStretchFactor(0, 5)
-        senkrecht.setStretchFactor(1, 1)
-        spalte.addWidget(senkrecht, stretch=1)
+        spalte.addWidget(teiler, stretch=1)
 
     # -- Aufbau ------------------------------------------------------------
     def _baue_wiedergabe(self) -> QHBoxLayout:
@@ -270,7 +283,7 @@ class Rennseite(QWidget):
         self._rangliste = QTreeWidget()
         self._rangliste.setHeaderLabels(
             [
-                "Pos", "Auto", "Fahrer", "+/-", "Rd", "Zeit / Rueckstand",
+                "Pos", "Auto", "Fahrer", "Team", "+/-", "Rd", "Zeit / Rueckstand",
                 "Intervall", "km/h", "Ø km/h", "Mischung", "Reifen", "Status",
             ]
         )
@@ -300,8 +313,8 @@ class Rennseite(QWidget):
         self._monitor = QTreeWidget()
         self._monitor.setHeaderLabels(
             [
-                "Auto", "Fahrer", "Letzte Rd", "Beste Rd", "in Rd", "Ø km/h",
-                "S1", "S2", "S3", "S4",
+                "Auto", "Fahrer", "Team", "Letzte Rd", "Beste Rd", "in Rd",
+                "Ø km/h", "S1", "S2", "S3", "S4",
             ]
         )
         self._monitor.setRootIsDecorated(False)
@@ -313,15 +326,33 @@ class Rennseite(QWidget):
         # zu Ende - als zweites Blatt unter dem Zeitenmonitor.
         self._meisterschaft = QTreeWidget()
         self._meisterschaft.setHeaderLabels(
-            ["Pos", "Auto", "Fahrer", "+/-", "Punkte", "davon jetzt"]
+            ["Pos", "Auto", "Fahrer", "Team", "+/-", "Punkte", "davon jetzt"]
         )
         self._meisterschaft.setRootIsDecorated(False)
         self._meisterschaft.setAlternatingRowColors(True)
         self._meisterschaft.currentItemChanged.connect(self._auswahl_geaendert)
 
+        # Punkt 82: Dieselben Sektoren, aber die persoenlich besten -
+        # und was sie zusammen ergaeben.
+        self._ideal = QTreeWidget()
+        self._ideal.setHeaderLabels(
+            [
+                "Auto", "Fahrer", "Team", "Beste Rd", "Moeglich", "Luecke",
+                "S1", "S2", "S3", "S4",
+            ]
+        )
+        self._ideal.setRootIsDecorated(False)
+        self._ideal.setAlternatingRowColors(True)
+        self._ideal.currentItemChanged.connect(self._auswahl_geaendert)
+
         self._monitorblaetter = QTabWidget()
         self._monitorblaetter.addTab(self._monitor, "Zeitenmonitor")
+        self._monitorblaetter.addTab(self._ideal, "Bestmoegliche Runde")
         self._monitorblaetter.addTab(self._meisterschaft, "Meisterschaft")
+        # Punkt 82: Die Meldungen standen fest unter der Seite und nahmen
+        # den Tabellen Hoehe weg. Als viertes Blatt stoeren sie nicht mehr
+        # und sind trotzdem einen Klick entfernt.
+        self._monitorblaetter.addTab(self._baue_ticker(), "Meldungen")
         return self._monitorblaetter
 
     def _baue_ticker(self) -> QWidget:
@@ -476,9 +507,21 @@ class Rennseite(QWidget):
         if self._tabellen_faellig(zeit):
             self._fuelle_rangliste(verlauf, reihenfolge, distanzen, zeit)
             self._fuelle_monitor(verlauf, reihenfolge, zeit)
+            self._fuelle_ideal(verlauf, reihenfolge, zeit)
             self._fuelle_meisterschaft(verlauf, reihenfolge, zeit)
             self._fuelle_ticker(verlauf, zeit)
         self._rueckstand.setze_marke(zeit)
+
+    def _teamname(self, teilnehmer) -> str:
+        """Das Team hinter einem Auto (Punkt 82).
+
+        Wie ``_nachname``: Ein Feld aus ``rennen.starterfeld`` hat keinen
+        Fahrer dahinter, dann bleibt die Spalte leer.
+        """
+        nummer = getattr(teilnehmer, "nummer", 0)
+        if not nummer or self._welt is None or nummer >= len(self._welt.fahrer):
+            return ""
+        return self._welt.team_von(self._welt.fahrer[nummer]).name
 
     def _nachname(self, teilnehmer) -> str:
         """Der Nachname des Fahrers hinter einem Auto (Punkt 60).
@@ -644,6 +687,7 @@ class Rennseite(QWidget):
                     str(platz),
                     teilnehmer.kuerzel,
                     self._nachname(teilnehmer),
+                    self._teamname(teilnehmer),
                     self._wechseltext(gewinn),
                     str(runde),
                     text,
@@ -812,6 +856,33 @@ class Rennseite(QWidget):
         dt = (verlauf.zeitpunkte_ms[bild + 1] - verlauf.zeitpunkte_ms[bild]) / 1000.0
         return float(verlauf.distanz_m[bild + 1, i] - verlauf.distanz_m[bild, i]) / max(dt, 1e-6)
 
+    @staticmethod
+    def _beste_sektoren_im_feld(
+        verlauf: Rennverlauf, reihenfolge: list[int], zeit: float
+    ) -> dict[int, int]:
+        """Je Sektor die schnellste Zeit, die **irgendwer** gefahren ist.
+
+        Ueber alle Autos und alle bis dahin gefahrenen Runden - nicht nur
+        ueber die letzte Runde. Wer einen davon haelt, bekommt ihn im
+        Monitor lila.
+        """
+        bestzeiten: dict[int, int] = {}
+        for i in reihenfolge:
+            for nummer, sektor in enumerate(verlauf.protokolle[i].beste_sektoren_bis(zeit)):
+                if sektor is None:
+                    continue
+                if nummer not in bestzeiten or sektor < bestzeiten[nummer]:
+                    bestzeiten[nummer] = sektor
+        return bestzeiten
+
+    @staticmethod
+    def _faerbe_lila(zeile: QTreeWidgetItem, spalte: int) -> None:
+        """Ein Sektor in Lila und fett - die Bestzeit des ganzen Feldes."""
+        zeile.setForeground(spalte, QColor(FARBE_BESTER_SEKTOR))
+        schrift = zeile.font(spalte)
+        schrift.setBold(True)
+        zeile.setFont(spalte, schrift)
+
     def _fuelle_monitor(
         self, verlauf: Rennverlauf, reihenfolge: list[int], zeit: float
     ) -> None:
@@ -837,12 +908,14 @@ class Rennseite(QWidget):
             key=lambda i: (staende[i][1] is None, staende[i][1] or 0, i),
         )
         laenge = verlauf.strecke.laenge_m
+        bestzeiten = self._beste_sektoren_im_feld(verlauf, reihenfolge, zeit)
         for i in nach_bestzeit:
             letzte, beste, sektoren = staende[i]
             runde = self._beste_rundennummer(verlauf, i, zeit, beste)
             spalten = [
                 verlauf.teilnehmer[i].kuerzel,
                 self._nachname(verlauf.teilnehmer[i]),
+                self._teamname(verlauf.teilnehmer[i]),
                 formatiere_dauer(letzte) if letzte else "-",
                 formatiere_dauer(beste) if beste else "-",
                 str(runde) if runde else "-",
@@ -851,6 +924,11 @@ class Rennseite(QWidget):
             spalten += [formatiere_dauer(sektor) for sektor in sektoren]
             spalten += ["-"] * (MONITOR_SPALTEN - len(spalten))
             zeile = QTreeWidgetItem(self._monitor, spalten)
+            # Punkt 82: Wer einen Sektor als Schnellster des ganzen Feldes
+            # gefahren ist, bekommt ihn lila.
+            for nummer, sektor in enumerate(sektoren):
+                if bestzeiten.get(nummer) == sektor:
+                    self._faerbe_lila(zeile, MONITOR_SEKTOR + nummer)
             zeile.setForeground(0, QColor(verlauf.teilnehmer[i].farbe))
             zeile.setData(0, Qt.UserRole, i)
             # Die letzte Runde leuchtet auf, wenn sie zugleich die beste
@@ -864,6 +942,57 @@ class Rennseite(QWidget):
         for spalte in range(MONITOR_SPALTEN):
             self._monitor.resizeColumnToContents(spalte)
         self._stelle_auswahl_wieder_her(self._monitor)
+
+    def _fuelle_ideal(
+        self, verlauf: Rennverlauf, reihenfolge: list[int], zeit: float
+    ) -> None:
+        """Was jeder haette fahren koennen (Punkt 82).
+
+        Aufbau wie der Zeitenmonitor, aber die Sektoren sind die
+        **persoenlich** besten - sie muessen nicht aus derselben Runde
+        stammen. Ihre Summe ist die bestmoegliche Runde, und die Luecke
+        daneben sagt, wieviel zwischen ihr und der wirklich gefahrenen
+        Bestzeit liegt.
+
+        Sortiert wird nach der moeglichen Zeit: Hier steht, wer das
+        schnellste Auto haette, nicht wer es am besten zusammengebracht
+        hat.
+        """
+        self._merke_stand(self._ideal)
+        self._ideal.blockSignals(True)
+        self._ideal.clear()
+        self._ideal.blockSignals(False)
+        moeglich = {i: verlauf.protokolle[i].ideale_runde_ms(zeit) for i in reihenfolge}
+        bestzeiten = self._beste_sektoren_im_feld(verlauf, reihenfolge, zeit)
+        gereiht = sorted(
+            reihenfolge,
+            key=lambda i: (moeglich[i] is None, moeglich[i] or 0, i),
+        )
+        for i in gereiht:
+            protokoll = verlauf.protokolle[i]
+            sektoren = protokoll.beste_sektoren_bis(zeit)
+            _letzte, beste, _ = protokoll.stand_zu(zeit)
+            kann = moeglich[i]
+            luecke = beste - kann if beste is not None and kann is not None else None
+            spalten = [
+                verlauf.teilnehmer[i].kuerzel,
+                self._nachname(verlauf.teilnehmer[i]),
+                self._teamname(verlauf.teilnehmer[i]),
+                formatiere_dauer(beste) if beste else "-",
+                formatiere_dauer(kann) if kann else "-",
+                f"-{formatiere_dauer(luecke)}" if luecke else "-",
+            ]
+            spalten += [formatiere_dauer(s) if s else "-" for s in sektoren]
+            spalten += ["-"] * (IDEAL_SPALTEN - len(spalten))
+            zeile = QTreeWidgetItem(self._ideal, spalten)
+            zeile.setForeground(0, QColor(verlauf.teilnehmer[i].farbe))
+            zeile.setData(0, Qt.UserRole, i)
+            for nummer, sektor in enumerate(sektoren):
+                if sektor is not None and bestzeiten.get(nummer) == sektor:
+                    self._faerbe_lila(zeile, IDEAL_SEKTOR + nummer)
+        for spalte in range(IDEAL_SPALTEN):
+            self._ideal.resizeColumnToContents(spalte)
+        self._stelle_auswahl_wieder_her(self._ideal)
 
     def _fuelle_meisterschaft(
         self, verlauf: Rennverlauf, reihenfolge: list[int], zeit: float
@@ -896,6 +1025,7 @@ class Rennseite(QWidget):
                     str(zeile.platz),
                     teilnehmer.kuerzel if teilnehmer else "",
                     self._nachname(teilnehmer) if teilnehmer else "",
+                    self._teamname(teilnehmer) if teilnehmer else "",
                     self._wechseltext(zeile.veraenderung),
                     str(zeile.punkte),
                     f"+{zeile.zuwachs}" if zeile.zuwachs else "",
@@ -906,7 +1036,7 @@ class Rennseite(QWidget):
                 eintrag.setData(0, Qt.UserRole, stelle)
             if zeile.veraenderung:
                 eintrag.setForeground(
-                    3,
+                    4,
                     QColor(
                         FARBE_GEWONNEN if zeile.veraenderung > 0 else FARBE_VERLOREN
                     ),
@@ -1071,6 +1201,24 @@ class Rennseite(QWidget):
     @property
     def rangliste(self) -> QTreeWidget:
         return self._rangliste
+
+    @property
+    def monitor(self) -> QTreeWidget:
+        return self._monitor
+
+    @property
+    def ideal(self) -> QTreeWidget:
+        """Das Blatt "Bestmoegliche Runde" (Punkt 82)."""
+        return self._ideal
+
+    @property
+    def meisterschaft(self) -> QTreeWidget:
+        return self._meisterschaft
+
+    @property
+    def blaetter_rechts(self) -> QTabWidget:
+        """Zeitenmonitor, Bestmoegliche Runde, Meisterschaft, Meldungen."""
+        return self._monitorblaetter
 
     @property
     def verlauf(self) -> Rennverlauf | None:

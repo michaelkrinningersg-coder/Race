@@ -266,3 +266,111 @@ def test_die_aufstellung_kommt_aus_dem_qualifying(
     kuerzel = seite.qualifying.teilnehmer[pole].kuerzel
     erster = next(t for t in seite.verlauf.teilnehmer if t.startplatz == 1)
     assert erster.kuerzel == kuerzel
+
+
+# -- Die vier Blaetter rechts (Punkt 82) ------------------------------------
+def test_die_meldungen_sind_ein_blatt_und_keine_fussleiste(
+    qtbot, konfig: kf.Konfiguration
+) -> None:
+    """Punkt 82: Der Ticker nahm den Tabellen unten Hoehe weg."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = kurzes_rennen(fenster)
+    seite._halte_an()
+
+    ueberschriften = [
+        seite.blaetter_rechts.tabText(i) for i in range(seite.blaetter_rechts.count())
+    ]
+    assert ueberschriften == [
+        "Zeitenmonitor", "Bestmoegliche Runde", "Meisterschaft", "Meldungen",
+    ]
+    # Der Ticker haengt wirklich in den Blaettern, nicht mehr daneben.
+    assert seite.ticker.isAncestorOf(seite.ticker)
+    assert seite.blaetter_rechts.isAncestorOf(seite.ticker)
+
+
+@pytest.mark.parametrize(
+    ("blatt", "spalte"),
+    [("rangliste", 3), ("monitor", 2), ("ideal", 2), ("meisterschaft", 3)],
+)
+def test_jedes_blatt_hat_eine_teamspalte(
+    qtbot, konfig: kf.Konfiguration, blatt: str, spalte: int
+) -> None:
+    """Punkt 82: Wer fuer wen faehrt, stand bisher nirgends im Rennen.
+
+    Die Ueberschrift steht in allen vier Blaettern. Gefuellt sind hier
+    nur drei: Die Meisterschaft bleibt ohne Saisontabelle leer, und ein
+    Testrennen hat keine Saison.
+    """
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = kurzes_rennen(fenster)
+    seite._zum_ende()
+    seite._halte_an()
+
+    liste = getattr(seite, blatt)
+    assert liste.headerItem().text(spalte) == "Team"
+    if blatt == "meisterschaft":
+        return
+    gefuellt = [
+        liste.topLevelItem(i).text(spalte) for i in range(liste.topLevelItemCount())
+    ]
+    assert gefuellt, f"{blatt} ist leer"
+    assert any(gefuellt), f"{blatt}: keine einzige Teamspalte gefuellt"
+
+
+def test_der_schnellste_sektor_des_feldes_ist_lila(
+    qtbot, konfig: kf.Konfiguration
+) -> None:
+    """Punkt 82: Wer den Sektor haelt, bekommt ihn lila - genau einer je Sektor.
+
+    Geprueft wird gegen die Farbe aus dem Modul, nicht gegen einen
+    wiederholten Farbwert.
+    """
+    from rennmanager.ui.rennseite import FARBE_BESTER_SEKTOR, MONITOR_SEKTOR
+
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = kurzes_rennen(fenster)
+    # Ohne gefahrene Runden gibt es keine Sektorzeiten - seit Punkt 81
+    # startet die Anzeige in Echtzeit und steht beim Anhalten noch am Start.
+    seite._zum_ende()
+    seite._halte_an()
+
+    monitor = seite.monitor
+    lila_je_sektor: dict[int, int] = {}
+    for i in range(monitor.topLevelItemCount()):
+        zeile = monitor.topLevelItem(i)
+        for sektor in range(monitor.columnCount() - MONITOR_SEKTOR):
+            spalte = MONITOR_SEKTOR + sektor
+            if zeile.text(spalte) in ("", "-"):
+                continue
+            if zeile.foreground(spalte).color().name() == FARBE_BESTER_SEKTOR:
+                lila_je_sektor[sektor] = lila_je_sektor.get(sektor, 0) + 1
+    assert lila_je_sektor, "Kein einziger Sektor ist lila"
+    for sektor, anzahl in lila_je_sektor.items():
+        assert anzahl == 1, f"Sektor {sektor + 1}: {anzahl} lila statt einem"
+
+
+def test_die_bestmoegliche_runde_ist_nie_langsamer_als_die_gefahrene(
+    qtbot, konfig: kf.Konfiguration
+) -> None:
+    """Punkt 82: Aus den besten Sektoren kann nur eine bessere Runde werden."""
+    from rennmanager.ui.rennseite import IDEAL_BESTE, IDEAL_MOEGLICH
+
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = kurzes_rennen(fenster)
+    seite._zum_ende()
+    seite._halte_an()
+
+    geprueft = 0
+    for i in range(seite.ideal.topLevelItemCount()):
+        zeile = seite.ideal.topLevelItem(i)
+        beste, moeglich = zeile.text(IDEAL_BESTE), zeile.text(IDEAL_MOEGLICH)
+        if "-" in (beste, moeglich) or not beste or not moeglich:
+            continue
+        # Die Texte sind m:ss.mmm - so verglichen stimmt die Reihenfolge.
+        assert moeglich <= beste, f"{zeile.text(0)}: {moeglich} > {beste}"
+        geprueft += 1
+    assert geprueft, "Kein Auto mit beiden Zeiten - der Test prueft nichts"

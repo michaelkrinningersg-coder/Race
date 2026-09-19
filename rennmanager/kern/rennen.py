@@ -96,6 +96,55 @@ class Rundenprotokoll:
             return len(self.rundenzeiten_ms)
         return int(bisect_right(self.rundenende_ms, zeit_ms))
 
+    def beste_sektoren_bis(self, zeit_ms: float) -> tuple[int | None, ...]:
+        """Je Sektor die **persoenlich** beste Zeit bis zu diesem Zeitpunkt.
+
+        Die Sektoren muessen nicht aus derselben Runde stammen - genau
+        darum geht es: Der beste erste Sektor kann aus Runde 3 kommen und
+        der beste dritte aus Runde 17.
+
+        Ein Sektor, der noch nie zu Ende gefahren wurde, bleibt ``None``.
+        Die Laenge richtet sich nach der Runde mit den meisten Sektoren;
+        eine abgebrochene Runde hat weniger und zaehlt nur so weit, wie
+        sie reicht.
+        """
+        bis = self.gefahren_bis(zeit_ms)
+        runden = self.sektorzeiten_ms[:bis]
+        if not runden:
+            return ()
+        beste: list[int | None] = [None] * max(len(r) for r in runden)
+        for runde in runden:
+            for nummer, zeit in enumerate(runde):
+                if beste[nummer] is None or zeit < beste[nummer]:
+                    beste[nummer] = zeit
+        return tuple(beste)
+
+    def ideale_runde_ms(self, zeit_ms: float) -> int | None:
+        """Die Runde, die aus den besten Sektoren zusammen entstuende.
+
+        Was der Fahrer haette fahren koennen, wenn ihm jeder Sektor so
+        gelungen waere wie sein bester. Sie ist nie langsamer als seine
+        beste wirkliche Runde.
+
+        ``None``, solange nicht **jeder** Sektor einmal gefahren wurde -
+        eine Summe aus halben Runden waere keine Rundenzeit.
+
+        Die Summe wird gegen die beste **wirklich gefahrene** Runde
+        gedeckelt. Sektoren und Rundenzeiten werden unabhaengig
+        voneinander auf ganze Millisekunden gerundet (GDD: Zeiten sind
+        ganze Millisekunden), deshalb kann die Summe der Sektoren eine
+        Millisekunde ueber der Rundenzeit liegen, aus der sie stammt.
+        Gemessen ist das vorgekommen: 5:37.491 gegen 5:37.490. Eine
+        "bestmoegliche" Runde, die langsamer ist als eine gefahrene, waere
+        eine falsche Auskunft - und die Luecke daneben wuerde negativ.
+        """
+        beste = self.beste_sektoren_bis(zeit_ms)
+        if not beste or any(sektor is None for sektor in beste):
+            return None
+        summe = sum(beste)
+        gefahren = self.rundenzeiten_ms[: self.gefahren_bis(zeit_ms)]
+        return min(summe, min(gefahren)) if gefahren else summe
+
     def stand_zu(self, zeit_ms: float) -> tuple[int | None, int | None, tuple[int, ...]]:
         """Letzte Runde, beste Runde und ihre Sektorzeiten zum Zeitpunkt.
 

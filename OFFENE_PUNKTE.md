@@ -2109,3 +2109,59 @@ Verschiebeschwelle in Punkt 78.
 **Was das für lange Rennen heißt:** Ein Rennen in Liga 20 dauert real über
 eine Stunde. Wer es ganz sehen will, stellt jetzt selbst hoch — oder nimmt
 den Knopf **Sofortergebnis**, den es unverändert gibt.
+
+### 82. Vier Blätter rechts, Team überall, lila Sektoren
+
+Vier Wünsche des Auftraggebers an die Rennanzeige, alle in derselben
+Ecke.
+
+**Die Meldungen sind ein Blatt geworden.** Der Zwischenfall-Ticker stand
+seit Punkt 4 als Fußleiste unter der ganzen Seite, in einem senkrechten
+Teiler. Er nahm den Tabellen Höhe weg, obwohl man ihn selten braucht.
+Jetzt ist er das vierte Blatt rechts — einen Klick entfernt und keinen
+Pixel im Weg. Der senkrechte Teiler entfällt ganz.
+
+**Spalte „Team" in allen Blättern.** Rangliste, Zeitenmonitor,
+Bestmögliche Runde und Meisterschaft. `_teamname()` arbeitet wie
+`_nachname()`: über die Fahrernummer in die Welt und von dort ins Team.
+Ein Feld aus `rennen.starterfeld` hat keinen Fahrer dahinter, dann bleibt
+die Spalte leer.
+
+**Der schnellste Sektor des Feldes ist lila.** Wer einen Sektor als
+Schnellster aller 30 hält, bekommt ihn in `FARBE_BESTER_SEKTOR` und fett
+— wie in der Übertragung. Grün bleibt die persönliche Bestzeit, lila
+steht darüber. Gesucht wird über **alle bisher gefahrenen Runden** aller
+Autos, nicht nur über die letzte Runde.
+
+**Das Blatt „Bestmögliche Runde".** Aufbau wie der Zeitenmonitor, aber
+die Sektoren sind die **persönlich** besten — sie müssen nicht aus
+derselben Runde stammen, genau darum geht es. Ihre Summe ist die Zeit,
+die der Fahrer hätte fahren können; die Spalte „Lücke" daneben sagt,
+wieviel zwischen ihr und seiner wirklich gefahrenen Bestzeit liegt.
+Sortiert wird nach der möglichen Zeit: Dort steht, wer das schnellste
+Auto hätte, nicht wer es am besten zusammengebracht hat.
+
+Im Kern kommen dafür `Rundenprotokoll.beste_sektoren_bis()` und
+`ideale_runde_ms()` dazu. Beide rechnen zum **Abspielzeitpunkt**, wie
+alles auf dieser Seite. Ohne vollständige Sektoren gibt es keine ideale
+Runde — eine Summe aus halben Runden wäre keine Rundenzeit.
+
+### Dabei behoben: die bestmögliche Runde war eine Millisekunde zu langsam
+
+Der erste Testlauf des neuen Blattes fiel durch:
+
+```
+RAD: 5:37.491 > 5:37.490
+```
+
+Die aus den besten Sektoren zusammengesetzte Runde war **langsamer** als
+eine wirklich gefahrene. Das kann nicht sein — und lag an der Rundung:
+Sektorzeiten und Rundenzeiten werden unabhängig voneinander auf ganze
+Millisekunden gerundet (GDD: Zeiten sind ganze Millisekunden), also kann
+die Summe der Sektoren eine Millisekunde über der Rundenzeit liegen, aus
+der sie stammt.
+
+`ideale_runde_ms()` deckelt die Summe jetzt gegen die beste wirklich
+gefahrene Runde. Eine „bestmögliche" Runde, die langsamer ist als eine
+gefahrene, wäre eine falsche Auskunft — und die Spalte „Lücke" daneben
+stünde im Minus.

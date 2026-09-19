@@ -395,21 +395,33 @@ def test_rangliste_und_monitor_stehen_nebeneinander(gefahren) -> None:
     )
 
 
-def test_der_ticker_liegt_als_fussleiste_unten(gefahren) -> None:
-    """Die Zwischenfaelle stehen unter allem, in einem senkrechten Teiler."""
+def test_der_ticker_ist_ein_blatt_neben_den_tabellen(gefahren) -> None:
+    """Punkt 82: Die Meldungen standen als Fussleiste unter allem.
+
+    Sie nahmen den Tabellen Hoehe weg, obwohl man sie selten braucht.
+    Jetzt sind sie das letzte der vier Blaetter rechts - einen Klick
+    entfernt und keinen Pixel im Weg.
+    """
+    _fenster, seite = gefahren
+    blaetter = seite.blaetter_rechts
+    assert blaetter.isAncestorOf(seite.ticker)
+    assert blaetter.tabText(blaetter.count() - 1) == "Meldungen"
+    # Und nirgends mehr ein senkrechter Teiler mit dem Ticker darin.
     from PySide6.QtWidgets import QSplitter
 
-    _fenster, seite = gefahren
-    kasten = seite.ticker.parent()
-    while kasten is not None and not isinstance(kasten, QSplitter):
-        kasten = kasten.parent()
-    assert kasten is not None
-    assert kasten.orientation() == Qt.Vertical
-    # Und zwar als letztes, also unten.
-    assert kasten.widget(kasten.count() - 1).findChild(type(seite.ticker)) is not None
+    eltern = seite.ticker.parent()
+    while eltern is not None:
+        assert not (
+            isinstance(eltern, QSplitter) and eltern.orientation() == Qt.Vertical
+        ), "Der Ticker haengt noch in einer Fussleiste"
+        eltern = eltern.parent()
 
 
 # --- Punkt 73: Live-Meisterschaftsstand -----------------------------------
+# Spalten des Meisterschaftsblattes. Seit Punkt 82 steht "Team" dazwischen;
+# die Zahlen stehen hier einmal, statt in jedem Test zu stecken.
+MEISTER_PUNKTE = 5
+MEISTER_ZUWACHS = 6
 def _mit_tabelle(seite, konfig):
     """Gibt der Seite einen Meisterschaftsstand vor dem Rennen."""
     from rennmanager.kern import wertung as wt
@@ -436,7 +448,7 @@ def test_die_meisterschaft_zaehlt_die_punkte_der_lage_dazu(gefahren, konfig) -> 
     assert liste.topLevelItemCount() == len(tabelle.eintraege)
     # Jede Zeile traegt Punkte, und der Erste hat die meisten.
     punkte = [
-        int(liste.topLevelItem(stelle).text(4))
+        int(liste.topLevelItem(stelle).text(MEISTER_PUNKTE))
         for stelle in range(liste.topLevelItemCount())
     ]
     assert punkte == sorted(punkte, reverse=True)
@@ -448,7 +460,7 @@ def test_die_meisterschaft_zeigt_den_zuwachs(gefahren, konfig) -> None:
     _mit_tabelle(seite, konfig)
     liste = seite._meisterschaft
     zuwaechse = [
-        liste.topLevelItem(stelle).text(5)
+        liste.topLevelItem(stelle).text(MEISTER_ZUWACHS)
         for stelle in range(liste.topLevelItemCount())
     ]
     mit_zuwachs = [z for z in zuwaechse if z]

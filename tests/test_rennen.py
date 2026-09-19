@@ -549,3 +549,97 @@ def test_waehrend_des_rennens_entscheidet_weiter_die_strecke(k, strecken):
     assert verlauf.reihenfolge_zu(mitte) == sorted(
         range(verlauf.anzahl), key=lambda i: -distanzen[i]
     )
+
+
+# -- Persoenlich beste Sektoren und die ideale Runde (Punkt 82) -------------
+def _protokoll(runden: list[tuple[int, ...]]) -> rn.Rundenprotokoll:
+    """Ein Protokoll aus reinen Zahlen - ohne ein Rennen zu fahren."""
+    ende, summe = [], 0
+    for sektoren in runden:
+        summe += sum(sektoren)
+        ende.append(summe)
+    return rn.Rundenprotokoll(
+        rundenzeiten_ms=[sum(s) for s in runden],
+        sektorzeiten_ms=list(runden),
+        rundenende_ms=ende,
+    )
+
+
+def test_die_besten_sektoren_kommen_aus_verschiedenen_runden() -> None:
+    """Genau darum geht es: der beste S1 aus Runde 1, der beste S2 aus Runde 2."""
+    protokoll = _protokoll([(30_000, 40_000), (35_000, 36_000)])
+    assert protokoll.beste_sektoren_bis(1e9) == (30_000, 36_000)
+
+
+def test_die_ideale_runde_ist_nie_langsamer_als_die_beste_gefahrene() -> None:
+    protokoll = _protokoll([(30_000, 40_000), (35_000, 36_000)])
+    assert protokoll.ideale_runde_ms(1e9) == 66_000
+    assert protokoll.ideale_runde_ms(1e9) <= protokoll.beste_runde_ms
+
+
+def test_die_ideale_runde_zaehlt_nur_gefahrene_runden() -> None:
+    """Zum Abspielzeitpunkt zaehlt, was bis dahin gefahren war."""
+    protokoll = _protokoll([(30_000, 40_000), (35_000, 36_000)])
+    # Nach der ersten Runde (70 s) ist die zweite noch nicht gefahren.
+    assert protokoll.beste_sektoren_bis(70_000) == (30_000, 40_000)
+    assert protokoll.ideale_runde_ms(70_000) == 70_000
+
+
+def test_ohne_runde_gibt_es_keine_ideale_zeit() -> None:
+    protokoll = _protokoll([(30_000, 40_000)])
+    assert protokoll.beste_sektoren_bis(0) == ()
+    assert protokoll.ideale_runde_ms(0) is None
+
+
+def test_eine_unvollstaendige_runde_ergibt_keine_rundenzeit() -> None:
+    """Eine Summe aus halben Runden waere keine Rundenzeit."""
+    protokoll = rn.Rundenprotokoll(
+        rundenzeiten_ms=[70_000],
+        sektorzeiten_ms=[(30_000,)],   # S2 fehlt, das Auto fiel aus
+        rundenende_ms=[70_000],
+    )
+    protokoll.sektorzeiten_ms.append((31_000, 39_000))
+    protokoll.rundenzeiten_ms.append(70_000)
+    protokoll.rundenende_ms.append(140_000)
+    # S2 gibt es nur aus der zweiten Runde - aber es gibt ihn, also zaehlt er.
+    assert protokoll.beste_sektoren_bis(1e9) == (30_000, 39_000)
+    assert protokoll.ideale_runde_ms(1e9) == 69_000
+
+
+def test_die_besten_sektoren_kommen_aus_einem_echten_rennen(rennen) -> None:
+    """Gegenprobe am gefahrenen Rennen, nicht nur an erfundenen Zahlen."""
+    fuer_jeden = [
+        rennen.protokolle[i].beste_sektoren_bis(rennen.dauer_ms)
+        for i in range(len(rennen.teilnehmer))
+    ]
+    mit_sektoren = [s for s in fuer_jeden if s]
+    assert mit_sektoren, "Ein gefahrenes Rennen muss Sektorzeiten haben"
+    for i, sektoren in enumerate(fuer_jeden):
+        ideal = rennen.protokolle[i].ideale_runde_ms(rennen.dauer_ms)
+        beste = rennen.protokolle[i].beste_runde_ms
+        if ideal is None or beste is None:
+            continue
+        assert ideal <= beste, f"Auto {i}: {ideal} > {beste}"
+        assert all(s is not None for s in sektoren)
+
+
+def test_die_ideale_runde_ueberholt_die_gefahrene_nicht(rennen) -> None:
+    """Rundung darf keine "bestmoegliche" Runde ergeben, die langsamer ist.
+
+    Sektoren und Rundenzeiten werden unabhaengig auf ganze Millisekunden
+    gerundet; gemessen kam die Summe der Sektoren eine Millisekunde ueber
+    der Rundenzeit heraus, aus der sie stammte (5:37.491 gegen 5:37.490).
+    """
+    kuenstlich = rn.Rundenprotokoll(
+        # Die Summe der Sektoren liegt eine Millisekunde ueber der Runde.
+        rundenzeiten_ms=[70_000],
+        sektorzeiten_ms=[(30_000, 40_001)],
+        rundenende_ms=[70_000],
+    )
+    assert kuenstlich.ideale_runde_ms(1e9) == 70_000
+
+    for i in range(len(rennen.teilnehmer)):
+        ideal = rennen.protokolle[i].ideale_runde_ms(rennen.dauer_ms)
+        beste = rennen.protokolle[i].beste_runde_ms
+        if ideal is not None and beste is not None:
+            assert ideal <= beste
