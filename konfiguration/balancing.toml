@@ -178,6 +178,28 @@ schritt_anteil = 0.01
 # Schrittweite fuer Kaeufe (GDD 9)
 kaufschritt = 10
 
+[zeitmodell.training]
+# Trainingsprogramme ueber mehrere Tage (Punkt 84, Entscheidung des
+# Auftraggebers). Bis dahin belegte eine Buchung einen Platz bis zum
+# naechsten Rennen und die zehn nutzbaren Tage dazwischen wurden zwar
+# angezeigt, aber nie verbraucht. Ein Programm macht sie zur Waehrung.
+#
+# Was ein einzelner Trainingstag bringt, als Anteil dessen, was eine
+# Einzelbuchung braechte. Zehn Tage ergeben damit anderthalb Buchungen -
+# das ist der Anreiz, den Block zu wagen. Ohne ihn waere das Programm
+# strikt schlechter als die sichere Einzelbuchung: gleicher Ertrag,
+# gleicher belegter Platz, dazu das Abbruchrisiko.
+tag_anteil = 0.15
+# Ein Programm dauert mindestens so viele und hoechstens so viele
+# nutzbare Tage. Zehn ist zugleich die Zahl der nutzbaren Tage zwischen
+# zwei Rennen - ein Programm reicht also nie ueber ein Rennwochenende
+# hinweg, so hat es der Auftraggeber festgelegt.
+min_tage = 5
+max_tage = 10
+# Keinen Bonus fuers Durchhalten: Bricht ein Ereignis das Programm ab,
+# zahlt es genau die geleisteten Tage aus. Die Zeit war dann nicht
+# umsonst, aber der Rest ist verloren.
+
 # ---------------------------------------------------------------------------
 # GDD 3 – Streckenmodell
 # ---------------------------------------------------------------------------

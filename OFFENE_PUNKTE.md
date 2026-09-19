@@ -2233,3 +2233,85 @@ kaum Höhe, und ihr eigener Rollbalken half nichts, weil schon der Kasten
 abgeschnitten war. Die ganze Seite liegt jetzt in einer `QScrollArea`, und
 die Liste behält eine Mindesthöhe von 320 Pixeln — genug für rund ein
 Dutzend Zeilen, darunter sieht man nur noch Kopfzeile und Balken.
+
+### 84. Trainingsprogramme über mehrere Tage
+
+Der Auftraggeber wählte aus drei Vorschlägen diesen — und dabei kam
+heraus, dass mein eigener Vorschlag auf einer falschen Annahme stand.
+
+**Es gab kein „Tag für Tag belegen".** `belege_tag()` belegt einen
+**Platz** (Fahrer oder Werkstatt) **bis zum nächsten Rennen**, nicht nur
+für heute (Punkt 69). Zwischen zwei Rennen liegen 14 Kalendertage mit
+**10 nutzbaren** — aber je Fahrer waren nur **zwei Buchungen** möglich,
+eine je Platz, jede `max(+10, +1 %)` wert. Die Mechanik war also längst
+blockweise; die 10 freien Tage wurden angezeigt und von nichts
+verbraucht. Der Satz „bringt mehr als 14 Einzeltage" hatte kein
+Gegenstück im Code; ich hatte vom Knopf „Heutigen Tag belegen" auf eine
+Tagesbuchung geschlossen.
+
+**Entscheidungen des Auftraggebers**, nachdem das geklärt war:
+
+1. Die Tage werden eine **echte Währung**. Ein Programm zieht sie ab.
+2. **5 bis 10 Tage**, nie über ein Rennwochenende hinweg — zehn ist
+   zugleich die Zahl der nutzbaren Tage zwischen zwei Rennen, ein
+   Programm passt also immer in einen Rennabstand.
+3. Ein Abbruch zahlt **anteilig**, was gelaufen ist.
+4. **Kein Bonus** fürs Durchhalten.
+
+**Dabei fiel ein Rechenfehler in meinem eigenen Vorschlag auf.** Mit dem
+zuerst vorgeschlagenen `tag_anteil = 0,10` und ohne Bonus wäre ein
+Programm **strikt schlechter** als die Einzelbuchung gewesen:
+
+| | Ertrag | Risiko | Tage |
+| --- | --- | --- | --- |
+| Einzelbuchung | 1,0 | keins | 0 |
+| Programm, 10 Tage | 10 × 0,10 = **1,0** | Abbruch | alle 10 |
+
+Gleicher Ertrag, gleicher belegter Platz, dazu das Risiko — niemand hätte
+je eines gebucht. Der Bonus war genau das, was es trug. Entscheidung des
+Auftraggebers: `tag_anteil = 0,15`. Zehn Tage bringen damit anderthalb
+Buchungen, und das Programm lohnt sich ohne Bonus.
+
+Neu im Kern: `training.py` mit `Programm`, `zuwachs()`, `plane()` und
+`abrechnung()`. Die Karriere führt `programme` je Fahrer, zählt beim
+Tageswechsel mit und rechnet ab, sobald ein Programm durch ist oder ein
+Ereignis es bricht (E2/E6 sperren die Fähigkeit, E29 frisst Tage).
+`entwicklung.mit_zuwachs()` ist die Tür dorthin — vorher hätte `training`
+durch die private `_entwicklung` greifen müssen.
+
+**Spielstand auf Version 9.** Die Tabelle `trainingsprogramm` trägt die
+laufenden Programme; ältere Stände laden ohne, sie kannten die Mechanik
+nicht.
+
+**Die Einzelbuchung bleibt unverändert daneben.** Sie kostet keinen Tag
+aus dem Vorrat und ist der sichere Weg; das Programm ist der Einsatz. So
+bricht nichts Bestehendes, und es gibt eine echte Wahl.
+
+**Derselbe Fehler noch einmal, eine Ebene tiefer.** Die Tabelle oben
+rechnet auf dem rohen Tageszuwachs — aber jeder Zuwachs wird auf ganze
+Kaufschritte **abgerundet** (GDD 9, `kaufschritt = 10`), und der
+Tageszuwachs ist für jeden Wert unter 2000 genau diese 10. Gemessen:
+
+| Tage | roh bei 0,15 | verbucht | roh bei 0,20 | verbucht |
+| --- | --- | --- | --- | --- |
+| 5 | 7,5 | **0** | 10,0 | **10** |
+| 6 | 9,0 | 0 | 12,0 | 10 |
+| 7 | 10,5 | 10 | 14,0 | 10 |
+| 8 | 12,0 | 10 | 16,0 | 10 |
+| 9 | 13,5 | 10 | 18,0 | 10 |
+| 10 | 15,0 | **10** | 20,0 | **20** |
+
+Mit `0,15` bringt ein Fünftageprogramm also **nichts** und ein
+Zehntageprogramm **genau eine Einzelbuchung** — bei gleichem belegtem
+Platz plus Abbruchrisiko. Die anderthalb Buchungen gibt es nur auf dem
+Papier; die Rundung frisst den halben Schritt. Damit ist das Programm
+wieder strikt schlechter als die Einzelbuchung, aus demselben Grund wie
+bei `0,10`, nur versteckter.
+
+`0,20` ist die nächste Schwelle, an der die Mechanik trägt: Ein Tag ist
+ein Fünftel einer Buchung, fünf Tage sind eine, zehn sind zwei. Weil der
+Platz nach dem Programm frei wird, passen zwei Fünftageprogramme in einen
+Zyklus — die Entwicklung des Spielers verdoppelt sich damit gegenüber
+heute, wenn er die Tage voll nutzt. Das ist ein Balancing-Eingriff und
+deshalb nicht meine Entscheidung; der Code liegt fertig daneben und
+braucht nur die Zahl.

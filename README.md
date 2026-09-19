@@ -924,6 +924,61 @@ verlorene Tage aus E29 Reisechaos, voll belegt, halb belegt, frei. Die
 Legende zaehlt mit, und ein Mouseover nennt Datum und Zustand. Wo Luecken
 im Band bleiben, ist Zeit liegen geblieben - das ist die ganze Aussage.
 
+### Trainingsprogramme ueber mehrere Tage
+
+Bis Punkt 84 standen die zehn nutzbaren Tage eines Zyklus nur in der
+Anzeige: `belege_tag()` belegt den Platz bis zum naechsten Rennen (Punkt
+69), egal ob noch neun Tage kommen oder einer. Zwei Buchungen je Fahrer
+und Rennabstand, mehr gab der Kalender nicht her - die Tage selbst waren
+keine Waehrung.
+
+Ein Programm macht sie dazu. Es laeuft ueber fuenf bis zehn nutzbare
+Tage, belegt solange denselben Platz und zahlt je Tag einen Anteil
+dessen, was eine Einzelbuchung braechte:
+
+    Zuwachs(n) = n * tag_anteil * Tageszuwachs
+
+```python
+c.freie_trainingstage()            # die noch offenen Tage bis zum Renntag
+c.programm_vorschau("D1", 10)      # was es braechte, ohne zu buchen
+c.starte_programm("D1", 10)        # Platz belegt, Tage vergeben
+c.tag_weiter()                     # zaehlt mit, rechnet am Ende ab
+```
+
+Bezahlt und gutgeschrieben wird erst am Ende. **Ein Abbruch zahlt
+anteilig**, was gelaufen ist: Sperrt ein Ereignis die Faehigkeit (GDD 14:
+E2, E6) oder frisst es einen der vergebenen Tage (E29 Reisechaos), endet
+das Programm vorzeitig, der Platz wird frei und die geleisteten Tage
+werden abgerechnet. Einen Bonus fuers Durchhalten gibt es nicht - das
+waere ein zweiter Anreiz neben dem Tagesanteil, und der Auftraggeber
+wollte nur einen.
+
+**Nie ueber ein Rennwochenende hinweg**: `freie_trainingstage()` schoepft
+nur aus den nutzbaren Tagen bis zum naechsten Renntag, und `max_tage`
+ist genau die zehn eines Zyklus. Ein Programm passt damit immer in einen
+Rennabstand; am Renntag ist ohnehin jedes beendet.
+
+#### Warum der Tagesanteil an der Rundung haengt
+
+`tag_anteil` allein sagt noch nichts. Jeder Zuwachs wird auf ganze
+Kaufschritte abgerundet (GDD 9, `kaufschritt = 10`), und der
+Tageszuwachs ist fuer jeden Wert unter 2000 genau diese 10. Der Anteil
+muss also erst einen vollen Schritt fuellen, bevor er ueberhaupt
+sichtbar wird:
+
+| Tage | bei 0,15 | bei 0,20 |
+| --- | --- | --- |
+| 5 | 7,5 -> **0** | 10,0 -> **10** |
+| 7 | 10,5 -> 10 | 14,0 -> 10 |
+| 10 | 15,0 -> **10** | 20,0 -> **20** |
+
+Eine Einzelbuchung bringt 10 und belegt den Platz ebenfalls bis zum
+Rennen. Unter 0,20 ist ein Programm damit nie besser als sie - bei 0,15
+braechten fuenf Tage gar nichts und zehn Tage genau dasselbe. Erst bei
+0,20 traegt ein Tag ein Fuenftel einer Buchung: fuenf Tage sind eine,
+zehn Tage sind zwei, und weil der Platz nach dem Programm frei wird,
+passen in einen Zyklus zwei Fuenftageprogramme.
+
 ### Was ein Upgrade kostet
 
 `K(S) = K0 * faktor * (1 + S/1000)^0,6` je +10-Schritt. Der Faktor folgt

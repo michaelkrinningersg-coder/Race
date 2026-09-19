@@ -31,6 +31,7 @@ from rennmanager.kern import kalender as kern_kalender
 from rennmanager.kern import kassenbuch as kern_kassenbuch
 from rennmanager.kern import sponsoren as kern_sponsoren
 from rennmanager.kern import streckenkenntnis as kern_streckenkenntnis
+from rennmanager.kern import training as kern_training
 from rennmanager.kern import zwischenfall as kern_zwischenfall
 from rennmanager.kern.entwicklung import Konto
 from rennmanager.kern.kalender import Saison, Tagesart
@@ -123,6 +124,9 @@ class Karriere:
     # Belegte Plaetze des laufenden Tages, je Fahrer: An einem Tag wird
     # an **einem** Auto gearbeitet, und jedes hat seine eigenen Plaetze.
     belegte_plaetze: dict[int, set[str]] = field(default_factory=dict)
+    # Punkt 84: Laufende Trainingsprogramme je Fahrer. Eines je Platz,
+    # also hoechstens zwei - mehr Plaetze gibt es nicht.
+    programme: dict[int, list[kern_training.Programm]] = field(default_factory=dict)
     # Punkt 72: Jede Geldbewegung wird mitgeschrieben, damit die
     # Finanzseite nach Kategorien gruppieren kann. Das Konto kennt nur
     # den Stand, nicht die Herkunft.
@@ -306,12 +310,18 @@ class Karriere:
 
         vorher = kern_ereignis.zyklusnummer(self.konfiguration, self.saison, self.heute)
         war_renntag = self.tag.art is Tagesart.RENNEN
+        # Punkt 84: Der Tag, der eben zu Ende geht, zaehlt noch fuer die
+        # laufenden Programme - danach erst wechselt das Datum.
+        self._arbeite_programme_ab()
         self.heute = naechster
         self.zahle_monatsrate()
         # Die belegten Plaetze bleiben bis zum naechsten Rennen belegt
         # (Punkt 69) - erst danach steht wieder ein Platz zur Verfuegung.
         if war_renntag:
             self.belegte_plaetze.clear()
+            # Ein Programm reicht nie ueber ein Rennwochenende hinweg
+            # (Punkt 84); am Renntag ist also ohnehin keines mehr offen.
+            self.programme.clear()
         if kern_ereignis.zyklusnummer(self.konfiguration, self.saison, naechster) != vorher:
             # Punkt 56: Jeder Fahrer fuehrt seine eigene Lage - der Zyklus
             # zaehlt bei allen weiter.
@@ -706,6 +716,120 @@ class Karriere:
         self.belegt.add(platz)
         self._uebernimm(entwicklung, platz)
         return entwicklung
+
+    # -- Trainingsprogramme (Punkt 84) -------------------------------------
+    @property
+    def laufende_programme(self) -> list[kern_training.Programm]:
+        """Die Programme des gewaehlten Fahrers."""
+        return self.programme.setdefault(self.fahrernummer, [])
+
+    def freie_trainingstage(self) -> tuple[dt.date, ...]:
+        """Die nutzbaren Tage bis zum naechsten Rennen, die noch offen sind.
+
+        Der Vorrat, aus dem ein Programm schoepft: nutzbare Tage ab heute
+        bis zum Renntag, ohne die, die ein Ereignis gefressen hat, und
+        ohne die, die ein laufendes Programm schon belegt.
+        """
+        ziel = self.naechstes_rennen or self.saison.tage[-1].datum
+        vergeben = {tag for p in self.laufende_programme for tag in p.tage}
+        return tuple(
+            tag.datum
+            for tag in self.saison.nutzbare_tage(self.heute, ziel)
+            if tag.datum not in self.verlorene_tage and tag.datum not in vergeben
+        )
+
+    def programm_vorschau(
+        self, schluessel: str, tage: int
+    ) -> kern_entwicklung.Entwicklung:
+        """Was ein Programm braechte, ohne es zu buchen."""
+        faehigkeit = self._faehigkeit(schluessel)
+        if faehigkeit is None:
+            raise KarriereFehler(
+                f"Fuer {schluessel} gibt es kein Programm - nur die Matrix kennt Zeit"
+            )
+        return kern_training.plane(
+            self.konfiguration, faehigkeit, self.wert(schluessel), tage
+        )
+
+    def starte_programm(
+        self, schluessel: str, tage: int
+    ) -> kern_training.Programm:
+        """Bucht ein Trainingsprogramm ueber mehrere Tage (Punkt 84).
+
+        Der Platz ist ab sofort belegt, die Tage sind vergeben. Bezahlt
+        und gutgeschrieben wird erst am Ende - wer abbricht, bekommt
+        anteilig, was gelaufen ist.
+        """
+        self._pruefe_sperre(schluessel)
+        # Die Vorschau prueft Spanne und Zeitanteil und wirft sonst.
+        self.programm_vorschau(schluessel, tage)
+
+        platz = self.platz_fuer(schluessel)
+        if platz in self.belegt:
+            raise KarriereFehler(
+                f"Der Platz {platz} ist bis zum naechsten Rennen belegt"
+            )
+        offen = self.freie_trainingstage()
+        if len(offen) < tage:
+            raise KarriereFehler(
+                f"Bis zum naechsten Rennen sind nur noch {len(offen)} Tage frei, "
+                f"nicht {tage}"
+            )
+        programm = kern_training.Programm(
+            faehigkeit=schluessel, platz=platz, tage=tuple(offen[:tage])
+        )
+        self.laufende_programme.append(programm)
+        self.belegt.add(platz)
+        return programm
+
+    def _arbeite_programme_ab(self) -> list[kern_entwicklung.Entwicklung]:
+        """Zaehlt den heutigen Tag mit und rechnet fertige Programme ab.
+
+        Laeuft beim Tageswechsel. Ein Programm, dessen Faehigkeit ein
+        Ereignis inzwischen sperrt (GDD 14: E2, E6) oder dessen Tag ein
+        Ereignis gefressen hat (E29), bricht ab und wird anteilig
+        abgerechnet - so hat es der Auftraggeber entschieden.
+        """
+        abgerechnet: list[kern_entwicklung.Entwicklung] = []
+        for nummer, liste in self.programme.items():
+            lage = self.lage_je_fahrer.get(nummer)
+            gesperrt = set(lage.gesperrt()) if lage is not None else set()
+            bleiben = []
+            for programm in liste:
+                if self.heute in programm.tage and self.heute not in self.verlorene_tage:
+                    programm = programm.mit_tag()
+                bricht_ab = programm.faehigkeit in gesperrt or any(
+                    tag in self.verlorene_tage for tag in programm.tage
+                )
+                if programm.laeuft and not bricht_ab:
+                    bleiben.append(programm)
+                    continue
+                abgerechnet.append(self._rechne_programm_ab(nummer, programm))
+            self.programme[nummer] = bleiben
+        return abgerechnet
+
+    def _rechne_programm_ab(
+        self, nummer: int, programm: kern_training.Programm
+    ) -> kern_entwicklung.Entwicklung:
+        """Schreibt gut, was geleistet wurde, und gibt den Platz frei."""
+        vorher = self.fahrernummer
+        self.fahrernummer = nummer
+        try:
+            faehigkeit = self._faehigkeit(programm.faehigkeit)
+            entwicklung = kern_training.abrechnung(
+                self.konfiguration,
+                faehigkeit,
+                self.wert(programm.faehigkeit),
+                programm.geleistet,
+            )
+            if entwicklung.nach > entwicklung.von:
+                self.konto = kern_entwicklung.buche(self.konto, entwicklung)
+                self._buche_entwicklung(entwicklung, programm.platz)
+                self._uebernimm(entwicklung, programm.platz)
+            self.belegt.discard(programm.platz)
+            return entwicklung
+        finally:
+            self.fahrernummer = vorher
 
     def kaufe(self, schluessel: str) -> kern_entwicklung.Entwicklung:
         """Kauft einen +10-Schritt sofort - nur ohne Zeitanteil (GDD 2)."""
@@ -1106,6 +1230,8 @@ def kopiere(karriere: Karriere) -> Karriere:
         fahrervertraege=dict(karriere.fahrervertraege),
         buchungen=list(karriere.buchungen),
         belegte_plaetze={n: set(p) for n, p in karriere.belegte_plaetze.items()},
+        # Punkt 84: Die Programme sind eingefroren, die Listen nicht.
+        programme={n: list(p) for n, p in karriere.programme.items()},
         defekte=list(karriere.defekte),
         verlorene_tage=set(karriere.verlorene_tage),
         meldungen=list(karriere.meldungen),

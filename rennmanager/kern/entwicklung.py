@@ -208,6 +208,24 @@ def plane_kauf(
     )
 
 
+def mit_zuwachs(
+    konfiguration: Konfiguration,
+    faehigkeit: Faehigkeit,
+    wert: int,
+    zuwachs: int,
+    *,
+    braucht_tag: bool = True,
+) -> Entwicklung:
+    """Eine Entwicklung mit schon ausgerechnetem Zuwachs.
+
+    Die Tuer fuer ``training`` (Punkt 84): Ein Programm rechnet seinen
+    Zuwachs selbst aus - je Tag ein Anteil des Tageszuwachses - und
+    braucht von hier nur noch die Kostenrechnung, die fuer jeden
+    +10-Schritt dieselbe ist.
+    """
+    return _entwicklung(konfiguration, faehigkeit, wert, zuwachs, braucht_tag)
+
+
 def _entwicklung(
     konfiguration: Konfiguration,
     faehigkeit: Faehigkeit,

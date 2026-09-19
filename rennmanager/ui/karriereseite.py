@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSpinBox,
     QSplitter,
     QTreeWidget,
     QTreeWidgetItem,
@@ -29,6 +30,7 @@ from PySide6.QtWidgets import (
 from rennmanager.kern import ereignis as kern_ereignis
 from rennmanager.kern import kalender as kern_kalender
 from rennmanager.kern import karriere as kern_karriere
+from rennmanager.kern import training as kern_training
 from rennmanager.kern.entwicklung import EntwicklungsFehler, ist_bezahlbar
 from rennmanager.kern.kalender import Tagesart
 from rennmanager.kern.karriere import FAHRERPLATZ, WERKSTATTPLATZ, Karriere, KarriereFehler
@@ -200,6 +202,18 @@ class Karriereseite(QWidget):
         self._kaufen.clicked.connect(self._kaufe)
         knoepfe.addWidget(self._belegen)
         knoepfe.addWidget(self._kaufen)
+        # Punkt 84: Das Trainingsprogramm. Die Dauer steht daneben, damit
+        # sie ohne zweiten Dialog zu sehen und zu aendern ist.
+        knoepfe.addSpacing(16)
+        self._programmtage = QSpinBox()
+        kuerzeste, laengste = kern_training.spanne(self._konfiguration)
+        self._programmtage.setRange(kuerzeste, laengste)
+        self._programmtage.setValue(laengste)
+        self._programmtage.setSuffix(" Tage")
+        self._programm = QPushButton("Programm starten")
+        self._programm.clicked.connect(self._starte_programm)
+        knoepfe.addWidget(self._programm)
+        knoepfe.addWidget(self._programmtage)
         knoepfe.addStretch(1)
         spalte.addLayout(knoepfe)
 
@@ -323,6 +337,26 @@ class Karriereseite(QWidget):
         self._zeichne()
         self.werte_geaendert.emit()
 
+    def _starte_programm(self) -> None:
+        """Bucht ein Trainingsprogramm ueber mehrere Tage (Punkt 84)."""
+        schluessel = self._gewaehlt()
+        if schluessel is None:
+            return
+        tage = self._programmtage.value()
+        try:
+            vorschau = self._karriere.programm_vorschau(schluessel, tage)
+            self._karriere.starte_programm(schluessel, tage)
+        except (KarriereFehler, EntwicklungsFehler, kern_training.TrainingsFehler) as fehler:
+            QMessageBox.information(self, "Nicht moeglich", str(fehler))
+            return
+        self._meldung.setText(
+            f"Programm laeuft: {tage} Tage, bringt "
+            f"+{vorschau.nach - vorschau.von} - bricht ein Ereignis es ab, "
+            f"zaehlt nur, was gelaufen ist."
+        )
+        self._zeichne()
+        self.werte_geaendert.emit()
+
     def _kaufe(self) -> None:
         schluessel = self._gewaehlt()
         if schluessel is None:
@@ -354,13 +388,28 @@ class Karriereseite(QWidget):
             )
 
         belegt = self._karriere.belegt
+        # Punkt 84: Die freien Tage sind seit dem Trainingsprogramm eine
+        # Waehrung und keine blosse Auskunft mehr - sie gehoeren neben die
+        # Plaetze.
+        frei = len(self._karriere.freie_trainingstage())
+        laufend = self._karriere.laufende_programme
         self._plaetze.setText(
             "Plaetze heute: "
             f"Fahrer {'belegt' if FAHRERPLATZ in belegt else 'frei'} · "
-            f"Werkstatt {'belegt' if WERKSTATTPLATZ in belegt else 'frei'}"
+            f"Werkstatt {'belegt' if WERKSTATTPLATZ in belegt else 'frei'} · "
+            f"{frei} Tage frei bis zum Rennen"
             + ("" if tag.art is Tagesart.NUTZBAR else "  (heute nicht nutzbar)")
+            + "".join(
+                f"  ·  {p.faehigkeit}: Tag {p.geleistet} von {p.dauer}"
+                for p in laufend
+            )
         )
         self._belegen.setEnabled(tag.art is Tagesart.NUTZBAR)
+        kuerzeste, _laengste = kern_training.spanne(self._konfiguration)
+        self._programm.setEnabled(tag.art is Tagesart.NUTZBAR and frei >= kuerzeste)
+        self._programmtage.setMaximum(
+            max(kuerzeste, min(frei, kern_training.spanne(self._konfiguration)[1]))
+        )
 
         self._fuelle_faehigkeiten()
         self._fuelle_konto()

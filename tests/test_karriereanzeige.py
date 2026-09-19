@@ -357,3 +357,54 @@ def test_weltseite_zieht_nach_einem_kauf_nach(qtbot, konfig) -> None:
     seite = fenster.weltseite
     gezeigt = seite._welt.fahrer[nummer].auto.werte[schluessel]
     assert gezeigt == karriere.werte_von(nummer)[schluessel]
+
+
+# --- Punkt 84: Trainingsprogramme ------------------------------------------
+def test_die_karriereseite_rollt(qtbot, konfig) -> None:
+    """Punkt 83: Auf kleinen Fenstern war die Faehigkeitenliste unerreichbar."""
+    from PySide6.QtWidgets import QScrollArea
+
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.karriereseite
+    assert seite.findChild(QScrollArea) is not None
+
+
+def test_ein_programm_laesst_sich_starten(qtbot, konfig) -> None:
+    """Der Knopf bucht wirklich, und die Anzeige sagt es."""
+    from rennmanager.kern import entwicklung as kern_entwicklung
+    from rennmanager.kern import training as kern_training
+
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.karriereseite
+    karriere = seite._karriere
+
+    gesperrt = karriere.gesperrt()
+    name = next(
+        f.schluessel
+        for f in konfig.faehigkeiten
+        if kern_entwicklung.braucht_tag(f) and f.schluessel not in gesperrt
+    )
+    vorher = karriere.wert(name)
+    tage = kern_training.spanne(konfig)[0]
+
+    # Die Faehigkeit in der Liste waehlen, wie es ein Klick taete.
+    for stelle in range(seite._liste.topLevelItemCount()):
+        zeile = seite._liste.topLevelItem(stelle)
+        if zeile.data(0, Qt.UserRole) == name:
+            seite._liste.setCurrentItem(zeile)
+            break
+    else:
+        pytest.skip(f"{name} steht nicht in der Liste")
+
+    seite._programmtage.setValue(tage)
+    seite._starte_programm()
+
+    laufend = karriere.laufende_programme
+    assert laufend, "Kein Programm gestartet"
+    assert laufend[0].faehigkeit == name
+    assert laufend[0].dauer == tage
+    # Gutgeschrieben wird erst am Ende - jetzt steht der Wert noch.
+    assert karriere.wert(name) == vorher
+    assert "Programm laeuft" in seite._meldung.text()

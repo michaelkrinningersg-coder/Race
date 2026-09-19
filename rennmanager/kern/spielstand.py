@@ -52,6 +52,7 @@ from rennmanager.kern import popularitaet as kern_popularitaet
 from rennmanager.kern import sponsoren as kern_sponsoren
 from rennmanager.kern import statistik as kern_statistik
 from rennmanager.kern import streckenkenntnis as kern_streckenkenntnis
+from rennmanager.kern import training as kern_training
 from rennmanager.kern import wertung as kern_wertung
 from rennmanager.kern import zwischenfall as kern_zwischenfall
 from rennmanager.kern.auto import Auto
@@ -73,7 +74,7 @@ if TYPE_CHECKING:  # pragma: no cover
 # Version 4: Der Punkteverlauf der laufenden Saison (Tabelle
 # ``saisonverlauf``, Punkt 9). Aeltere Staende werden gelesen; ihr Verlauf
 # beginnt dann beim naechsten gefahrenen Rennen.
-SPIELSTAND_VERSION = 8
+SPIELSTAND_VERSION = 9
 
 # Punkt 17: Autosave und Schnellspeicher liegen an einem festen Ort,
 # damit sie ohne Dateidialog geschrieben werden koennen.
@@ -98,6 +99,10 @@ TEAMVERTRAEGE_AB_VERSION = 7
 # laden mit leerem Buch und ohne Budget - sie haben nie eines gefuehrt,
 # und ein nachtraeglich erfundenes waere gelogen.
 KASSENBUCH_AB_VERSION = 8
+# Ab Version 9 laufen Trainingsprogramme (Punkt 84). Aeltere Staende
+# laden ohne - sie kannten die Mechanik nicht, und ein nachtraeglich
+# erfundenes Programm waere gelogen.
+TRAINING_AB_VERSION = 9
 
 SCHEMA = """
 CREATE TABLE kopf (
@@ -190,6 +195,13 @@ CREATE TABLE kassenbuch (
     unterkategorie TEXT NOT NULL,
     fahrer INTEGER,
     text TEXT NOT NULL
+);
+CREATE TABLE trainingsprogramm (
+    fahrer INTEGER NOT NULL,
+    faehigkeit TEXT NOT NULL,
+    platz TEXT NOT NULL,
+    tage TEXT NOT NULL,
+    geleistet INTEGER NOT NULL
 );
 CREATE TABLE ereignisplan (datum TEXT NOT NULL, schluessel TEXT NOT NULL);
 CREATE TABLE ereignis (
@@ -549,6 +561,23 @@ def _schreibe_karriere(verbindung: sqlite3.Connection, k: kern_karriere.Karriere
             for b in k.buchungen
         ],
     )
+    # Punkt 84: Laufende Trainingsprogramme. Die Tage stehen als
+    # ISO-Daten mit Komma getrennt - eine eigene Zeile je Tag waere
+    # genauer, aber ein Programm hat hoechstens zehn.
+    verbindung.executemany(
+        "INSERT INTO trainingsprogramm VALUES (?, ?, ?, ?, ?)",
+        [
+            (
+                nummer,
+                programm.faehigkeit,
+                programm.platz,
+                ",".join(tag.isoformat() for tag in programm.tage),
+                programm.geleistet,
+            )
+            for nummer, liste in sorted(k.programme.items())
+            for programm in liste
+        ],
+    )
     verbindung.executemany(
         "INSERT INTO ereignisplan VALUES (?, ?)",
         [
@@ -712,7 +741,9 @@ def lade(konfiguration: Konfiguration, pfad: Path | str) -> Spielstand:
                 )
 
             welt = _lies_welt(verbindung, kopf["seed"])
-            karriere = _lies_karriere(konfiguration, verbindung, kopf["saisonjahr"])
+            karriere = _lies_karriere(
+                konfiguration, verbindung, kopf["saisonjahr"], kopf["version"]
+            )
             tabellen = _lies_wertung(konfiguration, verbindung)
             statistik = _lies_statistik(konfiguration, verbindung, kopf["version"])
             kenntnis = kern_streckenkenntnis.Streckenkenntnis(
@@ -819,7 +850,10 @@ def _lies_teamautos(
 
 
 def _lies_karriere(
-    konfiguration: Konfiguration, verbindung: sqlite3.Connection, jahr: int
+    konfiguration: Konfiguration,
+    verbindung: sqlite3.Connection,
+    jahr: int,
+    version: int = SPIELSTAND_VERSION,
 ) -> kern_karriere.Karriere:
     z = verbindung.execute("SELECT * FROM karriere").fetchone()
     if z is None:
@@ -846,6 +880,10 @@ def _lies_karriere(
     )
     karriere.autos = autos
     karriere.belegte_plaetze = belegte
+    # Punkt 84: Laufende Trainingsprogramme. Aeltere Staende haben die
+    # Tabelle nicht - sie kannten die Mechanik nicht.
+    if version >= TRAINING_AB_VERSION:
+        karriere.programme = _lies_programme(verbindung)
     karriere.heute = _datum(z["heute"])
     # Punkt 72: Kassenbuch, Teambudget und die zuletzt gezahlte Rate.
     # ``beginne`` hat gerade Startkapital und erste Rate gebucht - das
@@ -1165,3 +1203,22 @@ def aus_teilen(
         gefahrene_rennen=gefahrene_rennen,
         popularitaet=popularitaet,
     )
+
+
+def _lies_programme(
+    verbindung: sqlite3.Connection,
+) -> dict[int, list[kern_training.Programm]]:
+    """Die laufenden Trainingsprogramme je Fahrer (Punkt 84)."""
+    programme: dict[int, list[kern_training.Programm]] = {}
+    for zeile in verbindung.execute(
+        "SELECT fahrer, faehigkeit, platz, tage, geleistet FROM trainingsprogramm"
+    ):
+        programme.setdefault(zeile["fahrer"], []).append(
+            kern_training.Programm(
+                faehigkeit=zeile["faehigkeit"],
+                platz=zeile["platz"],
+                tage=tuple(_datum(s) for s in zeile["tage"].split(",") if s),
+                geleistet=zeile["geleistet"],
+            )
+        )
+    return programme
