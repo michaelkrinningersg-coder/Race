@@ -847,23 +847,50 @@ def notstopp(
     gefahren: Mischung,
     naesse: float,
     seit_letztem_stopp: int,
+    runden_auf_falschem_reifen: int = 0,
+    geduld: int = 0,
 ) -> bool:
     """Ob ein Auto wegen des Wetters ausserplanmaessig hereinkommen muss.
 
-    Der Auftraggeber hat die Frist gesetzt: **hoechstens drei Runden auf
-    dem falschen Reifen**, und **mindestens drei Runden zwischen zwei
-    Stopps**. Ohne die zweite Bedingung kaeme ein Auto bei einem schnellen
-    Wechsel zweimal hintereinander herein und verloere das Rennen an der
-    Boxengasse statt auf der Strecke.
+    Drei Bedingungen. Der Reifen muss **falsch** sein - weiter von der
+    Lage entfernt, als die Eignungsgrenze zulaesst, also genau die
+    Mischungen, die die KI fuer diese Lage gar nicht erst gewaehlt haette.
+    Das Auto muss seine **Geduld** aufgebraucht haben (Punkt 83): So
+    viele Runden faehrt es auf dem falschen Reifen weiter, ausgewuerfelt
+    von ``geduld_falscher_reifen``. Und zwischen zwei Stopps muessen
+    **mindestens drei Runden** liegen - ohne das kaeme ein Auto bei einem
+    schnellen Wechsel zweimal hintereinander herein und verloere das
+    Rennen an der Boxengasse statt auf der Strecke.
 
-    Falsch ist ein Reifen, wenn er weiter von der Lage entfernt ist, als
-    die Eignungsgrenze zulaesst - also genau die Mischungen, die die KI
-    fuer diese Lage gar nicht erst gewaehlt haette.
+    :param runden_auf_falschem_reifen: wie lange der Reifen schon nicht
+        mehr zur Lage passt
+    :param geduld: wie lange dieses Auto das aushaelt
     """
     einstellung = konfiguration.wert("boxenstopp", "strategie")
     if abs(gefahren.naesse - naesse) <= einstellung["eignungsgrenze"]:
         return False
+    if runden_auf_falschem_reifen < geduld:
+        return False
     return seit_letztem_stopp >= einstellung["abstand_min_runden"]
+
+
+def geduld_falscher_reifen(konfiguration: Konfiguration, seedquelle: Seedquelle) -> int:
+    """Wie viele Runden dieses Auto auf dem falschen Reifen bleibt.
+
+    Ausgewuerfelt von null bis ``falscher_reifen_max_runden``
+    (Entscheidung des Auftraggebers). Ohne den Wurf kam das ganze Feld in
+    derselben Runde herein: Dreht das Wetter, werden alle dreissig Reifen
+    im selben Augenblick falsch, und jedes Auto nahm die fruehestmoegliche
+    Runde. Gemessen in Liga 20 auf Sakhir: 17 Autos in Runde 10, 12 in
+    Runde 11.
+
+    Je Auto **ein** Wurf je Rennen - wer zweimal auf den falschen Reifen
+    geraet, bleibt beide Male gleich geduldig.
+    """
+    hoechstens = konfiguration.wert(
+        "boxenstopp", "strategie", "falscher_reifen_max_runden"
+    )
+    return int(seedquelle.generator().integers(0, hoechstens + 1))
 
 
 def weichste_trockene(konfiguration: Konfiguration) -> Mischung | None:

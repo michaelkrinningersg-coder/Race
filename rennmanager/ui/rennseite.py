@@ -95,6 +95,11 @@ TICKER_ZEILEN = 12
 AUSFALL_SICHTBAR_MS = 60_000
 # Die letzte Runde leuchtet auf, wenn sie die beste dieses Fahrers war.
 FARBE_PERSOENLICHE_BEST = "#2e7d32"
+# Ab welchem Tempo ein Auto als fahrend gilt, in m/s. Darunter steht es -
+# im Ziel, in der Box oder ausgefallen -, und dann gibt es weder ein
+# Momentantempo noch einen Abstand, der sich aus Strecke durch Tempo
+# rechnen liesse (Punkt 83).
+TEMPO_STEHT = 0.1
 # Punkt 82: Wer einen Sektor als Schnellster des ganzen Feldes gefahren
 # ist, bekommt ihn lila - wie in der Uebertragung. Gruen bleibt die
 # persoenliche Bestzeit, lila steht ueber allem.
@@ -539,7 +544,7 @@ class Rennseite(QWidget):
     def _tempotext(self, verlauf: Rennverlauf, i: int, zeit: float) -> str:
         """Das Momentantempo in km/h (Punkt 60)."""
         tempo = self._tempo_naeherung(verlauf, i, zeit)
-        return f"{tempo * 3.6:.0f}" if tempo > 0.1 else "-"
+        return f"{tempo * 3.6:.0f}" if tempo > TEMPO_STEHT else "-"
 
     @staticmethod
     def _schnitttext(distanz: float, zeit: float) -> str:
@@ -804,6 +809,14 @@ class Rennseite(QWidget):
         laenge = verlauf.strecke.laenge_m
         if abstand >= laenge:
             return formatiere_runden_rueckstand(int(abstand // laenge))
+        # Punkt 83: Auch andersherum. Sortiert wird nach Runden und dann
+        # nach Zielzeit (Punkt 67), deshalb kann ein Ueberrundeter, der
+        # schon im Ziel ist, vor einem stehen, der noch faehrt - auf der
+        # Strecke liegt er dann eine Runde **zurueck**. Ohne diesen Fall
+        # landete ein Abstand von minus einer Runde in der Schaetzung
+        # unten und kam als -1487467:14:28.515 heraus.
+        if abstand <= -laenge:
+            return f"-{int(-abstand // laenge)} Rd."
         return self._zeitabstand(verlauf, hinten, vorne, zeit)
 
     def _zeitabstand(
@@ -831,7 +844,13 @@ class Rennseite(QWidget):
         distanzen = verlauf.distanzen_zu(zeit)
         abstand = float(distanzen[vorne]) - float(distanzen[hinten])
         tempo = self._tempo_naeherung(verlauf, vorne, zeit)
-        return formatiere_rueckstand(int(abstand / max(tempo, 1e-6) * 1000))
+        # Punkt 83: Ein stehendes Auto hat kein Tempo, durch das sich
+        # teilen liesse. Frueher fing ``max(tempo, 1e-6)`` das ab - und
+        # machte aus einer Rundenlaenge rund anderthalb Millionen Stunden.
+        # Wer steht, hat keinen Abstand in Sekunden; dann steht da nichts.
+        if tempo <= TEMPO_STEHT:
+            return "-"
+        return formatiere_rueckstand(int(abstand / tempo * 1000))
 
     @staticmethod
     def _status(zwischenfaelle, ausgefallen: bool) -> str:

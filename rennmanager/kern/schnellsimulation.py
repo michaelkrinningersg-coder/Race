@@ -272,6 +272,18 @@ def fahre_wochenende(
     # Mischung festgelegt hat.
     kuerzel_gefahren: list[set[str]] = [{m.kuerzel} for m in gefahrene]
     haerte_untergrenze: list[kern_reifen.Mischung | None] = [None] * anzahl
+    # Punkt 83: wie lange ein Auto schon auf dem falschen Reifen faehrt
+    # und wie lange es das aushaelt - wie in der vollen Simulation.
+    runden_falscher_reifen = np.zeros(anzahl, dtype=int)
+    geduld_falsch = np.array(
+        [
+            kern_strategie.geduld_falscher_reifen(
+                konfiguration, seedquelle.zweig("reifengeduld", i)
+            )
+            for i in range(anzahl)
+        ],
+        dtype=int,
+    )
 
     def je_runde(i: int, naesse: float) -> float:
         """Profilverlust je Runde - die Naesse geht hier ein, nicht obendrauf.
@@ -459,8 +471,20 @@ def fahre_wochenende(
                 ):
                     notstopp_faellig[i] = True
                     continue
+                grenze = konfiguration.wert("boxenstopp", "strategie", "eignungsgrenze")
+                if abs(gefahrene[i].naesse - naesse) > grenze:
+                    runden_falscher_reifen[i] += 1
+                else:
+                    runden_falscher_reifen[i] = 0
                 if (
-                    kern_strategie.notstopp(konfiguration, gefahrene[i], naesse, seit)
+                    kern_strategie.notstopp(
+                        konfiguration,
+                        gefahrene[i],
+                        naesse,
+                        seit,
+                        int(runden_falscher_reifen[i]) - 1,
+                        int(geduld_falsch[i]),
+                    )
                     and kern_strategie.passende_mischung(konfiguration, naesse).kuerzel
                     != gefahrene[i].kuerzel
                 ):
@@ -508,6 +532,7 @@ def fahre_wochenende(
             gesamtzeit[i] += stoppgrundlast[i] + standzeit
             gefahrene[i] = gestreut(i, neu)
             kuerzel_gefahren[i].add(neu.kuerzel)
+            runden_falscher_reifen[i] = 0
             verschleiss[i] = 0.0
             verschleiss_je_runde[i] = je_runde(i, naesse_lage)
             runde_letzter_stopp[i] = runde

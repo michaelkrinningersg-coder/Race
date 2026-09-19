@@ -576,8 +576,11 @@ Drei Dinge halten sich nicht an den Plan:
   Die Vorausberechnung kennt ihn nicht - geplant wird auf den Sollwerten.
 * **Der Notstopp.** Zwei Lagen zwingen ausserplanmaessig herein, beide
   gehen dem geplanten Stopp vor und schieben ihn nach hinten. Dreht sich
-  das **Wetter**, kommt ein Auto hoechstens drei Runden spaeter herein und
-  wechselt auf den Reifen, der zur Lage passt. Faellt das **Restprofil
+  das **Wetter**, faehrt ein Auto noch **null bis zwei Runden** auf dem
+  falschen Reifen weiter - je Auto ausgewuerfelt - und wechselt dann auf
+  den, der zur Lage passt. Der Wurf ist noetig, weil bei einem
+  Wetterwechsel alle dreissig Reifen im selben Augenblick falsch werden:
+  Ohne ihn kam das ganze Feld in derselben Runde herein. Faellt das **Restprofil
   unter 30 Prozent**, kommt es in der naechsten Runde herein und holt
   sich einen frischen Satz - egal welcher Mischung. Fuer beide gilt der
   Mindestabstand von drei Runden zum letzten Stopp und dieselbe Sperre

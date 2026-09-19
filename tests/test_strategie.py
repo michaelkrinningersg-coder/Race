@@ -451,3 +451,50 @@ def test_wer_oft_stoppt_faehrt_nicht_auf_weich(k, strecken):
     # ``viele`` darf null sein: Dass es solche Strategien gar nicht mehr
     # gibt, ist der erwuenschte Fall und kein Grund durchzufallen.
     assert viele >= 0
+
+
+# -- Geduld auf dem falschen Reifen (Punkt 83) ------------------------------
+def test_die_geduld_bleibt_in_ihrer_spanne(k):
+    """Null bis ``falscher_reifen_max_runden``, aus dem Seed des Autos."""
+    hoechstens = k.wert("boxenstopp", "strategie", "falscher_reifen_max_runden")
+    gezogen = [
+        sg.geduld_falscher_reifen(k, Seedquelle(7).zweig("reifengeduld", i))
+        for i in range(60)
+    ]
+    assert all(0 <= wert <= hoechstens for wert in gezogen), sorted(set(gezogen))
+    # Und sie ist nicht fuer alle gleich - sonst kaeme das Feld wieder
+    # geschlossen herein.
+    assert len(set(gezogen)) > 1
+
+
+def test_gleicher_seed_gleiche_geduld(k):
+    erst = sg.geduld_falscher_reifen(k, Seedquelle(7).zweig("reifengeduld", 3))
+    nochmal = sg.geduld_falscher_reifen(k, Seedquelle(7).zweig("reifengeduld", 3))
+    assert erst == nochmal
+
+
+def test_wer_geduld_hat_faehrt_noch_eine_runde_weiter(k):
+    """Der Kern der Regel: Der falsche Reifen allein holt niemanden herein.
+
+    Vorher gab ``notstopp()`` sofort True zurueck, sobald der Reifen
+    falsch war - und weil bei einem Wetterwechsel alle dreissig Reifen im
+    selben Augenblick falsch werden, kam das ganze Feld in derselben
+    Runde herein.
+    """
+    trocken = kern_reifen.mischung(k, "hart")
+    nass = 1.0   # Starkregen: Trockenreifen ist eindeutig falsch
+    abstand = k.wert("boxenstopp", "strategie", "abstand_min_runden")
+    # Ohne Geduld sofort.
+    assert sg.notstopp(k, trocken, nass, abstand, 0, 0)
+    # Mit einer Runde Geduld erst eine Runde spaeter.
+    assert not sg.notstopp(k, trocken, nass, abstand, 0, 1)
+    assert sg.notstopp(k, trocken, nass, abstand, 1, 1)
+    # Der Mindestabstand zum letzten Stopp gilt weiter.
+    assert not sg.notstopp(k, trocken, nass, abstand - 1, 5, 0)
+
+
+def test_ein_passender_reifen_bleibt_draussen(k):
+    """Geduld hin oder her - wer den richtigen Reifen hat, kommt nicht herein."""
+    regen = kern_reifen.mischung(k, "regen")
+    abstand = k.wert("boxenstopp", "strategie", "abstand_min_runden")
+    assert not sg.notstopp(k, regen, 1.0, abstand, 99, 0)

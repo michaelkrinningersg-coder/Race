@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QSplitter,
     QTreeWidget,
     QTreeWidgetItem,
@@ -34,6 +35,11 @@ from rennmanager.kern.karriere import FAHRERPLATZ, WERKSTATTPLATZ, Karriere, Kar
 from rennmanager.kern.zufall import Seedquelle
 from rennmanager.konfiguration import Konfiguration
 from rennmanager.ui.kalenderstreifen import Kalenderstreifen
+
+# Punkt 83: So hoch bleibt die Faehigkeitenliste mindestens - genug fuer
+# rund ein Dutzend Zeilen. Darunter lohnt sich das Rollen in ihr nicht
+# mehr, man sieht dann nur noch Kopfzeile und Balken.
+HOEHE_FAEHIGKEITEN = 320
 
 FARBE_RENNEN = QColor("#c62828")
 FARBE_QUALIFYING = QColor("#eda100")
@@ -73,7 +79,21 @@ class Karriereseite(QWidget):
         self._konfiguration = konfiguration
         self._karriere = karriere
 
-        spalte = QVBoxLayout(self)
+        # Punkt 83: Die Seite traegt Kopf, Kalenderband, die
+        # Faehigkeitenliste und die Seitenspalte untereinander. Auf einem
+        # kleinen Fenster blieb fuer die Liste kaum Hoehe, und ihr eigener
+        # Rollbalken half nichts, weil schon der Kasten abgeschnitten war.
+        # Jetzt rollt die ganze Seite.
+        rollflaeche = QScrollArea(self)
+        rollflaeche.setWidgetResizable(True)
+        rollflaeche.setFrameShape(QScrollArea.NoFrame)
+        inhalt = QWidget()
+        rollflaeche.setWidget(inhalt)
+        aussen = QVBoxLayout(self)
+        aussen.setContentsMargins(0, 0, 0, 0)
+        aussen.addWidget(rollflaeche)
+
+        spalte = QVBoxLayout(inhalt)
         spalte.addLayout(self._baue_kopf())
         # Punkt 7: Das Jahr als Band - wo Luecken bleiben, ist Zeit
         # liegen geblieben (GDD 2).
@@ -189,6 +209,11 @@ class Karriereseite(QWidget):
         )
         self._liste.setRootIsDecorated(False)
         self._liste.setAlternatingRowColors(True)
+        # Punkt 83: Die Liste traegt alle Faehigkeiten der Matrix plus die
+        # Zusatzfaehigkeiten. Ohne Mindesthoehe schrumpfte sie auf dem
+        # Teiler auf zwei Zeilen zusammen; mit ihr bleibt sie lesbar und
+        # rollt im Zweifel selbst.
+        self._liste.setMinimumHeight(HOEHE_FAEHIGKEITEN)
         spalte.addWidget(self._liste)
         return kasten
 

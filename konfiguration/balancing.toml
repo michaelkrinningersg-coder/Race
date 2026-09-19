@@ -1268,8 +1268,17 @@ variantenschwelle_je_100km_s = 15.0
 # ist aus dem Plan gefallen.
 notstopp_ab_restprofil = 0.30
 # Wetterwechsel: Hoechstens so viele Runden faehrt ein Auto auf dem
-# falschen Reifen, bevor es hereinkommt.
-falscher_reifen_max_runden = 3
+# falschen Reifen, bevor es hereinkommt. **Je Auto ausgewuerfelt** von
+# null bis zu diesem Wert (Entscheidung des Auftraggebers).
+#
+# Der Wert stand auf 3 und wurde von nichts gelesen - notstopp() holte
+# jedes Auto in der fruehestmoeglichen Runde herein. Dreht das Wetter,
+# werden alle dreissig Reifen im selben Augenblick falsch, also kam das
+# ganze Feld in derselben Runde: gemessen in Liga 20 auf Sakhir 17 Autos
+# in Runde 10 und 12 in Runde 11. Dass ein Schauer ein Feld binnen
+# weniger Runden hereinholt, ist richtig; dass es dieselbe Runde ist,
+# war der tote Wert.
+falscher_reifen_max_runden = 2
 # Und so viele Runden muessen zwischen zwei Stopps liegen - sonst kaeme
 # ein Auto bei schnellem Wetterwechsel zweimal hintereinander herein.
 abstand_min_runden = 3

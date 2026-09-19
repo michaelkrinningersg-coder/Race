@@ -472,3 +472,63 @@ def test_ohne_tabelle_bleibt_die_meisterschaft_leer(gefahren) -> None:
     """Ein Testrennen ohne Saison hat keinen Stand - und stuerzt nicht."""
     _fenster, seite = gefahren
     assert seite._meisterschaft.topLevelItemCount() == 0
+
+
+# --- Punkt 83: Das Intervall nach dem Zieldurchlauf ------------------------
+class _Standlauf:
+    """Ein Verlauf, in dem alle Autos stehen - wie nach dem Zieldurchlauf.
+
+    Gerade genug, damit ``_intervall`` und ``_zeitabstand`` rechnen
+    koennen. Ein echtes Rennen dafuer zu fahren hiesse, auf genau die
+    Reihenfolge zu warten, die den Fehler ausloest.
+    """
+
+    def __init__(self, laenge: float, distanzen: list[float]) -> None:
+        import numpy as np
+
+        self.strecke = type("S", (), {"laenge_m": laenge})()
+        self._distanzen = np.array(distanzen)
+        # Zwei Bilder mit derselben Distanz: Tempo null, alles steht.
+        self.distanz_m = np.vstack([self._distanzen, self._distanzen])
+        self.zeitpunkte_ms = np.array([0, 1000])
+
+    def abstand_ms(self, hinten, vorne, zeit):
+        # Kein gemeinsamer Messpunkt - genau der Fall, der in die
+        # Schaetzung unten faellt.
+        return None
+
+    def distanzen_zu(self, zeit):
+        return self._distanzen
+
+    def bild_zu(self, zeit):
+        return 0
+
+
+def test_ein_stehendes_auto_hat_keinen_abstand_in_sekunden(qtbot, konfig) -> None:
+    """Punkt 83: ``max(tempo, 1e-6)`` machte aus einer Runde 1,5 Mio Stunden.
+
+    Gemessen in der Rangliste: ``-1487467:14:28.515``. 5355 m geteilt
+    durch 1e-6 m/s sind 5,4 Milliarden Sekunden - genau diese Zahl.
+    """
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.rennseite
+
+    lauf = _Standlauf(5355.0, [10_000.0, 9_000.0])
+    assert seite._zeitabstand(lauf, hinten=1, vorne=0, zeit=1000.0) == "-"
+
+
+def test_ein_ueberrundeter_vor_uns_steht_als_runde_da(qtbot, konfig) -> None:
+    """Sortiert wird nach Runden und Zielzeit - da kann ein Ueberrundeter
+    vor einem stehen, der auf der Strecke eine Runde weiter ist."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.rennseite
+
+    # Auf Platz 1 steht das Auto mit der **kleineren** Distanz.
+    lauf = _Standlauf(5355.0, [3_000.0, 12_000.0])
+    text = seite._intervall(lauf, [0, 1], lauf.distanzen_zu(0), 1000.0, platz=2)
+    assert text == "-1 Rd.", text
+    # Andersherum wie bisher.
+    text = seite._intervall(lauf, [1, 0], lauf.distanzen_zu(0), 1000.0, platz=2)
+    assert text == "+1 Rd.", text

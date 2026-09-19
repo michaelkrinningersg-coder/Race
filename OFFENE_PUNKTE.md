@@ -2165,3 +2165,71 @@ der sie stammt.
 gefahrene Runde. Eine „bestmögliche" Runde, die langsamer ist als eine
 gefahrene, wäre eine falsche Auskunft — und die Spalte „Lücke" daneben
 stünde im Minus.
+
+### 83. Drei Fehler und eine Regel, die es nur auf dem Papier gab
+
+**Das ganze Feld kam in derselben Runde herein.** Gemeldet aus Liga 20 in
+Sakhir: Runde 7, alle auf Intermediates, alle unter 40 Prozent. Nachgestellt
+und reproduziert — aber die Ursache war nicht der Verschleiß-Zwangsstopp aus
+Punkt 78. Die Restprofile lagen bei 36 bis 71 Prozent, weit über den 30.
+
+Es war die **Wetterregel**. Ein Intermediate gilt als falscher Reifen, sobald
+die Lage weiter als 0,30 von seinen 0,40 entfernt ist:
+
+| Lage | Abstand | Inter |
+| --- | --- | --- |
+| wechselhaft (0,35) | 0,05 | ok |
+| regen (0,70) | 0,30 | ok |
+| **trocken / heiß (0,0)** | **0,40** | **falsch** |
+| **starkregen (1,0)** | **0,60** | **falsch** |
+
+Trocknet es ab, werden alle dreißig Intermediates im selben Augenblick
+falsch. Und `notstopp()` gab `True` zurück, sobald der Reifen falsch war —
+also nahm jedes Auto die früheste erlaubte Runde.
+
+Dabei stand in der Konfiguration seit jeher `falscher_reifen_max_runden = 3`,
+und der Docstring versprach „höchstens drei Runden auf dem falschen Reifen".
+**Der Wert wurde von nichts gelesen** — `grep` über das ganze Projekt fand
+genau eine Fundstelle: die Konfigurationszeile selbst.
+
+Entscheidung des Auftraggebers: Der Wert geht auf **2** und wird je Auto
+ausgewürfelt (0 bis 2). `geduld_falscher_reifen()` zieht ihn aus dem Seed des
+Autos, beide Rennmodelle zählen mit. Gemessen auf Sakhir: Zwangsstopps von
+**29 auf 16**, verteilt auf zwei Runden statt einer.
+
+Was bleibt, ist gewollt: In Runde 11 stoppen weiter 24 Autos — das sind die
+**geplanten** Stopps. Alle dreißig planen dort den Wechsel auf Regen, weil
+der Wetterumschwung feststeht (GDD 7). So halten es echte Teams auch.
+
+### Dabei behoben: ein Intervall von minus 1 487 467 Stunden
+
+Nach dem Zieldurchlauf stand in der Rangliste:
+
+```
+P29 KER Keller  +5:09.430   Intervall -1487467:14:28.515   km/h 105
+```
+
+Zwei Fehler griffen ineinander. Sortiert wird nach Runden und dann nach
+Zielzeit (Punkt 67), deshalb kann ein Überrundeter, der schon im Ziel ist,
+**vor** einem stehen, der noch fährt — auf der Strecke liegt er dann eine
+Runde zurück. `_intervall()` fing nur den umgekehrten Fall ab
+(`abstand >= laenge`), der negative fiel durch.
+
+Und dort landete er in der Schätzung „Strecke durch Tempo", die mit
+`max(tempo, 1e-6)` gegen Division durch null abgesichert war. Ein stehendes
+Auto hat aber Tempo null: 5355 Meter geteilt durch 1e-6 m/s sind 5,4
+Milliarden Sekunden — **genau die 1 487 467 Stunden aus dem Bild**.
+
+Beides behoben: Ein Rundenrückstand in die andere Richtung steht jetzt als
+`-1 Rd.` da, und wer steht, hat keinen Abstand in Sekunden — dann steht dort
+nichts. Die Schwelle dafür ist dieselbe `TEMPO_STEHT = 0.1`, die schon die
+km/h-Spalte benutzt; vorher stand die 0,1 dort als lose Zahl im Code.
+
+### Dabei behoben: die Fähigkeitenliste ließ sich nicht erreichen
+
+Die Karriereseite trägt Kopf, Kalenderband, Fähigkeitenliste und
+Seitenspalte untereinander. Auf einem kleinen Fenster blieb für die Liste
+kaum Höhe, und ihr eigener Rollbalken half nichts, weil schon der Kasten
+abgeschnitten war. Die ganze Seite liegt jetzt in einer `QScrollArea`, und
+die Liste behält eine Mindesthöhe von 320 Pixeln — genug für rund ein
+Dutzend Zeilen, darunter sieht man nur noch Kopfzeile und Balken.

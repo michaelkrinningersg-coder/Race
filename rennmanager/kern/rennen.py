@@ -953,6 +953,20 @@ class _Lauf:
         # Ab da geht es nicht wieder weicher (Entscheidung des
         # Auftraggebers); None heisst: noch kein solcher Stopp.
         self.haerte_untergrenze: list[kern_reifen.Mischung | None] = [None] * self.anzahl
+        # Punkt 83: Wie lange ein Auto schon auf dem falschen Reifen
+        # faehrt, und wie lange es das aushaelt. Die Geduld wird je Auto
+        # einmal gewuerfelt, damit nicht das ganze Feld in derselben
+        # Runde hereinkommt, wenn das Wetter dreht.
+        self.runden_falscher_reifen = np.zeros(self.anzahl, dtype=int)
+        self.geduld_falscher_reifen = np.array(
+            [
+                kern_strategie.geduld_falscher_reifen(
+                    self.k, self.seedquelle.zweig("reifengeduld", i)
+                )
+                for i in range(self.anzahl)
+            ],
+            dtype=int,
+        )
         if not self.faehrt_stopps:
             self.profil_box = self.profile
             return
@@ -1051,6 +1065,7 @@ class _Lauf:
         )
         self.mischungen[i] = neu
         self.kuerzel_gefahren[i].add(neu.kuerzel)
+        self.runden_falscher_reifen[i] = 0
         self.verschleiss[i] = 0.0
         self._setze_verschleissrate(i)
         self._setze_reifen(i)
@@ -1116,11 +1131,24 @@ class _Lauf:
             self._setze_fenster(i, runde + 1, True)
             return
 
-        # Das Wetter: hoechstens drei Runden auf dem falschen Reifen.
+        # Das Wetter: so lange auf dem falschen Reifen, wie die Geduld
+        # dieses Autos reicht (Punkt 83).
         if self.wetter is None:
             return
         naesse = kern_reifen.naesse_von(self.k, self.wetter.zustand_zu(ueberfahrt))
-        if not kern_strategie.notstopp(self.k, self.mischungen[i], naesse, seit):
+        grenze = self.k.wert("boxenstopp", "strategie", "eignungsgrenze")
+        if abs(self.mischungen[i].naesse - naesse) > grenze:
+            self.runden_falscher_reifen[i] += 1
+        else:
+            self.runden_falscher_reifen[i] = 0
+        if not kern_strategie.notstopp(
+            self.k,
+            self.mischungen[i],
+            naesse,
+            seit,
+            int(self.runden_falscher_reifen[i]) - 1,
+            int(self.geduld_falscher_reifen[i]),
+        ):
             return
         if kern_strategie.passende_mischung(self.k, naesse).kuerzel == self.mischungen[i].kuerzel:
             return
