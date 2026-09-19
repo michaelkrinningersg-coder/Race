@@ -2081,3 +2081,31 @@ der Grenze. Zur Gegenprobe deshalb **Budapest** (1,210) einzeln
 gefahren: höchstens drei Stopps im ganzen Feld (2 Autos mit einem,
 8 mit zwei, 19 mit drei), nur vier Zwangsstopps, kein Weich. Genau das
 Bild, das die Regel erzeugen soll.
+
+### 81. Das Rennen startet in Echtzeit
+
+Bisher suchte die Rennseite beim Aufschlagen die kleinste Zeitrafferstufe,
+mit der das Rennen in rund 210 Sekunden durchlief (`wunschdauer_s`). Auf
+langen Strecken waren das 20x oder 50x — die ersten Runden waren vorbei,
+bevor man richtig hinsah.
+
+**Entscheidung des Auftraggebers:** Jedes Rennen startet mit **1x**. Das
+steht als `zeitraffer.start_stufe = 1` in der Konfiguration; `wunschdauer_s`
+ist damit gegenstandslos und entfällt. Umstellen geht weiter jederzeit
+während des Rennens, die Stufen 1x bis 100x bleiben unverändert.
+
+Die Stufe wird **nicht** fest im Code gesetzt, sondern aus der
+Konfiguration gelesen — und wenn dort eine Stufe steht, die es in
+`stufen` nicht gibt, nimmt die Oberfläche die langsamste statt zu
+stolpern. Ein eigener Test prüft, dass `start_stufe` wirklich in `stufen`
+vorkommt; sonst fiele das erst im Spiel auf, und zwar still.
+
+`test_zeitraffer_wird_zur_renndauer_gewaehlt` prüfte die alte Regel und
+ist durch `test_das_rennen_startet_mit_der_eingestellten_stufe` ersetzt.
+Der liest die Stufe aus der Konfiguration statt die Eins zu wiederholen —
+dieselbe Lehre wie bei der Gripkurve in Punkt 77 und der
+Verschiebeschwelle in Punkt 78.
+
+**Was das für lange Rennen heißt:** Ein Rennen in Liga 20 dauert real über
+eine Stunde. Wer es ganz sehen will, stellt jetzt selbst hoch — oder nimmt
+den Knopf **Sofortergebnis**, den es unverändert gibt.

@@ -387,10 +387,14 @@ anzeige_takt_min_ms = 10
 anzeige_takt_max_ms = 5000
 # Nach dem Berechnen laeuft das Rennen von selbst los.
 automatisch_starten = true
-# Vorgewaehlte Zeitrafferstufe: die kleinste, mit der das Rennen in etwa
-# dieser Zeit durchlaeuft. Ein Rennen in Liga 20 dauert real ueber eine
-# Stunde - bei 1x wuerde niemand zusehen.
-wunschdauer_s = 210
+# Zeitrafferstufe, mit der ein Rennen startet (Entscheidung des
+# Auftraggebers). Vorher suchte die Oberflaeche die kleinste Stufe, mit
+# der das Rennen in rund 210 Sekunden durchlief - auf langen Strecken
+# also 20x oder 50x. Jetzt faengt jedes Rennen in Echtzeit an; wer es
+# schneller will, stellt die Stufe im Rennen um.
+#
+# Der Wert muss in ``stufen`` oben vorkommen.
+start_stufe = 1
 
 [simulation]
 # Schrittweite der Rennsimulation. 50 ms sind fein genug: Bei 400 km/h

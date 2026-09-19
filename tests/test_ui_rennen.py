@@ -163,22 +163,26 @@ def test_rennen_laeuft_von_selbst_los(qtbot, konfig: kf.Konfiguration) -> None:
     seite._halte_an()
 
 
-def test_zeitraffer_wird_zur_renndauer_gewaehlt(qtbot, konfig: kf.Konfiguration) -> None:
-    """Die Vorwahl muss das Rennen in ertraeglicher Zeit durchlaufen lassen."""
+def test_das_rennen_startet_mit_der_eingestellten_stufe(
+    qtbot, konfig: kf.Konfiguration
+) -> None:
+    """Entscheidung des Auftraggebers: jedes Rennen faengt in Echtzeit an.
+
+    Geprueft wird gegen ``start_stufe`` aus der Konfiguration, nicht gegen
+    die Eins - die Stufe ist ein Einstellwert und darf sich aendern, ohne
+    dass dieser Test darueber stolpert.
+    """
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
     seite = kurzes_rennen(fenster)
     seite._halte_an()
 
-    wunsch_ms = konfig.wert("zeitraffer", "wunschdauer_s") * 1000
-    stufen = konfig.wert("zeitraffer", "stufen")
-    gewaehlt = seite._raffer.currentData()
-    dauer = seite.verlauf.dauer_ms / gewaehlt
-    assert dauer <= wunsch_ms or gewaehlt == stufen[-1]
-    # Und es ist die kleinste Stufe, die das schafft.
-    kleiner = [stufe for stufe in stufen if stufe < gewaehlt]
-    if kleiner:
-        assert seite.verlauf.dauer_ms / kleiner[-1] > wunsch_ms
+    assert seite._raffer.currentData() == konfig.wert("zeitraffer", "start_stufe")
+
+
+def test_die_startstufe_gibt_es_wirklich(konfig: kf.Konfiguration) -> None:
+    """Sonst faengt jedes Rennen still auf der langsamsten Stufe an."""
+    assert konfig.wert("zeitraffer", "start_stufe") in konfig.wert("zeitraffer", "stufen")
 
 
 def test_rennen_zeigt_das_wetter(qtbot, konfig: kf.Konfiguration) -> None:

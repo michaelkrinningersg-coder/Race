@@ -387,20 +387,22 @@ class Rennseite(QWidget):
             self._umschalten()
 
     def _waehle_zeitraffer(self) -> None:
-        """Waehlt die kleinste Stufe, mit der das Rennen zuegig durchlaeuft.
+        """Stellt die Stufe ein, mit der jedes Rennen startet.
 
-        Ein Rennen dauert real bis zu anderthalb Stunden; bei einfacher
-        Geschwindigkeit saehe man nichts als Warten.
+        Entscheidung des Auftraggebers: ``start_stufe``, also Echtzeit.
+        Vorher suchte die Oberflaeche die kleinste Stufe, mit der das
+        Rennen in rund 210 Sekunden durchlief - auf langen Strecken also
+        20x oder 50x, und die ersten Runden waren vorbei, bevor man
+        hinsah. Wer es schneller will, stellt waehrend des Rennens um.
         """
         if self._verlauf is None:
             return
-        wunsch_ms = self._konfiguration.wert("zeitraffer", "wunschdauer_s") * 1000
         stufen = self._konfiguration.wert("zeitraffer", "stufen")
-        passend = next(
-            (stufe for stufe in stufen if self._verlauf.dauer_ms / stufe <= wunsch_ms),
-            stufen[-1],
-        )
-        self._raffer.setCurrentIndex(stufen.index(passend))
+        start = self._konfiguration.wert("zeitraffer", "start_stufe")
+        # Steht in der Konfiguration eine Stufe, die es nicht gibt, wird
+        # daraus die langsamste - lieber zu langsam als gar kein Rennen.
+        index = stufen.index(start) if start in stufen else 0
+        self._raffer.setCurrentIndex(index)
 
     # -- Wiedergabe --------------------------------------------------------
     def _umschalten(self) -> None:

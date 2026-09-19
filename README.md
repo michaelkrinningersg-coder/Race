@@ -351,7 +351,10 @@ einem Reiter:
    Tabellenstand vor dem Rennen. Vor Rennen 1 gibt es noch keine Tabelle;
    dann steht dort das Feld nach Staerke.
 2. **Qualifying** - die Session der eigenen Liga, Fahrt fuer Fahrt (GDD 4)
-3. **Rennen** - auf die gefahrene Aufstellung, abspielbar im Zeitraffer
+3. **Rennen** - auf die gefahrene Aufstellung, abspielbar im Zeitraffer.
+   Es startet in **Echtzeit** (1x) und laeuft von selbst los, sobald man
+   den Reiter aufschlaegt; die Stufen 1x bis 100x lassen sich waehrend
+   des Rennens umstellen (``zeitraffer.start_stufe``)
 4. **Ergebnis** - die eigene Wertung, das Rennergebnis und die Tabelle
    danach mit dem Sprung gegen vorher
 
