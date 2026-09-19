@@ -32,22 +32,70 @@ def ohne_zeit(k):
 
 
 # -- Der Zuwachs ------------------------------------------------------------
-def test_zehn_tage_bringen_anderthalb_buchungen(k) -> None:
+# Die Werte, bei denen gemessen wird. Die Null gehoert unbedingt dazu:
+# Dort startet der Spieler (GDD 1), und dort ist der Tageszuwachs genau
+# ein Kaufschritt - die Abrundung frisst jeden Anteil, der nicht ueber
+# zwei Schritte kommt. Ein frueherer Test mass nur bei 50.000, wo der
+# Tageszuwachs 500 betraegt und die Rundung nicht ins Gewicht faellt.
+# Dort sah tag_anteil = 0,15 brauchbar aus, obwohl ein Zehntageprogramm
+# beim Anfaenger genau eine Einzelbuchung brachte und ein
+# Fuenftageprogramm gar nichts.
+MESSWERTE = (0, 500, 1_000, 50_000, 99_000)
+
+
+def test_das_laengste_programm_schlaegt_die_einzelbuchung(k) -> None:
     """Der Anreiz, ohne den niemand ein Programm buchen wuerde.
 
     Eine Einzelbuchung belegt denselben Platz fuer denselben Rennabstand
-    und bringt einen Tageszuwachs. Brachte ein Zehn-Tage-Programm
+    und bringt einen Tageszuwachs. Braechte das laengstmoegliche Programm
     dasselbe, waere es strikt schlechter - es kann ja abbrechen.
     """
-    wert = 50_000
-    einzeln = kern_entwicklung.tageszuwachs(k, wert)
+    _, laengste = tr.spanne(k)
+    for wert in MESSWERTE:
+        einzeln = kern_entwicklung.tageszuwachs(k, wert)
+        lang = tr.zuwachs(k, wert, laengste)
+        assert lang > einzeln, (
+            f"Bei Wert {wert} bringt ein Programm ueber {laengste} Tage {lang}, "
+            f"eine Einzelbuchung {einzeln} - niemand wuerde es buchen"
+        )
+
+
+def test_das_kuerzeste_programm_bringt_ueberhaupt_etwas(k) -> None:
+    """Auch die Untergrenze muss ueber einen Kaufschritt kommen.
+
+    Sonst waeren die Tage verschenkt: Der Spieler belegt den Platz,
+    verbraucht seinen Vorrat und bekommt null zurueck.
+    """
+    kuerzeste, _ = tr.spanne(k)
+    for wert in MESSWERTE:
+        assert tr.zuwachs(k, wert, kuerzeste) > 0, f"Wert {wert} bringt nichts"
+
+
+def test_der_tagesanteil_muss_die_rundung_tragen(k) -> None:
+    """Warum ``tag_anteil`` nicht frei waehlbar ist.
+
+    Fuer jeden Wert unter 2000 ist der Tageszuwachs genau ein
+    Kaufschritt. Damit das laengste Programm mehr bringt als eine
+    Buchung, muss ``max_tage * tag_anteil`` zwei Schritte fuellen - unter
+    ``2 / max_tage`` ist die Mechanik tot, egal wie plausibel die Zahl
+    klingt. Dieselbe Rechnung fuer die Untergrenze: ``min_tage *
+    tag_anteil`` muss einen Schritt fuellen.
+    """
     anteil = k.wert("zeitmodell", "training", "tag_anteil")
-    zehn = tr.zuwachs(k, wert, 10)
-    assert zehn > einzeln, f"{zehn} <= {einzeln} - das Programm lohnt sich nicht"
-    # 10 * 0,15 = 1,5 Buchungen, auf ganze Kaufschritte abgerundet.
+    kuerzeste, laengste = tr.spanne(k)
+    assert laengste * anteil >= 2.0, "Das laengste Programm schlaegt keine Buchung"
+    assert kuerzeste * anteil >= 1.0, "Das kuerzeste Programm bringt nichts"
+
+
+def test_der_zuwachs_folgt_der_formel(k) -> None:
+    """Tage mal Anteil mal Tageszuwachs, auf ganze Kaufschritte ab."""
+    anteil = k.wert("zeitmodell", "training", "tag_anteil")
     schritt = k.wert("zeitmodell", "kaufschritt")
-    erwartet = int(10 * einzeln * anteil) // schritt * schritt
-    assert zehn == erwartet
+    for wert in MESSWERTE:
+        einzeln = kern_entwicklung.tageszuwachs(k, wert)
+        for tage in range(1, 11):
+            erwartet = int(tage * einzeln * anteil) // schritt * schritt
+            assert tr.zuwachs(k, wert, tage) == erwartet
 
 
 def test_der_zuwachs_waechst_mit_den_tagen(k) -> None:

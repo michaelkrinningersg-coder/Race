@@ -12,9 +12,17 @@ dessen, was eine Einzelbuchung braechte:
 
     Zuwachs(n) = n * tag_anteil * Tageszuwachs
 
-Zehn Tage ergeben damit anderthalb Buchungen. Das ist der Anreiz - ohne
-ihn waere das Programm strikt schlechter als die sichere Einzelbuchung,
-denn es belegt denselben Platz, bringt dasselbe und kann abbrechen.
+Bei ``tag_anteil = 0,20`` sind fuenf Tage eine Buchung und zehn Tage
+zwei. Das ist der Anreiz - ohne ihn waere das Programm strikt schlechter
+als die sichere Einzelbuchung, denn es belegt denselben Platz, bringt
+dasselbe und kann abbrechen.
+
+Die Zahl haengt dabei an der Rundung, nicht am Bauchgefuehl: Jeder
+Zuwachs faellt auf ganze Kaufschritte (GDD 9), und der Tageszuwachs ist
+fuer jeden Wert unter 2000 genau ein solcher Schritt. Der Anteil muss
+also erst einen vollen Schritt fuellen, bevor er sichtbar wird - unter
+``2 / max_tage`` ist die Mechanik tot. ``test_training.py`` haelt das
+als Regel fest, damit die Zahl nicht still darunter rutscht.
 
 **Nie ueber ein Rennwochenende hinweg** (Entscheidung des
 Auftraggebers). Zwischen zwei Rennen liegen genau zehn nutzbare Tage,

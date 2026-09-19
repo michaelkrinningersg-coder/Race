@@ -1033,10 +1033,37 @@ sichtbar wird:
 
 Eine Einzelbuchung bringt 10 und belegt den Platz ebenfalls bis zum
 Rennen. Unter 0,20 ist ein Programm damit nie besser als sie - bei 0,15
-braechten fuenf Tage gar nichts und zehn Tage genau dasselbe. Erst bei
-0,20 traegt ein Tag ein Fuenftel einer Buchung: fuenf Tage sind eine,
-zehn Tage sind zwei, und weil der Platz nach dem Programm frei wird,
-passen in einen Zyklus zwei Fuenftageprogramme.
+braechten fuenf Tage gar nichts und zehn Tage genau dasselbe. Der Wert
+steht deshalb auf **0,20**: Ein Tag traegt ein Fuenftel einer Buchung,
+fuenf Tage sind eine, zehn sind zwei. Weil der Platz nach dem Programm
+frei wird, passen zwei Fuenftageprogramme in einen Zyklus.
+
+Drei Tests in `test_training.py` halten das fest - nicht die Zahl,
+sondern die Regel: Das laengste Programm muss die Einzelbuchung
+schlagen, das kuerzeste muss ueberhaupt etwas bringen, und
+`max_tage * tag_anteil` muss zwei Kaufschritte fuellen. Gemessen wird
+dabei **auch bei Wert 0**, wo der Spieler startet (GDD 1) und die
+Rundung am haertesten zuschlaegt. Ein frueherer Test mass nur bei
+50.000; dort betraegt der Tageszuwachs 500, die Rundung faellt nicht ins
+Gewicht, und 0,15 sah brauchbar aus.
+
+##### Die Treppe am Anfang
+
+Solange der Tageszuwachs genau ein Kaufschritt ist, zahlt nicht jeder
+zusaetzliche Tag:
+
+| Tage | bei Wert 0 | bei Wert 2.000 | bei Wert 50.000 |
+| --- | --- | --- | --- |
+| 5 | +10 | +20 | +500 |
+| 7 | +10 | +20 | +700 |
+| 9 | +10 | +30 | +900 |
+| 10 | +20 | +40 | +1.000 |
+
+Am Anfang lohnen sich deshalb nur die beiden Enden der Spanne - fuenf
+Tage oder zehn, alles dazwischen verschenkt Vorrat. Je hoeher der Wert,
+desto feiner wird die Treppe; ab etwa 5.000 zahlt jeder einzelne Tag.
+Das ist keine eigene Regel, sondern dieselbe +10-Granularitaet aus
+GDD 9, die auch den Kauf bestimmt.
 
 ### Was ein Upgrade kostet
 

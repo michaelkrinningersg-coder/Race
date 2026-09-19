@@ -2312,9 +2312,42 @@ bei `0,10`, nur versteckter.
 ein Fünftel einer Buchung, fünf Tage sind eine, zehn sind zwei. Weil der
 Platz nach dem Programm frei wird, passen zwei Fünftageprogramme in einen
 Zyklus — die Entwicklung des Spielers verdoppelt sich damit gegenüber
-heute, wenn er die Tage voll nutzt. Das ist ein Balancing-Eingriff und
-deshalb nicht meine Entscheidung; der Code liegt fertig daneben und
-braucht nur die Zahl.
+heute, wenn er die Tage voll nutzt.
+
+**Entscheidung des Auftraggebers: „Mach es tragbar" — `tag_anteil =
+0,20`.**
+
+**Warum der bestehende Test das nicht gefunden hat.** Es gab einen Test
+namens `test_zehn_tage_bringen_anderthalb_buchungen`, und er war grün.
+Er maß bei Wert 50.000 — dort ist der Tageszuwachs 500, die Abrundung auf
+Kaufschritte fällt nicht ins Gewicht, und 0,15 sah brauchbar aus. Beim
+Anfängerwert 0, wo der Spieler tatsächlich startet (GDD 1), ist der
+Tageszuwachs genau *ein* Kaufschritt, und dort frisst die Rundung alles.
+Ein Test, der nur an der bequemen Stelle misst, ist kein Test.
+
+Er ist jetzt durch drei ersetzt, die nicht die Zahl prüfen, sondern die
+**Regel**, und das über eine Reihe von Werten einschließlich der Null:
+
+1. Das längste Programm muss die Einzelbuchung schlagen.
+2. Das kürzeste muss überhaupt etwas bringen.
+3. `max_tage * tag_anteil` muss zwei Kaufschritte füllen,
+   `min_tage * tag_anteil` einen.
+
+Gegengeprobt: Mit `tag_anteil = 0,15` fallen alle drei, mit Meldungen,
+die die Ursache benennen („Bei Wert 0 bringt ein Programm über 10 Tage
+10, eine Einzelbuchung 10 — niemand würde es buchen"). Damit kann die
+Zahl nicht mehr still unter die Schwelle rutschen. Dieselbe Lehre wie bei
+Punkt 79 und Punkt 77: Ein Test, der einen Balancing-Wert fest verdrahtet
+oder nur an einer bequemen Stelle misst, schützt nichts.
+
+**Eine Treppe bleibt.** Solange der Tageszuwachs genau ein Kaufschritt
+ist, zahlt nicht jeder zusätzliche Tag — bei Wert 0 bringen fünf bis neun
+Tage alle dasselbe (+10), erst der zehnte hebt auf +20. Am Anfang lohnen
+sich also nur die beiden Enden der Spanne. Je höher der Wert, desto
+feiner die Treppe; ab etwa 5.000 zahlt jeder einzelne Tag. Das ist keine
+eigene Regel, sondern dieselbe +10-Granularität aus GDD 9, die auch den
+Kauf bestimmt — und deshalb nichts, was ich ohne Rückfrage glätten
+würde.
 
 ### 85. Das Qualifying als abspielbarer Zeitenmonitor
 

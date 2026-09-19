@@ -185,11 +185,27 @@ kaufschritt = 10
 # angezeigt, aber nie verbraucht. Ein Programm macht sie zur Waehrung.
 #
 # Was ein einzelner Trainingstag bringt, als Anteil dessen, was eine
-# Einzelbuchung braechte. Zehn Tage ergeben damit anderthalb Buchungen -
-# das ist der Anreiz, den Block zu wagen. Ohne ihn waere das Programm
-# strikt schlechter als die sichere Einzelbuchung: gleicher Ertrag,
-# gleicher belegter Platz, dazu das Abbruchrisiko.
-tag_anteil = 0.15
+# Einzelbuchung braechte. Ein Fuenftel - fuenf Tage sind damit eine
+# Buchung, zehn Tage sind zwei.
+#
+# Die Zahl haengt an der Rundung, nicht am Bauchgefuehl: Jeder Zuwachs
+# wird auf ganze Kaufschritte abgerundet (GDD 9, kaufschritt = 10), und
+# der Tageszuwachs ist fuer jeden Wert unter 2000 genau diese 10. Der
+# Anteil muss also erst einen vollen Schritt fuellen, bevor er ueberhaupt
+# sichtbar wird. Gemessen:
+#
+#   Tage |  bei 0,15  |  bei 0,20
+#      5 | 7,5  ->  0 | 10,0 -> 10
+#      7 | 10,5 -> 10 | 14,0 -> 10
+#     10 | 15,0 -> 10 | 20,0 -> 20
+#
+# Eine Einzelbuchung bringt 10 und belegt den Platz ebenfalls bis zum
+# Rennen. Unter 0,20 ist ein Programm damit nie besser als sie - bei 0,15
+# braechten fuenf Tage gar nichts und zehn Tage genau dasselbe, bei
+# gleichem Platz und zusaetzlichem Abbruchrisiko. Erst ab hier traegt die
+# Mechanik. test_training.py haelt genau das fest, damit die Zahl nicht
+# still unter die Schwelle rutschen kann.
+tag_anteil = 0.20
 # Ein Programm dauert mindestens so viele und hoechstens so viele
 # nutzbare Tage. Zehn ist zugleich die Zahl der nutzbaren Tage zwischen
 # zwei Rennen - ein Programm reicht also nie ueber ein Rennwochenende
