@@ -2315,3 +2315,50 @@ Zyklus — die Entwicklung des Spielers verdoppelt sich damit gegenüber
 heute, wenn er die Tage voll nutzt. Das ist ein Balancing-Eingriff und
 deshalb nicht meine Entscheidung; der Code liegt fertig daneben und
 braucht nur die Zahl.
+
+### 85. Das Qualifying als abspielbarer Zeitenmonitor
+
+Gewünscht: das Qualifying „nur als Zeitenmonitor abspielbar von der
+Geschwindigkeit her", nach dem Laden auf Anfang, dieselben
+Abspielgeschwindigkeiten wie im Rennen, die Zeit läuft live mit, sobald
+ein Fahrer auf seiner schnellen Runde ist, die Fahrer sortieren sich live
+ein — Splits **rot** wenn langsamer als der derzeitige Führende, **grün**
+wenn schneller, **lila** beim absolut besten Split.
+
+**Der Kern brauchte keine neue Rechnung.** Jede `Fahrt` trug schon
+`beginn_ms`, `ziel_ms`, `zeit_ms` und die Sektorzeiten — daraus fallen
+`runde_ab_ms` und `sektorenden_ms` einfach ab. Neu sind nur die Abfragen:
+`lage_zu()` mit den vier Lagen (Box, Aufwärmrunde, Schnelle Runde, Im
+Ziel), `fuehrender_zu()`, `splitvergleich()` und `beste_splits_zu()`.
+
+**Zwei Entscheidungen des Auftraggebers:**
+
+1. Der Vergleich gegen den Führenden ist **wie im Fernsehen** — er friert
+   im Moment des Überfahrens ein und dreht sich nicht mehr um.
+2. Die **Startaufstellung** füllt sich erst am Ende der Session.
+
+Daraus folgt, dass die beiden Farbgruppen verschiedene Zeitpunkte messen:
+Lila ist Live-Stand und wandert weiter, Grün und Rot stehen fest. Das ist
+kein Widerspruch, sondern genau das Bild einer Übertragung — nur muss man
+es einmal ausschreiben, sonst liest es sich wie ein Fehler.
+
+**Ein Rundungsfall, derselbe wie bei der idealen Runde.** Sektorzeiten
+und Rundenzeit runden getrennt auf ganze Millisekunden (GDD 15), ihre
+Summe trifft die Rundenzeit also nicht zwingend. Ohne Festlegung wäre ein
+Auto für einen Takt im Ziel, ohne seinen letzten Split gesetzt zu haben;
+deshalb endet der letzte Sektor per Definition im Ziel.
+
+**Drei Tests hingen am alten Regler.** `test_ui_rennen.py` prüfte die
+Live-Einsortierung über `_regler.setValue()` und erwartete die fertige
+Aufstellung direkt nach dem Laden — beides gibt es nicht mehr. Sie prüfen
+jetzt dasselbe über die Sessionuhr. Dass die Tabelle immer alle dreißig
+Autos zeigt (Punkt 64), heißt dabei: gezählt wird, wer schon eine
+Position hat, nicht wie viele Zeilen dastehen.
+
+**Ein eigener Testfehler:** Mein erster Beweis, dass der eingefrorene
+Vergleich etwas anderes ist als der gegen die Pole, lief über einen Seed
+— und der lieferte ihn nicht. In der gemessenen Session fuhr der Erste
+zugleich die Pole, weil das Wetter nach seiner Runde umschlug; damit war
+der Führende immer die Pole und der Unterschied unsichtbar. Der Fall
+steht jetzt als von Hand gebaute Session im Test, die ihn garantiert
+enthält.

@@ -365,7 +365,8 @@ einem Reiter:
 1. **Vorschau** - Renntag, Strecke, Charakter, Laenge, Rundenzahl und der
    Tabellenstand vor dem Rennen. Vor Rennen 1 gibt es noch keine Tabelle;
    dann steht dort das Feld nach Staerke.
-2. **Qualifying** - die Session der eigenen Liga, Fahrt fuer Fahrt (GDD 4)
+2. **Qualifying** - die Session der eigenen Liga als Zeitenmonitor,
+   abspielbar wie das Rennen (GDD 4)
 3. **Rennen** - auf die gefahrene Aufstellung, abspielbar im Zeitraffer.
    Es startet in **Echtzeit** (1x) und laeuft von selbst los, sobald man
    den Reiter aufschlaegt; die Stufen 1x bis 100x lassen sich waehrend
@@ -389,6 +390,64 @@ wochenende.fahre_qualifying()   # ab hier springt der Kalender auf den Renntag
 wochenende.fahre_rennen()       # auf die Aufstellung des Qualifyings
 wochenende.schliesse_ab()       # die 19 anderen Ligen, dann verbuchen
 ```
+
+#### Das Qualifying als Uebertragung
+
+Bis Punkt 85 stand ueber der Qualifyingseite ein Regler "Gefahrene
+Laeufe": Man konnte die Session laufweise durchblaettern, aber nicht
+zusehen. Jetzt traegt sie dieselbe Wiedergabeleiste wie das Rennen -
+Start, Anfang, Zeitraffer 1x bis 100x, Sofortergebnis, laufende Uhr -
+und steht nach dem Laden auf Anfang.
+
+Der Kern rechnet dafuer nichts Neues. Jede `Fahrt` trug schon
+`beginn_ms`, `ziel_ms`, `zeit_ms` und die Sektorzeiten; daraus ergibt
+sich alles Weitere:
+
+```python
+fahrt.runde_ab_ms       # ziel_ms - zeit_ms, also nach der Aufwaermrunde
+fahrt.sektorenden_ms    # wann die einzelnen Splits fallen
+session.lage_zu(t)      # was jedes Auto gerade macht, live sortiert
+```
+
+`lage_zu()` kennt vier Lagen - Box, Aufwaermrunde, Schnelle Runde, Im
+Ziel - und sortiert die beendeten Runden nach Zeit nach oben; darunter
+stehen die, die gerade unterwegs sind, dann die Aufwaermrunden, zuletzt
+die Box. Es stehen immer alle dreissig Autos da, damit die Tabelle beim
+Abspielen nicht springt (Punkt 64). Wer faehrt, hat noch keine Position -
+seine Rundenzeit laeuft kursiv mit, bis sie im Ziel steht.
+
+Der letzte Sektor endet dabei per Definition im Ziel: Sektorzeiten und
+Rundenzeit runden getrennt auf ganze Millisekunden (GDD 15), ihre Summe
+trifft die Rundenzeit also nicht zwingend. Ohne diese Festlegung waere
+ein Auto fuer einen Takt im Ziel, ohne seinen letzten Split gesetzt zu
+haben - derselbe Rundungsfall wie bei der idealen Runde im Rennen.
+
+##### Warum Lila mitlaeuft und Gruen und Rot einfrieren
+
+Die Splits sind dreifarbig, und die beiden Farbgruppen messen bewusst
+verschieden:
+
+| Farbe | Vergleich | Zeitpunkt |
+| --- | --- | --- |
+| Lila | schnellster Split des Feldes | **jetzt** - wandert weiter |
+| Gruen / Rot | gegen den Fuehrenden | **damals** - friert ein |
+
+Entscheidung des Auftraggebers: wie im Fernsehen. Gruen und Rot sagen,
+wie der Split stand, **als er fiel** - gemessen gegen den, der in dem
+Moment die schnellste stehende Runde hatte. Die Farbe dreht sich nicht
+mehr um, wenn spaeter jemand schneller ist; sonst waere die Tabelle am
+Ende nur noch eine Tabelle gegen die Pole, und die frueh gefahrenen
+Runden haetten ihre Geschichte verloren. Lila dagegen ist Live-Stand: Es
+haelt immer genau einer je Sektor, und es wandert in dem Moment weiter,
+in dem es jemand unterbietet.
+
+Wer als Erster faehrt, bekommt kein Gruen und kein Rot - es gibt noch
+niemanden, gegen den zu messen waere. Eine laufende Runde fuehrt
+ausserdem nie: Solange sie nicht steht, ist sie mit nichts vergleichbar.
+
+Die **Startaufstellung fuers Rennen** rechts fuellt sich erst, wenn der
+Letzte durch ist (ebenfalls Entscheidung des Auftraggebers). Vorher
+stuende dort das Ergebnis, auf das die Uebertragung gerade zulaeuft.
 
 #### Warum der Aufbau nichts bewegt
 

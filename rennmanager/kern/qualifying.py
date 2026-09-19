@@ -24,6 +24,7 @@ Gewicht nur fuer die gezeitete Runde").
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from enum import Enum
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -42,6 +43,29 @@ if TYPE_CHECKING:  # pragma: no cover
     from rennmanager.konfiguration import Konfiguration
 
 
+class Lage(Enum):
+    """Was ein Auto zu einem Zeitpunkt der Session macht (Punkt 85).
+
+    Die Session laeuft ueberlappend: Waehrend der eine schon im Ziel ist,
+    waermt der naechste erst auf und der uebernaechste steht noch. Fuer
+    die Uebertragung braucht jede dieser vier Lagen eine eigene Zeile.
+    """
+
+    WARTET = "wartet"
+    AUFWAERMUNG = "aufwaermung"
+    SCHNELLE_RUNDE = "schnelle_runde"
+    ZIEL = "ziel"
+
+    @property
+    def bezeichnung(self) -> str:
+        return {
+            Lage.WARTET: "Box",
+            Lage.AUFWAERMUNG: "Aufwaermrunde",
+            Lage.SCHNELLE_RUNDE: "Schnelle Runde",
+            Lage.ZIEL: "Im Ziel",
+        }[self]
+
+
 @dataclass(frozen=True)
 class Fahrt:
     """Die gezeitete Runde eines Autos."""
@@ -58,6 +82,54 @@ class Fahrt:
     # Punkt 39: Womit die Runde gefahren wurde. Im Qualifying keine Wahl,
     # sondern eine Regel - deshalb steht das Kuerzel hier nur zur Anzeige.
     mischung: str = ""
+
+    @property
+    def runde_ab_ms(self) -> int:
+        """Wann die gezeitete Runde beginnt.
+
+        ``beginn_ms`` ist die Ausfahrt aus der Box, davor liegen noch die
+        Aufwaermrunden. Die Uhr der schnellen Runde laeuft erst ab hier.
+        """
+        return self.ziel_ms - self.zeit_ms
+
+    @property
+    def sektorenden_ms(self) -> tuple[int, ...]:
+        """Wann die einzelnen Sektoren der gezeiteten Runde fertig sind.
+
+        Sektorzeiten und Rundenzeit werden getrennt auf ganze
+        Millisekunden gerundet (GDD 15), ihre Summe muss die Rundenzeit
+        also nicht auf die Millisekunde treffen. Der letzte Sektor endet
+        deshalb per Definition im Ziel - die Runde ist vorbei, wenn sie
+        vorbei ist, nicht wenn die Teilsummen es sagen.
+        """
+        enden = []
+        uhr = self.runde_ab_ms
+        for wert in self.sektoren_ms:
+            uhr += wert
+            enden.append(uhr)
+        if enden:
+            enden[-1] = self.ziel_ms
+        return tuple(enden)
+
+
+@dataclass(frozen=True)
+class Stand:
+    """Was ein Auto zu einem Zeitpunkt der Session macht (Punkt 85).
+
+    :param sektoren: wie viele Sektoren der gezeiteten Runde schon fertig
+        sind - im Ziel alle, in der Box keiner
+    :param zeit_ms: die laufende Rundenzeit, im Ziel die endgueltige;
+        ``None``, solange das Auto noch nicht auf der schnellen Runde ist
+    """
+
+    fahrt: Fahrt
+    lage: Lage
+    sektoren: int
+    zeit_ms: int | None
+
+    @property
+    def ist_fertig(self) -> bool:
+        return self.lage is Lage.ZIEL
 
 
 @dataclass(frozen=True)
@@ -91,6 +163,96 @@ class Qualifying:
 
     def startplatz(self, teilnehmer: int) -> int:
         return self.aufstellung.index(teilnehmer) + 1
+
+    # -- Uebertragung (Punkt 85) -------------------------------------------
+    def lage_zu(self, zeit_ms: float) -> tuple[Stand, ...]:
+        """Was jedes Auto zum Zeitpunkt ``zeit_ms`` macht.
+
+        Sortiert wie eine Zeitentafel: zuerst die beendeten Runden nach
+        Zeit, darunter die, die gerade unterwegs sind - wer weiter auf
+        seiner Runde ist, steht hoeher -, dann die Aufwaermrunden und
+        zuletzt, wer noch in der Box steht. Es stehen immer alle Autos
+        da, damit die Tabelle beim Abspielen nicht springt (Punkt 64).
+        """
+        staende = [self._stand_zu(fahrt, zeit_ms) for fahrt in self.fahrten]
+        gruppe = {Lage.ZIEL: 0, Lage.SCHNELLE_RUNDE: 1, Lage.AUFWAERMUNG: 2, Lage.WARTET: 3}
+        return tuple(
+            sorted(
+                staende,
+                key=lambda s: (
+                    gruppe[s.lage],
+                    s.zeit_ms if s.lage is Lage.ZIEL else 0,
+                    -s.sektoren,
+                    s.zeit_ms if s.lage is Lage.SCHNELLE_RUNDE else 0,
+                    s.fahrt.reihenfolge,
+                ),
+            )
+        )
+
+    @staticmethod
+    def _stand_zu(fahrt: Fahrt, zeit_ms: float) -> Stand:
+        if zeit_ms >= fahrt.ziel_ms:
+            return Stand(fahrt, Lage.ZIEL, len(fahrt.sektoren_ms), fahrt.zeit_ms)
+        if zeit_ms < fahrt.beginn_ms:
+            return Stand(fahrt, Lage.WARTET, 0, None)
+        if zeit_ms < fahrt.runde_ab_ms:
+            return Stand(fahrt, Lage.AUFWAERMUNG, 0, None)
+        fertig = sum(1 for ende in fahrt.sektorenden_ms if ende <= zeit_ms)
+        return Stand(
+            fahrt, Lage.SCHNELLE_RUNDE, fertig, int(zeit_ms - fahrt.runde_ab_ms)
+        )
+
+    def fuehrender_zu(self, zeit_ms: float, ohne: Fahrt | None = None) -> Fahrt | None:
+        """Die schnellste bis dahin **beendete** Runde.
+
+        Eine laufende Runde fuehrt nicht: Solange sie nicht steht, ist
+        sie mit nichts vergleichbar.
+        """
+        fertig = [
+            f for f in self.fahrten if f.ziel_ms <= zeit_ms and f is not ohne
+        ]
+        return min(fertig, key=lambda f: f.zeit_ms) if fertig else None
+
+    def splitvergleich(self, fahrt: Fahrt, nummer: int) -> int | None:
+        """Wie ein Split gegen den Fuehrenden stand, **als er fiel**.
+
+        Entscheidung des Auftraggebers: wie im Fernsehen. Der Vergleich
+        friert im Moment des Ueberfahrens ein und dreht sich nicht mehr,
+        wenn spaeter jemand schneller ist. Verglichen wird der einzelne
+        Sektor gegen denselben Sektor des Fuehrenden.
+
+        ``None``, solange noch niemand sonst eine Runde stehen hat - dann
+        gibt es nichts, wogegen zu messen waere.
+        """
+        fuehrt = self.fuehrender_zu(fahrt.sektorenden_ms[nummer], ohne=fahrt)
+        if fuehrt is None:
+            return None
+        return fahrt.sektoren_ms[nummer] - fuehrt.sektoren_ms[nummer]
+
+    def beste_splits_zu(self, zeit_ms: float) -> tuple[int | None, ...]:
+        """Wer je Sektor bis dahin den schnellsten Split hat.
+
+        Gibt je Sektor den Teilnehmerindex zurueck, ``None``, solange
+        keiner gefahren ist. Anders als der Vergleich gegen den
+        Fuehrenden laeuft das mit: Lila haelt immer genau einer je
+        Sektor, und es wandert weiter, sobald es jemand unterbietet.
+        """
+        if not self.fahrten:
+            return ()
+        halter: list[int | None] = []
+        for nummer in range(len(self.fahrten[0].sektoren_ms)):
+            gefahren = [
+                f for f in self.fahrten if f.sektorenden_ms[nummer] <= zeit_ms
+            ]
+            if not gefahren:
+                halter.append(None)
+                continue
+            bester = min(
+                gefahren,
+                key=lambda f: (f.sektoren_ms[nummer], f.sektorenden_ms[nummer]),
+            )
+            halter.append(bester.teilnehmer)
+        return tuple(halter)
 
 
 def qualifyingstaerke(konfiguration: Konfiguration, teilnehmer: Teilnehmer) -> float:

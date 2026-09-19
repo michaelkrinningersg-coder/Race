@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from rennmanager import konfiguration as kf
@@ -200,3 +202,189 @@ def test_staerkere_autos_stehen_meist_vorn(k, strecke, feld) -> None:
         # Teilnehmer 0 ist das staerkste Auto des Feldes.
         plaetze.append(session.startplatz(0))
     assert sum(plaetze) / len(plaetze) < len(feld) / 3
+
+
+def _kunst_session(session: ql.Qualifying) -> ql.Qualifying:
+    """Eine Session aus vier von Hand gesetzten Fahrten.
+
+    Vier Autos, die nacheinander ins Ziel kommen und sich dabei
+    gegenseitig ueberholen - das braucht die Uebertragung, um zu zeigen,
+    dass der eingefrorene Vergleich etwas anderes ist als der gegen die
+    Pole. Die Reihenfolge der Sektoren ist so gelegt, dass der Dritte
+    seine Runde faehrt, waehrend noch der Erste fuehrt.
+    """
+    entwurf = (
+        # (Sektorzeit, Zielzeit) - der Erste ist langsam und fuehrt trotzdem
+        (31_000, 200_000),
+        (30_000, 400_000),
+        (30_500, 350_000),
+        (29_000, 500_000),
+    )
+    fahrten = tuple(
+        ql.Fahrt(
+            teilnehmer=nummer,
+            reihenfolge=nummer + 1,
+            beginn_ms=ziel - 8 * sektor,
+            ziel_ms=ziel,
+            zeit_ms=4 * sektor,
+            sektoren_ms=(sektor,) * 4,
+            tagesform=1.0,
+            zustand="Trocken",
+            grip=1.0,
+        )
+        for nummer, (sektor, ziel) in enumerate(entwurf)
+    )
+    aufstellung = tuple(
+        f.teilnehmer for f in sorted(fahrten, key=lambda f: f.zeit_ms)
+    )
+    return replace(
+        session,
+        fahrten=fahrten,
+        aufstellung=aufstellung,
+        dauer_ms=max(f.ziel_ms for f in fahrten),
+    )
+
+
+# -- Uebertragung (Punkt 85) ------------------------------------------------
+def test_die_gezeitete_runde_beginnt_nach_der_aufwaermrunde(session) -> None:
+    """Zwischen Ausfahrt und schneller Runde liegt die Aufwaermrunde."""
+    for fahrt in session.fahrten:
+        assert fahrt.beginn_ms < fahrt.runde_ab_ms < fahrt.ziel_ms
+        assert fahrt.ziel_ms - fahrt.runde_ab_ms == fahrt.zeit_ms
+
+
+def test_der_letzte_sektor_endet_im_ziel(session) -> None:
+    """Sektoren und Rundenzeit runden getrennt - das Ziel entscheidet.
+
+    Sonst laege das Ende des letzten Sektors ein bis zwei Millisekunden
+    neben dem Ziel, und ein Auto waere fuer einen Takt im Ziel, ohne
+    seinen letzten Sektor gesetzt zu haben.
+    """
+    for fahrt in session.fahrten:
+        enden = fahrt.sektorenden_ms
+        assert len(enden) == len(fahrt.sektoren_ms)
+        assert enden[-1] == fahrt.ziel_ms
+        assert list(enden) == sorted(enden)
+        assert enden[0] > fahrt.runde_ab_ms
+
+
+def test_die_lage_durchlaeuft_alle_vier_zustaende(session) -> None:
+    fahrt = session.fahrten[0]
+    lagen = [
+        session._stand_zu(fahrt, fahrt.beginn_ms - 1).lage,
+        session._stand_zu(fahrt, fahrt.beginn_ms).lage,
+        session._stand_zu(fahrt, fahrt.runde_ab_ms).lage,
+        session._stand_zu(fahrt, fahrt.ziel_ms).lage,
+    ]
+    assert lagen == [ql.Lage.WARTET, ql.Lage.AUFWAERMUNG, ql.Lage.SCHNELLE_RUNDE, ql.Lage.ZIEL]
+
+
+def test_am_anfang_hat_noch_niemand_eine_zeit(session, feld) -> None:
+    """Zum Sessionbeginn faehrt hoechstens der Erste seine Aufwaermrunde."""
+    stand = session.lage_zu(0)
+    assert len(stand) == len(feld)
+    assert all(s.zeit_ms is None for s in stand)
+    unterwegs = [s for s in stand if s.lage is not ql.Lage.WARTET]
+    assert len(unterwegs) == 1
+    assert unterwegs[0].lage is ql.Lage.AUFWAERMUNG
+
+
+def test_am_ende_steht_das_feld_in_der_reihenfolge_der_aufstellung(session) -> None:
+    stand = session.lage_zu(session.dauer_ms)
+    assert all(s.ist_fertig for s in stand)
+    assert tuple(s.fahrt.teilnehmer for s in stand) == session.aufstellung
+
+
+def test_die_zeit_laeuft_auf_der_schnellen_runde_mit(session) -> None:
+    fahrt = session.fahrten[0]
+    mitte = fahrt.runde_ab_ms + fahrt.zeit_ms // 2
+    stand = session._stand_zu(fahrt, mitte)
+    assert stand.lage is ql.Lage.SCHNELLE_RUNDE
+    assert stand.zeit_ms == fahrt.zeit_ms // 2
+    assert 0 < stand.sektoren < len(fahrt.sektoren_ms)
+
+
+def test_fertige_stehen_ueber_den_laufenden(session) -> None:
+    """Wer seine Runde stehen hat, steht ueber jedem, der noch faehrt."""
+    fahrt = session.fahrten[3]
+    stand = session.lage_zu(fahrt.runde_ab_ms + 1)
+    lagen = [s.lage for s in stand]
+    gruppen = [ql.Lage.ZIEL, ql.Lage.SCHNELLE_RUNDE, ql.Lage.AUFWAERMUNG, ql.Lage.WARTET]
+    folge = [gruppen.index(lage) for lage in lagen]
+    assert folge == sorted(folge)
+    assert ql.Lage.ZIEL in lagen and ql.Lage.WARTET in lagen
+
+
+def test_der_erste_fahrer_hat_keinen_vergleich(session) -> None:
+    """Wer als Erster faehrt, misst sich gegen niemanden."""
+    erster = session.fahrten[0]
+    assert all(
+        session.splitvergleich(erster, nummer) is None
+        for nummer in range(len(erster.sektoren_ms))
+    )
+
+
+def test_der_vergleich_friert_im_moment_des_ueberfahrens_ein(session) -> None:
+    """Entscheidung des Auftraggebers: wie im Fernsehen.
+
+    Gemessen wird gegen den, der in dem Moment vorn lag - nicht gegen
+    den, der am Ende der Session vorn liegt. Beides faellt auseinander,
+    sobald jemand den damaligen Fuehrenden unterbietet, ohne die Pole zu
+    erreichen. Die gebaute Session zeigt genau diesen Fall; ein Seed
+    liefert ihn nicht zuverlaessig, weil das Wetter der Session ihn
+    verdecken kann.
+    """
+    kunst = _kunst_session(session)
+    langsam, _, mittel, schnell = kunst.fahrten
+    # Der Dritte faehrt seine Sektoren, waehrend noch der Erste fuehrt.
+    assert kunst.fuehrender_zu(mittel.sektorenden_ms[0], ohne=mittel) is langsam
+    assert kunst.pole is schnell
+
+    eingefroren = kunst.splitvergleich(mittel, 0)
+    gegen_pole = mittel.sektoren_ms[0] - schnell.sektoren_ms[0]
+    assert eingefroren < 0, "schneller als der damalige Fuehrende"
+    assert gegen_pole > 0, "langsamer als die spaetere Pole"
+
+
+def test_der_vergleich_misst_gegen_den_fuehrenden_zu_dem_zeitpunkt(session) -> None:
+    for fahrt in session.fahrten:
+        for nummer in range(len(fahrt.sektoren_ms)):
+            zeit = fahrt.sektorenden_ms[nummer]
+            fuehrt = session.fuehrender_zu(zeit, ohne=fahrt)
+            wert = session.splitvergleich(fahrt, nummer)
+            if fuehrt is None:
+                assert wert is None
+            else:
+                assert wert == fahrt.sektoren_ms[nummer] - fuehrt.sektoren_ms[nummer]
+
+
+def test_eine_laufende_runde_fuehrt_nicht(session) -> None:
+    """Erst wenn die Runde steht, ist sie vergleichbar."""
+    erster = session.fahrten[0]
+    assert session.fuehrender_zu(erster.ziel_ms - 1) is None
+    assert session.fuehrender_zu(erster.ziel_ms) is erster
+
+
+def test_lila_haelt_je_sektor_genau_einer(session) -> None:
+    stand = session.beste_splits_zu(session.dauer_ms)
+    assert len(stand) == len(session.fahrten[0].sektoren_ms)
+    for nummer, halter in enumerate(stand):
+        bestzeit = min(f.sektoren_ms[nummer] for f in session.fahrten)
+        fahrt = next(f for f in session.fahrten if f.teilnehmer == halter)
+        assert fahrt.sektoren_ms[nummer] == bestzeit
+
+
+def test_lila_wandert_beim_abspielen_weiter(session) -> None:
+    """Der beste Split ist Live-Stand, kein Endergebnis.
+
+    Frueh in der Session haelt ihn jemand anderes als am Ende - sonst
+    waere die Farbe schon beim Laden entschieden.
+    """
+    frueh = session.beste_splits_zu(session.fahrten[2].ziel_ms)
+    spaet = session.beste_splits_zu(session.dauer_ms)
+    assert any(a is not None for a in frueh)
+    assert frueh != spaet
+
+
+def test_ohne_gefahrenen_sektor_gibt_es_kein_lila(session) -> None:
+    assert all(halter is None for halter in session.beste_splits_zu(0))

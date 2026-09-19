@@ -208,36 +208,57 @@ def test_qualifyingseite_faehrt_eine_session(qtbot, konfig: kf.Konfiguration) ->
 
 
 def test_qualifying_sortiert_live_ein(qtbot, konfig: kf.Konfiguration) -> None:
-    """GDD 4: Live-Einsortierung ins Ranking."""
+    """GDD 4: Live-Einsortierung ins Ranking.
+
+    Punkt 85: Getrieben wird das jetzt von der Sessionuhr, nicht mehr von
+    einem Regler "Gefahrene Laeufe". Die Tabelle zeigt immer alle Autos -
+    gezaehlt wird deshalb, wer schon eine Position hat.
+    """
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
     seite = gefahrenes_qualifying(fenster)
-
+    session = seite.session
     autos = konfig.wert("rennen", "autos")
-    seite._regler.setValue(1)
-    assert seite._rangliste.topLevelItemCount() == 1
+
+    def mit_position() -> int:
+        liste = seite._rangliste
+        return sum(
+            1
+            for i in range(liste.topLevelItemCount())
+            if liste.topLevelItem(i).text(0)
+        )
+
+    assert seite._rangliste.topLevelItemCount() == autos
+    seite._springe(0)
+    assert mit_position() == 0
+    seite._springe(session.fahrten[0].ziel_ms)
+    assert mit_position() == 1
     mitte = max(2, autos // 2)
-    seite._regler.setValue(mitte)
-    assert seite._rangliste.topLevelItemCount() == mitte
-    seite._regler.setValue(seite._regler.maximum())
-    assert seite._rangliste.topLevelItemCount() == konfig.wert("rennen", "autos")
+    seite._springe(session.fahrten[mitte - 1].ziel_ms)
+    assert mit_position() == mitte
+    seite._sofort.click()
+    assert mit_position() == autos
 
 
 def test_qualifying_zeigt_aufstellung_und_wetter(qtbot, konfig: kf.Konfiguration) -> None:
+    """Das Wetter steht sofort, die Aufstellung erst am Ende (Punkt 85)."""
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
     seite = gefahrenes_qualifying(fenster)
 
+    assert seite._wetterfeld.rowCount() > 0
+    assert seite._aufstellung.topLevelItemCount() == 0
+
+    seite._sofort.click()
     assert seite._aufstellung.topLevelItemCount() == konfig.wert("rennen", "autos")
     assert seite._aufstellung.topLevelItem(0).text(0) == "1"
-    assert seite._wetterfeld.rowCount() > 0
 
 
 def test_qualifying_rueckstand_nur_ab_platz_zwei(qtbot, konfig: kf.Konfiguration) -> None:
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
     seite = gefahrenes_qualifying(fenster)
-    seite._regler.setValue(seite._regler.maximum())
+    seite._sofort.click()
 
     liste = seite._rangliste
     assert liste.topLevelItem(0).text(3) == ""
