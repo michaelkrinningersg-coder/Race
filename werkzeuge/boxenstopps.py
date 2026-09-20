@@ -41,6 +41,15 @@ from rennmanager.kern import wetter as kern_wetter
 from rennmanager.kern.zufall import Seedquelle
 
 LIGA = 1
+# Die Liga, in der der Spieler faehrt - **nicht** die gemessene. Ohne
+# Karriere haben seine vier Fahrer alle Eigenschaften auf null, und ein
+# Auto mit Gesamtwert 0 dreht Monza in 280 statt 85 Sekunden. Es kam
+# damit nach 16 von 51 Runden ins Ziel, erreichte seine geplante
+# Stopprunde 34 nie und stand danach als "null Stopps" in der
+# Verteilung - vier von dreissig Autos, also 13 Prozent des Feldes, die
+# ueber Strategie nichts aussagen. Gemessen wird deshalb eine Liga ohne
+# Spielerteam: dreissig KI-Autos mit Gesamtwerten von 76.768 bis 94.632.
+SPIELERLIGA = 20
 # Lagen, unter denen die Trockenmischungen ueberhaupt zur Wahl stehen.
 TROCKEN = {"trocken", "heiss"}
 # So viele Seeds werden hoechstens probiert, bis das Wetter trocken bleibt.
@@ -348,7 +357,8 @@ def main() -> None:
     strecken = kern_strecke.lade_alle(konfiguration)
     streckenmittel = kern_rennen.mittlerer_ueberholzonenanteil(konfiguration, strecken)
     welt = kern_welt.erzeuge(
-        konfiguration, Seedquelle(argumente.seed).zweig("welt"), spielerliga=LIGA
+        konfiguration, Seedquelle(argumente.seed).zweig("welt"),
+        spielerliga=SPIELERLIGA,
     )
     gewaehlt = waehle_strecken(konfiguration, argumente.strecken)
 

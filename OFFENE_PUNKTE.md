@@ -2852,3 +2852,48 @@ viele Autos sie fahren, die gerechnete Zeit **ohne Verkehr** und den
 mittleren Rückstand **im Rennen** zum gezeigten Zeitpunkt. Der
 Unterschied zwischen beiden Spalten ist genau das, was die Rechnung
 nicht kennt. Wer welche Strategie fährt, bleibt geheim.
+
+
+---
+
+## Nachtrag zu Punkt 92: „Es gibt doch einen Pflichtstopp — wie kommt
+## Monza auf 0 = 3 Prozent?"
+
+Berechtigte Frage, und die Antwort liegt nicht im Modell, sondern im
+**Messwerkzeug**.
+
+`werkzeuge/boxenstopps.py` baute seine Welt mit `spielerliga=1` und maß
+dann Liga 1. Ohne Karriere haben die vier Fahrer des Spielers aber alle
+Eigenschaften auf **null**. Gemessen:
+
+| | Gesamtwert | Rundenzeit Monza | Runden von 51 |
+| --- | ---: | ---: | ---: |
+| Sieger | 94.632 | ~85 s | 51 |
+| VE1 (Spielerteam) | **0** | ~280 s | **16** |
+
+VE1 hatte den Pflichtstopp sehr wohl eingeplant — sein Plan war **H-W
+mit einem Stopp in Runde 34**. Es hat Runde 34 nur nie erreicht: Als der
+Sieger ins Ziel kam, stand VE1 auf Runde 16. Die Pflicht war also nie
+ausgehebelt, das Auto war nur 3,3-mal zu langsam für die Distanz.
+
+Vier von dreißig Autos, also **13 Prozent des Feldes**, sagten damit
+über Strategie gar nichts aus — und genau sie stellten die
+Ein-Stopp-Anteile von 13,8 % auf drei der fünf Strecken und die
+Null-Stopp-Zeile auf Monza.
+
+Das Werkzeug misst jetzt eine Liga **ohne** Spielerteam (`SPIELERLIGA =
+20`): dreißig KI-Autos mit Gesamtwerten von 76.768 bis 94.632. Der
+Unterschied ist erheblich:
+
+| Strecke | vorher (mit Nullautos) | nachher |
+| --- | --- | --- |
+| Zandvoort | 1x 14 %, 2x 10 %, 3x 76 % | 2x 10 %, 3x 90 % |
+| Sao Paulo | 1x 14 %, 2x 55 %, 3x 31 % | 2x 62 %, 3x 38 % |
+| Nürburgring | 2x 21 %, 3x 79 % | 2x 7 %, 3x 93 % |
+| Silverstone | 1x 14 %, 2x 17 %, 3x 69 % | 2x 21 %, 3x 79 % |
+| Monza | 0x 3 %, 1x 59 %, 2x 38 % | 1x 48 %, 2x 52 % |
+
+**Keine Null-Stopp-Rennen mehr, keine Ein-Stopp-Ausreißer auf den harten
+Strecken, und die Zwangsstopps fallen von 1 bis 6 je Rennen auf 0 bis
+1.** Zandvoort liegt damit bei 2 bis 3 Stopps, Monza bei 1 bis 2 — beide
+Spannen genau wie gewünscht.
