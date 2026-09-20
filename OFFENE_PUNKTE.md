@@ -2613,3 +2613,42 @@ unverändert. Ein trockenes Rennen baut über 12 Runden 0,50 % auf; setzt
 danach wechselhaft ein, friert es fast ein (203 → 197 Auto-Runden); ein
 Regenrennen bleibt bei null. Im Qualifying liegen zwischen erstem und
 letztem Starter 0,164 % Grip, also 0,14 s.
+
+**Die Reifenart kam eine Runde später dazu.** Gewünscht: „Reifen leichter
+Gummi auftragen oder nicht, und mit weichen Reifen ist der Grip-Effekt
+stärker als mit harten." Also **zwei** Effekte, nicht einer.
+
+Die Zahl dafür stand schon da: `verschleiss` aus `[reifen.mischungen]`.
+Gummi auf der Strecke **ist** abgefahrener Reifen — was 1,44-mal so
+schnell abbaut, lässt 1,44-mal so viel liegen. Und dass ein weicher
+Reifen sich in den liegenden Gummi besser einarbeitet, kommt aus
+derselben Eigenschaft. Keine zweite Tabelle, nur ein Bezug und ein
+Exponent:
+
+| | `verschleiss` | Auftrag | Ansprechen |
+| --- | ---: | ---: | ---: |
+| Weich | 1,27 | 1,44 | 1,20 |
+| Mittel | 0,88 | 1,00 | 1,00 |
+| Hart | 0,64 | 0,73 | 0,85 |
+
+Der Auftrag ist **linear**, das Ansprechen **gedämpft** (Exponent 0,5) —
+der zweite Zusammenhang ist der schwächere. Entscheidungen des
+Auftraggebers: Bezug **Mittel**, Exponent **0,5**.
+
+Gemessen in Zandvoort, nach 1.200 Auto-Runden: Weich −1,37 s, Mittel
+−1,14 s, Hart −0,98 s. Der Unterschied Weich gegen Hart erreicht 23 %
+dessen, was die Mischung an sich ausmacht (1,70 s). Bei Exponent 1,0
+wären es 53 % gewesen, und ein später weicher Stint wäre fast erzwungen.
+
+Weil Mittel der Bezug ist, bleibt der gemessene Verlauf aus dem ersten
+Teil stehen: Ein trockenes Feld der Liga 1 fährt 46 % Hart, 32 % Mittel
+und 22 % Weich, das Feldmittel des Auftrags liegt bei **0,973**.
+
+**Der Auftrag gilt nur beim Aufbau.** Abgewaschen wird vom Regen, nicht
+vom Reifen; sonst würde ein Intermediate (Verschleiß 1,10) stärker
+abwaschen als ein Regenreifen. Ein Test hält das fest.
+
+**Die Strategie weiß davon nichts** und soll es vorerst auch nicht:
+`strategie.py` plant aus Verschleiß und Mischungstempo. Weich wird damit
+spät im Rennen relativ besser, ohne dass die Planung es einrechnet — die
+KI schöpft es nicht aus, und wer es bemerkt, hat einen echten Vorteil.

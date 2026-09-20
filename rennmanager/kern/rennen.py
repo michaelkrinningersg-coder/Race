@@ -1394,12 +1394,14 @@ class _Lauf:
         # Punkt 88: Der Gummi-Aufschlag wirkt **nach** ``grip_fuer``. Davor
         # daempfte die Wetterfaehigkeit ihn mit, und ein Regenspezialist
         # bekaeme vom Gummi weniger ab - Gummi ist aber keine Fahrkunst.
-        gummi = kern_gummierung.faktor(self.k, self.gummierung)
-        self.grip = (
-            np.array(
-                [kern_wetter.grip_fuer(self.k, auto, zustand, roh) for auto in self.autos]
-            )
-            * gummi
+        # Er faellt je Auto verschieden aus: Ein weicher Reifen holt mehr
+        # aus dem liegenden Gummi heraus als ein harter.
+        self.grip = np.array(
+            [
+                kern_wetter.grip_fuer(self.k, auto, zustand, roh)
+                * kern_gummierung.faktor(self.k, self.gummierung, self.mischungen[i])
+                for i, auto in enumerate(self.autos)
+            ]
         )
 
     def _setze_rundenform(self, runde: int) -> None:
@@ -1949,7 +1951,10 @@ class _Lauf:
         # im Spiel hat jedes Rennen ein Wetter).
         if self.wetter is not None:
             self.gummierung = kern_gummierung.naechster_stand(
-                self.k, self.gummierung, self.wetter.zustand_zu(ueberfahrt)
+                self.k,
+                self.gummierung,
+                self.wetter.zustand_zu(ueberfahrt),
+                mischung=self.mischungen[i],
             )
         self.naechster_sektor[i] = 0
         self._zaehle_positionsgewinne(i)

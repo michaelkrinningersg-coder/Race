@@ -664,6 +664,54 @@ Viel am Anfang, immer weniger, je mehr schon liegt. Mit `max_anteil =
 | Rennen, nach 10 Runden | 300 | 0,68 % | −0,57 s |
 | Rennen, nach 40 Runden | 1.200 | 1,36 % | −1,15 s |
 
+#### Was die Reifenart damit zu tun hat
+
+Weiche Reifen tragen **mehr Gummi auf** und holen auch **mehr daraus
+heraus**. Beides kommt aus derselben Eigenschaft - wie weich der Reifen
+ist -, und die steht schon als `verschleiss` in `[reifen.mischungen]`.
+Es braucht deshalb keine zweite Tabelle, nur einen Bezug und einen
+Exponenten:
+
+    Auftrag    =  verschleiss / verschleiss(Mittel)
+    Ansprechen = (verschleiss / verschleiss(Mittel)) ^ 0,5
+
+| | `verschleiss` | Auftrag | Ansprechen |
+| --- | ---: | ---: | ---: |
+| Weich | 1,27 | 1,44 | 1,20 |
+| Mittel | 0,88 | 1,00 | 1,00 |
+| Hart | 0,64 | 0,73 | 0,85 |
+
+Der **Auftrag** ist linear: Gummi auf der Strecke *ist* abgefahrener
+Reifen, was 1,44-mal so schnell abbaut, laesst 1,44-mal so viel liegen.
+Das **Ansprechen** ist gedaempft - dass sich ein weicher Reifen besser
+in den liegenden Gummi einarbeitet, ist der schwaechere Zusammenhang.
+Ein Exponent statt fuenf erfundener Zahlen, und genau eine Stellschraube.
+
+Der Auftrag gilt **nur beim Aufbau**. Abgewaschen wird vom Regen, nicht
+vom Reifen; ein Intermediate (Verschleiss 1,10) darf nicht staerker
+abwaschen als ein Regenreifen.
+
+Gemessen in Zandvoort, reine Physik:
+
+| Stand | Gummi | Weich | Mittel | Hart | W−H |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 300 | 0,68 % | −0,68 s | −0,57 s | −0,49 s | 0,20 s |
+| 600 | 1,05 % | −1,05 s | −0,88 s | −0,75 s | 0,30 s |
+| 1.200 | 1,36 % | −1,37 s | −1,14 s | −0,98 s | 0,39 s |
+
+Zum Vergleich: Weich ist an sich **1,70 s** schneller als Hart
+(Zandvoort, frischer Satz). Der Gummi-Unterschied erreicht damit rund
+**23 %** davon - spuerbar, aber er stellt die Mischungswahl nicht auf
+den Kopf. Bei Exponent 1,0 waeren es 53 %, und ein spaeter weicher
+Stint waere fast erzwungen.
+
+**Die Strategie weiss davon nichts.** `strategie.py` plant Stints aus
+Verschleiss und Mischungstempo; Gummi kennt sie nicht. Weich wird damit
+spaet im Rennen relativ besser, ohne dass die Planung es einrechnet -
+die KI schoepft es nicht aus, und wer es bemerkt, hat einen Vorteil. So
+gewollt (Entscheidung des Auftraggebers); es der Planung beizubringen
+waere ein eigener Punkt.
+
 #### Warum ein Prozent Grip eine Sekunde ist
 
 Der Grip geht **quadratisch** ins Kurvenlimit (GDD 3), ein Prozent Grip

@@ -260,6 +260,41 @@ mindestsegmentlaenge_m = 0.0
 max_anteil = 0.015
 halbwert_runden = 500
 
+# Weiche Reifen tragen mehr Gummi auf und holen auch mehr daraus heraus
+# (Entscheidung des Auftraggebers). Beides kommt aus derselben
+# Eigenschaft - wie weich der Reifen ist -, und die steht schon als
+# ``verschleiss`` in [reifen.mischungen]. Es braucht deshalb keine
+# zweite Tabelle, nur einen Bezug und einen Exponenten:
+#
+#   Auftrag    =  verschleiss / verschleiss(Bezug)
+#   Ansprechen = (verschleiss / verschleiss(Bezug)) ^ ansprechen_exponent
+#
+# Mit Bezug "M" (0,88) und Exponent 0,5:
+#
+#             Auftrag  Ansprechen
+#   Weich        1,44        1,20
+#   Mittel       1,00        1,00
+#   Hart         0,73        0,85
+#
+# Der Auftrag ist linear: Gummi auf der Strecke **ist** abgefahrener
+# Reifen, was 1,44-mal so schnell abbaut, laesst 1,44-mal so viel
+# liegen. Das Ansprechen ist gedaempft - dass sich ein weicher Reifen
+# besser in den liegenden Gummi einarbeitet, ist der schwaechere
+# Zusammenhang. Ein Exponent statt fuenf erfundener Zahlen, und genau
+# eine Stellschraube.
+#
+# Der Auftrag gilt nur beim **Aufbau**. Abgewaschen wird vom Regen, nicht
+# vom Reifen; ein Intermediate darf nicht staerker abwaschen als ein
+# Regenreifen.
+#
+# Gemessen in Zandvoort nach 40 Runden: Weich -1,37 s, Mittel -1,14 s,
+# Hart -0,97 s. Der Unterschied Weich gegen Hart erreicht damit 23 %
+# dessen, was die Mischung an sich ausmacht (1,70 s) - spuerbar, aber er
+# stellt die Mischungswahl nicht auf den Kopf. Bei Exponent 1,0 waeren es
+# 53 %, und ein spaeter weicher Stint waere fast erzwungen.
+bezugsmischung = "M"
+ansprechen_exponent = 0.5
+
 # Was eine gefahrene Auto-Runde je Lage am Stand aendert. Trocken und
 # heiss bauen auf, Regen waescht ab, wechselhaft nur sehr wenig. Wird es
 # nach dem Regen wieder trocken, baut sich derselbe Stand wieder auf.

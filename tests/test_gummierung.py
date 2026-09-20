@@ -168,6 +168,96 @@ def test_das_qualifying_faengt_gruen_an(k, zandvoort) -> None:
     assert session.fahrten[0].gummi < 0.0001
 
 
+# -- Reifenart (Entscheidung des Auftraggebers: Bezug Mittel, Exponent 0,5) --
+def test_weich_traegt_mehr_auf_als_hart(k) -> None:
+    """Gummi auf der Strecke **ist** abgefahrener Reifen."""
+    from rennmanager.kern import reifen as kern_reifen
+
+    m = {x.kuerzel: x for x in kern_reifen.mischungen(k)}
+    assert gu.auftrag(k, m["W"]) > gu.auftrag(k, m["M"]) > gu.auftrag(k, m["H"])
+    # Die Bezugsmischung ist genau eins - sonst verschoebe sich der
+    # gemessene Verlauf aus Punkt 88 ohne Absicht.
+    assert gu.auftrag(k, m["M"]) == pytest.approx(1.0)
+    assert gu.auftrag(k, None) == 1.0
+
+
+def test_der_auftrag_folgt_dem_verschleiss(k) -> None:
+    """Keine zweite Tabelle: Er kommt aus [reifen.mischungen]."""
+    from rennmanager.kern import reifen as kern_reifen
+
+    for m in kern_reifen.mischungen(k):
+        assert gu.auftrag(k, m) == pytest.approx(m.verschleiss / 0.88, rel=1e-9)
+
+
+def test_weich_holt_mehr_heraus_als_hart(k) -> None:
+    """Der zweite Teil: das Ansprechen auf liegenden Gummi."""
+    from rennmanager.kern import reifen as kern_reifen
+
+    m = {x.kuerzel: x for x in kern_reifen.mischungen(k)}
+    assert gu.anteil(k, 1200, m["W"]) > gu.anteil(k, 1200, m["M"])
+    assert gu.anteil(k, 1200, m["M"]) > gu.anteil(k, 1200, m["H"])
+
+
+def test_das_ansprechen_ist_gedaempfter_als_der_auftrag(k) -> None:
+    """Der Exponent unter eins ist die ganze Aussage.
+
+    Dass ein weicher Reifen mehr Gummi liegen laesst, ist direkt. Dass er
+    sich besser darin einarbeitet, ist der schwaechere Zusammenhang.
+    """
+    from rennmanager.kern import reifen as kern_reifen
+
+    m = {x.kuerzel: x for x in kern_reifen.mischungen(k)}
+    for kuerzel in ("W", "H"):
+        abstand_auftrag = abs(gu.auftrag(k, m[kuerzel]) - 1.0)
+        abstand_ansprechen = abs(gu.ansprechen(k, m[kuerzel]) - 1.0)
+        assert abstand_ansprechen < abstand_auftrag
+
+
+def test_auf_gruener_strecke_bringt_die_mischung_keinen_gummi(k) -> None:
+    """Null mal Ansprechen ist null - fuer jede Mischung."""
+    from rennmanager.kern import reifen as kern_reifen
+
+    for m in kern_reifen.mischungen(k):
+        assert gu.faktor(k, 0.0, m) == 1.0
+
+
+def test_die_mischung_waescht_nicht_staerker_ab(k) -> None:
+    """Abgewaschen wird vom Regen, nicht vom Reifen.
+
+    Ohne diese Grenze wuerde ein Intermediate - Verschleiss 1,10 -
+    staerker abwaschen als ein Regenreifen, und das ergaebe keinen Sinn.
+    """
+    from rennmanager.kern import reifen as kern_reifen
+
+    m = {x.kuerzel: x for x in kern_reifen.mischungen(k)}
+    ohne = gu.naechster_stand(k, 1000.0, "starkregen", 10)
+    for kuerzel in ("W", "H", "I", "R"):
+        assert gu.naechster_stand(k, 1000.0, "starkregen", 10, m[kuerzel]) == ohne
+
+
+def test_ein_weiches_feld_gummiert_schneller_ein(k, zandvoort, mittel) -> None:
+    """Der Effekt muss im fertigen Rennen ankommen, nicht nur in der Formel."""
+    from rennmanager.kern import reifen as kern_reifen
+    from rennmanager.kern import strategie as kern_strategie
+
+    m = {x.kuerzel: x for x in kern_reifen.mischungen(k)}
+    feld = rn.starterfeld(k, LIGA)
+    wetter = _trockenes_wetter(k, zandvoort, 10 * 130_000)
+
+    def stand(kuerzel: str) -> float:
+        strategien = tuple(
+            kern_strategie.Strategie(mischungen=(m[kuerzel],), stopps=())
+            for _ in feld
+        )
+        verlauf = rn.simuliere(
+            k, zandvoort, feld, 10, Seedquelle(4711), mittel,
+            wetter=wetter, strategien=strategien,
+        )
+        return verlauf.gummierung_zu(verlauf.dauer_ms)
+
+    assert stand("W") > stand("M") > stand("H")
+
+
 # -- Der Spieler sieht es (Entscheidung des Auftraggebers) ------------------
 def test_die_anzeige_zeigt_den_gummistand(qtbot, k, zandvoort, mittel) -> None:
     pytest.importorskip("PySide6")

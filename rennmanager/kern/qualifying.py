@@ -423,7 +423,15 @@ def fahre(
         # Punkt 88: Der Stand, den dieses Auto vorfindet - alles, was die
         # Autos vor ihm gefahren haben. Die Schleife laeuft in der
         # Startreihenfolge und damit in der Zeit, also stimmt das.
-        gummi_faktor = kern_gummierung.faktor(konfiguration, gummistand)
+        # Die Mischung steht im Qualifying nicht zur Wahl, sondern folgt
+        # der Lage (Punkt 39) - sie wird deshalb schon hier gebraucht,
+        # fuer Auftrag und Ansprechen des Gummis.
+        aufwaermmisch = kern_strategie.qualifyingmischung(
+            konfiguration, verlauf.zustand_zu(uhr)
+        )
+        gummi_faktor = kern_gummierung.faktor(
+            konfiguration, gummistand, aufwaermmisch
+        )
         for _ in range(aufwaermrunden):
             grip = _grip_je_punkt(
                 strecke, verlauf, konfiguration, auto, uhr, gummi_faktor
@@ -437,12 +445,17 @@ def fahre(
         # Die Aufwaermrunden dieses Autos zaehlen fuer seine eigene
         # gezeitete Runde schon mit - es ist ja selbst darueber gefahren.
         gummistand = kern_gummierung.naechster_stand(
-            konfiguration, gummistand, verlauf.zustand_zu(uhr), aufwaermrunden
+            konfiguration,
+            gummistand,
+            verlauf.zustand_zu(uhr),
+            aufwaermrunden,
+            mischung=aufwaermmisch,
         )
-        gummi_faktor = kern_gummierung.faktor(konfiguration, gummistand)
 
         beginn_runde = uhr
         zustand = verlauf.zustand_zu(beginn_runde)
+        misch = kern_strategie.qualifyingmischung(konfiguration, zustand)
+        gummi_faktor = kern_gummierung.faktor(konfiguration, gummistand, misch)
         grip = _grip_je_punkt(
             strecke, verlauf, konfiguration, auto, beginn_runde, gummi_faktor
         )
@@ -453,7 +466,6 @@ def fahre(
         # Qualifying keine Wahl, sondern eine Regel (Punkt 39): immer
         # weich, im Nassen der passende Satz.
         streuung = kern_form.rundenform(konfiguration, auto, seedquelle.zweig("runde", i), 1)
-        misch = kern_strategie.qualifyingmischung(konfiguration, zustand)
         mischfaktor = kern_reifen.mischungsfaktor(
             konfiguration, misch, kern_reifen.naesse_von(konfiguration, zustand)
         )
@@ -480,7 +492,7 @@ def fahre(
             )
         )
         gummistand = kern_gummierung.naechster_stand(
-            konfiguration, gummistand, zustand, 1.0
+            konfiguration, gummistand, zustand, 1.0, mischung=misch
         )
 
     # Aufstellung: schnellste Runde zuerst. Bei Gleichstand auf die

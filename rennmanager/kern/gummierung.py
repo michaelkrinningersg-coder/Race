@@ -39,6 +39,44 @@ if TYPE_CHECKING:  # pragma: no cover
     from rennmanager.konfiguration import Konfiguration
 
 
+def _bezug(konfiguration: Konfiguration) -> float:
+    """Der Verschleiss der Bezugsmischung - dort sind beide Faktoren 1,0."""
+    kuerzel = konfiguration.wert("strecke", "gummierung", "bezugsmischung")
+    for zeile in konfiguration.wert("reifen", "mischungen", "liste"):
+        if zeile["kuerzel"] == kuerzel:
+            return float(zeile["verschleiss"])
+    raise KeyError(f"Bezugsmischung {kuerzel} steht nicht in [reifen.mischungen]")
+
+
+def auftrag(konfiguration: Konfiguration, mischung) -> float:
+    """Wie viel Gummi diese Mischung je Runde liegen laesst.
+
+    **Linear** im Verschleiss: Gummi auf der Strecke *ist* abgefahrener
+    Reifen. Was 1,44-mal so schnell abbaut, laesst 1,44-mal so viel
+    liegen. Ohne Mischung gilt 1,0 - dann rechnet die Strecke so, als
+    fuehre das ganze Feld die Bezugsmischung.
+    """
+    if mischung is None:
+        return 1.0
+    return float(mischung.verschleiss) / _bezug(konfiguration)
+
+
+def ansprechen(konfiguration: Konfiguration, mischung) -> float:
+    """Wie viel diese Mischung aus dem liegenden Gummi herausholt.
+
+    **Gedaempft** gegenueber dem Auftrag: Dass sich ein weicher Reifen
+    besser in den liegenden Gummi einarbeitet, ist der schwaechere
+    Zusammenhang. Deshalb derselbe Quotient, aber mit einem Exponenten
+    unter eins - eine Stellschraube statt fuenf erfundener Zahlen.
+    """
+    if mischung is None:
+        return 1.0
+    exponent = float(
+        konfiguration.wert("strecke", "gummierung", "ansprechen_exponent")
+    )
+    return auftrag(konfiguration, mischung) ** exponent
+
+
 def je_runde(konfiguration: Konfiguration, zustand: str) -> float:
     """Was eine gefahrene Auto-Runde bei dieser Lage am Stand aendert.
 
@@ -51,21 +89,39 @@ def je_runde(konfiguration: Konfiguration, zustand: str) -> float:
 
 
 def naechster_stand(
-    konfiguration: Konfiguration, stand: float, zustand: str, runden: float = 1.0
+    konfiguration: Konfiguration,
+    stand: float,
+    zustand: str,
+    runden: float = 1.0,
+    mischung=None,
 ) -> float:
-    """Der Stand nach ``runden`` gefahrenen Auto-Runden bei dieser Lage."""
-    return max(0.0, stand + je_runde(konfiguration, zustand) * runden)
+    """Der Stand nach ``runden`` gefahrenen Auto-Runden bei dieser Lage.
+
+    Die Mischung wirkt **nur auf den Aufbau**. Abgewaschen wird vom
+    Regen, nicht vom Reifen - ein Intermediate darf nicht staerker
+    abwaschen als ein Regenreifen.
+    """
+    beitrag = je_runde(konfiguration, zustand)
+    if beitrag > 0.0:
+        beitrag *= auftrag(konfiguration, mischung)
+    return max(0.0, stand + beitrag * runden)
 
 
-def faktor(konfiguration: Konfiguration, stand: float) -> float:
-    """Der Grip-Aufschlag zu diesem Stand: 1,0 bis 1 + ``max_anteil``."""
+def faktor(konfiguration: Konfiguration, stand: float, mischung=None) -> float:
+    """Der Grip-Aufschlag zu diesem Stand, fuer diese Mischung.
+
+    1,0 auf gruener Strecke, hoechstens ``1 + max_anteil * Ansprechen``.
+    Ohne Mischung gilt die Bezugsmischung - das ist der Wert, den die
+    Anzeige zeigt.
+    """
     einstellung = konfiguration.wert("strecke", "gummierung")
     halbwert = float(einstellung["halbwert_runden"])
     if stand <= 0.0 or halbwert <= 0.0:
         return 1.0
-    return 1.0 + float(einstellung["max_anteil"]) * (1.0 - math.exp(-stand / halbwert))
+    roh = float(einstellung["max_anteil"]) * (1.0 - math.exp(-stand / halbwert))
+    return 1.0 + roh * ansprechen(konfiguration, mischung)
 
 
-def anteil(konfiguration: Konfiguration, stand: float) -> float:
+def anteil(konfiguration: Konfiguration, stand: float, mischung=None) -> float:
     """Derselbe Aufschlag als Anteil, fuer die Anzeige: 0,0136 statt 1,0136."""
-    return faktor(konfiguration, stand) - 1.0
+    return faktor(konfiguration, stand, mischung) - 1.0
