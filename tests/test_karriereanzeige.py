@@ -27,6 +27,7 @@ from rennmanager.ui.kalenderstreifen import (  # noqa: E402
     Kalenderstreifen,
 )
 from rennmanager.ui.punkteansicht import Punkteansicht  # noqa: E402
+from tests.oberflaeche import waehle_liga
 
 
 @pytest.fixture(scope="module")
@@ -229,7 +230,7 @@ def test_punkteverlauf_waechst_mit_jedem_rennen(qtbot, konfig) -> None:
         assert len(stand) == 2
         assert list(stand) == sorted(stand)
     # Der Tabellenerste fuehrt auch im Diagramm.
-    assert ansicht.hoechster == int(seite.tabelle.topLevelItem(0).text(3))
+    assert ansicht.hoechster == int(seite.tabelle.topLevelItem(0).text(4))
 
 
 def test_punkteverlauf_hebt_spieler_und_auswahl_hervor(qtbot, konfig) -> None:
@@ -241,7 +242,7 @@ def test_punkteverlauf_hebt_spieler_und_auswahl_hervor(qtbot, konfig) -> None:
     ansicht = seite.punkteansicht
 
     eigene = fenster.welt.spielerfahrer
-    seite.liga_auswahl.setCurrentIndex(eigene[0].liga - 1)
+    waehle_liga(seite.liga_auswahl, eigene[0].liga)
     # Ohne Auswahl treten die eigenen Fahrer dieser Liga hervor.
     seite.tabelle.setCurrentItem(None)
     in_der_liga = sum(1 for f in eigene if f.liga == eigene[0].liga)

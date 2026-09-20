@@ -22,6 +22,7 @@ from PySide6.QtCore import Qt  # noqa: E402
 
 from rennmanager.ui.hauptfenster import Hauptfenster  # noqa: E402
 from rennmanager.ui.rennwochenendeseite import SCHRITTE, WEITER  # noqa: E402
+from tests.oberflaeche import waehle_liga
 
 # Punkt 77: Diese Datei ist auf Wunsch des Auftraggebers stillgelegt.
 # Geprueft wird erst wieder, wenn ein einzelnes Rennwochenende sauber
@@ -197,7 +198,7 @@ def test_die_saisonseite_zieht_nach(gefahren) -> None:
     """Das gefuehrte Wochenende meldet sich; die Saisonseite liest neu."""
     fenster, _seite, _vorher = gefahren
     liga = fenster.welt.spieler.liga
-    fenster.saisonseite.liga_auswahl.setCurrentIndex(liga - 1)
+    waehle_liga(fenster.saisonseite.liga_auswahl, liga)
     tabelle = fenster.saisonseite.tabelle
     assert tabelle.topLevelItemCount() > 0
     assert fenster.saisonseite.rennliste.topLevelItemCount() > 0

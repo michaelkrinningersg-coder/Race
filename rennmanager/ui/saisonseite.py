@@ -38,6 +38,13 @@ from rennmanager.konfiguration import Konfiguration
 from rennmanager.ui.punkteansicht import Punkteansicht
 from rennmanager.ui.tabellen import verbinde_fahrerkarte
 
+# Punkt 95: Kennung der Weltansicht in der Ligaauswahl. Keine Liga hat die
+# Nummer 0, sie ist damit als Sonderfall eindeutig.
+WELT = 0
+# So viele Linien zeigt das Punktediagramm in der Weltansicht; 400 waeren
+# kein Diagramm mehr. Die eigenen Fahrer kommen dazu, wo immer sie stehen.
+WELT_LINIEN = 20
+
 FARBE_AUFSTIEG = QColor("#2e7d32")
 FARBE_ABSTIEG = QColor("#c62828")
 
@@ -117,13 +124,17 @@ class Saisonseite(QWidget):
         zeile = QHBoxLayout()
 
         self._liga = QComboBox()
+        # Punkt 95: Die Meisterschaft laeuft ueber alle Ligen; die
+        # Ligatabellen sind der Ausschnitt daraus, der ueber Auf- und
+        # Abstieg entscheidet.
+        self._liga.addItem("Weltmeisterschaft - alle Ligen", WELT)
         for nummer in range(1, self._konfiguration.wert("ligen", "anzahl") + 1):
             self._liga.addItem(
                 f"Liga {nummer} - {self._konfiguration.ligenname(nummer)}", nummer
             )
         spieler = self._welt.spieler
         if spieler is not None:
-            self._liga.setCurrentIndex(spieler.liga - 1)
+            self._liga.setCurrentIndex(spieler.liga)
         self._liga.currentIndexChanged.connect(self._aktualisiere)
 
         # Punkt 12: Ein einzelnes Wochenende faehrt der Spieler gefuehrt
@@ -178,7 +189,7 @@ class Saisonseite(QWidget):
         kasten = QVBoxLayout(self._tabellenkasten)
         self._tabelle = QTreeWidget()
         self._tabelle.setHeaderLabels(
-            ["#", "Fahrer", "Team", "Punkte", "Siege", "Podien", "Poles", "SR", "DNF"]
+            ["#", "Fahrer", "Liga", "Team", "Punkte", "Siege", "Podien", "Poles", "SR", "DNF"]
         )
         self._tabelle.setRootIsDecorated(False)
         self._tabelle.setAlternatingRowColors(True)
@@ -362,6 +373,15 @@ class Saisonseite(QWidget):
             f" · Rennen {nummer} am {kern_kalender.wochentag(renntag)} "
             f"{renntag:%d.%m.%Y}"
         )
+        # Punkt 95: Alle fuenf Rennen wird auf- und abgestiegen. Wer das
+        # naechste Rennen faehrt, soll wissen, ob es darum geht.
+        if kern_wertung.ist_wechselrennen(self._konfiguration, nummer):
+            aufsteiger = self._konfiguration.wert("auf_abstieg", "aufsteiger")
+            absteiger = self._konfiguration.wert("auf_abstieg", "absteiger")
+            stand += (
+                f" · <b>Wechselrunde</b>: danach steigen die besten {aufsteiger} "
+                f"jeder Liga auf und die letzten {absteiger} ab"
+            )
         offen = self._lauf.offene_tage_vor_dem_rennen
         if offen:
             self._kalender.setStyleSheet(f"color: {FARBE_ABSTIEG.name()};")
@@ -373,16 +393,32 @@ class Saisonseite(QWidget):
             self._kalender.setStyleSheet("")
             self._kalender.setText(f"{stand} · Heute ist Renntag.")
 
+    def _stand_von(self, liga: int) -> list[tuple[int, object]]:
+        """Der Stand als Paare ``(liga, eintrag)``, bester zuerst.
+
+        Fuer ``WELT`` die Meisterschaft ueber alle Ligen (Punkt 95), sonst
+        die Tabelle einer einzelnen.
+        """
+        if liga == WELT:
+            return kern_wertung.weltstand(self._konfiguration, self._lauf.tabellen)
+        return [(liga, eintrag) for eintrag in self._lauf.tabelle(liga).stand()]
+
     def _zeige_tabelle(self, liga: int) -> None:
         self._tabelle.clear()
-        self._tabellenkasten.setTitle(
-            f"Saisonwertung {self._lauf.jahr} - Liga {liga} "
-            f"({self._konfiguration.ligenname(liga)})"
-        )
+        if liga == WELT:
+            self._tabellenkasten.setTitle(
+                f"Weltmeisterschaft {self._lauf.jahr} - alle "
+                f"{self._konfiguration.wert('ligen', 'anzahl')} Ligen"
+            )
+        else:
+            self._tabellenkasten.setTitle(
+                f"Saisonwertung {self._lauf.jahr} - Liga {liga} "
+                f"({self._konfiguration.ligenname(liga)})"
+            )
         aufsteiger = self._konfiguration.wert("auf_abstieg", "aufsteiger")
         absteiger = self._konfiguration.wert("auf_abstieg", "absteiger")
-        stand = self._lauf.tabelle(liga).stand()
-        for platz, eintrag in enumerate(stand, start=1):
+        stand = self._stand_von(liga)
+        for platz, (seine_liga, eintrag) in enumerate(stand, start=1):
             fahrer = self._welt.fahrer[eintrag.fahrer]
             team = self._welt.team_von(fahrer)
             zeile = QTreeWidgetItem(
@@ -390,6 +426,7 @@ class Saisonseite(QWidget):
                 [
                     str(platz),
                     fahrer.name,
+                    str(seine_liga),
                     team.name,
                     str(eintrag.punkte),
                     str(eintrag.siege),
@@ -401,7 +438,11 @@ class Saisonseite(QWidget):
             )
             zeile.setForeground(0, QColor(team.farbe))
             zeile.setData(0, Qt.UserRole, fahrer.nummer)
-            # Wer am Saisonende auf- oder absteigt, ist farbig markiert.
+            # Wer bei der naechsten Wechselrunde auf- oder absteigt, ist
+            # farbig markiert. In der Weltmeisterschaft sagt der Platz
+            # darueber nichts - dort entscheidet die Ligatabelle.
+            if liga == WELT:
+                continue
             if platz <= aufsteiger and liga > 1:
                 zeile.setForeground(1, FARBE_AUFSTIEG)
             elif platz > len(stand) - absteiger and liga < len(self._lauf.tabellen):
@@ -420,11 +461,20 @@ class Saisonseite(QWidget):
         Gezeichnet wird die Reihenfolge der Tabelle, damit die
         hervorgehobene Linie zu der Zeile passt, die daneben gewaehlt ist.
         """
-        stand = self._lauf.tabelle(liga).stand()
+        stand = self._stand_von(liga)
+        if liga == WELT:
+            # 400 Linien waeren kein Diagramm mehr. Gezeigt wird die
+            # Spitze, dazu die eigenen Fahrer, wo immer sie stehen.
+            eigene = {f.nummer for f in self._welt.spielerfahrer}
+            stand = [
+                paar
+                for platz, paar in enumerate(stand, start=1)
+                if platz <= WELT_LINIEN or paar[1].fahrer in eigene
+            ]
         statistik = self._lauf.statistik
         reihen = []
         self._fahrernummern = []
-        for eintrag in stand:
+        for _seine_liga, eintrag in stand:
             fahrer = self._welt.fahrer[eintrag.fahrer]
             team = self._welt.team_von(fahrer)
             reihen.append(
@@ -461,6 +511,11 @@ class Saisonseite(QWidget):
             self._rennkopf.setText("Noch kein Rennen gefahren.")
             return
 
+        if liga == WELT:
+            # Ein Rennen gehoert immer einer Liga. In der Weltansicht wird
+            # das des Spielers gezeigt, sonst das der obersten Liga.
+            eigene = self._welt.spielerligen()
+            liga = eigene[0] if eigene else 1
         ergebnis = self._letztes.liga(liga)
         art = "ausfuehrlich" if ergebnis.ausfuehrlich else "Schnellmodus"
         self._rennkopf.setText(

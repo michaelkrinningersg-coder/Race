@@ -187,10 +187,53 @@ def test_saisonseite_faehrt_ein_rennwochenende(qtbot, konfig: kf.Konfiguration) 
     assert seite.tabelle.topLevelItemCount() == autos
     assert seite.rennliste.topLevelItemCount() == autos
     # Der Tabellenerste hat die meisten Punkte.
-    punkte = [int(seite.tabelle.topLevelItem(i).text(3)) for i in range(autos)]
+    punkte = [int(seite.tabelle.topLevelItem(i).text(4)) for i in range(autos)]
     assert punkte == sorted(punkte, reverse=True)
     # Der Auf- und Abstieg steht erst am Saisonende fest.
     assert seite.wechselliste.topLevelItemCount() == 0
+
+
+def test_saisonseite_zeigt_die_weltmeisterschaft(qtbot, konfig: kf.Konfiguration) -> None:
+    """Punkt 95: Die Meisterschaft laeuft ueber alle Ligen."""
+    from rennmanager.ui.saisonseite import WELT
+
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.saisonseite
+    seite.lauf.fahre_rennen()
+
+    waehle_liga(seite.liga_auswahl, WELT)
+    assert seite.tabelle.topLevelItemCount() == len(fenster.welt.fahrer)
+    # Bester zuerst, ueber alle Ligen hinweg.
+    punkte = [
+        int(seite.tabelle.topLevelItem(i).text(4))
+        for i in range(seite.tabelle.topLevelItemCount())
+    ]
+    assert punkte == sorted(punkte, reverse=True)
+    # Und die Ligaspalte sagt, wo jeder faehrt.
+    ligen = {
+        int(seite.tabelle.topLevelItem(i).text(2))
+        for i in range(seite.tabelle.topLevelItemCount())
+    }
+    assert ligen == set(range(1, konfig.wert("ligen", "anzahl") + 1))
+
+    # Die Ligasicht bleibt daneben stehen.
+    waehle_liga(seite.liga_auswahl, 1)
+    assert seite.tabelle.topLevelItemCount() == konfig.wert("ligen", "autos_je_liga")
+
+
+def test_der_kalender_kuendigt_die_wechselrunde_an(qtbot, konfig: kf.Konfiguration) -> None:
+    """Punkt 95: Vor dem fuenften Rennen steht mehr auf dem Spiel."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.saisonseite
+    takt = konfig.wert("auf_abstieg", "alle_rennen")
+
+    bis_zur_runde = takt - (seite.lauf.gefahren % takt)
+    for _ in range(bis_zur_runde - 1):
+        seite.lauf.fahre_rennen()
+    seite._aktualisiere()
+    assert "Wechselrunde" in seite.kalenderzeile.text()
 
 
 def test_saisonseite_wechselt_die_liga(qtbot, konfig: kf.Konfiguration) -> None:
