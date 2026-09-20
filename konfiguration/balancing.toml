@@ -1084,8 +1084,12 @@ sigma = 0.02
 grenze = 0.05
 
 [zufall.rundenform]
-# Jede Runde auf die Rundenzeit, verkleinert durch D12 Konstanz
-sigma = 0.003
+# Punkt 95: Nicht mehr je Runde, sondern **je Sektor**. Vier gleich lange
+# Sektoren mitteln sich zu 0,25 % Rundenstreuung - nah an den 0,3 %, die
+# GDD 11 fuer die Runde nennt, aber innerhalb der Runde schwankt es
+# sichtbar. Verkleinert durch D12 Konstanz.
+sigma = 0.005
+je_sektor = true
 verkleinert_durch = "D12"
 
 # ---------------------------------------------------------------------------
@@ -2097,6 +2101,22 @@ max_anteil = 0.60
 [zufall.rundenform.daempfung]
 faehigkeit = "D12"
 max_anteil = 0.80
+
+# --- Punkt 95: Die Sektorform haengt am Platzgewinn -----------------------
+# Wer im Sektor davor Plaetze gutgemacht hat, faehrt den naechsten mit
+# hoeherer Wahrscheinlichkeit ueber seiner Form; wer Plaetze verloren hat,
+# umgekehrt. Gezogen wird der **Betrag** |normal(0, sigma)|, das Vorzeichen
+# faellt mit dieser Wahrscheinlichkeit gut aus:
+#
+#     p(d) = 0,5 + 0,5 * (1 - rest^|d|) * Vorzeichen(d)
+#     rest = 2 - 2 * bei_einem_platz
+#
+# Bei einem gewonnenen Platz sind das die gesetzten 3/4, bei zwei 0,875,
+# bei drei 0,9375 - es naehert sich 1, ohne es zu erreichen. Ein Fahrer
+# wird also nie sicher schnell. Bei p = 0,5 ist die Verteilung rechnerisch
+# wieder die Normalverteilung; ohne Platzaenderung aendert sich nichts.
+[zufall.rundenform.kopplung]
+bei_einem_platz = 0.75
 
 # --- Punkt 24: Wirkung der Q-Spalte auf die gezeitete Runde (GDD 8) -------
 # GDD 8: "die Q-Spalte ist ein zusaetzliches Gewicht nur fuer die gezeitete

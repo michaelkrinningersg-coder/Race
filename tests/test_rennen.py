@@ -145,14 +145,30 @@ def test_ausgefallene_stehen_nach_runden_und_zeit(k, zandvoort, mittel) -> None:
 
     Bis dahin entschied unter gleich weit gekommenen Ausfaellen das Los.
     Der erhoehte Streckenverschleiss sorgt dafuer, dass in diesem kurzen
-    Rennen ueberhaupt jemand ausfaellt.
+    Rennen ueberhaupt jemand ausfaellt. Welcher Seed dabei zwei Ausfaelle
+    mit gleicher Rundenzahl liefert, haengt am ganzen Rennmodell - der
+    Test sucht sich deshalb den ersten passenden, statt sich an eine Zahl
+    zu binden, die die naechste Balancing-Aenderung umwirft.
     """
     feld = rn.starterfeld(k, LIGA, seedquelle=Seedquelle(1))
-    verlauf = rn.simuliere(
-        k, zandvoort, feld, 12, Seedquelle(1), mittel, streckenverschleiss=6.0
-    )
-    ausfaelle = [e for e in verlauf.ergebnisse if e.zeit_ms is None]
-    assert ausfaelle, "Der Test braucht Ausfaelle"
+
+    def paare_von(verlauf):
+        ausfaelle = [e for e in verlauf.ergebnisse if e.zeit_ms is None]
+        return ausfaelle, [
+            (davor, danach)
+            for davor, danach in zip(ausfaelle, ausfaelle[1:], strict=False)
+            if davor.runden == danach.runden
+        ]
+
+    for seed in (22, 1, 5, 11, 7):
+        verlauf = rn.simuliere(
+            k, zandvoort, feld, 12, Seedquelle(seed), mittel, streckenverschleiss=6.0
+        )
+        ausfaelle, paare = paare_von(verlauf)
+        if paare:
+            break
+    else:  # pragma: no cover - nur, wenn niemand mehr gleich weit kommt
+        pytest.fail("Kein Seed lieferte zwei Ausfaelle mit gleicher Rundenzahl")
 
     def letzte_rundenzeit(ergebnis) -> int:
         enden = verlauf.protokolle[ergebnis.teilnehmer].rundenende_ms
@@ -163,14 +179,38 @@ def test_ausgefallene_stehen_nach_runden_und_zeit(k, zandvoort, mittel) -> None:
         (e.runden for e in ausfaelle), reverse=True
     )
     # Und bei gleicher Rundenzahl der Schnellere.
-    paare = [
-        (davor, danach)
-        for davor, danach in zip(ausfaelle, ausfaelle[1:], strict=False)
-        if davor.runden == danach.runden
-    ]
-    assert paare, "Der Test braucht zwei Ausfaelle mit gleicher Rundenzahl"
     for davor, danach in paare:
         assert letzte_rundenzeit(davor) <= letzte_rundenzeit(danach)
+
+
+def test_die_form_faellt_je_sektor_nicht_je_runde(k, zandvoort, mittel) -> None:
+    """Punkt 95: Innerhalb einer Runde schwankt es jetzt sichtbar.
+
+    Verglichen wird gegen denselben Lauf ohne Zufall: Das Verhaeltnis der
+    Sektorzeiten zeigt, was der Zufall getan hat. Bei einem Wurf je Runde
+    waeren die vier Verhaeltnisse einer Runde bis auf Reifenverschleiss
+    und Verkehr gleich; mit einem Wurf je Sektor gehen sie auseinander.
+    """
+    feld = rn.starterfeld(k, LIGA, seedquelle=Seedquelle(1))[:6]
+    mit = rn.simuliere(k, zandvoort, feld, 4, Seedquelle(3), mittel)
+    ohne = rn.simuliere(k, zandvoort, feld, 4, Seedquelle(3), mittel, ohne_zufall=True)
+
+    spannen = []
+    for i in range(len(feld)):
+        for gewuerfelt, fest in zip(
+            mit.protokolle[i].sektorzeiten_ms,
+            ohne.protokolle[i].sektorzeiten_ms,
+            strict=False,
+        ):
+            wenn = [a / b for a, b in zip(gewuerfelt, fest, strict=False)]
+            if len(wenn) == len(zandvoort.sektoren):
+                spannen.append(max(wenn) - min(wenn))
+
+    assert spannen, "Der Test braucht vollstaendige Runden"
+    # Gemessen liegen die Spannen bei 0,3 bis 0,6 %; 0,15 % lassen Luft
+    # nach unten und faengt trotzdem einen Rueckfall auf einen Wurf je
+    # Runde ab.
+    assert sum(spannen) / len(spannen) > 0.0015
 
 
 def test_sieger_faehrt_die_volle_distanz(rennen) -> None:

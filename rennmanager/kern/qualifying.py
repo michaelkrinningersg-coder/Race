@@ -552,19 +552,33 @@ def fahre(
         )
         runde = fahre_runde(konfiguration, strecke, auto, grip, grenzen)
 
-        # Rundenform, der Bonus aus der Q-Spalte, die Streckenkenntnis und
+        # Sektorform, der Bonus aus der Q-Spalte, die Streckenkenntnis und
         # die Reifenmischung wirken auf die Zeit. Die Mischung ist im
         # Qualifying keine Wahl, sondern eine Regel (Punkt 39): immer
         # weich, im Nassen der passende Satz.
-        streuung = kern_form.rundenform(konfiguration, auto, seedquelle.zweig("runde", i), 1)
+        #
+        # Punkt 95: Die Form faellt je Sektor, nicht je Runde. Eine
+        # Kopplung an den Platzgewinn gibt es hier nicht - im Qualifying
+        # faehrt jeder allein, es gibt keine Plaetze zu gewinnen.
         mischfaktor = kern_reifen.mischungsfaktor(
             konfiguration, misch, kern_reifen.naesse_von(konfiguration, zustand)
         )
-        faktor = streuung / (
+        grundfaktor = 1.0 / (
             (1.0 + qualifyingbonus(konfiguration, auto)) * kenntnis * mischfaktor
         )
-        zeit = int(round(runde.zeit_ms * faktor))
-        sektoren = tuple(int(round(wert * faktor)) for wert in runde.sektoren_ms)
+        sektoren = tuple(
+            int(round(
+                wert
+                * grundfaktor
+                * kern_form.sektorform(
+                    konfiguration, auto, seedquelle.zweig("runde", i), 1, nummer
+                )
+            ))
+            for nummer, wert in enumerate(runde.sektoren_ms)
+        )
+        # Die Rundenzeit ist die Summe ihrer Sektoren - anders ginge es
+        # nicht mehr auf, seit jeder Sektor seinen eigenen Wurf hat.
+        zeit = sum(sektoren)
         uhr += zeit
 
         fahrten.append(

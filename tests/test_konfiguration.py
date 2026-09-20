@@ -150,8 +150,11 @@ def test_zufallsebenen(k: kf.Konfiguration) -> None:
     assert k.wert("zufall", "tagesform", "grenze") == 0.08
     assert k.wert("zufall", "eigenschaft", "sigma") == 0.02
     assert k.wert("zufall", "eigenschaft", "grenze") == 0.05
-    assert k.wert("zufall", "rundenform", "sigma") == 0.003
+    # Punkt 95: Die dritte Ebene faellt je Sektor, nicht je Runde.
+    assert k.wert("zufall", "rundenform", "sigma") == 0.005
+    assert k.wert("zufall", "rundenform", "je_sektor") is True
     assert k.wert("zufall", "rundenform", "verkleinert_durch") == "D12"
+    assert k.wert("zufall", "rundenform", "kopplung", "bei_einem_platz") == 0.75
 
 
 def test_ereignisse_und_defekte(k: kf.Konfiguration) -> None:

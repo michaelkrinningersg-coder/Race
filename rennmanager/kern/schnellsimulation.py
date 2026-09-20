@@ -200,7 +200,9 @@ def fahre_wochenende(
         grip = kern_wetter.grip_fuer(
             konfiguration, auto, quali_zustand, quali_wetter.grip_zu(0)
         ) * kern_gummierung.faktor(konfiguration, gummistand, quali_misch)
-        streuung = kern_form.rundenform(
+        # Punkt 95: Die Form faellt je Sektor; der Schnellmodus mittelt
+        # sie zur Runde. Ohne Kopplung - im Qualifying faehrt jeder allein.
+        streuung = kern_form.rundenform_aus_sektoren(
             konfiguration, auto, seedquelle.zweig("qualirunde", i), 1
         )
         quali_mischfaktor = kern_reifen.mischungsfaktor(
@@ -368,6 +370,9 @@ def fahre_wochenende(
     grenze = kern_zwischenfall.ausfallgrenze(konfiguration, wuerfel)
     # Die Startaufstellung ist die Reihenfolge vor der ersten Runde.
     vorige_reihenfolge = list(aufstellung)
+    # Punkt 95: Platzgewinn der Vorrunde je Auto; in der ersten Runde
+    # hat noch niemand etwas gutgemacht.
+    platzgewinn: dict[int, int] = {}
     naesse_lage = naesse_start
     # Punkt 88: Gefahrene Auto-Runden Gummi, wie in der vollen Simulation.
     gummistand = 0.0
@@ -394,8 +399,12 @@ def fahre_wochenende(
             grip = kern_wetter.grip_fuer(
                 konfiguration, auto, zustand, wetter.grip_zu(gesamtzeit[i])
             ) * kern_gummierung.faktor(konfiguration, gummistand, gefahrene[i])
-            streuung = kern_form.rundenform(
-                konfiguration, auto, seedquelle.zweig("rundenform", i), runde
+            # Punkt 95: vier Sektorwuerfe, gemittelt zur Runde. Als
+            # Platzgewinn zaehlt der der Vorrunde - Sektoren fuehrt der
+            # Schnellmodus nicht.
+            streuung = kern_form.rundenform_aus_sektoren(
+                konfiguration, auto, seedquelle.zweig("sektorform", i), runde,
+                platzgewinn.get(i, 0),
             )
             # Punkt 39: Der Tempofaktor der Mischung gehoert dazu - sonst
             # faehrt weich im Rennen so schnell wie hart, und die
@@ -616,7 +625,14 @@ def fahre_wochenende(
                 )
                 break
 
+        vorher_stelle = {i: platz for platz, i in enumerate(vorige_reihenfolge)}
         reihenfolge = sorted(nummern[aktiv], key=lambda i: gesamtzeit[i])
+        # Punkt 95: Was diese Runde an Plaetzen gebracht hat, steuert in
+        # der naechsten das Vorzeichen der Form.
+        platzgewinn = {
+            i: vorher_stelle.get(i, platz) - platz
+            for platz, i in enumerate(reihenfolge)
+        }
         vorige_reihenfolge = list(reihenfolge)
 
         # Unfaelle: sehr selten, nur zwischen nahen Autos (GDD 4).

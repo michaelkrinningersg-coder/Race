@@ -133,14 +133,29 @@ def test_gleicher_seed_gleicher_wurf(k) -> None:
     assert erste.tagesform == zweite.tagesform
 
 
-# -- Rundenform -------------------------------------------------------------
-def test_rundenform_streut_wie_vorgegeben(k) -> None:
-    """GDD 11: Streuung 0,3 % auf die Rundenzeit."""
+# -- Sektorform (Punkt 95) --------------------------------------------------
+def test_sektorform_streut_wie_vorgegeben(k) -> None:
+    """Punkt 95: 0,5 % je Sektor, ohne Platzgewinn ohne Schlagseite."""
     sigma = k.wert("zufall", "rundenform", "sigma")
     auto = mit_wert(k, "D12", 0)
-    werte = [fm.rundenform(k, auto, Seedquelle(seed), 1) for seed in range(2_000)]
+    werte = [fm.sektorform(k, auto, Seedquelle(seed), 1) for seed in range(4_000)]
     assert statistics.mean(werte) == pytest.approx(1.0, abs=0.001)
     assert statistics.stdev(werte) == pytest.approx(sigma, rel=0.1)
+
+
+def test_vier_sektoren_ergeben_die_rundenstreuung(k) -> None:
+    """Punkt 95: Vier gleich lange Sektoren mitteln sich auf die Haelfte.
+
+    Aus 0,5 % je Sektor werden damit 0,25 % je Runde - nah an den 0,3 %,
+    die GDD 11 fuer die Runde nennt.
+    """
+    sigma = k.wert("zufall", "rundenform", "sigma")
+    sektoren = k.wert("strecke", "sektoren")
+    auto = mit_wert(k, "D12", 0)
+    runden = [
+        fm.rundenform_aus_sektoren(k, auto, Seedquelle(seed), 1) for seed in range(4_000)
+    ]
+    assert statistics.stdev(runden) == pytest.approx(sigma / sektoren**0.5, rel=0.1)
 
 
 def test_konstanz_verkleinert_die_streuung(k) -> None:
@@ -148,10 +163,10 @@ def test_konstanz_verkleinert_die_streuung(k) -> None:
     schwach = mit_wert(k, "D12", 0)
     stark = mit_wert(k, "D12", 100_000)
     streuung_schwach = statistics.stdev(
-        fm.rundenform(k, schwach, Seedquelle(seed), 1) for seed in range(1_000)
+        fm.sektorform(k, schwach, Seedquelle(seed), 1) for seed in range(2_000)
     )
     streuung_stark = statistics.stdev(
-        fm.rundenform(k, stark, Seedquelle(seed), 1) for seed in range(1_000)
+        fm.sektorform(k, stark, Seedquelle(seed), 1) for seed in range(2_000)
     )
     assert streuung_stark < streuung_schwach
 
@@ -159,11 +174,42 @@ def test_konstanz_verkleinert_die_streuung(k) -> None:
     assert streuung_stark == pytest.approx(streuung_schwach * (1 - max_anteil), rel=0.15)
 
 
-def test_jede_runde_wird_neu_gewuerfelt(k) -> None:
+def test_jeder_sektor_wird_neu_gewuerfelt(k) -> None:
     auto = ka.gleichverteilt(k, 50_000)
     quelle = Seedquelle(5)
-    werte = {fm.rundenform(k, auto, quelle, runde) for runde in range(1, 20)}
-    assert len(werte) == 19
+    werte = {
+        fm.sektorform(k, auto, quelle, runde, sektor)
+        for runde in range(1, 6)
+        for sektor in range(k.wert("strecke", "sektoren"))
+    }
+    assert len(werte) == 5 * k.wert("strecke", "sektoren")
+
+
+def test_wer_plaetze_gutmacht_faehrt_haeufiger_ueber_seiner_form(k) -> None:
+    """Punkt 95: drei Viertel bei einem Platz, danach naeher an eins."""
+    assert fm.gute_haelfte(k, 0) == 0.5
+    assert fm.gute_haelfte(k, 1) == pytest.approx(0.75)
+    assert fm.gute_haelfte(k, 2) == pytest.approx(0.875)
+    assert fm.gute_haelfte(k, 3) == pytest.approx(0.9375)
+    # Und spiegelbildlich bei verlorenen Plaetzen.
+    for plaetze in (1, 2, 3, 7):
+        assert fm.gute_haelfte(k, -plaetze) == pytest.approx(1 - fm.gute_haelfte(k, plaetze))
+    # Nie ganz sicher: Auch wer zehn Plaetze gutmacht, kann langsam sein.
+    assert fm.gute_haelfte(k, 10) < 1.0
+
+
+def test_der_platzgewinn_macht_im_mittel_schneller(k) -> None:
+    auto = mit_wert(k, "D12", 0)
+
+    def mittel(plaetze: int) -> float:
+        return statistics.mean(
+            fm.sektorform(k, auto, Seedquelle(seed), 1, 0, plaetze) for seed in range(4_000)
+        )
+
+    assert mittel(1) < mittel(0) < mittel(-1)
+    assert mittel(0) == pytest.approx(1.0, abs=0.001)
+    # Mehr Plaetze wirken staerker, aber immer schwaecher zunehmend.
+    assert mittel(3) < mittel(2) < mittel(1)
 
 
 # -- E3 Motivationsschub (GDD 14) ------------------------------------------

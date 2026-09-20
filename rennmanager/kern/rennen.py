@@ -852,6 +852,11 @@ class _Lauf:
         # zaehlt nicht mit - an ihm ist niemand vorbeigefahren.
         startplaetze = np.array([t.startplatz for t in teilnehmer])
         self.vorne_bei_rundenbeginn = startplaetze[None, :] < startplaetze[:, None]
+        # Punkt 95: Dieselbe Momentaufnahme noch einmal, aber je Sektor -
+        # daran haengt das Vorzeichen der Sektorform. Getrennt gefuehrt,
+        # weil die Rundenzaehlung fuer Erfahrung und Statistik weiter die
+        # ganze Runde vergleicht.
+        self.vorne_bei_sektorbeginn = self.vorne_bei_rundenbeginn.copy()
         self.positionsgewinne = np.zeros(self.anzahl, dtype=int)
         # Letzte Ueberfahrt je Auto: Startlinie und Sektorgrenzen.
         self.linienzeit = np.zeros(self.anzahl)
@@ -1078,7 +1083,7 @@ class _Lauf:
                 )
             self.kenntnis_tempo = np.array(kenntnisfaktor, dtype=float)
 
-        self._setze_rundenform(0)
+        self._setze_startform()
         self._setze_grip(0.0)
 
     def _setze_verschleissrate(self, i: int) -> None:
@@ -1568,16 +1573,41 @@ class _Lauf:
             ]
         )
 
-    def _setze_rundenform(self, runde: int) -> None:
-        """Zieht fuer jedes Auto die Rundenform dieser Runde (GDD 11)."""
+    def _setze_sektorform(self, i: int, sektor: int) -> None:
+        """Zieht die Form eines Autos fuer den beginnenden Sektor (Punkt 95).
+
+        Das Vorzeichen haengt am Platzgewinn im Sektor davor: Wer gerade
+        Plaetze gutgemacht hat, faehrt den naechsten mit hoeherer
+        Wahrscheinlichkeit ueber seiner Form. Gezaehlt wird wie bei den
+        Positionsgewinnen je Runde - Ausgefallene und Autos im Ziel
+        zaehlen nicht mit, an ihnen ist niemand vorbeigefahren.
+        """
         if self.ohne_zufall:
             return
-        faktoren = [
-            kern_form.rundenform(self.k, auto, self.seedquelle.zweig("rundenform", i), runde)
-            for i, auto in enumerate(self.autos)
-        ]
-        # Der Wurf gilt der Rundenzeit; als Tempofaktor ist es der Kehrwert.
-        self.tempoform = 1.0 / np.array(faktoren)
+        faehrt_noch = self.aktiv & ~self.im_ziel
+        jetzt_vorne = self.distanz > self.distanz[i]
+        vorher_vorne = self.vorne_bei_sektorbeginn[i]
+        gewonnen = int(np.count_nonzero(vorher_vorne & ~jetzt_vorne & faehrt_noch))
+        verloren = int(np.count_nonzero(~vorher_vorne & jetzt_vorne & faehrt_noch))
+        self.vorne_bei_sektorbeginn[i] = jetzt_vorne
+
+        faktor = kern_form.sektorform(
+            self.k,
+            self.autos[i],
+            self.seedquelle.zweig("sektorform", i),
+            int(self.runden_gefahren[i]),
+            sektor,
+            gewonnen - verloren,
+        )
+        # Der Wurf gilt der Zeit; als Tempofaktor ist es der Kehrwert.
+        self.tempoform[i] = 1.0 / faktor
+
+    def _setze_startform(self) -> None:
+        """Die Form des ersten Sektors, bevor das Rennen losgeht."""
+        if self.ohne_zufall:
+            return
+        for i in range(self.anzahl):
+            self._setze_sektorform(i, 0)
 
     # -- ein Zeitschritt ---------------------------------------------------
     def schritt(self, zeit_ms: int, dt: float) -> None:
@@ -2103,6 +2133,8 @@ class _Lauf:
                     self._runde_fertig(i, ueberfahrt)
                 else:
                     self.naechster_sektor[i] += 1
+                    # Punkt 95: Jeder Sektor bekommt seine eigene Form.
+                    self._setze_sektorform(i, int(self.naechster_sektor[i]))
 
     def _runde_fertig(self, i: int, ueberfahrt: float) -> None:
         """Haelt Runden- und Sektorzeiten fest und prueft das Rennende."""
@@ -2128,13 +2160,9 @@ class _Lauf:
         self.naechster_sektor[i] = 0
         self._zaehle_positionsgewinne(i)
 
-        # Jede Runde wird die Rundenform neu gezogen (GDD 11); das Wetter
-        # kann sich inzwischen geaendert haben (GDD 7).
-        if not self.ohne_zufall:
-            self.tempoform[i] = 1.0 / kern_form.rundenform(
-                self.k, self.autos[i], self.seedquelle.zweig("rundenform", i),
-                int(self.runden_gefahren[i]),
-            )
+        # Punkt 95: Die Ziellinie ist zugleich die Grenze zum ersten
+        # Sektor der neuen Runde - auch dort faellt die Form neu.
+        self._setze_sektorform(i, 0)
         self._setze_grip(ueberfahrt)
         # Reifenzustand und Zwischenfaelle werden je Runde nachgezogen.
         self._setze_reifen(i)

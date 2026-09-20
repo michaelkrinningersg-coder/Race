@@ -9,15 +9,21 @@ Tagesform            vor Qualifying, erneut vor       ein Faktor auf alle
                      dem Rennen                       Fahrerwerte
 Eigenschafts-Zufall  vor Qualifying, erneut vor       jeder einzelne Wert
                      dem Rennen
-Rundenform           jede Runde                       die Rundenzeit
+Sektorform           jeden Sektor                     die Sektorzeit
 ===================  ==============================  =====================
+
+Die Sektorform hiess bis Punkt 95 Rundenform und wurde einmal je Runde
+gezogen. Jetzt faellt sie in jedem der vier Sektoren neu, und ihr
+Vorzeichen haengt am Platzgewinn im Sektor davor: Wer gerade Plaetze
+gutgemacht hat, faehrt den naechsten mit drei Vierteln Wahrscheinlichkeit
+ueber seiner Form.
 
 Qualifying und Rennen bekommen eigene Zweige der Seedquelle, damit beide
 getrennt gewuerfelt werden und ein zusaetzlicher Wurf an einer Stelle die
 uebrigen nicht verschiebt.
 
 D16 Mentale Staerke begrenzt nur die negative Seite der Tagesform, D12
-Konstanz verkleinert die Streuung der Rundenform.
+Konstanz verkleinert die Streuung der Sektorform.
 """
 
 from __future__ import annotations
@@ -129,20 +135,80 @@ def wuerfle(
     )
 
 
-def rundenform(
-    konfiguration: Konfiguration, auto: Auto, seedquelle: Seedquelle, runde: int
-) -> float:
-    """Faktor auf die Rundenzeit einer einzelnen Runde (GDD 11).
+def streuung(konfiguration: Konfiguration, auto: Auto) -> float:
+    """Die Streuung der Sektorform dieses Autos (GDD 11).
 
-    Streuung 0,3 %, verkleinert durch D12 Konstanz. Der Rueckgabewert ist
-    ein Faktor auf die *Zeit*: groesser als 1 bedeutet langsamer.
+    Der Grundwert aus der Konfiguration, verkleinert durch D12 Konstanz.
     """
     einstellung = konfiguration.wert("zufall", "rundenform")
     daempfung = einstellung["daempfung"]
     anteil = leistungsanteil(
         auto.wert(daempfung["faehigkeit"]), konfiguration.wert("skala", "referenz")
     )
-    sigma = einstellung["sigma"] * (1.0 - daempfung["max_anteil"] * min(anteil, 1.0))
+    return einstellung["sigma"] * (1.0 - daempfung["max_anteil"] * min(anteil, 1.0))
 
-    wuerfel = seedquelle.zweig("runde", runde).generator()
-    return 1.0 + float(wuerfel.normal(0.0, sigma))
+
+def gute_haelfte(konfiguration: Konfiguration, plaetze: int) -> float:
+    """Wahrscheinlichkeit, dass die Form nach oben ausschlaegt (Punkt 95).
+
+    ``plaetze`` ist der Platzgewinn im Sektor davor: positiv fuer
+    gutgemachte, negativ fuer verlorene Plaetze. Bei einem gewonnenen
+    Platz steht die Wahrscheinlichkeit auf dem Wert aus der Konfiguration,
+    und sie naehert sich mit jedem weiteren Platz der Eins, ohne sie zu
+    erreichen - ein Fahrer wird nie sicher schnell.
+    """
+    if plaetze == 0:
+        return 0.5
+    bei_einem = konfiguration.wert("zufall", "rundenform", "kopplung", "bei_einem_platz")
+    rest = 2.0 - 2.0 * bei_einem
+    naeherung = 0.5 * (1.0 - rest ** abs(plaetze))
+    return 0.5 + naeherung if plaetze > 0 else 0.5 - naeherung
+
+
+def rundenform_aus_sektoren(
+    konfiguration: Konfiguration,
+    auto: Auto,
+    seedquelle: Seedquelle,
+    runde: int,
+    plaetze: int = 0,
+) -> float:
+    """Die Form einer ganzen Runde als Mittel ihrer Sektoren (Punkt 95).
+
+    Fuer den Schnellmodus, der keine Sektoren fuehrt. Weil die Sektoren
+    gleich lang sind, ist die Rundenzeit das Mittel ihrer Faktoren - die
+    Verteilung stimmt damit mit der vollen Simulation ueberein, ohne dass
+    der Schnellmodus die Runde zerlegen muesste.
+    """
+    anzahl = konfiguration.wert("strecke", "sektoren")
+    summe = sum(
+        sektorform(konfiguration, auto, seedquelle, runde, sektor, plaetze)
+        for sektor in range(anzahl)
+    )
+    return summe / anzahl
+
+
+def sektorform(
+    konfiguration: Konfiguration,
+    auto: Auto,
+    seedquelle: Seedquelle,
+    runde: int,
+    sektor: int = 0,
+    plaetze: int = 0,
+) -> float:
+    """Faktor auf die Zeit eines einzelnen Sektors (GDD 11, Punkt 95).
+
+    Gezogen wird der Betrag ``|normal(0, sigma)|``; das Vorzeichen faellt
+    mit ``gute_haelfte`` gut aus. Bei p = 0,5 ist das rechnerisch wieder
+    die Normalverteilung - ohne Platzaenderung im Sektor davor aendert
+    sich also nichts am bisherigen Verhalten.
+
+    Der Rueckgabewert ist ein Faktor auf die *Zeit*: groesser als 1
+    bedeutet langsamer.
+
+    :param plaetze: Platzgewinn im Sektor davor, negativ bei Verlusten
+    """
+    sigma = streuung(konfiguration, auto)
+    wuerfel = seedquelle.zweig("sektor", runde, sektor).generator()
+    betrag = abs(float(wuerfel.normal(0.0, sigma)))
+    gut = float(wuerfel.random()) < gute_haelfte(konfiguration, plaetze)
+    return 1.0 - betrag if gut else 1.0 + betrag
