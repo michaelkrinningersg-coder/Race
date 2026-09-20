@@ -18,6 +18,7 @@ pytest.importorskip("PySide6")
 from PySide6.QtCore import Qt  # noqa: E402
 
 from rennmanager.ui.hauptfenster import Hauptfenster  # noqa: E402
+from tests.oberflaeche import weiter  # noqa: E402
 
 
 # -- Karriereseite ----------------------------------------------------------
@@ -423,7 +424,7 @@ def test_autosave_nach_dem_rennwochenende(qtbot, konfig) -> None:
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
     for _ in range(3):
-        fenster.wochenendeseite.knopf_weiter.click()
+        weiter(fenster.wochenendeseite)
 
     stand = kern_spielstand.lade(konfig, kern_spielstand.autosave())
     assert stand.gefahrene_rennen == 1

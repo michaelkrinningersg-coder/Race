@@ -2477,3 +2477,42 @@ stattdessen nur, den Wrapper zu umgehen.
 
 Die Lehre ist dieselbe wie bei D3: Ein Vorschlag mit einer plausiblen
 Begründung ist noch keine Verbesserung. Gemessen wird vorher.
+
+**E10 bis E12.**
+
+**E10 — das Rennen rechnet im Hintergrund.** `simuliere()` nimmt einen
+`fortschritt`-Rückruf, der bei jeder vollen Runde des Führenden gerufen
+wird; die Wochenendseite rechnet damit in einem eigenen Faden und zeigt
+„Rennen wird gerechnet — Runde 23 von 40". Schneller wird nichts, aber
+das Fenster bleibt ansprechbar. Ein Test hält fest, dass der Rückruf am
+Rennen nichts ändert.
+
+**E11 — die Welt einmal erzeugen: es gab gar nichts zu tun.** Der
+Vorschlag stand unter der Bedingung „wenn das je Rennwochenende erneut
+passiert". Tut es nicht: `kern_welt.erzeuge` steht genau einmal im
+Programm, im Hauptfenster. Die gemessenen 409 ms fallen beim Start an,
+nicht je Rennen.
+
+**E12 — float32 nur für den Reifenzustand.** Der Vorschlag lautete,
+alle Bildfelder auf halbe Genauigkeit zu stellen. Für `distanz_m` wäre
+das ein Fehler gewesen, und zwar einer, den man erst im fertigen Spiel
+sieht:
+
+| | |
+| --- | ---: |
+| größte Distanz über 40 Runden | 169.778 m |
+| Auflösung von `float32` dort | **15,6 mm** |
+| engster gemessener Abstand zweier Autos | **5,24 mm** |
+
+An `distanz_m` hängt die Reihenfolge des ganzen Feldes. Bei 15,6 mm
+Auflösung bekämen zwei Autos, die 5 mm auseinander sind, denselben Wert
+— wer vorn liegt, entschiede dann die Sortierung statt die Strecke. Eine
+Stichprobe über 4.000 Zeitpunkte fand zwar keine Abweichung, aber das
+beweist nur, dass der Fall selten ist, nicht dass es ihn nicht gibt.
+`distanz_m` bleibt deshalb `float64`; die Begründung steht jetzt im
+Docstring, damit sie beim nächsten Anlauf gefunden wird.
+
+Der Reifenzustand wird dagegen nur angezeigt — als Balken und als
+Prozentzahl — und nie für eine Entscheidung gelesen; die Simulation
+rechnet auf `verschleiss`. Dort ist `float32` unbedenklich und halbiert
+den Speicher: **10,7 → 8,0 MB** je Rennen.

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import math
 from bisect import bisect_right
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from functools import cached_property
 from typing import TYPE_CHECKING
@@ -225,7 +226,13 @@ class Rennverlauf:
     """Der fertig berechnete Rennverlauf.
 
     :param zeitpunkte_ms: Zeitpunkte der festgehaltenen Bilder
-    :param distanz_m: Form ``(Bilder, Autos)``, zurueckgelegte Strecke
+    :param distanz_m: Form ``(Bilder, Autos)``, zurueckgelegte Strecke.
+        **Bleibt ``float64``** (E12): Daran haengt die Reihenfolge des
+        ganzen Feldes. Gemessen ueber vierzig Runden reicht die Distanz
+        bis 170 km; ``float32`` loest dort nur noch auf 15,6 mm auf,
+        waehrend sich zwei Autos im selben Rennen auf 5,24 mm naeherten.
+        Zwei Autos bekaemen dann denselben Wert, und wer vorn liegt,
+        entschiede die Sortierung statt die Strecke.
     :param ausgefallen: Form ``(Bilder, Autos)``, ob das Auto noch faehrt
     """
 
@@ -245,6 +252,7 @@ class Rennverlauf:
     # Erfahrung aus GDD 10 hieran und nicht an den rohen Vorbeigaengen.
     positionsgewinne: tuple[int, ...]
     zwischenfaelle: tuple[kern_zwischenfall.Zwischenfall, ...]
+    # ``float32`` (E12) - reine Anzeigegroesse, siehe ``simuliere``.
     reifenzustand: np.ndarray
     ergebnisse: tuple[Ergebnis, ...]
     dauer_ms: int
@@ -2018,6 +2026,7 @@ def simuliere(
     strategien: tuple[kern_strategie.Strategie, ...] | None = None,
     mischungspflicht: bool = False,
     liga: int | None = None,
+    fortschritt: Callable[[int, int], None] | None = None,
 ) -> Rennverlauf:
     """Faehrt ein ganzes Rennen und liefert den fertigen Verlauf.
 
@@ -2053,6 +2062,11 @@ def simuliere(
     :param liga: bestimmt das Boxenlimit (Punkt 39). Liga 1 bis 5 faehrt
         80 km/h, die unteren Ligen weniger. Ohne Angabe gilt der
         Grundwert.
+    :param fortschritt: wird bei jeder vollen Runde des Fuehrenden mit
+        ``(Runde, Runden)`` gerufen (E10). Damit kann die Oberflaeche
+        anzeigen, wie weit die Rechnung ist, statt vierzehn Sekunden zu
+        stehen. Der Rueckruf liest nur - am Rennen aendert er nichts,
+        und ohne ihn laeuft die Schleife wie zuvor.
     """
     if not teilnehmer:
         raise ValueError("Ohne Teilnehmer gibt es kein Rennen")
@@ -2090,10 +2104,19 @@ def simuliere(
 
     zeit_ms = 0
     nummer = 0
+    gemeldete_runde = 0
     while not lauf.alle_fertig and zeit_ms < hoechstdauer_ms:
         lauf.schritt(zeit_ms, dt)
         zeit_ms += schritt_ms
         nummer += 1
+        if fortschritt is not None:
+            # E10: Nur beim Rundenwechsel des Fuehrenden melden - ein
+            # Rueckruf je Rechenschritt waere bei 89.439 Schritten selbst
+            # eine Bremse.
+            vorn = int(lauf.runden_gefahren.max())
+            if vorn > gemeldete_runde:
+                gemeldete_runde = vorn
+                fortschritt(vorn, runden)
         if nummer % je_bild == 0:
             zeitpunkte.append(zeit_ms)
             distanzen.append(lauf.distanz.copy())
@@ -2122,7 +2145,12 @@ def simuliere(
         manoever=tuple(lauf.manoever),
         positionsgewinne=tuple(int(n) for n in lauf.positionsgewinne),
         zwischenfaelle=tuple(lauf.zwischenfaelle),
-        reifenzustand=np.array(reifen),
+        # E12: Der Reifenzustand wird nur angezeigt - als Balken und als
+        # Prozentzahl -, nie fuer eine Entscheidung gelesen; die
+        # Simulation rechnet auf ``verschleiss``. Die halbe Genauigkeit
+        # loest hier noch auf ein Zehnmillionstel auf und halbiert den
+        # Speicher von 5,3 auf 2,7 MB je Rennen.
+        reifenzustand=np.array(reifen, dtype=np.float32),
         ergebnisse=_ergebnisse(lauf, konfiguration, seedquelle),
         dauer_ms=zeit_ms,
         mischungsindex=np.array(mischungsbilder),

@@ -643,3 +643,43 @@ def test_die_ideale_runde_ueberholt_die_gefahrene_nicht(rennen) -> None:
         beste = rennen.protokolle[i].beste_runde_ms
         if ideal is not None and beste is not None:
             assert ideal <= beste
+
+
+# -- Genauigkeit der Bildfelder (E12) ---------------------------------------
+def test_die_distanzen_bleiben_doppelt_genau(rennen) -> None:
+    """E12: An ``distanz_m`` haengt die Reihenfolge des ganzen Feldes.
+
+    Gemessen ueber vierzig Runden reicht die Distanz bis 170 km; dort
+    loest ``float32`` nur noch auf 15,6 mm auf, waehrend sich zwei Autos
+    im selben Rennen auf 5,24 mm naeherten. Zwei Autos bekaemen dann
+    denselben Wert, und wer vorn liegt, entschiede die Sortierung statt
+    die Strecke - ein Fehler, den man erst im fertigen Spiel sieht und
+    dann nicht mehr erklaeren kann.
+    """
+    assert rennen.distanz_m.dtype == np.float64
+
+
+def test_der_reifenzustand_reicht_einfach_genau(rennen) -> None:
+    """E12: Reine Anzeigegroesse - Balken und Prozentzahl.
+
+    Die Simulation rechnet auf ``verschleiss``; dieses Feld wird nie
+    fuer eine Entscheidung gelesen. Halbe Genauigkeit loest hier noch
+    auf ein Zehnmillionstel auf und halbiert den Speicher.
+    """
+    assert rennen.reifenzustand.dtype == np.float32
+    assert float(rennen.reifenzustand.max()) <= 1.0
+    assert float(rennen.reifenzustand.min()) >= 0.0
+
+
+def test_der_fortschritt_aendert_das_rennen_nicht(k, zandvoort, mittel) -> None:
+    """E10: Der Rueckruf liest nur mit, er greift nicht ein."""
+    feld = rn.starterfeld(k, LIGA, spielerplatz=30)
+    gemeldet: list[tuple[int, int]] = []
+    ohne = rn.simuliere(k, zandvoort, feld, 3, Seedquelle(4711), mittel)
+    mit = rn.simuliere(
+        k, zandvoort, feld, 3, Seedquelle(4711), mittel,
+        fortschritt=lambda runde, gesamt: gemeldet.append((runde, gesamt)),
+    )
+    assert np.array_equal(ohne.distanz_m, mit.distanz_m)
+    assert ohne.ergebnisse == mit.ergebnisse
+    assert gemeldet == [(1, 3), (2, 3), (3, 3)]

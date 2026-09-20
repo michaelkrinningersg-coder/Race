@@ -449,6 +449,28 @@ Die **Startaufstellung fuers Rennen** rechts fuellt sich erst, wenn der
 Letzte durch ist (ebenfalls Entscheidung des Auftraggebers). Vorher
 stuende dort das Ergebnis, auf das die Uebertragung gerade zulaeuft.
 
+#### Warum das Rennen im Hintergrund rechnet
+
+Ein Rennen zu rechnen kostet gemessen elf Sekunden (Zandvoort, 30 Autos,
+40 Runden). Bis Punkt 86 lief das im Oberflaechen-Thread: Der Knopf ging
+aus, der Mauszeiger wurde zur Sanduhr, und das Fenster reagierte elf
+Sekunden lang auf nichts. Ein Fenster, das nicht reagiert, sieht
+abgestuerzt aus - auch wenn es fleissig rechnet.
+
+Jetzt laeuft dieselbe Rechnung in einem eigenen Faden
+(`rennmanager.ui.hintergrund.Rechenlauf`) und meldet unterwegs, wie weit
+sie ist: "Rennen wird gerechnet - Runde 23 von 40". Schneller wird sie
+davon nicht, sie fuehlt sich nur nicht mehr wie ein Haenger an.
+
+`simuliere()` nimmt dafuer einen `fortschritt`-Rueckruf, der bei jeder
+vollen Runde des Fuehrenden gerufen wird. Er liest nur mit - am Rennen
+aendert er nichts, und das haelt ein Test fest. Je Rechenschritt zu
+melden waere bei 89.439 Schritten selbst eine Bremse.
+
+Der Arbeitsfaden fasst keine Widgets an; er meldet ueber Signale, die Qt
+in die Schlange des Hauptthreads stellt. Alles andere waere ein Absturz,
+der erst beim Kunden auftritt.
+
 #### Warum der Aufbau nichts bewegt
 
 Der `Wochenendlauf` ist beim Aufbau eine reine Vorschau: Strecke,

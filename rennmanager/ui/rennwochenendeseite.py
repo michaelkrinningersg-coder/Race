@@ -37,6 +37,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMessageBox,
+    QProgressBar,
     QPushButton,
     QStackedWidget,
     QTreeWidget,
@@ -50,6 +51,7 @@ from rennmanager.kern import saison as kern_saison
 from rennmanager.kern import wertung as kern_wertung
 from rennmanager.kern.zeit import formatiere_dauer
 from rennmanager.konfiguration import Konfiguration
+from rennmanager.ui.hintergrund import Rechenlauf
 from rennmanager.ui.qualifyingseite import Qualifyingseite
 from rennmanager.ui.reifenwahl import Reifenwahl
 from rennmanager.ui.rennseite import Rennseite
@@ -133,14 +135,41 @@ class Rennwochenendeseite(QWidget):
         )
         self._ligawahl.currentIndexChanged.connect(self._ligawahl_geaendert)
 
+        # E10: Der laufende Hintergrundlauf, solange es einen gibt.
+        self._rechnung: Rechenlauf | None = None
         self._weiter = QPushButton()
         self._weiter.clicked.connect(self._naechster_schritt)
 
+        # E10: Solange im Hintergrund gerechnet wird, steht hier, wie weit
+        # es ist. Ohne das sah ein rechnendes Fenster aus wie ein
+        # abgestuerztes.
+        self._rechenstand = QLabel("")
+        self._rechenbalken = QProgressBar()
+        self._rechenbalken.setTextVisible(False)
+        self._rechenbalken.setMaximumWidth(180)
+        self._zeige_rechnung(laeuft=False)
+
         kasten.addWidget(self._ueberschrift)
         kasten.addStretch(1)
+        kasten.addWidget(self._rechenstand)
+        kasten.addWidget(self._rechenbalken)
         kasten.addWidget(self._ligawahl)
         kasten.addWidget(self._weiter)
         return zeile
+
+    def _zeige_rechnung(self, *, laeuft: bool, getan: int = 0, gesamt: int = 0) -> None:
+        """Schaltet die Fortschrittsanzeige an oder aus (E10)."""
+        self._rechenstand.setVisible(laeuft)
+        self._rechenbalken.setVisible(laeuft)
+        if not laeuft:
+            return
+        self._rechenstand.setText(
+            f"Rennen wird gerechnet - Runde {getan} von {gesamt}"
+            if gesamt
+            else "Rennen wird gerechnet"
+        )
+        self._rechenbalken.setRange(0, max(gesamt, 1))
+        self._rechenbalken.setValue(getan)
 
     def _fuelle_ligawahl(self) -> None:
         """Traegt die Ligen der eigenen Fahrer ein, die gewaehlte bleibt."""
@@ -290,6 +319,16 @@ class Rennwochenendeseite(QWidget):
     def _naechster_schritt(self) -> None:
         if self._lauf.ist_fertig and self._wochenende is None:
             return
+        if self._rechnung is not None:
+            return  # Es laeuft schon eine Rechnung.
+        if self._schritt == 1:
+            # E10: Das Rennen ist die teure Etappe - gemessen elf
+            # Sekunden. Es laeuft im Hintergrund, damit das Fenster
+            # waehrenddessen ansprechbar bleibt. Deshalb steht es
+            # **vor** dem Sanduhr-Block: Eine Sanduhr ueber einem
+            # Fenster, das man bedienen darf, waere gelogen.
+            self._starte_rennrechnung()
+            return
         QApplication.setOverrideCursor(Qt.WaitCursor)
         self._weiter.setEnabled(False)
         try:
@@ -303,17 +342,6 @@ class Rennwochenendeseite(QWidget):
                     self._wochenende.runden,
                 )
                 self._schritt = 1
-            elif self._schritt == 1:
-                verlauf = self._wochenende.fahre_rennen()
-                # Punkt 73: Der Meisterschaftsstand **vor** diesem Rennen -
-                # daraus rechnet die Rennseite den Live-Stand.
-                self._rennen.zeige_verlauf(
-                    verlauf,
-                    self._wochenende.strecke,
-                    self._wochenende.qualifying,
-                    tabelle=self._lauf.tabelle(self._wochenende.liga),
-                )
-                self._schritt = 2
             elif self._schritt == 2:
                 self._wochenende.schliesse_ab()
                 self._fuelle_ergebnis()
@@ -329,6 +357,60 @@ class Rennwochenendeseite(QWidget):
             QApplication.restoreOverrideCursor()
             self._weiter.setEnabled(True)
         self._zeige_schritt()
+
+    def _starte_rennrechnung(self) -> None:
+        """Rechnet das Rennen im Hintergrund (E10)."""
+        wochenende = self._wochenende
+        self._weiter.setEnabled(False)
+        self._zeige_rechnung(laeuft=True, getan=0, gesamt=wochenende.runden)
+
+        self._rechnung = Rechenlauf(lambda melde: wochenende.fahre_rennen(melde), self)
+        self._rechnung.fortschritt.connect(
+            lambda getan, gesamt: self._zeige_rechnung(
+                laeuft=True, getan=getan, gesamt=gesamt
+            )
+        )
+        self._rechnung.fertig.connect(self._rennen_gerechnet)
+        self._rechnung.fehlgeschlagen.connect(self._rechnung_fehlgeschlagen)
+        self._rechnung.start()
+
+    def _rennen_gerechnet(self, verlauf) -> None:
+        """Das Rennen steht - jetzt darf die Anzeige es uebernehmen."""
+        self._rechnung = None
+        self._zeige_rechnung(laeuft=False)
+        # Punkt 73: Der Meisterschaftsstand **vor** diesem Rennen -
+        # daraus rechnet die Rennseite den Live-Stand.
+        self._rennen.zeige_verlauf(
+            verlauf,
+            self._wochenende.strecke,
+            self._wochenende.qualifying,
+            tabelle=self._lauf.tabelle(self._wochenende.liga),
+        )
+        self._schritt = 2
+        self._weiter.setEnabled(True)
+        self._zeige_schritt()
+
+    def _rechnung_fehlgeschlagen(self, meldung: str, _rueckverfolgung: str) -> None:
+        """Ein Fehler im Arbeitsfaden darf nicht still verschwinden."""
+        self._rechnung = None
+        self._zeige_rechnung(laeuft=False)
+        self._weiter.setEnabled(True)
+        QMessageBox.warning(self, "Rennwochenende", meldung)
+
+    def warte_auf_rechnung(self, ms: int = 300_000) -> None:
+        """Wartet, bis eine laufende Hintergrundrechnung durch ist.
+
+        Fuer Tests und fuers Speichern: Beide brauchen ein fertiges
+        Rennen, und beide laufen im Hauptthread. ``QThread.wait`` allein
+        genuegt nicht - die Signale des Arbeitsfadens stehen danach noch
+        in der Schlange und muessen abgearbeitet werden, sonst hat die
+        Seite den Verlauf noch nicht uebernommen.
+        """
+        rechnung = self._rechnung
+        if rechnung is None:
+            return
+        rechnung.wait(ms)
+        QApplication.processEvents()
 
     def _zeige_schritt(self) -> None:
         self._blaetter.setCurrentIndex(self._schritt)

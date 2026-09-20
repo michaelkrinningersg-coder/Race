@@ -37,6 +37,19 @@ def ein_fahrer(fenster, anteil: float = 0.5):
     return fahrer[min(int(len(fahrer) * anteil), len(fahrer) - 1)]
 
 
+def weiter(seite, mal: int = 1) -> None:
+    """Klickt "Weiter" und wartet auf die Hintergrundrechnung (E10).
+
+    Seit E10 laeuft das Rennen in einem eigenen Thread, damit das Fenster
+    waehrend der elf Sekunden ansprechbar bleibt. Ein Test, der direkt
+    nach dem Klick nachsieht, findet deshalb noch nichts - er muss
+    warten, so wie der Spieler auch wartet, nur ohne zuzusehen.
+    """
+    for _ in range(mal):
+        seite.knopf_weiter.click()
+        seite.warte_auf_rechnung()
+
+
 def schlage_blatt_auf(seite, name: str):
     """Oeffnet eines der vier rechten Blaetter der Rennseite (D2).
 
@@ -137,7 +150,7 @@ def gefahrenes_qualifying(fenster):
     zeigt, was das gefuehrte Wochenende ihr reicht. Das Qualifying selbst
     dauert nur Bruchteile einer Sekunde.
     """
-    fenster.wochenendeseite.knopf_weiter.click()
+    weiter(fenster.wochenendeseite)
     return fenster.qualifyingseite
 
 

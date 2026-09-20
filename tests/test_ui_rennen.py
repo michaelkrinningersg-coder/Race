@@ -21,6 +21,7 @@ from tests.oberflaeche import (  # noqa: E402
     gefahrenes_qualifying,
     kurzes_rennen,
     schlage_blatt_auf,
+    weiter,
 )
 
 
@@ -280,8 +281,7 @@ def test_die_aufstellung_kommt_aus_dem_qualifying(
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
     gefuehrt = fenster.wochenendeseite
-    gefuehrt.knopf_weiter.click()   # Qualifying
-    gefuehrt.knopf_weiter.click()   # Rennen
+    weiter(gefuehrt, 2)   # Qualifying, dann Rennen
     seite = fenster.rennseite
     seite._halte_an()
 

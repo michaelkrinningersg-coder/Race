@@ -332,6 +332,7 @@ def _fahre_rennen(
     rhythmusfaktor: tuple[float, ...],
     quali: Qualifying,
     wahl: dict[int, kern_strategie.Strategie] | None = None,
+    fortschritt=None,
 ) -> tuple[Ligawochenende, Rennverlauf]:
     """Das Rennen einer Liga auf ein gefahrenes Qualifying (GDD 4).
 
@@ -344,6 +345,9 @@ def _fahre_rennen(
     :param wahl: je Fahrernummer eine vom Spieler gewaehlte Strategie
         (Punkt 39). Wer nicht darin steht, faehrt, was die
         Vorausberechnung ihm zuteilt.
+    :param fortschritt: wird je gefahrener Runde des Fuehrenden gerufen
+        (E10), damit die Oberflaeche waehrend der Rechnung etwas zeigen
+        kann.
     """
     gestartet = startfeld(konfiguration, welt, liga, spielerautos, quali)
     vorbereitung = vor_dem_rennen(
@@ -375,6 +379,7 @@ def _fahre_rennen(
         kenntnisfaktor=tuple(kenntnisfaktor[i] for i in quali.aufstellung),
         tagesformbonus=tuple(tagesformbonus[i] for i in quali.aufstellung),
         rhythmusfaktor=tuple(rhythmusfaktor[i] for i in quali.aufstellung),
+        fortschritt=fortschritt,
     )
 
     # ``Ergebnis.teilnehmer`` zaehlt in der Startaufstellung, also ist der
@@ -1439,11 +1444,15 @@ class Wochenendlauf:
         )
         self.reifenwahl[fahrernummer] = strategie
 
-    def fahre_rennen(self) -> Rennverlauf:
+    def fahre_rennen(self, fortschritt=None) -> Rennverlauf:
         """Zweite Etappe: das Rennen auf die gefahrene Aufstellung.
 
         Gebucht wird hier noch nichts - erst ``schliesse_ab`` traegt ein,
         damit ein abgebrochenes Wochenende die Saison nicht halb bewegt.
+
+        :param fortschritt: wird je gefahrener Runde des Fuehrenden mit
+            ``(Runde, Runden)`` gerufen (E10). Die Oberflaeche rechnet
+            damit im Hintergrund und zeigt, wie weit sie ist.
         """
         if self.qualifying is None:
             raise WochenendFehler(
@@ -1467,6 +1476,7 @@ class Wochenendlauf:
             self.daten.rhythmus,
             self.qualifying,
             wahl=dict(self.reifenwahl),
+            fortschritt=fortschritt,
         )
         return self.verlauf
 
