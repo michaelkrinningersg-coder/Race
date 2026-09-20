@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from rennmanager.kern import form as kern_form
+from rennmanager.kern import gummierung as kern_gummierung
 from rennmanager.kern import reifen as kern_reifen
 from rennmanager.kern import strategie as kern_strategie
 from rennmanager.kern import wetter as kern_wetter
@@ -82,6 +83,11 @@ class Fahrt:
     # Punkt 39: Womit die Runde gefahren wurde. Im Qualifying keine Wahl,
     # sondern eine Regel - deshalb steht das Kuerzel hier nur zur Anzeige.
     mischung: str = ""
+    # Punkt 88: Der Gummi-Aufschlag, den die Strecke dieser Runde bot -
+    # als Anteil, also 0,0016 fuer 0,16 Prozent. Wer spaeter faehrt,
+    # findet mehr vor; die Startreihenfolge ist der umgekehrte
+    # Meisterschaftsstand (GDD 4).
+    gummi: float = 0.0
 
     @property
     def runde_ab_ms(self) -> int:
@@ -286,7 +292,12 @@ def startreihenfolge(
 
 
 def _grip_je_punkt(
-    strecke: Strecke, verlauf: kern_wetter.Wetterverlauf, konfiguration, auto, zeit_ms: float
+    strecke: Strecke,
+    verlauf: kern_wetter.Wetterverlauf,
+    konfiguration,
+    auto,
+    zeit_ms: float,
+    gummi: float = 1.0,
 ) -> np.ndarray:
     """Grip je Streckenpunkt zu einem Zeitpunkt, mit Wetterkoennen.
 
@@ -297,8 +308,11 @@ def _grip_je_punkt(
     grip = np.empty(len(strecke.punkte))
     for sektor in strecke.sektoren:
         roh = verlauf.grip_zu(zeit_ms, sektor.nummer)
-        grip[sektor.von : sektor.bis] = kern_wetter.grip_fuer(
-            konfiguration, auto, zustand, roh
+        # Punkt 88: Der Gummi-Aufschlag wirkt **nach** ``grip_fuer`` -
+        # Gummi auf der Strecke ist keine Fahrkunst und wird deshalb
+        # nicht von der Wetterfaehigkeit gedaempft.
+        grip[sektor.von : sektor.bis] = (
+            kern_wetter.grip_fuer(konfiguration, auto, zustand, roh) * gummi
         )
     return grip
 
@@ -384,6 +398,9 @@ def fahre(
     )
 
     fahrten: list[Fahrt] = []
+    # Punkt 88: Gefahrene Auto-Runden Gummi. Waechst mit jedem Auto, das
+    # drausen war - wer spaeter faehrt, findet mehr vor.
+    gummistand = 0.0
     for platz, i in enumerate(reihenfolge):
         # Ueberlappender Start: jedes Auto rueckt abstand_runden nach dem
         # vorigen los und faehrt seine Runden dennoch allein.
@@ -403,17 +420,32 @@ def fahre(
             grenzen_aus(konfiguration, auto),
             quer=grenzen_aus(konfiguration, auto).quer * rhythmusfaktor[i],
         )
+        # Punkt 88: Der Stand, den dieses Auto vorfindet - alles, was die
+        # Autos vor ihm gefahren haben. Die Schleife laeuft in der
+        # Startreihenfolge und damit in der Zeit, also stimmt das.
+        gummi_faktor = kern_gummierung.faktor(konfiguration, gummistand)
         for _ in range(aufwaermrunden):
-            grip = _grip_je_punkt(strecke, verlauf, konfiguration, auto, uhr)
+            grip = _grip_je_punkt(
+                strecke, verlauf, konfiguration, auto, uhr, gummi_faktor
+            )
             uhr += fahre_runde(
                 konfiguration, strecke, auto, grip, grenzen
             ).zeit_ms / kenntnis
 
         # Gezeitete Runde. Zustand und Grip gelten fuer den Beginn der
         # Runde - danach kann das Wetter schon gewechselt haben.
+        # Die Aufwaermrunden dieses Autos zaehlen fuer seine eigene
+        # gezeitete Runde schon mit - es ist ja selbst darueber gefahren.
+        gummistand = kern_gummierung.naechster_stand(
+            konfiguration, gummistand, verlauf.zustand_zu(uhr), aufwaermrunden
+        )
+        gummi_faktor = kern_gummierung.faktor(konfiguration, gummistand)
+
         beginn_runde = uhr
         zustand = verlauf.zustand_zu(beginn_runde)
-        grip = _grip_je_punkt(strecke, verlauf, konfiguration, auto, beginn_runde)
+        grip = _grip_je_punkt(
+            strecke, verlauf, konfiguration, auto, beginn_runde, gummi_faktor
+        )
         runde = fahre_runde(konfiguration, strecke, auto, grip, grenzen)
 
         # Rundenform, der Bonus aus der Q-Spalte, die Streckenkenntnis und
@@ -444,7 +476,11 @@ def fahre(
                 zustand=zustand,
                 grip=float(grip.mean()),
                 mischung=misch.kuerzel,
+                gummi=gummi_faktor - 1.0,
             )
+        )
+        gummistand = kern_gummierung.naechster_stand(
+            konfiguration, gummistand, zustand, 1.0
         )
 
     # Aufstellung: schnellste Runde zuerst. Bei Gleichstand auf die

@@ -31,6 +31,7 @@ import numpy as np
 
 from rennmanager.kern import boxenstopp as kern_boxenstopp
 from rennmanager.kern import form as kern_form
+from rennmanager.kern import gummierung as kern_gummierung
 from rennmanager.kern import reifen as kern_reifen
 from rennmanager.kern import strategie as kern_strategie
 from rennmanager.kern import tempoverlauf as kern_tempoverlauf
@@ -262,6 +263,10 @@ class Rennverlauf:
     mischungsindex: np.ndarray | None = None
     # Die Kuerzel in der Reihenfolge der Indizes.
     mischungen: tuple[str, ...] = ()
+    # Punkt 88: Der Gummistand je Bild, als gefahrene Auto-Runden. Die
+    # Anzeige macht daraus den Aufschlag in Prozent. ``None`` bei einem
+    # Rennen ohne Wetter - dort bleibt die Strecke gruen.
+    gummierung: np.ndarray | None = None
     boxenstopps: tuple[Boxenstopp, ...] = ()
     # Ob in diesem Rennen zwei Mischungen Pflicht sind (Punkt 39). Bei
     # Regen, Starkregen und wechselhaftem Wetter ist die Pflicht
@@ -335,6 +340,12 @@ class Rennverlauf:
             if kuerzel not in gesehen:
                 gesehen.append(kuerzel)
         return tuple(gesehen)
+
+    def gummierung_zu(self, zeit_ms: float) -> float:
+        """Gefahrene Auto-Runden Gummi zu diesem Zeitpunkt (Punkt 88)."""
+        if self.gummierung is None or not len(self.gummierung):
+            return 0.0
+        return float(self.gummierung[self.bild_zu(zeit_ms)])
 
     def distanzen_zu(self, zeit_ms: float) -> np.ndarray:
         """Zurueckgelegte Strecke je Auto, zwischen den Bildern interpoliert."""
@@ -735,6 +746,9 @@ class _Lauf:
         self.dt_s = konfiguration.wert("simulation", "zeitschritt_ms") / 1000.0
         # Der Wetter-Multiplikator auf Fehler und Unfaelle (GDD 7).
         self.wetter_fehlerfaktor = 1.0
+        # Punkt 88: Gefahrene Auto-Runden auf dieser Strecke in dieser
+        # Session. Daraus wird der Grip-Aufschlag der Gummierung.
+        self.gummierung = 0.0
         # E1: Der Nachbar je Platz - ``[1, 2, ..., n-1, 0]``. ``np.roll``
         # tat dasselbe und kostete auf dreissig Werten 6,4 Mikrosekunden;
         # ein fertiger Indexvektor kostet 0,2. Bei einem Aufruf je
@@ -1377,8 +1391,15 @@ class _Lauf:
         roh = sum(
             self.wetter.grip_zu(zeit_ms, sektor.nummer) for sektor in self.strecke.sektoren
         ) / len(self.strecke.sektoren)
-        self.grip = np.array(
-            [kern_wetter.grip_fuer(self.k, auto, zustand, roh) for auto in self.autos]
+        # Punkt 88: Der Gummi-Aufschlag wirkt **nach** ``grip_fuer``. Davor
+        # daempfte die Wetterfaehigkeit ihn mit, und ein Regenspezialist
+        # bekaeme vom Gummi weniger ab - Gummi ist aber keine Fahrkunst.
+        gummi = kern_gummierung.faktor(self.k, self.gummierung)
+        self.grip = (
+            np.array(
+                [kern_wetter.grip_fuer(self.k, auto, zustand, roh) for auto in self.autos]
+            )
+            * gummi
         )
 
     def _setze_rundenform(self, runde: int) -> None:
@@ -1922,6 +1943,14 @@ class _Lauf:
         self.sektor_puffer[i] = []
         self.linienzeit[i] = ueberfahrt
         self.runden_gefahren[i] += 1
+        # Punkt 88: Diese Runde hat Gummi gebracht - oder abgewaschen.
+        # Die Lage gilt zum Zeitpunkt der Ueberfahrt; ohne Wetterverlauf
+        # bleibt die Strecke gruen (Laborfall: Kalibrierung und Tests -
+        # im Spiel hat jedes Rennen ein Wetter).
+        if self.wetter is not None:
+            self.gummierung = kern_gummierung.naechster_stand(
+                self.k, self.gummierung, self.wetter.zustand_zu(ueberfahrt)
+            )
         self.naechster_sektor[i] = 0
         self._zaehle_positionsgewinne(i)
 
@@ -2101,6 +2130,7 @@ def simuliere(
     ausgefallen = [~lauf.aktiv.copy()]
     reifen = [np.ones(lauf.anzahl)]
     mischungsbilder = [mischungszeile()]
+    gummibilder = [lauf.gummierung]
 
     zeit_ms = 0
     nummer = 0
@@ -2123,6 +2153,7 @@ def simuliere(
             ausgefallen.append(~lauf.aktiv.copy())
             reifen.append(np.clip(1.0 - lauf.verschleiss, 0.0, 1.0))
             mischungsbilder.append(mischungszeile())
+            gummibilder.append(lauf.gummierung)
 
     # Das letzte Bild immer festhalten, damit der Zielstand sichtbar ist.
     if zeitpunkte[-1] != zeit_ms:
@@ -2131,6 +2162,7 @@ def simuliere(
         ausgefallen.append(~lauf.aktiv.copy())
         reifen.append(np.clip(1.0 - lauf.verschleiss, 0.0, 1.0))
         mischungsbilder.append(mischungszeile())
+        gummibilder.append(lauf.gummierung)
 
     return Rennverlauf(
         strecke=strecke,
@@ -2155,6 +2187,7 @@ def simuliere(
         dauer_ms=zeit_ms,
         mischungsindex=np.array(mischungsbilder),
         mischungen=kuerzel,
+        gummierung=np.array(gummibilder, dtype=np.float32) if wetter is not None else None,
         boxenstopps=tuple(lauf.boxenstopps),
         mischungspflicht=mischungspflicht,
         messzeiten=tuple(tuple(zeiten) for zeiten in lauf.messzeiten),

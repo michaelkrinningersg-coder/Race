@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from rennmanager.kern import gummierung as kern_gummierung
 from rennmanager.kern import strecke as kern_strecke
 from rennmanager.kern import wertung as kern_wertung
 from rennmanager.kern.rennen import Rennverlauf
@@ -590,7 +591,14 @@ class Rennseite(QWidget):
         if verlauf.wetter is not None:
             zustand = verlauf.wetter.zustand_zu(zeit)
             grip = verlauf.wetter.grip_zu(zeit)
-            self._wetteranzeige.setText(f"{zustand}  (Grip {grip:.2f})")
+            # Punkt 88: Was die Strecke inzwischen an Gummi liegen hat.
+            # Ein Prozent davon ist rund eine Sekunde Rundenzeit.
+            gummi = kern_gummierung.anteil(
+                self._konfiguration, verlauf.gummierung_zu(zeit)
+            )
+            self._wetteranzeige.setText(
+                f"{zustand}  (Grip {grip:.2f})   Strecke +{gummi * 100:.2f} %"
+            )
 
         distanzen = verlauf.distanzen_zu(zeit)
         reihenfolge = verlauf.reihenfolge_zu(zeit)

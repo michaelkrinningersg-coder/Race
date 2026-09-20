@@ -225,6 +225,7 @@ abtastabstand_m = 5.0
 # Segmenttyp aus dem Kruemmungsradius
 enge_kurve_radius_max_m = 60.0
 gerade_radius_min_m = 300.0
+
 # Nur Geraden ab dieser Laenge sind Ueberholzonen
 ueberholzone_mindestlaenge_m = 100.0
 sektoren = 4
@@ -236,6 +237,38 @@ verzeichnis = "daten/strecken"
 linie = "ideallinie"
 # Segmenttypen rein nach Radius, ohne Mindestlaenge - das GDD nennt keine.
 mindestsegmentlaenge_m = 0.0
+
+# Punkt 88: Die Strecke gummiert ein (Entscheidung des Auftraggebers).
+# Der Stand zaehlt gefahrene **Auto-Runden** - jede Runde jedes Autos auf
+# dieser Strecke in dieser Session. Daraus wird der Grip-Aufschlag:
+#
+#   faktor(n) = 1 + max_anteil * (1 - e^(-n / halbwert_runden))
+#
+# Gemessen bedeutet ein Prozent Grip rund eine Sekunde Rundenzeit
+# (Zandvoort -0,84 s, Spa -1,13 s, Sakhir -0,95 s), weil der Grip
+# quadratisch ins Kurvenlimit geht. Mit den Werten unten:
+#
+#   Qualifying, letzter Starter (n=58)   0,16 %   -0,14 s
+#   Rennen nach 10 Runden    (n=300)     0,68 %   -0,57 s
+#   Rennen nach 40 Runden    (n=1200)    1,36 %   -1,15 s
+#
+# Der Vorsprung des letzten Quali-Starters auf den ersten liegt damit bei
+# 0,14 s. Das ist spuerbar, aber nicht entscheidend - wichtig, weil die
+# Startreihenfolge der umgekehrte Meisterschaftsstand ist (GDD 4) und der
+# Fuehrende sonst systematisch bevorzugt waere.
+[strecke.gummierung]
+max_anteil = 0.015
+halbwert_runden = 500
+
+# Was eine gefahrene Auto-Runde je Lage am Stand aendert. Trocken und
+# heiss bauen auf, Regen waescht ab, wechselhaft nur sehr wenig. Wird es
+# nach dem Regen wieder trocken, baut sich derselbe Stand wieder auf.
+[strecke.gummierung.je_runde]
+trocken = 1.0
+heiss = 1.0
+wechselhaft = -0.05
+regen = -1.5
+starkregen = -3.0
 
 # Die 20 Strecken der Saison (GDD 3). Monaco, Imola und Mugello fehlen im Datensatz.
 [[strecke.liste]]

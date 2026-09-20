@@ -2561,3 +2561,55 @@ zwischen den Rechnern entsteht breiter als an einer einzelnen Stelle.
 `tests.yml` fährt bei einem Push nur Linux und beide Systeme erst bei
 „Run workflow"; `build-windows.yml` läuft nur noch bei einem
 Versionsschild `v*` oder von Hand.
+
+### 88. Die Strecke gummiert ein
+
+Gewünscht: „Strecke wird schneller, mehr Grip bekommt sie bei trocken
+und heiß über die Zeit." Vorgelegt als Konzept, entschieden vom
+Auftraggeber:
+
+| | Entscheidung |
+| --- | --- |
+| Wie viel maximal | **+1,5 %** Grip |
+| Wie schnell | Halbwert bei **500** Auto-Runden |
+| Was überlebt ins Rennen | **nichts** — jede Session fängt grün an |
+| Regen | allmählich **abwaschen**; wird es wieder trocken, baut es sich neu auf. Wechselhaft wäscht ab, aber sehr wenig |
+| Sieht der Spieler es | **ja** |
+| Kalibrierung | bleibt die **grüne** Strecke |
+
+**Die Zahl, die die Entscheidung erst möglich gemacht hat.** Der Grip
+geht quadratisch ins Kurvenlimit (GDD 3). Gemessen bringt +1,0 % Grip
+−0,84 s in Zandvoort, −1,13 s in Spa, −0,95 s in Sakhir. **Faustregel:
+ein Prozent Grip ist rund eine Sekunde.** Damit ließ sich in Sekunden
+entscheiden statt in Prozent — sonst wäre `max_anteil = 0,015` eine Zahl
+ohne Bedeutung gewesen.
+
+**Eine einzige Zahl trägt die ganze Mechanik**: der Stand in gefahrenen
+Auto-Runden. Aufbauen und Abwaschen sind derselbe Zähler mit
+verschiedenem Vorzeichen; damit ist „nach dem Regen baut es sich wieder
+auf" nicht als Sonderfall gebaut, sondern fällt von selbst ab.
+
+**Drei Modelle, eine Formel.** Volle Simulation, Qualifying und
+Schnellmodus rechnen dasselbe — sonst driften die 19 KI-Ligen weg
+(README: Warum es zwei Rennmodelle gibt). Im Qualifying gilt für den
+k-ten Starter, was die k Autos vor ihm plus seine eigene Aufwärmrunde
+gefahren sind; die Schleife läuft in der Startreihenfolge und damit in
+der Zeit.
+
+**Der Aufschlag wirkt nach `grip_fuer`, nicht davor.** Davor dämpfte die
+Wetterfähigkeit ihn mit, und ein Regenspezialist bekäme vom Gummi
+weniger ab als ein anderer — Gummi ist aber keine Fahrkunst. Außerdem
+hat `grip_fuer` bei genau 1,0 einen Sprung (dort schaltet der
+Trockenbonus zu), und „heiss" mit Grip 0,97 liefe mit wachsendem Gummi
+genau hinein.
+
+**Ein Rennen ohne Wetterverlauf bleibt grün.** Das ist der Laborfall —
+Kalibrierung und Tests. Im Spiel hat jedes Rennen ein Wetter, dort
+greift die Gummierung immer. Ohne diese Grenze hätte die Mechanik die
+Kalibrierung aus GDD 9 verschoben.
+
+**Nachgemessen:** Kalibrierung Zandvoort 180,00 km/h (+0,00),
+unverändert. Ein trockenes Rennen baut über 12 Runden 0,50 % auf; setzt
+danach wechselhaft ein, friert es fast ein (203 → 197 Auto-Runden); ein
+Regenrennen bleibt bei null. Im Qualifying liegen zwischen erstem und
+letztem Starter 0,164 % Grip, also 0,14 s.

@@ -248,6 +248,7 @@ class Qualifyingseite(QWidget):
 
         session = self._session
         stand = session.lage_zu(zeit)
+        self._zeige_gummi(stand)
         fertig = [s for s in stand if s.ist_fertig]
         self._stand.setText(f"{len(fertig)} von {len(session.fahrten)} Runden gefahren")
         bestzeit = fertig[0].zeit_ms if fertig else None
@@ -270,6 +271,17 @@ class Qualifyingseite(QWidget):
             self._fuelle_aufstellung()
         else:
             self._leere_aufstellung()
+
+    def _zeige_gummi(self, stand) -> None:
+        """Wie viel Gummi die Strecke gerade hergibt (Punkt 88).
+
+        Genommen wird der Wert des zuletzt gestarteten Autos - das ist
+        der Stand, den die Strecke in diesem Augenblick bietet. Wer noch
+        in der Box steht, hat seinen Wert noch nicht.
+        """
+        gefahren = [s.fahrt.gummi for s in stand if s.lage is not Lage.WARTET]
+        jetzt = max(gefahren) if gefahren else 0.0
+        self._gummianzeige.setText(f"+{jetzt * 100:.2f} %")
 
     def _fuelle_zeile(self, stand, platz: int | None, bestzeit: int | None, lila) -> None:
         session = self._session
@@ -341,6 +353,11 @@ class Qualifyingseite(QWidget):
         self._wetterfeld.addRow(
             "Dauer der Session:", QLabel(formatiere_dauer(self._session.dauer_ms))
         )
+        # Punkt 88: Die Strecke gummiert ueber die Session ein. Wer
+        # spaeter faehrt, findet mehr vor - und die Startreihenfolge ist
+        # der umgekehrte Meisterschaftsstand (GDD 4).
+        self._gummianzeige = QLabel("+0,00 %")
+        self._wetterfeld.addRow("Strecke:", self._gummianzeige)
 
     def _leere_aufstellung(self) -> None:
         if self._aufstellung.topLevelItemCount():

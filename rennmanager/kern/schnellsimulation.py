@@ -23,6 +23,7 @@ import numpy as np
 
 from rennmanager.kern import boxenstopp as kern_boxenstopp
 from rennmanager.kern import form as kern_form
+from rennmanager.kern import gummierung as kern_gummierung
 from rennmanager.kern import reifen as kern_reifen
 from rennmanager.kern import strategie as kern_strategie
 from rennmanager.kern import tempoverlauf as kern_tempoverlauf
@@ -175,10 +176,18 @@ def fahre_wochenende(
     # anderes Wetter an - dafuer braeuchte es hier eine Uhr, die der
     # Schnellmodus gerade nicht fuehrt.
     quali_zustand = quali_wetter.startzustand
+    # Punkt 88: Wer spaeter faehrt, findet mehr Gummi vor - wie in der
+    # vollen Session. Vor dem i-ten Auto lagen i Autos mit je einer
+    # Aufwaerm- und einer gezeiteten Runde draussen, dazu die eigene
+    # Aufwaermrunde.
+    quali_aufwaerm = konfiguration.wert("qualifying", "aufwaermrunden")
     for i, auto in enumerate(quali_autos):
+        gummistand = kern_gummierung.naechster_stand(
+            konfiguration, 0.0, quali_zustand, i * (quali_aufwaerm + 1) + quali_aufwaerm
+        )
         grip = kern_wetter.grip_fuer(
             konfiguration, auto, quali_zustand, quali_wetter.grip_zu(0)
-        )
+        ) * kern_gummierung.faktor(konfiguration, gummistand)
         streuung = kern_form.rundenform(
             konfiguration, auto, seedquelle.zweig("qualirunde", i), 1
         )
@@ -351,12 +360,17 @@ def fahre_wochenende(
     # Die Startaufstellung ist die Reihenfolge vor der ersten Runde.
     vorige_reihenfolge = list(aufstellung)
     naesse_lage = naesse_start
+    # Punkt 88: Gefahrene Auto-Runden Gummi, wie in der vollen Simulation.
+    gummistand = 0.0
 
     for runde in range(1, runden + 1):
         zustand = wetter.zustand_zu(gesamtzeit[aktiv].min() if aktiv.any() else 0.0)
         wetter_fehler = float(konfiguration.wert("wetter", "zustand", zustand)["fehlerquote"])
         wetter_verschleiss = kern_wetter.verschleissfaktor(konfiguration, zustand)
         naesse_jetzt = kern_reifen.naesse_von(konfiguration, zustand)
+        # Der Stand gilt fuer die ganze Runde; er waechst am Ende um die
+        # Runden, die in ihr gefahren wurden.
+        gummi_faktor = kern_gummierung.faktor(konfiguration, gummistand)
         if naesse_jetzt != naesse_lage:
             naesse_lage = naesse_jetzt
             for i in range(anzahl):
@@ -368,7 +382,7 @@ def fahre_wochenende(
             auto = autos[i]
             grip = kern_wetter.grip_fuer(
                 konfiguration, auto, zustand, wetter.grip_zu(gesamtzeit[i])
-            )
+            ) * gummi_faktor
             streuung = kern_form.rundenform(
                 konfiguration, auto, seedquelle.zweig("rundenform", i), runde
             )
@@ -621,6 +635,12 @@ def fahre_wochenende(
                             aktiv[i] = False
                             ausfaelle += 1
                     break
+
+        # Punkt 88: Was in dieser Runde gefahren wurde, zaehlt fuer die
+        # naechste - bei trocken als Gummi, bei Regen als Abwaschen.
+        gummistand = kern_gummierung.naechster_stand(
+            konfiguration, gummistand, zustand, float(int(aktiv.sum()))
+        )
 
         if not aktiv.any():
             break

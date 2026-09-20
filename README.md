@@ -633,6 +633,77 @@ Das war lange anders: Die Vorausberechnung hielt die Regel ein, das
 Fenster hebelte sie wieder aus. In Zandvoort kamen so 23 von 30 Autos
 darunter, eines mit 9 Prozent ins Ziel.
 
+### Die Strecke gummiert ein
+
+Je mehr auf einer trockenen Strecke gefahren wird, desto mehr Gummi
+liegt auf der Ideallinie und desto mehr Grip gibt sie her. Regen waescht
+das wieder ab; sobald es trocknet, baut es sich von neuem auf.
+
+Eine einzige Zahl traegt das: der **Stand** zaehlt gefahrene
+**Auto-Runden**. Jede Runde, die ein Auto auf dieser Strecke in dieser
+Session dreht, aendert ihn um den Beitrag der herrschenden Lage:
+
+| Lage | je Auto-Runde |
+| --- | ---: |
+| trocken, heiss | +1,0 |
+| wechselhaft | −0,05 |
+| regen | −1,5 |
+| starkregen | −3,0 |
+
+Unter null faellt er nie. Aus dem Stand wird der Grip-Aufschlag:
+
+    faktor(n) = 1 + max_anteil * (1 - e^(-n / halbwert_runden))
+
+Viel am Anfang, immer weniger, je mehr schon liegt. Mit `max_anteil =
+0,015` und `halbwert_runden = 500`:
+
+| | Auto-Runden | Aufschlag | Zandvoort |
+| --- | ---: | ---: | ---: |
+| Qualifying, erster Starter | 0 | 0,00 % | — |
+| Qualifying, letzter Starter | 58 | 0,16 % | −0,14 s |
+| Rennen, nach 10 Runden | 300 | 0,68 % | −0,57 s |
+| Rennen, nach 40 Runden | 1.200 | 1,36 % | −1,15 s |
+
+#### Warum ein Prozent Grip eine Sekunde ist
+
+Der Grip geht **quadratisch** ins Kurvenlimit (GDD 3), ein Prozent Grip
+bringt also mehr als ein Prozent Rundenzeit. Gemessen mit einem
+Liga-1-Auto: +1,0 % Grip sind −0,84 s in Zandvoort, −1,13 s in Spa und
+−0,95 s in Sakhir. Damit laesst sich die Mechanik in Sekunden
+einstellen statt in Prozent.
+
+#### Warum Auto-Runden und nicht Zeit
+
+Dreissig Autos gummieren schneller ein als eines. Im Rennen geht es
+damit von selbst schneller als im Qualifying, ohne dass irgendwo eine
+zweite Zahl noetig waere - und es bleibt ueber den Seed reproduzierbar,
+weil kein Wurf mitspielt.
+
+#### Warum der Aufschlag nach `grip_fuer` wirkt
+
+Vor `wetter.grip_fuer` waere er falsch: Dort daempft die
+Wetterfaehigkeit die Abweichung von 1,0, und ein Regenspezialist
+bekaeme vom Gummi weniger ab als ein anderer. Gummi auf der Strecke ist
+aber keine Fahrkunst. Ausserdem hat `grip_fuer` bei genau 1,0 einen
+Sprung - dort schaltet der Trockenbonus zu -, und "heiss" (Grip 0,97)
+liefe mit wachsendem Gummi genau hinein.
+
+#### Was das fuer das Qualifying bedeutet
+
+Die Startreihenfolge ist der umgekehrte Meisterschaftsstand (GDD 4) -
+wer vorn liegt, faehrt zuletzt und findet die gummiertere Strecke vor.
+Bei den Werten oben sind das **0,14 s** zwischen erstem und letztem
+Starter: spuerbar, aber nicht entscheidend. Zwischen Qualifying und
+Rennen ueberlebt **nichts**; jede Session faengt gruen an (Entscheidung
+des Auftraggebers).
+
+Der Anker aus GDD 9 bleibt gruen: Die Kalibrierung rechnet eine
+einzelne Runde ohne Wetter und ohne Verkehr, dort ist der Stand null und
+der Faktor genau 1,0. Zandvoort bei S=98.000 steht weiter auf
+180,00 km/h. Auch ein Rennen ohne Wetterverlauf bleibt gruen - das ist
+der Laborfall fuer Kalibrierung und Tests; im Spiel hat jedes Rennen ein
+Wetter.
+
 ### Warum die Strategie das ganze Wetter kennt
 
 Das Rennwetter steht vor dem Start fest (GDD 7) - also darf die Strategie
