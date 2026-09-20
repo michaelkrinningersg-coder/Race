@@ -297,7 +297,13 @@ def test_die_aufstellung_kommt_aus_dem_qualifying(
 def test_die_meldungen_sind_ein_blatt_und_keine_fussleiste(
     qtbot, konfig: kf.Konfiguration
 ) -> None:
-    """Punkt 82: Der Ticker nahm den Tabellen unten Hoehe weg."""
+    """Punkt 82: Der Ticker nahm den Tabellen unten Hoehe weg.
+
+    Punkt 93 hat die Boxenbilanz danebengestellt, deshalb steht hier
+    kein vollstaendiger Vergleich mehr, sondern die Reihenfolge der
+    ersten vier: Wer ein Blatt dazwischenschiebt, soll das merken, wer
+    eines anhaengt, nicht.
+    """
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
     seite = kurzes_rennen(fenster)
@@ -306,7 +312,7 @@ def test_die_meldungen_sind_ein_blatt_und_keine_fussleiste(
     ueberschriften = [
         seite.blaetter_rechts.tabText(i) for i in range(seite.blaetter_rechts.count())
     ]
-    assert ueberschriften == [
+    assert ueberschriften[:4] == [
         "Zeitenmonitor", "Bestmoegliche Runde", "Meisterschaft", "Meldungen",
     ]
     # Der Ticker haengt wirklich in den Blaettern, nicht mehr daneben.

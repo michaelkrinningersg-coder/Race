@@ -403,13 +403,17 @@ def test_der_ticker_ist_ein_blatt_neben_den_tabellen(gefahren) -> None:
     """Punkt 82: Die Meldungen standen als Fussleiste unter allem.
 
     Sie nahmen den Tabellen Hoehe weg, obwohl man sie selten braucht.
-    Jetzt sind sie das letzte der vier Blaetter rechts - einen Klick
-    entfernt und keinen Pixel im Weg.
+    Jetzt sind sie eines der Blaetter rechts - einen Klick entfernt und
+    keinen Pixel im Weg. Seit Punkt 93 steht die Boxenbilanz daneben,
+    deshalb wird das Blatt gesucht und nicht mehr an letzter Stelle
+    erwartet.
     """
     _fenster, seite = gefahren
     blaetter = seite.blaetter_rechts
     assert blaetter.isAncestorOf(seite.ticker)
-    assert blaetter.tabText(blaetter.count() - 1) == "Meldungen"
+    namen = [blaetter.tabText(i) for i in range(blaetter.count())]
+    assert "Meldungen" in namen
+    assert blaetter.tabText(rs.BLATT_TICKER) == "Meldungen"
     # Und nirgends mehr ein senkrechter Teiler mit dem Ticker darin.
     from PySide6.QtWidgets import QSplitter
 
@@ -539,3 +543,186 @@ def test_ein_ueberrundeter_vor_uns_steht_als_runde_da(qtbot, konfig) -> None:
     # Andersherum wie bisher.
     text = seite._intervall(lauf, [1, 0], lauf.distanzen_zu(0), 1000.0, platz=2)
     assert text == "+1 Rd.", text
+
+
+# -- Punkt 93, Block 4 ------------------------------------------------------
+def test_die_rangliste_hat_alter_reicht_und_stopp(gefahren) -> None:
+    """B35, B36 und B32 nebeneinander hinter dem Reifenbalken."""
+    _fenster, seite = gefahren
+    kopf = seite.rangliste.headerItem()
+    assert kopf.text(rs.SPALTE_ALTER) == "Alter"
+    assert kopf.text(rs.SPALTE_REICHT) == "Reicht"
+    assert kopf.text(rs.SPALTE_PLANSTOPP) == "Stopp"
+
+
+def test_das_reifenalter_faengt_nach_dem_stopp_von_vorn_an(qtbot, konfig, stopprennen):
+    """B35: Der Balken sagt "wieviel", nicht "wie lange"."""
+    _fenster, seite, verlauf = _mit_stopps(qtbot, konfig, stopprennen)
+    stopps = [b for b in verlauf.boxenstopps if b.teilnehmer == 0]
+    assert stopps, "Dieser Lauf muss einen Stopp haben"
+    stopp = stopps[0]
+
+    # Kurz vor dem Stopp ist der Satz so alt wie das Rennen lang.
+    seite._springe(stopp.zeit_ms - 1000)
+    vorher = _spalte_je_auto(seite, rs.SPALTE_ALTER)[0]
+    # Danach faengt er wieder bei null an.
+    seite._springe(stopp.zeit_ms + 1000)
+    nachher = _spalte_je_auto(seite, rs.SPALTE_ALTER)[0]
+    assert int(vorher.split()[0]) > int(nachher.split()[0])
+    assert int(nachher.split()[0]) <= 1
+
+
+def test_der_planstopp_steht_da_und_verschwindet_danach(qtbot, konfig, stopprennen):
+    """B32: Der Kern wusste es, die Anzeige zeigte es nicht."""
+    _fenster, seite, verlauf = _mit_stopps(qtbot, konfig, stopprennen)
+    assert verlauf.stoppplan, "Ein Rennen mit Strategie muss einen Plan tragen"
+    geplant = verlauf.stoppplan[0][0]
+
+    seite._springe(0)
+    assert _spalte_je_auto(seite, rs.SPALTE_PLANSTOPP)[0] == f"R{geplant}"
+    # Nach dem letzten geplanten Stopp steht dort nichts mehr.
+    seite._springe(verlauf.dauer_ms)
+    assert _spalte_je_auto(seite, rs.SPALTE_PLANSTOPP)[0] == "-"
+
+
+def test_ohne_strategie_steht_kein_planstopp_da(gefahren) -> None:
+    _fenster, seite = gefahren
+    assert set(_spalte_je_auto(seite, rs.SPALTE_PLANSTOPP).values()) == {"-"}
+
+
+def test_die_restrunden_schrumpfen_mit_dem_reifen(qtbot, konfig, stopprennen):
+    """B36: Macht die Zwangsstopp-Grenze sichtbar, bevor sie zuschlaegt."""
+    _fenster, seite, verlauf = _mit_stopps(qtbot, konfig, stopprennen)
+    stopps = [b for b in verlauf.boxenstopps if b.teilnehmer == 0]
+    assert stopps
+    letzte = stopps[0].zeit_ms
+
+    # In der ersten Runde laesst sich noch nichts hochrechnen.
+    seite._springe(0)
+    assert _spalte_je_auto(seite, rs.SPALTE_REICHT)[0] == "-"
+
+    # Ueber den ersten Stint hinweg wird die Zahl kleiner.
+    werte = []
+    for anteil in (0.4, 0.7, 0.95):
+        seite._springe(letzte * anteil)
+        text = _spalte_je_auto(seite, rs.SPALTE_REICHT)[0]
+        assert text != "-", "Nach ein paar Runden muss sich das rechnen lassen"
+        werte.append(int(text.split()[0]))
+    assert werte == sorted(werte, reverse=True), werte
+
+
+# -- Punkt 93, Block 5 ------------------------------------------------------
+def test_der_ticker_traegt_je_art_ein_eigenes_zeichen(qtbot, konfig, stopprennen):
+    """B49: Zwoelf Zeilen Fliesstext sehen alle gleich aus."""
+    from rennmanager.kern import zwischenfall as zw
+
+    _fenster, seite, verlauf = _mit_stopps(qtbot, konfig, stopprennen)
+    seite._springe(verlauf.dauer_ms)
+    schlage_blatt_auf(seite, "ticker")
+
+    assert seite._ticker.headerItem().text(0) == ""
+    gezeigt = [
+        seite._ticker.topLevelItem(i).text(0)
+        for i in range(seite._ticker.topLevelItemCount())
+    ]
+    assert gezeigt, "Dieser Lauf muss Zwischenfaelle haben"
+    assert set(gezeigt) <= set(rs.TICKER_ZEICHEN.values())
+    # Und die drei Arten haben wirklich verschiedene Zeichen.
+    assert len(set(rs.TICKER_ZEICHEN.values())) == 3
+    assert set(rs.TICKER_ZEICHEN) == {zw.Art.FEHLER, zw.Art.UNFALL, zw.Art.DEFEKT}
+
+
+def test_ein_ausfall_faerbt_sich_rot_und_sagt_es(qtbot, konfig, stopprennen):
+    """Der Ausfall ist keine vierte Art, sondern das Ende einer der drei."""
+    _fenster, seite, verlauf = _mit_stopps(qtbot, konfig, stopprennen)
+    ausfaelle = [z for z in verlauf.zwischenfaelle if z.ausgefallen]
+    if not ausfaelle:
+        pytest.skip("In diesem Lauf faellt niemand aus")
+    seite._springe(verlauf.dauer_ms)
+    schlage_blatt_auf(seite, "ticker")
+
+    rote = [
+        seite._ticker.topLevelItem(i)
+        for i in range(seite._ticker.topLevelItemCount())
+        if seite._ticker.topLevelItem(i).foreground(0).color().name()
+        == rs.FARBE_AUSFALL
+    ]
+    assert rote, "Ein Ausfall muss sich abheben"
+    for zeile in rote:
+        assert "Ausfall" in zeile.text(4)
+
+
+def test_das_rennen_hat_dasselbe_wetterband(qtbot, konfig, stopprennen):
+    """B43: dasselbe Widget wie im Qualifying (A13)."""
+    _fenster, seite, verlauf = _mit_stopps(qtbot, konfig, stopprennen)
+    band = seite._wetterband
+    if verlauf.wetter is None:
+        assert band.abschnitte == ()
+        return
+    assert [zustand for zustand, _von, _bis in band.abschnitte] == list(
+        verlauf.wetter.zustaende
+    )
+    seite._springe(verlauf.dauer_ms // 2)
+    assert band._marke_ms == verlauf.dauer_ms // 2
+
+
+# -- Punkt 93, Block 6 ------------------------------------------------------
+def test_die_boxenbilanz_ist_ein_eigenes_blatt(gefahren) -> None:
+    """B53: Standzeit, Gesamtverlust, Vergleich zum Feld."""
+    _fenster, seite = gefahren
+    blaetter = seite.blaetter_rechts
+    assert blaetter.tabText(rs.BLATT_BOXENBILANZ) == "Boxenbilanz"
+    kopf = seite._boxenbilanz.headerItem()
+    assert [kopf.text(s) for s in range(seite._boxenbilanz.columnCount())] == [
+        "Auto", "Fahrer", "Team", "Stopps", "Standzeit", "Verlust", "zum Feld",
+    ]
+
+
+def test_die_boxenbilanz_nennt_stopps_standzeit_und_verlust(qtbot, konfig, stopprennen):
+    _fenster, seite, verlauf = _mit_stopps(qtbot, konfig, stopprennen)
+    seite._springe(verlauf.dauer_ms)
+    seite.blaetter_rechts.setCurrentIndex(rs.BLATT_BOXENBILANZ)
+    seite._erzwinge_fuellung()
+    seite._zeichne()
+
+    liste = seite._boxenbilanz
+    assert liste.topLevelItemCount() == len(verlauf.teilnehmer)
+    mit_stopp = 0
+    for i in range(liste.topLevelItemCount()):
+        zeile = liste.topLevelItem(i)
+        nummer = zeile.data(0, Qt.UserRole)
+        anzahl, standzeit, verlust = verlauf.stoppbilanz(nummer)
+        assert zeile.text(3) == str(anzahl)
+        if anzahl:
+            mit_stopp += 1
+            assert zeile.text(4) != "-"
+            assert standzeit > 0
+            # Der Verlust ist mindestens so gross wie die Standzeit -
+            # Einfahrt und Ausfahrt kommen dazu.
+            assert verlust >= 0
+    assert mit_stopp, "Dieser Lauf muss Stopps haben"
+
+
+def test_ohne_stopp_bleibt_die_bilanz_bei_null(gefahren) -> None:
+    _fenster, seite = gefahren
+    verlauf = seite._verlauf
+    for i in range(len(verlauf.teilnehmer)):
+        assert verlauf.stoppbilanz(i) == (0, 0, 0)
+
+
+def test_der_kompaktmodus_blendet_alles_ausser_der_rangliste_aus(gefahren) -> None:
+    """B59: Nur die Rangliste, grosse Schrift - fuers reine Zusehen."""
+    _fenster, seite = gefahren
+    vorher = seite.rangliste.font().pointSize()
+    assert not seite.kompakt
+
+    seite._kompakt.setChecked(True)
+    assert seite.kompakt
+    assert not seite._blaetter.isVisible()
+    assert not seite._monitorblaetter.isVisible()
+    assert seite.rangliste.font().pointSize() == rs.SCHRIFT_KOMPAKT
+    assert seite.rangliste.font().pointSize() > vorher
+
+    seite._kompakt.setChecked(False)
+    assert not seite.kompakt
+    assert seite.rangliste.font().pointSize() == vorher

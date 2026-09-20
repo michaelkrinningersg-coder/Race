@@ -122,6 +122,11 @@ class Ligawochenende:
     schnellste_runde_ms: int
     ueberholmanoever: int
     ausfaelle: int
+    # Punkt 93 (A17): Die schnellste Qualirunde des Wochenendes und wer
+    # sie fuhr, mit weltweiter Nummer. Daraus wird die Streckenbestmarke,
+    # die im Qualifying der naechsten Saison oben steht.
+    polezeit_ms: int = 0
+    polefahrer: int = 0
     # Punkt 23: die Lage, unter der am meisten gefahren wurde. Die
     # Wetterbilanz braucht eine Lage je Rennen, nicht den ganzen Verlauf.
     vorherrschendes_wetter: str = ""
@@ -495,6 +500,10 @@ def _fahre_rennen(
         vorherrschendes_wetter=wetter.vorherrschend(verlauf.dauer_ms),
         siegerzeit_ms=verlauf.ergebnisse[0].zeit_ms or 0,
         schnellste_runde_ms=schnellste_ms,
+        polezeit_ms=quali.pole.zeit_ms if quali is not None else 0,
+        polefahrer=(
+            nummer_von(quali.aufstellung[0]) if quali is not None else 0
+        ),
         ueberholmanoever=sum(verlauf.positionsgewinne),
         ausfaelle=sum(1 for e in verlauf.ergebnisse if e.zeit_ms is None),
         ausfuehrlich=True,
@@ -644,6 +653,12 @@ def _schnell(
         vorherrschendes_wetter=ergebnis.vorherrschendes_wetter,
         siegerzeit_ms=ergebnis.siegerzeit_ms,
         schnellste_runde_ms=ergebnis.schnellste_runde_ms,
+        polezeit_ms=ergebnis.polezeit_ms,
+        polefahrer=(
+            fahrer[ergebnis.polefahrer].nummer
+            if ergebnis.polefahrer < len(fahrer)
+            else 0
+        ),
         ueberholmanoever=ergebnis.ueberholmanoever,
         ausfaelle=ergebnis.ausfaelle,
         # Der Schnellmodus zaehlt je Feldplatz; hier wird daraus die
@@ -1004,6 +1019,8 @@ class Saisonlauf:
             ergebnisse=ergebnis.ergebnisse,
             schnellste_runde_ms=ergebnis.schnellste_runde_ms,
             wetter=ergebnis.vorherrschendes_wetter,
+            quali_ms=ergebnis.polezeit_ms,
+            quali_fahrer=ergebnis.polefahrer or None,
         )
         # Qualifying und Rennen zaehlen beide fuer die Kenntnis (GDD 6).
         quali_runden = self.konfiguration.wert(

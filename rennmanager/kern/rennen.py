@@ -21,6 +21,7 @@ Regeln aus GDD 4:
 from __future__ import annotations
 
 import math
+import statistics
 from bisect import bisect_right
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
@@ -308,6 +309,12 @@ class Rennverlauf:
     # Regen, Starkregen und wechselhaftem Wetter ist die Pflicht
     # aufgehoben.
     mischungspflicht: bool = False
+    # Punkt 93 (B32): Je Auto die Runden, in denen sein Plan einen Stopp
+    # vorsieht - so, wie er vor dem Start stand. Was das Rennen daraus
+    # macht, steht in ``boxenstopps``; der Unterschied zwischen beidem
+    # ist die Geschichte des Rennens und keine Panne. Leer bei einem
+    # Rennen ohne Strategie.
+    stoppplan: tuple[tuple[int, ...], ...] = ()
     # Punkt 91 und 92: Welche Strategien im Feld vertreten sind, je
     # Strategie eine Zeile. Gezaehlt wird die **gewaehlte Variante**,
     # nicht die gefahrene Stopprunde - zwei Autos auf derselben Variante
@@ -331,6 +338,58 @@ class Rennverlauf:
     def strategiezahl(self) -> int:
         """Wie viele verschiedene Strategien unterwegs sind (Punkt 91)."""
         return len(self.strategieblaetter)
+
+    def naechster_planstopp(self, teilnehmer: int, runde: int) -> int | None:
+        """Punkt 93 (B32): In welcher Runde der Plan den naechsten Stopp vorsieht.
+
+        Der Plan, wie er **vor dem Start** stand. Was das Rennen daraus
+        macht - eine Runde spaeter, weil der Satz noch zu gut ist, oder
+        gar nicht, weil ein Zwangsstopp dazwischenkam -, steht in den
+        gefahrenen Stopps. Der Unterschied ist die Geschichte des
+        Rennens; die Anzeige sagt, was geplant war.
+        """
+        if teilnehmer >= len(self.stoppplan):
+            return None
+        kommende = [r for r in self.stoppplan[teilnehmer] if r > runde]
+        return min(kommende) if kommende else None
+
+    def reifenalter(self, teilnehmer: int, runde: int, zeit_ms: float) -> int:
+        """Punkt 93 (B35): Wie viele Runden der Satz schon drauf ist.
+
+        Der Balken sagt "wieviel", nicht "wie lange". Gezaehlt wird ab
+        der Runde des letzten Stopps; wer noch nicht gestoppt hat,
+        faehrt seit Runde eins auf demselben Satz.
+        """
+        gefahren = [
+            b.runde for b in self.boxenstopps
+            if b.teilnehmer == teilnehmer and b.zeit_ms <= zeit_ms
+        ]
+        return max(runde - max(gefahren), 0) if gefahren else max(runde, 1)
+
+    def restrunden(
+        self, teilnehmer: int, runde: int, zeit_ms: float, schwelle: float
+    ) -> int | None:
+        """Punkt 93 (B36): Wie viele Runden der Satz noch bis zur Schwelle traegt.
+
+        **Hochgerechnet aus dem, was schon passiert ist**, nicht aus dem
+        Modell: Ein frischer Satz startet bei 1,0, und was seither davon
+        fehlt, verteilt sich auf die gefahrenen Runden. Damit macht die
+        Anzeige die Zwangsstopp-Grenze sichtbar, bevor sie zuschlaegt -
+        und sie rechnet mit demselben Verschleiss, den dieses Auto an
+        diesem Tag wirklich hat, samt Streuung und Wetter.
+
+        ``None``, solange sich noch nichts hochrechnen laesst: in der
+        ersten Runde auf einem Satz, und wenn der Satz gar nicht abbaut.
+        """
+        alter = self.reifenalter(teilnehmer, runde, zeit_ms)
+        if alter < 1:
+            return None
+        zustand = float(self.reifen_zu(zeit_ms)[teilnehmer])
+        verbraucht = 1.0 - zustand
+        if verbraucht <= 0.0:
+            return None
+        je_runde = verbraucht / alter
+        return max(int((zustand - schwelle) / je_runde), 0)
 
     def bild_zu(self, zeit_ms: float) -> int:
         """Index des letzten Bildes, das nicht nach ``zeit_ms`` liegt."""
@@ -371,6 +430,43 @@ class Rennverlauf:
     def stopps_von(self, teilnehmer: int) -> tuple[Boxenstopp, ...]:
         """Alle Boxenstopps eines Autos, in der Reihenfolge des Rennens."""
         return tuple(b for b in self.boxenstopps if b.teilnehmer == teilnehmer)
+
+    def stoppbilanz(self, teilnehmer: int, zeit_ms: float | None = None):
+        """Punkt 93 (B53): Was die Boxenstopps dieses Autos gekostet haben.
+
+        Drei Zahlen: wie oft es hereinkam, wie lange es dabei **stand**
+        und was die Stopps insgesamt gekostet haben.
+
+        **Der Gesamtverlust wird gemessen, nicht gerechnet.** Eine Runde
+        mit Stopp dauert laenger als eine ohne; die Differenz zur
+        Medianrunde desselben Autos ist genau das, was der Stopp
+        gekostet hat - Einfahrt, Standzeit, Ausfahrt und der Verlust
+        durch die kalten Reifen inbegriffen. Eine Formel aus
+        Boxengassenlaenge und Standzeit kennt davon nur die Haelfte.
+
+        Der Median laeuft ueber die Runden **ohne** Stopp: Sonst hoebe
+        der Stopp die Bezugsgroesse, gegen die er gemessen wird.
+
+        :return: ``(Stopps, Standzeit in ms, Verlust in ms)``
+        """
+        stopps = [
+            b for b in self.stopps_von(teilnehmer)
+            if zeit_ms is None or b.zeit_ms <= zeit_ms
+        ]
+        if not stopps:
+            return 0, 0, 0
+        zeiten = self.protokolle[teilnehmer].rundenzeiten_ms
+        mit_stopp = {b.runde for b in stopps}
+        ohne = [z for n, z in enumerate(zeiten, start=1) if n not in mit_stopp]
+        if not ohne:
+            return len(stopps), sum(b.standzeit_ms for b in stopps), 0
+        mittel = statistics.median(ohne)
+        verlust = sum(
+            max(int(zeiten[b.runde - 1] - mittel), 0)
+            for b in stopps
+            if b.runde - 1 < len(zeiten)
+        )
+        return len(stopps), sum(b.standzeit_ms for b in stopps), verlust
 
     def gefahrene_mischungen(self, teilnehmer: int, zeit_ms: float) -> tuple[str, ...]:
         """Welche Mischungen ein Auto bis zu diesem Zeitpunkt gefahren hat.
@@ -2266,6 +2362,9 @@ def simuliere(
         gummierung=np.array(gummibilder, dtype=np.float32) if wetter is not None else None,
         boxenstopps=tuple(lauf.boxenstopps),
         mischungspflicht=mischungspflicht,
+        stoppplan=(
+            tuple(tuple(s.stopps) for s in strategien) if strategien is not None else ()
+        ),
         strategieblaetter=strategieblaetter,
         messzeiten=tuple(tuple(zeiten) for zeiten in lauf.messzeiten),
         messpunkte_je_runde=len(lauf.messpunkte),

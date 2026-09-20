@@ -194,6 +194,11 @@ class Statistik:
 
     konfiguration: Konfiguration
     rekorde: dict[tuple[str, int], Rekord] = field(default_factory=dict)
+    # Punkt 93 (A17): Dasselbe fuers Qualifying, getrennt gefuehrt. Eine
+    # Qualirunde faehrt man auf leerer Strecke mit frischen Reifen, eine
+    # Rennrunde mit Verkehr und abbauenden Reifen - in einem Topf fiele
+    # der Rennrekord nie wieder.
+    qualirekorde: dict[tuple[str, int], Rekord] = field(default_factory=dict)
     karriere: dict[int, Karrierezahlen] = field(default_factory=dict)
     historie: list[Saisonabschluss] = field(default_factory=list)
     # Punkte je (Saison, Liga, Fahrer) - GDD 13: "Gesamtpunkte je Liga und
@@ -213,6 +218,46 @@ class Statistik:
     # -- Rundenrekorde -----------------------------------------------------
     def rekord(self, strecke: str, liga: int) -> Rekord | None:
         return self.rekorde.get((strecke, liga))
+
+    # -- Der Qualifyingrekord (Punkt 93, A17) ------------------------------
+    def qualirekord(self, strecke: str, liga: int) -> Rekord | None:
+        """Die schnellste je gefahrene **Qualirunde** hier.
+
+        Getrennt vom Rennrekord gefuehrt, und zwar mit Absicht: Eine
+        Qualirunde wird auf leerer Strecke mit frischen Reifen gefahren,
+        eine Rennrunde mit Sprit, Verkehr und abbauenden Reifen. Die
+        beiden in einen Topf zu werfen hiesse, dass der Rennrekord nie
+        wieder faellt.
+        """
+        return self.qualirekorde.get((strecke, liga))
+
+    def melde_qualirunde(
+        self,
+        strecke: str,
+        liga: int,
+        zeit_ms: int,
+        fahrer: int,
+        saison: int,
+        rennen: int,
+    ) -> bool:
+        """Traegt eine Qualifyingzeit ein, wenn sie ein Rekord ist.
+
+        :return: ob der Rekord neu ist
+        """
+        if zeit_ms <= 0:
+            return False
+        bisher = self.qualirekorde.get((strecke, liga))
+        if bisher is not None and bisher.zeit_ms <= zeit_ms:
+            return False
+        self.qualirekorde[(strecke, liga)] = Rekord(
+            strecke=strecke,
+            liga=liga,
+            zeit_ms=zeit_ms,
+            fahrer=fahrer,
+            saison=saison,
+            rennen=rennen,
+        )
+        return True
 
     def melde_runde(
         self,
@@ -275,13 +320,17 @@ class Statistik:
         ergebnisse: tuple[Rennergebnis, ...],
         schnellste_runde_ms: int = 0,
         wetter: str = "",
+        quali_ms: int = 0,
+        quali_fahrer: int | None = None,
     ) -> bool:
         """Traegt ein Rennwochenende einer Liga ein.
 
         :param wetter: die vorherrschende Lage des Rennens (Punkt 23).
             Ohne sie bleibt die Wetterbilanz unberuehrt - so bleiben alte
             Spielstaende lesbar, sie beginnen nur bei null.
-        :return: ob dabei ein Rundenrekord gefallen ist
+        :param quali_ms: die Polezeit des Wochenendes (Punkt 93, A17).
+            Ohne sie bleibt der Qualifyingrekord unberuehrt.
+        :return: ob dabei ein **Renn**rundenrekord gefallen ist
         """
         for ergebnis in ergebnisse:
             self.zahlen(ergebnis.fahrer).verbuche(self.konfiguration, ergebnis)
@@ -296,6 +345,11 @@ class Statistik:
                 self.wetter_von(ergebnis.fahrer, wetter).verbuche(
                     self.konfiguration, ergebnis, liga
                 )
+
+        # Punkt 93 (A17): Die Polezeit getrennt melden - sie steht im
+        # Qualifying der naechsten Saison als Streckenbestmarke.
+        if quali_ms > 0 and quali_fahrer is not None:
+            self.melde_qualirunde(strecke, liga, quali_ms, quali_fahrer, saison, rennen)
 
         schnellster = next((e.fahrer for e in ergebnisse if e.schnellste_runde), None)
         if schnellster is None or schnellste_runde_ms <= 0:

@@ -209,6 +209,15 @@ class Qualifyingseite(QWidget):
         wetterkasten.setLayout(self._wetterfeld)
         spalte.addWidget(wetterkasten)
 
+        # Punkt 93 (A17): Die schnellste je hier gefahrene Qualirunde,
+        # mit Fahrer und Jahr. Getrennt vom Rennrekord gefuehrt: Eine
+        # Qualirunde faehrt man auf leerer Strecke mit frischen Reifen.
+        self._bestmarke = QLabel("-")
+        markenkasten = QGroupBox("Streckenbestmarke im Qualifying")
+        marken_spalte = QVBoxLayout(markenkasten)
+        marken_spalte.addWidget(self._bestmarke)
+        spalte.addWidget(markenkasten)
+
         self._aufstellung = QTreeWidget()
         self._aufstellung.setHeaderLabels(["Startplatz", "Auto", "Zeit"])
         self._aufstellung.setRootIsDecorated(False)
@@ -224,6 +233,21 @@ class Qualifyingseite(QWidget):
         return seite
 
     # -- Session uebernehmen -----------------------------------------------
+    def zeige_bestmarke(self, rekord, name: str = "") -> None:
+        """Punkt 93 (A17): Die schnellste je hier gefahrene Qualirunde.
+
+        ``rekord`` ist ein ``statistik.Rekord`` oder ``None``. Steht
+        noch keiner, sagt die Zeile das auch - ein leeres Feld saehe aus
+        wie ein Fehler.
+        """
+        if rekord is None:
+            self._bestmarke.setText("Noch keine - die heutige Pole setzt sie.")
+            return
+        wer = name or f"Fahrer {rekord.fahrer}"
+        self._bestmarke.setText(
+            f"{formatiere_dauer(rekord.zeit_ms)}   {wer}   {rekord.saison}"
+        )
+
     def zeige_session(self, session: Qualifying) -> None:
         """Uebernimmt ein gefahrenes Qualifying und stellt es auf Anfang."""
         self._session = session

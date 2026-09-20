@@ -74,7 +74,7 @@ if TYPE_CHECKING:  # pragma: no cover
 # Version 4: Der Punkteverlauf der laufenden Saison (Tabelle
 # ``saisonverlauf``, Punkt 9). Aeltere Staende werden gelesen; ihr Verlauf
 # beginnt dann beim naechsten gefahrenen Rennen.
-SPIELSTAND_VERSION = 9
+SPIELSTAND_VERSION = 10
 
 # Punkt 17: Autosave und Schnellspeicher liegen an einem festen Ort,
 # damit sie ohne Dateidialog geschrieben werden koennen.
@@ -85,6 +85,10 @@ HISTORIE_AB_VERSION = 2
 POPULARITAET_AB_VERSION = 3
 VERLAUF_AB_VERSION = 4
 BILANZ_AB_VERSION = 5
+# Ab Version 10 fuehrt die Statistik neben den Rennrekorden auch die
+# Qualifyingrekorde (Punkt 93, A17). Aeltere Staende haben die Tabelle
+# nicht; sie fangen bei null an.
+QUALIREKORD_AB_VERSION = 10
 # Ab Version 6 fuehrt die Karriere ein Auto je Fahrer statt eines
 # einzigen: Der Spieler ist Teamchef mit vier Autos, und jedes wird fuer
 # sich entwickelt. Aeltere Staende tragen genau ein Auto - das des
@@ -240,6 +244,15 @@ CREATE TABLE tabelle (
 );
 CREATE TABLE saisonstand (gefahrene_rennen INTEGER NOT NULL);
 CREATE TABLE rekord (
+    strecke TEXT NOT NULL,
+    liga INTEGER NOT NULL,
+    zeit_ms INTEGER NOT NULL,
+    fahrer INTEGER NOT NULL,
+    saison INTEGER NOT NULL,
+    rennen INTEGER NOT NULL,
+    PRIMARY KEY (strecke, liga)
+);
+CREATE TABLE qualirekord (
     strecke TEXT NOT NULL,
     liga INTEGER NOT NULL,
     zeit_ms INTEGER NOT NULL,
@@ -644,6 +657,13 @@ def _schreibe_statistik(
         [
             (r.strecke, r.liga, r.zeit_ms, r.fahrer, r.saison, r.rennen)
             for r in statistik.rekorde.values()
+        ],
+    )
+    verbindung.executemany(
+        "INSERT INTO qualirekord VALUES (?, ?, ?, ?, ?, ?)",
+        [
+            (r.strecke, r.liga, r.zeit_ms, r.fahrer, r.saison, r.rennen)
+            for r in statistik.qualirekorde.values()
         ],
     )
     verbindung.executemany(
@@ -1058,6 +1078,19 @@ def _lies_statistik(
             saison=z["saison"],
             rennen=z["rennen"],
         )
+    # Punkt 93 (A17): Erst ab Version 10. Aeltere Staende haben keine
+    # Qualifyingrekorde - sie fangen bei null an, und die erste Pole der
+    # naechsten Saison setzt die Marke.
+    if version >= QUALIREKORD_AB_VERSION:
+        for z in verbindung.execute("SELECT * FROM qualirekord"):
+            statistik.qualirekorde[(z["strecke"], z["liga"])] = kern_statistik.Rekord(
+                strecke=z["strecke"],
+                liga=z["liga"],
+                zeit_ms=z["zeit_ms"],
+                fahrer=z["fahrer"],
+                saison=z["saison"],
+                rennen=z["rennen"],
+            )
     for z in verbindung.execute("SELECT * FROM karrierezahl"):
         statistik.karriere[z["fahrer"]] = kern_statistik.Karrierezahlen(
             fahrer=z["fahrer"],

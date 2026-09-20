@@ -334,6 +334,7 @@ class Rennwochenendeseite(QWidget):
         try:
             if self._schritt == 0:
                 self._quali.zeige_session(self._wochenende.fahre_qualifying())
+                self._zeige_bestmarke()
                 # Punkt 39: Jetzt steht fest, was zur Wahl steht - das
                 # Wetter des Rennens und die tragfaehigen Strategien.
                 self._reifenwahl.zeige(
@@ -357,6 +358,25 @@ class Rennwochenendeseite(QWidget):
             QApplication.restoreOverrideCursor()
             self._weiter.setEnabled(True)
         self._zeige_schritt()
+
+    def _zeige_bestmarke(self) -> None:
+        """Punkt 93 (A17): Die Streckenbestmarke im Qualifying.
+
+        Sie steht in der Statistik der Saison; der Fahrername kommt aus
+        der Welt. Vor dem ersten Wochenende auf einer Strecke gibt es
+        keine - dann sagt die Zeile genau das.
+        """
+        statistik = getattr(self._lauf, "statistik", None)
+        if statistik is None:
+            self._quali.zeige_bestmarke(None)
+            return
+        rekord = statistik.qualirekord(
+            self._wochenende.rahmen.strecke.name, self._wochenende.liga
+        )
+        name = ""
+        if rekord is not None and rekord.fahrer < len(self._lauf.welt.fahrer):
+            name = self._lauf.welt.fahrer[rekord.fahrer].name
+        self._quali.zeige_bestmarke(rekord, name)
 
     def _starte_rennrechnung(self) -> None:
         """Rechnet das Rennen im Hintergrund (E10)."""

@@ -469,6 +469,16 @@ Dazu drei Dinge um die Tafel herum:
   Stellen, an denen Zeit und Ort beide bekannt sind, innerhalb eines
   Sektors wird linear interpoliert.
 
+##### Die Streckenbestmarke (Punkt 93, A17)
+
+Neben dem Wetter steht die **schnellste je hier gefahrene Qualirunde**,
+mit Fahrer und Jahr. Sie wird **getrennt vom Rennrekord** gefuehrt: Eine
+Qualirunde faehrt man auf leerer Strecke mit frischen Reifen, eine
+Rennrunde mit Verkehr und abbauenden Reifen - in einem Topf fiele der
+Rennrekord nie wieder. Gemeldet wird beim Verbuchen des Wochenendes,
+gespeichert ab Spielstandversion 10; aeltere Staende fangen bei null an,
+und die naechste Pole setzt die Marke.
+
 ##### Warum Lila mitlaeuft und Gruen und Rot einfrieren
 
 Die Splits sind dreifarbig, und die beiden Farbgruppen messen bewusst
@@ -853,6 +863,33 @@ der letzte ist - dann genuegte eine Rechnung je Zusammenstellung, und
 die Reihenfolgen erbten sie. Jetzt ist ein weicher Satz auf gruenem
 Asphalt etwas anderes als derselbe Satz auf eingegummiertem, und jede
 Reihenfolge wird einzeln gerechnet.
+
+#### Was das Rennen sonst noch zeigt (Punkt 93)
+
+* **Alter, Reicht, Stopp** neben dem Reifenbalken. Der Balken sagt
+  "wieviel", nicht "wie lange" (B35) und nicht "wie lange noch" (B36):
+  *Alter* zaehlt die Runden auf dem Satz, *Reicht* rechnet hoch, wie
+  viele noch bis zur Zwangsstopp-Grenze bleiben - aus dem, was schon
+  passiert ist, also mit dem Verschleiss, den dieses Auto an diesem Tag
+  wirklich hat. *Stopp* nennt die Runde, in der der Plan hereinkommen
+  will (B32); was das Rennen daraus macht, ist die Geschichte des
+  Rennens.
+* **Der Ticker traegt je Art ein Zeichen** (B49) - Warndreieck, Kreuz,
+  Zahnrad. Zwoelf Zeilen Fliesstext sehen alle gleich aus; ein Zeichen
+  am Zeilenanfang laesst sich im Vorbeischauen zaehlen. Wer ausfaellt,
+  bekommt dasselbe Zeichen in Rot: Der Ausfall ist keine vierte Art,
+  sondern das Ende einer der drei.
+* **Das Wetterband** unter der Wiedergabeleiste (B43), dasselbe Widget
+  wie im Qualifying.
+* **Die Boxenbilanz** als eigenes Blatt (B53): Stopps, Standzeit,
+  Gesamtverlust und der Abstand zum Feld. Der Verlust wird **gemessen,
+  nicht gerechnet** - die Runde mit Stopp gegen die Medianrunde
+  desselben Autos. Eine Formel aus Boxengassenlaenge und Standzeit
+  kennt davon nur die Haelfte.
+* **Der Kompaktmodus** (B59): nur die Rangliste, grosse Schrift, fuers
+  reine Zusehen. Karte, Diagramm und das rechte Blatt fallen weg - und
+  genau die kosten den Loewenanteil der Zeit je Bild (siehe D1 bis D10),
+  also ist es nebenbei der schnellste Modus ueberhaupt.
 
 #### Warum ein Prozent Grip eine Sekunde ist
 

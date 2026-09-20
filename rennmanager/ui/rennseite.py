@@ -7,6 +7,7 @@ groesseren Schritten aus dem fertigen Verlauf gelesen.
 
 from __future__ import annotations
 
+import statistics
 import time
 
 from PySide6.QtCore import Qt, QTimer, Signal
@@ -30,6 +31,7 @@ from PySide6.QtWidgets import (
 from rennmanager.kern import gummierung as kern_gummierung
 from rennmanager.kern import strecke as kern_strecke
 from rennmanager.kern import wertung as kern_wertung
+from rennmanager.kern import zwischenfall as kern_zwischenfall
 from rennmanager.kern.rennen import Rennverlauf
 from rennmanager.kern.welt import Welt
 from rennmanager.kern.zeit import (
@@ -41,6 +43,7 @@ from rennmanager.konfiguration import Konfiguration
 from rennmanager.ui.rueckstandsansicht import Rueckstandsansicht
 from rennmanager.ui.streckenansicht import Streckenansicht
 from rennmanager.ui.tabellen import Balkenzeichner, setze_breiten, verbinde_fahrerkarte
+from rennmanager.ui.wetterband import Wetterband
 
 # Der Zeitraffer vervielfacht die Rennzeit je Takt, nicht die Zahl der
 # Takte - die Anzeige bleibt damit gleich fluessig, egal wie schnell
@@ -63,7 +66,14 @@ SPALTE_TEMPO = 8
 SPALTE_SCHNITT = 9
 SPALTE_MISCHUNG = 10
 SPALTE_REIFEN = 11
-SPALTE_STATUS = 12
+# Punkt 93: Der Balken sagt "wieviel", nicht "wie lange" (B35) und nicht
+# "wie lange noch" (B36). Und B32: in welcher Runde der Plan den
+# naechsten Stopp vorsieht - der Kern wusste es, die Anzeige zeigte es
+# nicht.
+SPALTE_ALTER = 12
+SPALTE_REICHT = 13
+SPALTE_PLANSTOPP = 14
+SPALTE_STATUS = 15
 # Spalten des Zeitenmonitors.
 MONITOR_KUERZEL = 0
 MONITOR_NAME = 1
@@ -90,6 +100,8 @@ BLATT_MONITOR = 0
 BLATT_IDEAL = 1
 BLATT_MEISTERSCHAFT = 2
 BLATT_TICKER = 3
+# Punkt 93 (B53): Was die Stopps gekostet haben, je Fahrer.
+BLATT_BOXENBILANZ = 4
 # Gruener Pfeil hoch, roter Pfeil runter - die Zahl daneben sagt, um wie
 # viele Plaetze. Die Farbe ist nie die einzige Auskunft.
 PFEIL_HOCH = "\u25b2"
@@ -98,6 +110,19 @@ FARBE_GEWONNEN = "#2e7d32"
 FARBE_VERLOREN = "#c62828"
 # So viele Zwischenfaelle stehen im Ticker; aeltere rollen heraus.
 TICKER_ZEILEN = 12
+# Punkt 93 (B59): Schriftgroesse der Rangliste im Kompaktmodus.
+SCHRIFT_KOMPAKT = 14
+# Punkt 93 (B49): Je Art ein eigenes Zeichen. Zwoelf Zeilen Fliesstext
+# sehen alle gleich aus; ein Zeichen am Zeilenanfang laesst sich im
+# Vorbeischauen zaehlen - "drei Defekte, ein Unfall".
+TICKER_ZEICHEN = {
+    kern_zwischenfall.Art.FEHLER: "⚠",   # Warndreieck
+    kern_zwischenfall.Art.UNFALL: "✖",   # Kreuz
+    kern_zwischenfall.Art.DEFEKT: "⚙",   # Zahnrad
+}
+# Wer ausfaellt, bekommt dasselbe Zeichen in Rot - der Ausfall ist keine
+# vierte Art, sondern das Ende einer der drei.
+FARBE_AUSFALL = "#c62828"
 # Punkt 63: So lange bleibt ein ausgefallenes Auto noch auf der
 # Streckengrafik stehen - lang genug, um zu sehen, wo es passiert ist,
 # und kurz genug, dass die Karte nicht mit Standbildern zuwaechst.
@@ -201,6 +226,11 @@ class Rennseite(QWidget):
 
         spalte = QVBoxLayout(self)
         spalte.addLayout(self._baue_wiedergabe())
+        # Punkt 93 (B43): Dasselbe Band wie im Qualifying (A13). Ein
+        # Regenabschnitt in Runde 40 ist der Grund, warum eine Strategie
+        # aufgeht oder nicht - und man sah ihn erst, wenn man hineinfuhr.
+        self._wetterband = Wetterband()
+        spalte.addWidget(self._wetterband)
 
         self._blaetter = QTabWidget()
         self._blaetter.addTab(self._ansicht, "Strecke")
@@ -239,6 +269,19 @@ class Rennseite(QWidget):
         self._sofort.setEnabled(False)
         self._sofort.clicked.connect(self._zum_ende)
 
+        # Punkt 93 (B59): Nur die Rangliste, grosse Schrift - fuers reine
+        # Zusehen. Und nebenbei der schnellste Modus ueberhaupt: Karte,
+        # Rueckstandsdiagramm und das rechte Blatt fallen weg, und genau
+        # die kosten den Loewenanteil der Zeit je Bild (siehe D1 bis D10).
+        self._kompakt = QPushButton("Kompakt")
+        self._kompakt.setCheckable(True)
+        self._kompakt.setEnabled(False)
+        self._kompakt.setToolTip(
+            "Blendet Karte, Diagramm und die rechten Blaetter aus und "
+            "vergroessert die Rangliste - fuers reine Zusehen."
+        )
+        self._kompakt.toggled.connect(self._setze_kompakt)
+
         self._uhrzeit = QLabel("0:00.000")
         # Punkt 65: Je Fahrer steht in der Rangliste, in welcher Runde er
         # ist - aber nirgends, wie weit das Rennen insgesamt ist. Hier
@@ -266,6 +309,7 @@ class Rennseite(QWidget):
         zeile.addWidget(QLabel("Zeitraffer:"))
         zeile.addWidget(self._raffer)
         zeile.addWidget(self._sofort)
+        zeile.addWidget(self._kompakt)
         self._wetteranzeige = QLabel("-")
         # Punkt 91: Wie viele verschiedene Strategien das Feld faehrt.
         # Der Planer laesst eine Handvoll Varianten zu und verteilt sie
@@ -372,11 +416,16 @@ class Rennseite(QWidget):
         self._rangliste.setHeaderLabels(
             [
                 "Pos", "Auto", "Fahrer", "Team", "+/-", "Rd", "Zeit / Rueckstand",
-                "Intervall", "km/h", "Ø km/h", "Mischung", "Reifen", "Status",
+                "Intervall", "km/h", "Ø km/h", "Mischung", "Reifen",
+                "Alter", "Reicht", "Stopp", "Status",
             ]
         )
         self._rangliste.setRootIsDecorated(False)
         self._rangliste.setAlternatingRowColors(True)
+        # Punkt 93 (B59): Wohin der Kompaktmodus zurueckschaltet. Die
+        # Groesse kommt vom System, nicht von uns - sie darf deshalb
+        # nicht fest eingetippt werden.
+        self._schriftgroesse = self._rangliste.font().pointSize()
         # Punkt 3: Der Reifenzustand als Balken - im Zeitraffer schneller
         # zu lesen als eine Prozentzahl.
         self._rangliste.setItemDelegateForColumn(
@@ -441,6 +490,7 @@ class Rennseite(QWidget):
         # den Tabellen Hoehe weg. Als viertes Blatt stoeren sie nicht mehr
         # und sind trotzdem einen Klick entfernt.
         self._monitorblaetter.addTab(self._baue_ticker(), "Meldungen")
+        self._monitorblaetter.addTab(self._baue_boxenbilanz(), "Boxenbilanz")
         # D2: Ein frisch aufgeschlagenes Blatt steht sonst so lange leer
         # oder veraltet da, bis der naechste Takt faellig ist.
         self._monitorblaetter.currentChanged.connect(self._blatt_gewechselt)
@@ -449,11 +499,11 @@ class Rennseite(QWidget):
     def _baue_ticker(self) -> QWidget:
         # Punkt 4: Fehler, Unfaelle und Defekte laufen mit, neueste zuerst.
         self._ticker = QTreeWidget()
-        self._ticker.setHeaderLabels(["Zeit", "Rd", "Auto", "Was"])
+        self._ticker.setHeaderLabels(["", "Zeit", "Rd", "Auto", "Was"])
         self._ticker.setRootIsDecorated(False)
         self._ticker.setAlternatingRowColors(True)
         verbinde_fahrerkarte(
-            self._ticker, self.fahrerkarte_gewuenscht.emit, self._fahrernummer_in(2)
+            self._ticker, self.fahrerkarte_gewuenscht.emit, self._fahrernummer_in(3)
         )
         self._tickerkasten = QGroupBox("Zwischenfaelle")
         ticker_spalte = QVBoxLayout(self._tickerkasten)
@@ -488,6 +538,8 @@ class Rennseite(QWidget):
         self._gewaehlt = None
         self._zeige_auswahl()
         self._fortschritt.setRange(0, max(verlauf.dauer_ms, 1))
+        self._wetterband.zeige(verlauf.wetter, verlauf.dauer_ms)
+        self._kompakt.setEnabled(True)
         # Punkt 91: Steht einmal je Rennen fest und aendert sich nicht.
         self._strategiezahl.setText(
             str(verlauf.strategiezahl) if verlauf.strategiezahl else "-"
@@ -541,6 +593,7 @@ class Rennseite(QWidget):
         setze_breiten(self._rangliste, [
             "30", kuerzel, name, team, f"{PFEIL_RUNTER} 12", "48",
             dauer, abstand, "320", "288,8", f"WW (4){HAKEN}", None,
+            "88 Rd", "88 Rd", "R88",
             "Defekt x2, 3 Fehler",
         ])
         setze_breiten(self._monitor, [
@@ -554,7 +607,7 @@ class Rennseite(QWidget):
         setze_breiten(self._meisterschaft, [
             "30", kuerzel, name, team, f"{PFEIL_RUNTER} 12", "888", "+40",
         ])
-        setze_breiten(self._ticker, [dauer, "48", kuerzel,
+        setze_breiten(self._ticker, ["⚙", dauer, "48", kuerzel,
                                      "Dreher in der Schikane, 8,4 s verloren"])
 
     def showEvent(self, ereignis) -> None:  # noqa: D102 - Qt-Name
@@ -625,6 +678,7 @@ class Rennseite(QWidget):
         zeit = self._zeit_ms
         self._uhrzeit.setText(formatiere_dauer(int(zeit)))
         self._fortschritt.setValue(int(zeit))
+        self._wetterband.setze_marke(zeit)
 
         if verlauf.wetter is not None:
             zustand = verlauf.wetter.zustand_zu(zeit)
@@ -682,6 +736,8 @@ class Rennseite(QWidget):
             self._fuelle_meisterschaft(verlauf, reihenfolge, zeit)
         elif blatt == BLATT_TICKER:
             self._fuelle_ticker(verlauf, zeit)
+        elif blatt == BLATT_BOXENBILANZ:
+            self._fuelle_boxenbilanz(verlauf, reihenfolge, zeit)
 
     def _teamname(self, teilnehmer) -> str:
         """Das Team hinter einem Auto (Punkt 82).
@@ -815,6 +871,24 @@ class Rennseite(QWidget):
             return ""
         return formatiere_rueckstand(int(ergebnis.rueckstand_ms))
 
+    def _reichttext(self, verlauf: Rennverlauf, i: int, runde: int, zeit: float) -> str:
+        """Punkt 93 (B36): Wie viele Runden der Satz noch traegt.
+
+        Gerechnet gegen die Zwangsstopp-Grenze: Darunter kommt das Auto
+        herein, ob es will oder nicht. Die Zahl macht die Grenze
+        sichtbar, bevor sie zuschlaegt.
+        """
+        schwelle = self._konfiguration.wert(
+            "boxenstopp", "strategie", "notstopp_ab_restprofil"
+        )
+        rest = verlauf.restrunden(i, runde, zeit, schwelle)
+        return "-" if rest is None else f"{rest} Rd"
+
+    def _planstopptext(self, verlauf: Rennverlauf, i: int, runde: int) -> str:
+        """Punkt 93 (B32): In welcher Runde der Plan den naechsten Stopp vorsieht."""
+        naechster = verlauf.naechster_planstopp(i, runde)
+        return "-" if naechster is None else f"R{naechster}"
+
     def _fuelle_rangliste(
         self, verlauf: Rennverlauf, reihenfolge: list[int], distanzen, zeit: float
     ) -> None:
@@ -874,6 +948,9 @@ class Rennseite(QWidget):
                     self._schnitttext(distanz, zeit),
                     self._mischungstext(verlauf, i, mischungen[i], zeit),
                     f"{reifen[i]:.0%}",
+                    f"{verlauf.reifenalter(i, runde, zeit)} Rd",
+                    self._reichttext(verlauf, i, runde, zeit),
+                    self._planstopptext(verlauf, i, runde),
                     status,
                 ],
             )
@@ -1274,6 +1351,89 @@ class Rennseite(QWidget):
                 bester, beste = i, runde
         return bester
 
+    def _setze_kompakt(self, an: bool) -> None:
+        """Punkt 93 (B59): Nur die Rangliste, grosse Schrift.
+
+        Die ausgeblendeten Teile werden nicht nur versteckt, sondern
+        auch **nicht mehr gefuellt**: Karte, Rueckstandsdiagramm und das
+        rechte Blatt kosten den Loewenanteil der Zeit je Bild (siehe D1
+        bis D10). Der Modus ist damit nebenbei der schnellste ueberhaupt.
+        """
+        self._blaetter.setVisible(not an)
+        self._monitorblaetter.setVisible(not an)
+        schrift = self._rangliste.font()
+        schrift.setPointSize(SCHRIFT_KOMPAKT if an else self._schriftgroesse)
+        self._rangliste.setFont(schrift)
+        self._rangliste.header().setFont(schrift)
+        if self._verlauf is not None:
+            self._setze_spaltenbreiten(self._verlauf)
+            self._erzwinge_fuellung()
+            self._zeichne()
+
+    @property
+    def kompakt(self) -> bool:
+        return self._kompakt.isChecked()
+
+    def _baue_boxenbilanz(self) -> QWidget:
+        """Punkt 93 (B53): Standzeit, Gesamtverlust, Vergleich zum Feld."""
+        self._boxenbilanz = QTreeWidget()
+        self._boxenbilanz.setHeaderLabels(
+            ["Auto", "Fahrer", "Team", "Stopps", "Standzeit", "Verlust", "zum Feld"]
+        )
+        self._boxenbilanz.setRootIsDecorated(False)
+        self._boxenbilanz.setAlternatingRowColors(True)
+        verbinde_fahrerkarte(
+            self._boxenbilanz, self.fahrerkarte_gewuenscht.emit, self._fahrernummer_in(0)
+        )
+        return self._boxenbilanz
+
+    def _fuelle_boxenbilanz(
+        self, verlauf: Rennverlauf, reihenfolge: list[int], zeit: float
+    ) -> None:
+        """Punkt 93 (B53): Was die Stopps bis hierher gekostet haben.
+
+        "Zum Feld" misst gegen den **Median derer, die schon gestoppt
+        haben** - gegen das Feldmittel waere es unfair: Wer noch nicht
+        drin war, hat null Verlust, und mit dem im Nenner saehe jeder
+        Stopper schlecht aus.
+        """
+        self._boxenbilanz.clear()
+        bilanzen = {i: verlauf.stoppbilanz(i, zeit) for i in reihenfolge}
+        verluste = [v for _n, _s, v in bilanzen.values() if v > 0]
+        mittel = statistics.median(verluste) if verluste else 0
+
+        for i in reihenfolge:
+            anzahl, standzeit, verlust = bilanzen[i]
+            teilnehmer = verlauf.teilnehmer[i]
+            zeile = QTreeWidgetItem(
+                self._boxenbilanz,
+                [
+                    teilnehmer.kuerzel,
+                    self._namen[i],
+                    self._teams[i],
+                    str(anzahl),
+                    formatiere_rueckstand(standzeit) if anzahl else "-",
+                    formatiere_rueckstand(verlust) if anzahl else "-",
+                    (
+                        formatiere_rueckstand(verlust - int(mittel))
+                        if anzahl and mittel
+                        else "-"
+                    ),
+                ],
+            )
+            zeile.setForeground(0, QColor(teilnehmer.farbe))
+            zeile.setData(0, Qt.UserRole, i)
+            if anzahl and mittel:
+                zeile.setForeground(
+                    6,
+                    QColor(FARBE_GEWONNEN if verlust <= mittel else FARBE_VERLOREN),
+                )
+            if teilnehmer.ist_spieler:
+                schrift = zeile.font(0)
+                schrift.setBold(True)
+                for spalte in range(self._boxenbilanz.columnCount()):
+                    zeile.setFont(spalte, schrift)
+
     def _fuelle_ticker(self, verlauf: Rennverlauf, zeit: float) -> None:
         """Zwischenfaelle bis zur laufenden Rennzeit, neueste zuerst (Punkt 4)."""
         bisher = [z for z in verlauf.zwischenfaelle if z.zeit_ms <= zeit]
@@ -1284,17 +1444,26 @@ class Rennseite(QWidget):
             zeile = QTreeWidgetItem(
                 self._ticker,
                 [
+                    TICKER_ZEICHEN.get(z.art, "?"),
                     formatiere_dauer(z.zeit_ms),
                     str(z.runde),
                     teilnehmer.kuerzel,
-                    z.beschreibung,
+                    z.beschreibung + (" - Ausfall" if z.ausgefallen else ""),
                 ],
             )
-            zeile.setForeground(2, QColor(teilnehmer.farbe))
-            # Spalte 0 sortiert nach Zeit, Spalte 2 traegt das Auto - dort
-            # steht die Startnummer, damit der Doppelklick sie findet.
+            zeile.setForeground(3, QColor(teilnehmer.farbe))
+            if z.ausgefallen:
+                # Der Ausfall ist keine vierte Art, sondern das Ende
+                # einer der drei - also dasselbe Zeichen, nur in Rot.
+                zeile.setForeground(0, QColor(FARBE_AUSFALL))
+                zeile.setForeground(4, QColor(FARBE_AUSFALL))
+            # Spalte 0 traegt weiterhin die Zeit als Sortierschluessel -
+            # das Zeichen steht zwar darin, aber die Rolle daneben ist
+            # frei, und ein Test liest von dort, ob das Neueste oben
+            # steht. Spalte 3 traegt das Auto, damit der Doppelklick die
+            # Fahrerkarte findet.
             zeile.setData(0, Qt.UserRole, int(z.zeit_ms))
-            zeile.setData(2, Qt.UserRole, z.teilnehmer)
+            zeile.setData(3, Qt.UserRole, z.teilnehmer)
 
     def _fahrernummer_in(self, spalte: int):
         """Liefert den Uebersetzer von einer Zeile zum Fahrer der Welt.

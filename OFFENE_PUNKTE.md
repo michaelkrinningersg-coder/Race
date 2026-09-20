@@ -2897,3 +2897,76 @@ Unterschied ist erheblich:
 Strecken, und die Zwangsstopps fallen von 1 bis 6 je Rennen auf 0 bis
 1.** Zandvoort liegt damit bei 2 bis 3 Stopps, Monza bei 1 bis 2 — beide
 Spannen genau wie gewünscht.
+
+
+---
+
+## Punkt 93: Die fünfzehn ausgewählten Anzeigepunkte, in sechs Blöcken
+
+Aus `VORSCHLAEGE.md` ausgewählt: A 2, 6, 7, 8, 9, 13, 17, 23 und
+B 32, 35, 36, 43, 49, 53, 59. Gebaut in sechs Blöcken.
+
+### Block 1 — die Qualifying-Zeitentafel
+
+**A2 Intervall** als eigene Spalte neben dem Rückstand; die Intervalle
+summieren sich genau zum Rückstand. **A6** hebt die Zeile dessen hervor,
+der gerade auf seiner gezeiteten Runde ist. **A7** schreibt über die
+Tabelle, wer wen gerade um wie viel verdrängt hat. **A8** lässt die neue
+Pole golden aufleuchten.
+
+Die Rechnung steht im Kern: `session.letzte_zielankunft(t, fenster)`
+liefert Platz, Verdrängten, Abstand und den Polewechsel. Das Fenster
+zählt in **Sessionzeit** — bei 50-fachem Zeitraffer wäre eine Sekunde
+Bildschirmzeit fast eine Minute Session.
+
+**Drei Testannahmen von mir waren falsch:** Die Mitte zwischen Ausfahrt
+und Ziel liegt noch in der Aufwärmrunde. Die dritte Ankunft der
+Testsession reiht sich *hinten* ein und verdrängt niemanden. Und in
+dieser Session wechselt die Pole **kein einziges Mal** — die
+Startreihenfolge des ersten Rennens ist aufsteigend nach
+Qualifying-Fähigkeit, das schnellste Auto fährt also zuerst, und seine
+132,260 s halten bis zum Schluss.
+
+### Block 2 — Ablauf
+
+**A23** springt zur nächsten Zielankunft, also dorthin, wo sich die
+Tafel ändert. **A13** zeigt den Wetterverlauf als Band unter der
+Wiedergabeleiste; die Farben sind sequenziell, nicht kategorial.
+
+### Block 3 — Streckengrafik im Qualifying
+
+**A9**: ein Punkt, der die gezeitete Runde abfährt. Den Ort rechnet
+`session.ort_auf_der_runde` über die **Sektorgrenzen** — die einzigen
+Stellen, an denen Zeit und Ort beide bekannt sind.
+
+### Block 4 — Reifen und Strategie im Rennen
+
+**B35 Alter**, **B36 Reicht**, **B32 Stopp** neben dem Reifenbalken. Die
+Restrunden werden **hochgerechnet aus dem, was schon passiert ist**,
+nicht aus dem Modell: Ein frischer Satz startet bei 1,0, und was seither
+fehlt, verteilt sich auf die gefahrenen Runden.
+
+### Block 5 — Ticker und Wetterband
+
+**B49**: je Art ein Zeichen — Warndreieck, Kreuz, Zahnrad. Wer ausfällt,
+bekommt dasselbe Zeichen in Rot; der Ausfall ist keine vierte Art,
+sondern das Ende einer der drei. **B43**: dasselbe Wetterband wie im
+Qualifying.
+
+### Block 6 — Bilanz, Kompaktmodus, Bestmarke
+
+**B53 Boxenbilanz** als eigenes Blatt. Der Gesamtverlust wird
+**gemessen, nicht gerechnet**: die Runde mit Stopp gegen die Medianrunde
+desselben Autos. Eine Formel aus Boxengassenlänge und Standzeit kennt
+davon nur die Hälfte.
+
+**B59 Kompaktmodus**: nur die Rangliste, große Schrift. Karte, Diagramm
+und das rechte Blatt fallen weg — und genau die kosten den Löwenanteil
+der Zeit je Bild (D1 bis D10), also ist es nebenbei der schnellste Modus
+überhaupt.
+
+**A17 Streckenbestmarke**: die schnellste je hier gefahrene Qualirunde,
+mit Fahrer und Jahr. **Getrennt vom Rennrekord geführt** — eine
+Qualirunde fährt man auf leerer Strecke mit frischen Reifen; in einem
+Topf fiele der Rennrekord nie wieder. Spielstand auf Version 10;
+ältere Stände fangen bei null an.

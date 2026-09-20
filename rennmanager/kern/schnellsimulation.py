@@ -58,6 +58,10 @@ class Schnellergebnis:
     schnellste_runde_ms: int
     ueberholmanoever: int
     ausfaelle: int
+    # Punkt 93 (A17): Die schnellste Qualirunde und wer sie fuhr, als
+    # Platz im Feld. Daraus wird die Streckenbestmarke.
+    polezeit_ms: int = 0
+    polefahrer: int = 0
     # Punkt 23: die Lage, unter der am meisten gefahren wurde. Fuer die
     # Wetterbilanz braucht es eine Lage je Rennen, nicht den Verlauf.
     vorherrschendes_wetter: str = ""
@@ -694,6 +698,9 @@ def fahre_wochenende(
         schnellste_runde_ms=int(round(beste_runde[schnellste])),
         ueberholmanoever=manoever,
         ausfaelle=ausfaelle,
+        # Punkt 93 (A17): Die Qualirunde des Erstplatzierten.
+        polezeit_ms=int(round(quali_runden[aufstellung[0]])),
+        polefahrer=int(aufstellung[0]),
         manoever_je_auto=tuple(int(n) for n in manoever_je_auto),
         defekte_je_auto=tuple(
             tuple(d["schluessel"] for d in defekte) for defekte in defekte_je_auto
