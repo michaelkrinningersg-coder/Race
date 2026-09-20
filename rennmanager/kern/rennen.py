@@ -79,6 +79,17 @@ class Rundenprotokoll:
     # Anzeige nicht, welche Runden zum Abspielzeitpunkt schon gefahren
     # sind - sie zeigte immer die Zeiten vom Rennende.
     rundenende_ms: list[int] = field(default_factory=list)
+    # D4: Die besten Sektoren je Stand, einmal gerechnet. Die Anzeige
+    # fragt sie in jedem Bild fuer alle dreissig Autos ab, und die
+    # Funktion laeuft dabei ueber **alle** bisher gefahrenen Runden - in
+    # Runde 40 also ueber vierzig. Der Schluessel ist die Zahl der
+    # gefahrenen Runden; sie bestimmt den Ausschnitt vollstaendig, also
+    # kann der Puffer nicht veralten. Er zaehlt nicht zum Vergleich und
+    # steht nicht in der Darstellung - er ist Rechenergebnis, nicht
+    # Inhalt.
+    _beste_sektoren: dict[int, tuple[int | None, ...]] = field(
+        default_factory=dict, compare=False, repr=False
+    )
 
     @property
     def beste_runde_ms(self) -> int | None:
@@ -109,15 +120,22 @@ class Rundenprotokoll:
         sie reicht.
         """
         bis = self.gefahren_bis(zeit_ms)
+        gepuffert = self._beste_sektoren.get(bis)
+        if gepuffert is not None:
+            return gepuffert
+
         runden = self.sektorzeiten_ms[:bis]
         if not runden:
+            self._beste_sektoren[bis] = ()
             return ()
         beste: list[int | None] = [None] * max(len(r) for r in runden)
         for runde in runden:
             for nummer, zeit in enumerate(runde):
                 if beste[nummer] is None or zeit < beste[nummer]:
                     beste[nummer] = zeit
-        return tuple(beste)
+        ergebnis = tuple(beste)
+        self._beste_sektoren[bis] = ergebnis
+        return ergebnis
 
     def ideale_runde_ms(self, zeit_ms: float) -> int | None:
         """Die Runde, die aus den besten Sektoren zusammen entstuende.

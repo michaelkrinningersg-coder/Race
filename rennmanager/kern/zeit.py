@@ -14,6 +14,7 @@ Anzeigeformate laut GDD 4:
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 
 MS_JE_SEKUNDE = 1_000
 MS_JE_MINUTE = 60 * MS_JE_SEKUNDE
@@ -46,8 +47,15 @@ def zerlege(ms: int) -> tuple[int, int, int, int]:
     return stunden, minuten, sekunden, millisekunden
 
 
+@lru_cache(maxsize=4096)
 def formatiere_dauer(ms: int) -> str:
     """Formatiert eine Dauer als ``m:ss.mmm`` bzw. ab einer Stunde ``h:mm:ss.mmm``.
+
+    Gepuffert (D5): Die Rennanzeige ruft das in jedem Bild rund
+    hundertsiebzig Mal auf, und die meisten Werte sind dieselben wie im
+    Bild davor - die beste Runde eines Fahrers aendert sich alle
+    hundertzehn Sekunden, die Anzeige fuenfmal je Sekunde. Die Funktion
+    haengt nur von ihrem Argument ab, also ist der Puffer immer richtig.
 
     >>> formatiere_dauer(83_456)
     '1:23.456'

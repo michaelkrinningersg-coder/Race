@@ -178,6 +178,15 @@ class Rennseite(QWidget):
         # war der Takt oben ab Stufe 50x wirkungslos, weil zwischen zwei
         # Bildern mehr Rennzeit liegt als die Schwelle.
         self._letzte_fuellung_s: float | None = None
+        # D6: Nachnamen und Teams stehen beim Rennstart fest. Sie wurden
+        # bisher in jedem Bild fuer jede Zeile neu aus der Welt geholt
+        # und zerlegt - je 9000 Mal auf 150 Bilder.
+        self._namen: list[str] = []
+        self._teams: list[str] = []
+        # D7 und D10: je ein Puffer fuer das laufende Bild. Beide Werte
+        # gelten fuer das ganze Feld, wurden aber je Zeile neu gerechnet.
+        self._plaetze_puffer: tuple[object, dict[int, int]] = (None, {})
+        self._tempo_puffer: tuple[object, object] = (None, None)
 
         self._ansicht = Streckenansicht()
         # Punkt 2: Das Rueckstandsdiagramm liegt als zweiter Reiter neben
@@ -448,6 +457,9 @@ class Rennseite(QWidget):
         for knopf in (self._abspielen, self._zurueck, self._sofort):
             knopf.setEnabled(True)
         self._waehle_zeitraffer()
+        # D6: Namen und Teams einmal aufloesen, nicht je Zeile je Bild.
+        self._namen = [self._nachname(t) for t in verlauf.teilnehmer]
+        self._teams = [self._teamname(t) for t in verlauf.teilnehmer]
         # D1: Die Spalten werden **einmal** je Rennen ausgemessen. Bisher
         # rief jede Fuellung ``resizeColumnToContents`` fuer jede Spalte
         # jeder Tabelle auf - 37 Aufrufe je Bild.
@@ -480,8 +492,8 @@ class Rennseite(QWidget):
             return gefunden if gefunden else ersatz
 
         teilnehmer = verlauf.teilnehmer
-        name = laengster([self._nachname(t) for t in teilnehmer], "Mustermann")
-        team = laengster([self._teamname(t) for t in teilnehmer], "Rennstall")
+        name = laengster(self._namen, "Mustermann")
+        team = laengster(self._teams, "Rennstall")
         kuerzel = laengster([t.kuerzel for t in teilnehmer], "A30")
         dauer = "1:23:45.678"
         abstand = "+1:23.456"
@@ -682,9 +694,8 @@ class Rennseite(QWidget):
             return f"{PFEIL_RUNTER} {-gewinn}"
         return ""
 
-    @staticmethod
     def _plaetze_vorige_runde(
-        verlauf: Rennverlauf, fuehrender: int, zeit: float
+        self, verlauf: Rennverlauf, fuehrender: int, zeit: float
     ) -> dict[int, int]:
         """Die Plaetze zu Beginn der laufenden Runde des Fuehrenden.
 
@@ -699,10 +710,18 @@ class Rennseite(QWidget):
         if gefahren < 1 or not protokoll.rundenende_ms:
             return {}
         rundenbeginn = protokoll.rundenende_ms[gefahren - 1]
-        return {
+        # D7: Das kostet ein zweites ``reihenfolge_zu`` samt Interpolation
+        # und Sortierung - fuer einen Zeitpunkt, der sich nur beim
+        # Rundenwechsel des Fuehrenden aendert, nicht je Bild.
+        schluessel = (id(verlauf), fuehrender, rundenbeginn)
+        if self._plaetze_puffer[0] == schluessel:
+            return self._plaetze_puffer[1]
+        plaetze = {
             auto: platz
             for platz, auto in enumerate(verlauf.reihenfolge_zu(rundenbeginn), start=1)
         }
+        self._plaetze_puffer = (schluessel, plaetze)
+        return plaetze
 
     @staticmethod
     def _noch_auf_der_karte(verlauf: Rennverlauf, teilnehmer: int, zeit: float) -> bool:
@@ -799,8 +818,8 @@ class Rennseite(QWidget):
                 [
                     str(platz),
                     teilnehmer.kuerzel,
-                    self._nachname(teilnehmer),
-                    self._teamname(teilnehmer),
+                    self._namen[i],
+                    self._teams[i],
                     self._wechseltext(gewinn),
                     str(runde),
                     text,
@@ -971,14 +990,27 @@ class Rennseite(QWidget):
             zeichen.append(f"{fehler} Fehler")
         return ", ".join(zeichen)
 
-    @staticmethod
-    def _tempo_naeherung(verlauf: Rennverlauf, i: int, zeit: float) -> float:
-        """Tempo eines Autos aus zwei benachbarten Bildern, in m/s."""
+    def _tempi(self, verlauf: Rennverlauf, zeit: float):
+        """Das Momentantempo **aller** Autos zu diesem Zeitpunkt, in m/s.
+
+        D10: Gerechnet wurde das je Zeile - dreissigmal je Bild dieselbe
+        Suche nach dem Bild, dieselbe Zeitdifferenz, und dann eine
+        einzelne Subtraktion. Als Vektor ist es ein Zugriff.
+        """
+        schluessel = (id(verlauf), zeit)
+        if self._tempo_puffer[0] == schluessel:
+            return self._tempo_puffer[1]
         bild = verlauf.bild_zu(zeit)
         if bild >= len(verlauf.zeitpunkte_ms) - 1:
             bild = max(0, len(verlauf.zeitpunkte_ms) - 2)
         dt = (verlauf.zeitpunkte_ms[bild + 1] - verlauf.zeitpunkte_ms[bild]) / 1000.0
-        return float(verlauf.distanz_m[bild + 1, i] - verlauf.distanz_m[bild, i]) / max(dt, 1e-6)
+        tempi = (verlauf.distanz_m[bild + 1] - verlauf.distanz_m[bild]) / max(dt, 1e-6)
+        self._tempo_puffer = (schluessel, tempi)
+        return tempi
+
+    def _tempo_naeherung(self, verlauf: Rennverlauf, i: int, zeit: float) -> float:
+        """Tempo eines Autos aus zwei benachbarten Bildern, in m/s."""
+        return float(self._tempi(verlauf, zeit)[i])
 
     @staticmethod
     def _beste_sektoren_im_feld(
@@ -1038,8 +1070,8 @@ class Rennseite(QWidget):
             runde = self._beste_rundennummer(verlauf, i, zeit, beste)
             spalten = [
                 verlauf.teilnehmer[i].kuerzel,
-                self._nachname(verlauf.teilnehmer[i]),
-                self._teamname(verlauf.teilnehmer[i]),
+                self._namen[i],
+                self._teams[i],
                 formatiere_dauer(letzte) if letzte else "-",
                 formatiere_dauer(beste) if beste else "-",
                 str(runde) if runde else "-",
@@ -1098,8 +1130,8 @@ class Rennseite(QWidget):
             luecke = beste - kann if beste is not None and kann is not None else None
             spalten = [
                 verlauf.teilnehmer[i].kuerzel,
-                self._nachname(verlauf.teilnehmer[i]),
-                self._teamname(verlauf.teilnehmer[i]),
+                self._namen[i],
+                self._teams[i],
                 formatiere_dauer(beste) if beste else "-",
                 formatiere_dauer(kann) if kann else "-",
                 f"-{formatiere_dauer(luecke)}" if luecke else "-",
@@ -1144,8 +1176,8 @@ class Rennseite(QWidget):
                 [
                     str(zeile.platz),
                     teilnehmer.kuerzel if teilnehmer else "",
-                    self._nachname(teilnehmer) if teilnehmer else "",
-                    self._teamname(teilnehmer) if teilnehmer else "",
+                    self._namen[stelle] if stelle is not None else "",
+                    self._teams[stelle] if stelle is not None else "",
                     self._wechseltext(zeile.veraenderung),
                     str(zeile.punkte),
                     f"+{zeile.zuwachs}" if zeile.zuwachs else "",

@@ -2395,3 +2395,49 @@ zugleich die Pole, weil das Wetter nach seiner Runde umschlug; damit war
 der Führende immer die Pole und der Unterschied unsichtbar. Der Fall
 steht jetzt als von Hand gebaute Session im Test, die ihn garantiert
 enthält.
+
+### 86. Die Rennanzeige und der Rennaufbau, gemessen und beschleunigt
+
+Beauftragt: D1 bis D10 und E1 bis E13 ohne E9, aus `VORSCHLAEGE.md`.
+Die Vorschläge standen dort mit Messwerten; hier steht, was dabei
+herauskam.
+
+**Die Anzeige: 14,18 → 2,50 ms je Bild** (Zandvoort, Liga 1, 30 Autos,
+40 Runden, Seed 4711, `werkzeuge/profil_rennen.py`).
+
+| Schritt | je Bild | Bilder/s |
+| --- | ---: | ---: |
+| vorher | 14,18 ms | 70 |
+| D1, D2, D9 | 3,79 ms | 264 |
+| D4–D8, D10 | **2,50 ms** | **401** |
+
+**D3 wurde gemessen und nicht gebaut.** Der Vorschlag lautete, die
+dreißig Zeilen wiederzuverwenden statt die Tabelle je Bild zu leeren und
+neu aufzubauen. Nach D2 trägt das nichts mehr. Gemessen über 400
+Durchläufe mit 30 Zeilen und 13 Spalten:
+
+| Verfahren | je Füllung |
+| --- | ---: |
+| A — `clear()` und 30 neue Items (heute) | 0,148 ms |
+| B — Zeilen wiederverwenden, nur `setText` | 0,133 ms |
+| C — wiederverwenden **und** jede Zelle zurücksetzen | **0,214 ms** |
+| D — `setText` nur bei Änderung | 0,097 ms |
+
+B spart 0,015 ms je Tabelle und Bild, also rund **ein Prozent** des
+Bildes — und handelt sich dafür die Falle ein, dass Farbe, Schrift und
+Ausrichtung aus dem vorigen Bild stehen bleiben. Wer das sauber löst,
+landet bei C und ist **44 % langsamer als heute**: Eine Zelle
+zurückzusetzen kostet genauso viel wie sie zu setzen. Die Rechnung ging
+nur auf, solange fünf Tabellen je Bild gefüllt wurden; D2 hat diesen
+Boden weggezogen.
+
+Wenn D3 trotzdem gebaut werden soll, ist Variante B die einzige, die
+sich lohnt, und dann muss jede Füllfunktion **jedes** Merkmal jeder
+Zelle bedingungslos setzen. Das ist eine Entscheidung, keine
+Optimierung — deshalb liegt sie hier und nicht im Code.
+
+**Was stattdessen noch da ist:** `_fuelle_rangliste` verbraucht 0,94 ms
+je Bild an eigener Zeit, davon nur 0,15 ms fürs Bauen der Zeilen. Der
+Rest ist Python-Logik je Zeile — unter anderem wird für jede der dreißig
+Zeilen die Liste aller Zwischenfälle dieses Autos neu gefiltert. Das
+stand nicht in D1 bis D10 und ist nicht gebaut.
