@@ -143,6 +143,7 @@ def fahre(
         liga=LIGA,
     )
     return {
+        "konfiguration": konfiguration,
         "wahl": wahl,
         "runden": runden,
         "wetter": wetter,
@@ -155,6 +156,7 @@ def fahre(
 
 def zeige(lauf: dict) -> None:
     """Schreibt einen Lauf als Tabelle - je Fahrer eine Zeile."""
+    konfiguration: kf.Konfiguration = lauf["konfiguration"]
     wahl: Streckenwahl = lauf["wahl"]
     verlauf = lauf["verlauf"]
     runden = lauf["runden"]
@@ -180,6 +182,25 @@ def zeige(lauf: dict) -> None:
     print(
         f"Varianten: {len(strategien.varianten)} zugelassen, "
         f"{strategien.strategiezahl} davon gefahren"
+    )
+    # Punkt 92: Was die Gewichtung im Mittel ergibt. Ein einzelnes
+    # Rennen zieht dreissigmal und streut entsprechend - wer nur die
+    # gefahrene Verteilung liest, haelt Wuerfelglueck fuer Balancing.
+    gewicht: dict[int, float] = {}
+    for variante in strategien.varianten:
+        zahl = variante.anzahl_stopps
+        gewicht[zahl] = gewicht.get(zahl, 0.0) + kern_strategie.variantengewicht(
+            konfiguration, zahl
+        )
+    summe = sum(gewicht.values()) or 1.0
+    je_zahl = Counter(v.anzahl_stopps for v in strategien.varianten)
+    print(
+        "Erwartet aus der Gewichtung: "
+        + "   ".join(
+            f"{zahl} Stopps: {gewicht[zahl] / summe * 100:4.1f} % "
+            f"({je_zahl[zahl]} Varianten)"
+            for zahl in sorted(gewicht)
+        )
     )
     for nummer, wie_oft in sorted(gezogen.items()):
         v = strategien.varianten[nummer]

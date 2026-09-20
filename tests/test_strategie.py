@@ -384,16 +384,15 @@ def test_wenige_stopps_werden_beim_ziehen_beguenstigt(k):
         sg.Variante((weich, hart, weich, hart), (12, 24, 36), 5_000_000.0),
     ]
     gewicht = [sg.variantengewicht(k, v.anzahl_stopps) for v in moeglich]
-    assert gewicht == [8.0, 2.0, 1.0]
+    assert gewicht == sorted(gewicht, reverse=True), "Weniger Stopps, mehr Gewicht"
+    assert gewicht[-1] == 1.0, "Drei Stopps sind der Bezug"
 
     gezogen = Counter(
         sg._ziehe(k, moeglich, Seedquelle(seed).generator()) for seed in range(2000)
     )
-    anteile = [gezogen[n] / 2000 for n in range(3)]
-    # Erwartet 8:2:1 von 11, also 73 / 18 / 9 Prozent.
-    assert anteile[0] == pytest.approx(8 / 11, abs=0.03)
-    assert anteile[1] == pytest.approx(2 / 11, abs=0.03)
-    assert anteile[2] == pytest.approx(1 / 11, abs=0.03)
+    summe = sum(gewicht)
+    for n, wert in enumerate(gewicht):
+        assert gezogen[n] / 2000 == pytest.approx(wert / summe, abs=0.03)
 
 
 def test_das_gewicht_zieht_nur_aus_den_zugelassenen(k, zandvoort, strecken):

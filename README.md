@@ -589,7 +589,7 @@ Drei-Stopp-Folge 81. Wer gleich verteilt zieht, laesst das Feld schon
 deshalb oefter dreimal stoppen - gemessen planten in Zandvoort 86 und am
 Nuerburgring 97 Prozent der Autos drei Stopps, ohne dass das jemand
 entschieden haette. Die Gewichte gleichen das aus: Ein-Stopp-Varianten
-**achtmal**, Zwei-Stopp-Varianten **zweimal** so wahrscheinlich wie
+**zehnmal**, Zwei-Stopp-Varianten **2,6-mal** so wahrscheinlich wie
 Drei-Stopp-Varianten. Gezogen wird weiterhin nur aus dem, was die
 Vorausberechnung zugelassen hat - das Gewicht aendert die Auswahl nicht,
 nur ihre Haeufigkeit.

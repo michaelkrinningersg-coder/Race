@@ -1474,15 +1474,15 @@ eignungsgrenze = 0.30
 # entschieden haette.
 #
 # Die Gewichte gleichen das aus (Entscheidung des Auftraggebers):
-# Ein-Stopp-Varianten achtmal, Zwei-Stopp-Varianten zweimal so
+# Ein-Stopp-Varianten zehnmal, Zwei-Stopp-Varianten 2,6-mal so
 # wahrscheinlich wie Drei-Stopp-Varianten. Gezogen wird weiterhin nur
 # aus den Varianten, die die Vorausberechnung zugelassen hat - das
 # Gewicht aendert die Auswahl nicht, nur ihre Haeufigkeit.
 #
 # Eine Stoppzahl, die hier nicht steht, gilt mit 1,0.
 [boxenstopp.strategie.variantengewicht]
-1 = 8.0
-2 = 2.0
+1 = 10.0
+2 = 2.6
 3 = 1.0
 
 # ---------------------------------------------------------------------------

@@ -2794,35 +2794,46 @@ zieht, lässt das Feld schon deshalb öfter dreimal stoppen — gemessen
 planten in Zandvoort 86 und am Nürburgring 97 Prozent der Autos drei
 Stopps, ohne dass das jemand entschieden hätte.
 
-Gewichte: **1 Stopp ×8, 2 Stopps ×2, 3 Stopps ×1.** Gezogen wird
+Gewichte: **1 Stopp ×10, 2 Stopps ×2,6, 3 Stopps ×1.** Gezogen wird
 weiterhin nur aus den zugelassenen Varianten — das Gewicht ändert die
 Auswahl nicht, nur ihre Häufigkeit.
 
 ### Der Messlauf
 
-Fünf Strecken, Liga 1, trocken, 30 Autos. „Geplant" ist die gezogene
-Variante, „gefahren" das Ergebnis:
+Fünf Strecken, Liga 1, trocken, 30 Autos. Drei Spalten, weil sie drei
+verschiedene Dinge sagen: **Erwartet** ist, was die Gewichtung aus dem
+Variantenvorrat im Mittel macht; **geplant** ist, was dieses eine Feld
+gezogen hat; **gefahren** ist, was daraus im Rennen wurde.
 
-| Strecke | Faktor | Geplant | Gefahren | Notstopps |
-| --- | ---: | --- | --- | ---: |
-| Zandvoort | 1,263 | 2x 14 %, 3x 86 % | 1x 14 %, 2x 10 %, 3x 76 % | 5 |
-| Sao Paulo | 1,132 | 2x 63 %, 3x 37 % | 1x 13 %, 2x 83 %, 3x 3 % | 4 |
-| Nürburgring | 1,074 | 2x 7 %, 3x 93 % | 2x 21 %, 3x 79 % | 6 |
-| Silverstone | 0,890 | 2x 10 %, 3x 90 % | 1x 7 %, 2x 21 %, 3x 72 % | 3 |
-| Monza | 0,537 | 1x 31 %, 2x 24 %, 3x 45 % | 0x 3 %, 1x 69 %, 2x 24 %, 3x 3 % | 1 |
+| Strecke | Faktor | Erwartet | Geplant | Gefahren | Notstopps |
+| --- | ---: | --- | --- | --- | ---: |
+| Zandvoort | 1,263 | 2x 36 %, 3x 64 % | 2x 14 %, 3x 86 % | 1x 14 %, 2x 10 %, 3x 76 % | 5 |
+| Sao Paulo | 1,132 | 2x 46 %, 3x 54 % | 2x 45 %, 3x 55 % | 1x 14 %, 2x 55 %, 3x 31 % | 5 |
+| Nürburgring | 1,074 | 2x 14 %, 3x 86 % | 2x 7 %, 3x 93 % | 2x 21 %, 3x 79 % | 6 |
+| Silverstone | 0,890 | 2x 24 %, 3x 76 % | 2x 7 %, 3x 93 % | 1x 14 %, 2x 17 %, 3x 69 % | 4 |
+| Monza | 0,537 | 1x 27 %, 2x 41 %, 3x 32 % | 1x 31 %, 2x 31 %, 3x 38 % | 0x 3 %, 1x 59 %, 2x 38 % | 1 |
 
-**Monza liegt bei 69 zu 24 zwischen einem und zwei Stopps** — das Ziel
-war 60 zu 40. **Zandvoort liegt bei 10 zu 76** — das Ziel war 30 zu 70.
+**Monza liegt bei 59 zu 38 zwischen einem und zwei Stopps** — das Ziel
+war 60 zu 40. Getroffen.
+
+**Zandvoort liegt bei 10 zu 76** — aber das ist Würfelglück, kein
+Balancing: Erwartet sind 36 %, und ein einzelnes Feld zieht nur
+dreißigmal. Über vier Weltseeds gemessen, jeweils geplante
+Zwei-Stopp-Rennen: 14 %, 17 %, 0 % und **36 %**. Der dritte Seed hatte
+an dem Wochenende gar keine Zwei-Stopp-Variante zugelassen, der vierte
+traf die Erwartung genau. Deshalb schreibt das Werkzeug seit diesem
+Punkt beide Zeilen nebeneinander — wer nur die gefahrene Verteilung
+liest, hält den Wurf für die Einstellung.
 
 ### Was noch dazwischensteht
 
 Zwei Dinge erklären den Rest der Abweichung, beide gemessen:
 
 1. **Der Variantenvorrat je Strecke.** Auf trocken/heiß überleben in
-   Zandvoort nur 3 von 17 Varianten mit zwei Stopps; mit Gewicht 2 macht
-   das 6 von 20 Gewichtseinheiten, also 30 % — und aus 29 Autos wurden
-   daraus 4. Am Nürburgring sind es 2 von 69, also 5,6 %. Die Gewichtung
-   kann nur verteilen, was der Planer zulässt.
+   Zandvoort nur 3 von 17 Varianten mit zwei Stopps, am Nürburgring 4
+   von 69, in Silverstone 9 von 83. Die Gewichtung kann nur verteilen,
+   was der Planer zulässt — sie hebt diese drei Strecken auf 36, 14 und
+   24 Prozent, weiter trägt sie nicht.
 2. **Das Rennen streicht Stopps.** `planstopp_ab_restprofil = 0,55`
    verschiebt einen geplanten Stopp, solange der Satz noch zu gut dafür
    ist, und wer schon einmal gewechselt hat, fährt den guten Satz dann
