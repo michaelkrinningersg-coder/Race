@@ -7,6 +7,8 @@ groesseren Schritten aus dem fertigen Verlauf gelesen.
 
 from __future__ import annotations
 
+import time
+
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
@@ -37,7 +39,7 @@ from rennmanager.kern.zeit import (
 from rennmanager.konfiguration import Konfiguration
 from rennmanager.ui.rueckstandsansicht import Rueckstandsansicht
 from rennmanager.ui.streckenansicht import Streckenansicht
-from rennmanager.ui.tabellen import Balkenzeichner, verbinde_fahrerkarte
+from rennmanager.ui.tabellen import Balkenzeichner, setze_breiten, verbinde_fahrerkarte
 
 # Der Zeitraffer vervielfacht die Rennzeit je Takt, nicht die Zahl der
 # Takte - die Anzeige bleibt damit gleich fluessig, egal wie schnell
@@ -81,6 +83,12 @@ IDEAL_MOEGLICH = 4
 IDEAL_GEWINN = 5
 IDEAL_SEKTOR = 6
 IDEAL_SPALTEN = 10
+# Punkt 82: die vier Blaetter des rechten Reiters, in der Reihenfolge,
+# in der sie dort stehen. D2 fuellt nur das, welches man gerade sieht.
+BLATT_MONITOR = 0
+BLATT_IDEAL = 1
+BLATT_MEISTERSCHAFT = 2
+BLATT_TICKER = 3
 # Gruener Pfeil hoch, roter Pfeil runter - die Zahl daneben sagt, um wie
 # viele Plaetze. Die Farbe ist nie die einzige Auskunft.
 PFEIL_HOCH = "\u25b2"
@@ -166,6 +174,10 @@ class Rennseite(QWidget):
         # um, als sie zu lesen sind.
         self._anzeige_takt_ms = konfiguration.wert("zeitraffer", "anzeige_takt_ms")
         self._letzte_tabellen_ms: float | None = None
+        # D9: Derselbe Wert deckelt zusaetzlich in **Echtzeit**. Ohne das
+        # war der Takt oben ab Stufe 50x wirkungslos, weil zwischen zwei
+        # Bildern mehr Rennzeit liegt als die Schwelle.
+        self._letzte_fuellung_s: float | None = None
 
         self._ansicht = Streckenansicht()
         # Punkt 2: Das Rueckstandsdiagramm liegt als zweiter Reiter neben
@@ -256,22 +268,50 @@ class Rennseite(QWidget):
         return zeile
 
     def _tabellen_faellig(self, zeit: float) -> bool:
-        """Ob Rangliste, Monitor und Ticker jetzt nachgezogen werden.
+        """Ob Rangliste und das sichtbare Blatt jetzt nachgezogen werden.
 
-        Gemessen wird in **Rennzeit**, nicht in Echtzeit: Im Zeitraffer
-        laufen zwischen zwei Bildern viele Rennsekunden, und die Listen
-        sollen genauso oft stehenbleiben wie bei einfachem Tempo.
+        Zwei Deckel, beide mit demselben Wert aus ``anzeige_takt_ms``:
+
+        * In **Rennzeit**, damit die Listen bei jedem Tempo genauso oft
+          stehenbleiben wie bei einfachem.
+        * In **Echtzeit** (D9), damit sie es auch wirklich tun. Der erste
+          Deckel allein war ab Stufe 50x wirkungslos: Dort liegen
+          zwischen zwei Bildern mehr Rennsekunden als die Schwelle, also
+          wurde in **jedem** Takt neu gefuellt - gemessen 14 ms Arbeit
+          alle 33 ms.
+
+        Ein Sprung umgeht beide, siehe ``_erzwinge_fuellung``.
         """
         davor = self._letzte_tabellen_ms
-        if davor is None or abs(zeit - davor) >= self._anzeige_takt_ms:
-            self._letzte_tabellen_ms = zeit
-            return True
-        return False
+        if davor is not None and abs(zeit - davor) < self._anzeige_takt_ms:
+            return False
+        jetzt = time.perf_counter()
+        zuletzt = self._letzte_fuellung_s
+        if zuletzt is not None and (jetzt - zuletzt) * 1000.0 < self._anzeige_takt_ms:
+            return False
+        self._letzte_tabellen_ms = zeit
+        self._letzte_fuellung_s = jetzt
+        return True
+
+    def _erzwinge_fuellung(self) -> None:
+        """Der naechste Zeichenvorgang fuellt die Tabellen auf jeden Fall.
+
+        Fuer Spruenge, den Taktwechsel und den Reiterwechsel: Was der
+        Spieler gerade angestossen hat, soll sofort zu sehen sein und
+        nicht erst, wenn der Takt es erlaubt.
+        """
+        self._letzte_tabellen_ms = None
+        self._letzte_fuellung_s = None
+
+    def _blatt_gewechselt(self, _index: int) -> None:
+        """Ein frisch aufgeschlagenes Blatt sofort fuellen (D2)."""
+        self._erzwinge_fuellung()
+        self._zeichne()
 
     def _takt_geaendert(self, wert: int) -> None:
         """Uebernimmt einen neuen Anzeigetakt und zeichnet sofort neu."""
         self._anzeige_takt_ms = int(wert)
-        self._letzte_tabellen_ms = None
+        self._erzwinge_fuellung()
         self._zeichne()
 
     def _baue_listen(self) -> QWidget:
@@ -358,6 +398,9 @@ class Rennseite(QWidget):
         # den Tabellen Hoehe weg. Als viertes Blatt stoeren sie nicht mehr
         # und sind trotzdem einen Klick entfernt.
         self._monitorblaetter.addTab(self._baue_ticker(), "Meldungen")
+        # D2: Ein frisch aufgeschlagenes Blatt steht sonst so lange leer
+        # oder veraltet da, bis der naechste Takt faellig ist.
+        self._monitorblaetter.currentChanged.connect(self._blatt_gewechselt)
         return self._monitorblaetter
 
     def _baue_ticker(self) -> QWidget:
@@ -405,6 +448,10 @@ class Rennseite(QWidget):
         for knopf in (self._abspielen, self._zurueck, self._sofort):
             knopf.setEnabled(True)
         self._waehle_zeitraffer()
+        # D1: Die Spalten werden **einmal** je Rennen ausgemessen. Bisher
+        # rief jede Fuellung ``resizeColumnToContents`` fuer jede Spalte
+        # jeder Tabelle auf - 37 Aufrufe je Bild.
+        self._setze_spaltenbreiten(verlauf)
         self._springe(0)
 
         # Das Rennen laeuft von selbst los, damit es sich wie eine
@@ -415,6 +462,49 @@ class Rennseite(QWidget):
                 self._umschalten()
             else:
                 self._startet_beim_zeigen = True
+
+    def _setze_spaltenbreiten(self, verlauf: Rennverlauf) -> None:
+        """Alle Spalten einmal je Rennen ausmessen (D1).
+
+        Die Probetexte sind der breiteste Fall, den die Spalte je zeigt.
+        Fuer Namen, Teams und Kuerzel muss nichts geraten werden - das
+        Feld steht beim Rennstart fest, also wird der laengste genommen.
+        Fuer Zeiten und Zahlen steht der Extremfall da: eine Rundenzeit
+        ist nie laenger als ``1:23:45.678``.
+
+        Die Spalte mit dem Reifenbalken bleibt ausgespart; sie hat ihre
+        eigene Breite aus ``BREITE_REIFEN``.
+        """
+        def laengster(werte, ersatz: str) -> str:
+            gefunden = max(werte, key=len, default="")
+            return gefunden if gefunden else ersatz
+
+        teilnehmer = verlauf.teilnehmer
+        name = laengster([self._nachname(t) for t in teilnehmer], "Mustermann")
+        team = laengster([self._teamname(t) for t in teilnehmer], "Rennstall")
+        kuerzel = laengster([t.kuerzel for t in teilnehmer], "A30")
+        dauer = "1:23:45.678"
+        abstand = "+1:23.456"
+        sektor = "0:59.999"
+
+        setze_breiten(self._rangliste, [
+            "30", kuerzel, name, team, f"{PFEIL_RUNTER} 12", "48",
+            dauer, abstand, "320", "288,8", f"WW (4){HAKEN}", None,
+            "Defekt x2, 3 Fehler",
+        ])
+        setze_breiten(self._monitor, [
+            kuerzel, name, team, dauer, dauer, "48", "288,8",
+            sektor, sektor, sektor, sektor,
+        ])
+        setze_breiten(self._ideal, [
+            kuerzel, name, team, dauer, dauer, abstand,
+            sektor, sektor, sektor, sektor,
+        ])
+        setze_breiten(self._meisterschaft, [
+            "30", kuerzel, name, team, f"{PFEIL_RUNTER} 12", "888", "+40",
+        ])
+        setze_breiten(self._ticker, [dauer, "48", kuerzel,
+                                     "Dreher in der Schikane, 8,4 s verloren"])
 
     def showEvent(self, ereignis) -> None:  # noqa: D102 - Qt-Name
         super().showEvent(ereignis)
@@ -458,7 +548,7 @@ class Rennseite(QWidget):
     def _springe(self, zeit_ms: float) -> None:
         self._zeit_ms = zeit_ms
         # Ein Sprung soll sofort zu sehen sein, nicht erst im naechsten Takt.
-        self._letzte_tabellen_ms = None
+        self._erzwinge_fuellung()
         self._zeichne()
 
     def _zum_ende(self) -> None:
@@ -511,11 +601,29 @@ class Rennseite(QWidget):
         )
         if self._tabellen_faellig(zeit):
             self._fuelle_rangliste(verlauf, reihenfolge, distanzen, zeit)
-            self._fuelle_monitor(verlauf, reihenfolge, zeit)
-            self._fuelle_ideal(verlauf, reihenfolge, zeit)
-            self._fuelle_meisterschaft(verlauf, reihenfolge, zeit)
-            self._fuelle_ticker(verlauf, zeit)
+            self._fuelle_sichtbares_blatt(verlauf, reihenfolge, zeit)
         self._rueckstand.setze_marke(zeit)
+
+    def _fuelle_sichtbares_blatt(
+        self, verlauf: Rennverlauf, reihenfolge: list[int], zeit: float
+    ) -> None:
+        """Nur das Blatt fuellen, das man gerade sieht (D2).
+
+        Zeitenmonitor, Bestmoegliche Runde, Meisterschaft und Meldungen
+        liegen in **einem** Reiter; sichtbar ist immer genau eines.
+        Gefuellt wurden bisher alle vier, in jedem Bild - gemessen ein
+        Drittel der Zeit, die ein Bild kostet, fuer Tabellen, die niemand
+        sieht. Beim Reiterwechsel zieht ``_blatt_gewechselt`` sofort nach.
+        """
+        blatt = self._monitorblaetter.currentIndex()
+        if blatt == BLATT_MONITOR:
+            self._fuelle_monitor(verlauf, reihenfolge, zeit)
+        elif blatt == BLATT_IDEAL:
+            self._fuelle_ideal(verlauf, reihenfolge, zeit)
+        elif blatt == BLATT_MEISTERSCHAFT:
+            self._fuelle_meisterschaft(verlauf, reihenfolge, zeit)
+        elif blatt == BLATT_TICKER:
+            self._fuelle_ticker(verlauf, zeit)
 
     def _teamname(self, teilnehmer) -> str:
         """Das Team hinter einem Auto (Punkt 82).
@@ -729,9 +837,6 @@ class Rennseite(QWidget):
                 schrift.setBold(True)
                 for spalte in range(SPALTE_ZEIT + 1):
                     zeile.setFont(spalte, schrift)
-        for spalte in range(self._rangliste.columnCount()):
-            if spalte != SPALTE_REIFEN:
-                self._rangliste.resizeColumnToContents(spalte)
         self._stelle_auswahl_wieder_her(self._rangliste)
 
     @staticmethod
@@ -958,8 +1063,6 @@ class Rennseite(QWidget):
                 schrift = zeile.font(MONITOR_LETZTE)
                 schrift.setBold(True)
                 zeile.setFont(MONITOR_LETZTE, schrift)
-        for spalte in range(MONITOR_SPALTEN):
-            self._monitor.resizeColumnToContents(spalte)
         self._stelle_auswahl_wieder_her(self._monitor)
 
     def _fuelle_ideal(
@@ -1009,8 +1112,6 @@ class Rennseite(QWidget):
             for nummer, sektor in enumerate(sektoren):
                 if sektor is not None and bestzeiten.get(nummer) == sektor:
                     self._faerbe_lila(zeile, IDEAL_SEKTOR + nummer)
-        for spalte in range(IDEAL_SPALTEN):
-            self._ideal.resizeColumnToContents(spalte)
         self._stelle_auswahl_wieder_her(self._ideal)
 
     def _fuelle_meisterschaft(
@@ -1060,8 +1161,6 @@ class Rennseite(QWidget):
                         FARBE_GEWONNEN if zeile.veraenderung > 0 else FARBE_VERLOREN
                     ),
                 )
-        for spalte in range(self._meisterschaft.columnCount()):
-            self._meisterschaft.resizeColumnToContents(spalte)
         self._stelle_auswahl_wieder_her(self._meisterschaft)
 
     def _rennlage(
@@ -1118,8 +1217,6 @@ class Rennseite(QWidget):
             # steht die Startnummer, damit der Doppelklick sie findet.
             zeile.setData(0, Qt.UserRole, int(z.zeit_ms))
             zeile.setData(2, Qt.UserRole, z.teilnehmer)
-        for spalte in range(self._ticker.columnCount()):
-            self._ticker.resizeColumnToContents(spalte)
 
     def _fahrernummer_in(self, spalte: int):
         """Liefert den Uebersetzer von einer Zeile zum Fahrer der Welt.

@@ -3,8 +3,41 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QMenu, QStyledItemDelegate, QTreeWidgetItem
+from PySide6.QtGui import QColor, QFontMetrics
+from PySide6.QtWidgets import QMenu, QStyledItemDelegate, QTreeWidget, QTreeWidgetItem
+
+
+def setze_breiten(tabelle: QTreeWidget, proben, rand: int = 16) -> None:
+    """Spaltenbreiten **einmal** aus Probetexten setzen (D1).
+
+    Die Rennanzeige rief bisher in jedem Bild ``resizeColumnToContents``
+    fuer jede Spalte jeder Tabelle auf - gemessen 37 Aufrufe je Bild und
+    damit 62 Prozent der Zeit, die ein Bild kostet. Qt misst dafuer jede
+    einzelne Zelle der Spalte neu.
+
+    Gebraucht wird das nicht: Was in einer Spalte breitestenfalls steht,
+    laesst sich vorher sagen. Eine Rundenzeit ist nie laenger als
+    ``1:23:45.678``, und die Namen der dreissig Fahrer stehen beim
+    Rennstart fest. Ein Probetext je Spalte genuegt also, einmal
+    ausgemessen.
+
+    Nebenbei hoert das Zittern auf: Die Spalten sprangen bisher fuenfmal
+    je Sekunde in der Breite, sobald ein Wert eine Stelle mehr bekam.
+
+    :param proben: je Spalte ein Probetext; ``None`` laesst die Spalte,
+        wie sie ist (fuer Spalten mit eigener Breite, etwa dem
+        Reifenbalken)
+    """
+    metrik = QFontMetrics(tabelle.font())
+    kopfmetrik = QFontMetrics(tabelle.header().font())
+    kopf = tabelle.headerItem()
+    for spalte, probe in enumerate(proben):
+        if probe is None:
+            continue
+        breite = metrik.horizontalAdvance(probe)
+        if kopf is not None:
+            breite = max(breite, kopfmetrik.horizontalAdvance(kopf.text(spalte)))
+        tabelle.setColumnWidth(spalte, breite + rand)
 
 
 class SortierbareZeile(QTreeWidgetItem):

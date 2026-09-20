@@ -17,7 +17,11 @@ from rennmanager import konfiguration as kf
 pytest.importorskip("PySide6")
 
 from rennmanager.ui.hauptfenster import Hauptfenster  # noqa: E402
-from tests.oberflaeche import gefahrenes_qualifying, kurzes_rennen  # noqa: E402
+from tests.oberflaeche import (  # noqa: E402
+    gefahrenes_qualifying,
+    kurzes_rennen,
+    schlage_blatt_auf,
+)
 
 
 def test_rennseite_berechnet_ein_rennen(qtbot, konfig: kf.Konfiguration) -> None:
@@ -329,6 +333,8 @@ def test_jedes_blatt_hat_eine_teamspalte(
     seite._zum_ende()
     seite._halte_an()
 
+    if blatt in ("monitor", "ideal", "meisterschaft"):
+        schlage_blatt_auf(seite, blatt)
     liste = getattr(seite, blatt)
     assert liste.headerItem().text(spalte) == "Team"
     if blatt == "meisterschaft":
@@ -385,6 +391,7 @@ def test_die_bestmoegliche_runde_ist_nie_langsamer_als_die_gefahrene(
     seite._zum_ende()
     seite._halte_an()
 
+    schlage_blatt_auf(seite, "ideal")
     geprueft = 0
     for i in range(seite.ideal.topLevelItemCount()):
         zeile = seite.ideal.topLevelItem(i)

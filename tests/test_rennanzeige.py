@@ -25,6 +25,7 @@ from rennmanager.ui.rennseite import (  # noqa: E402
 )
 from rennmanager.ui.rueckstandsansicht import Rueckstandsansicht  # noqa: E402
 from rennmanager.ui.tabellen import Balkenzeichner  # noqa: E402
+from tests.oberflaeche import schlage_blatt_auf  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -260,6 +261,7 @@ def test_der_balken_faerbt_nach_zustand(konfig) -> None:
 # --- Punkt 4: Zwischenfall-Ticker -----------------------------------------
 def test_der_ticker_zeigt_nur_geschehenes(gefahren) -> None:
     _fenster, seite = gefahren
+    schlage_blatt_auf(seite, "ticker")
     zeit = seite.zeit_ms
     bisher = [z for z in seite.verlauf.zwischenfaelle if z.zeit_ms <= zeit]
     assert str(len(bisher)) in seite._tickerkasten.title()
@@ -268,6 +270,7 @@ def test_der_ticker_zeigt_nur_geschehenes(gefahren) -> None:
 
 def test_der_ticker_zeigt_das_neueste_oben(gefahren) -> None:
     _fenster, seite = gefahren
+    schlage_blatt_auf(seite, "ticker")
     if seite.ticker.topLevelItemCount() < 2:
         pytest.skip("In diesem Rennen passierte zu wenig")
     zeiten = [
@@ -279,6 +282,7 @@ def test_der_ticker_zeigt_das_neueste_oben(gefahren) -> None:
 
 def test_am_anfang_ist_der_ticker_leer(gefahren) -> None:
     _fenster, seite = gefahren
+    schlage_blatt_auf(seite, "ticker")
     seite._springe(0)
     assert seite.ticker.topLevelItemCount() == 0
 
@@ -444,6 +448,7 @@ def test_die_meisterschaft_zaehlt_die_punkte_der_lage_dazu(gefahren, konfig) -> 
     """Punkt 73: Stand bis hierher plus die Punkte fuer die Lage jetzt."""
     _fenster, seite = gefahren
     tabelle = _mit_tabelle(seite, konfig)
+    schlage_blatt_auf(seite, "meisterschaft")
     liste = seite._meisterschaft
     assert liste.topLevelItemCount() == len(tabelle.eintraege)
     # Jede Zeile traegt Punkte, und der Erste hat die meisten.
@@ -458,6 +463,7 @@ def test_die_meisterschaft_zeigt_den_zuwachs(gefahren, konfig) -> None:
     """Die Spalte '+x' sagt, wie viel aus diesem Rennen dazukommt."""
     _fenster, seite = gefahren
     _mit_tabelle(seite, konfig)
+    schlage_blatt_auf(seite, "meisterschaft")
     liste = seite._meisterschaft
     zuwaechse = [
         liste.topLevelItem(stelle).text(MEISTER_ZUWACHS)
@@ -471,6 +477,7 @@ def test_die_meisterschaft_zeigt_den_zuwachs(gefahren, konfig) -> None:
 def test_ohne_tabelle_bleibt_die_meisterschaft_leer(gefahren) -> None:
     """Ein Testrennen ohne Saison hat keinen Stand - und stuerzt nicht."""
     _fenster, seite = gefahren
+    schlage_blatt_auf(seite, "meisterschaft")
     assert seite._meisterschaft.topLevelItemCount() == 0
 
 

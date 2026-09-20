@@ -37,6 +37,34 @@ def ein_fahrer(fenster, anteil: float = 0.5):
     return fahrer[min(int(len(fahrer) * anteil), len(fahrer) - 1)]
 
 
+def schlage_blatt_auf(seite, name: str):
+    """Oeffnet eines der vier rechten Blaetter der Rennseite (D2).
+
+    Seit D2 fuellt die Rennseite nur noch das Blatt, das man auch sieht:
+    Zeitenmonitor, Bestmoegliche Runde, Meisterschaft und Meldungen
+    liegen in einem Reiter, und alle vier in jedem Bild zu fuellen
+    kostete ein Drittel der Zeit, die ein Bild braucht. Ein Test, der
+    aus einem Blatt liest, muss es also aufschlagen - genau wie der
+    Spieler.
+
+    :param name: monitor, ideal, meisterschaft oder ticker
+    """
+    from rennmanager.ui import rennseite as rs
+
+    blatt = {
+        "monitor": rs.BLATT_MONITOR,
+        "ideal": rs.BLATT_IDEAL,
+        "meisterschaft": rs.BLATT_MEISTERSCHAFT,
+        "ticker": rs.BLATT_TICKER,
+    }[name]
+    seite.blaetter_rechts.setCurrentIndex(blatt)
+    # setCurrentIndex meldet nichts, wenn das Blatt schon oben lag -
+    # dann muss die Fuellung von Hand angestossen werden.
+    seite._erzwinge_fuellung()
+    seite._zeichne()
+    return seite.blaetter_rechts.currentWidget()
+
+
 def kurzes_rennen(fenster, runden: int = 2, umgedreht: bool = False):
     """Rechnet ein kurzes Rennen und gibt es der Rennanzeige.
 
