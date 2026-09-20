@@ -714,11 +714,24 @@ waere ein eigener Punkt.
 
 #### Warum ein Prozent Grip eine Sekunde ist
 
-Der Grip geht **quadratisch** ins Kurvenlimit (GDD 3), ein Prozent Grip
-bringt also mehr als ein Prozent Rundenzeit. Gemessen mit einem
-Liga-1-Auto: +1,0 % Grip sind −0,84 s in Zandvoort, −1,13 s in Spa und
-−0,95 s in Sakhir. Damit laesst sich die Mechanik in Sekunden
-einstellen statt in Prozent.
+Der Grip streckt das **ganze Geschwindigkeitsprofil** um genau seinen
+Faktor (siehe "Warum der Grip quadratisch angesetzt wird" - das Quadrat
+auf den Beschleunigungen ist gerade das, was die Geschwindigkeit linear
+macht). Ein Prozent Grip ist damit ein Prozent Tempo und
+`1 - 1/1,01 = 0,99 %` Rundenzeit.
+
+In Sekunden haengt das an der Rundenlaenge. Gemessen mit einem
+Liga-1-Auto sind +1,0 % Grip:
+
+| | Rundenzeit | −1 % |
+| --- | ---: | ---: |
+| Zandvoort | 1:24,8 | −0,84 s |
+| Sakhir | 1:36,0 | −0,95 s |
+| Spa | 1:54,3 | −1,13 s |
+
+Weil eine Runde rund anderthalb Minuten dauert, ist **ein Prozent Grip
+ungefaehr eine Sekunde** - eine brauchbare Faustregel, um die Mechanik
+in Sekunden einzustellen statt in Prozent.
 
 #### Warum Auto-Runden und nicht Zeit
 

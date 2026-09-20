@@ -244,9 +244,11 @@ mindestsegmentlaenge_m = 0.0
 #
 #   faktor(n) = 1 + max_anteil * (1 - e^(-n / halbwert_runden))
 #
-# Gemessen bedeutet ein Prozent Grip rund eine Sekunde Rundenzeit
-# (Zandvoort -0,84 s, Spa -1,13 s, Sakhir -0,95 s), weil der Grip
-# quadratisch ins Kurvenlimit geht. Mit den Werten unten:
+# Der Grip streckt das ganze Geschwindigkeitsprofil um genau seinen
+# Faktor, ein Prozent Grip ist also ein Prozent Rundenzeit. Weil eine
+# Runde rund anderthalb Minuten dauert, ist das ungefaehr eine Sekunde
+# (gemessen Zandvoort -0,84 s, Sakhir -0,95 s, Spa -1,13 s). Mit den
+# Werten unten:
 #
 #   Qualifying, letzter Starter (n=58)   0,16 %   -0,14 s
 #   Rennen nach 10 Runden    (n=300)     0,68 %   -0,57 s

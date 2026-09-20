@@ -2578,7 +2578,8 @@ Auftraggeber:
 | Kalibrierung | bleibt die **grüne** Strecke |
 
 **Die Zahl, die die Entscheidung erst möglich gemacht hat.** Der Grip
-geht quadratisch ins Kurvenlimit (GDD 3). Gemessen bringt +1,0 % Grip
+streckt das ganze Geschwindigkeitsprofil um genau seinen Faktor — ein
+Prozent Grip ist ein Prozent Rundenzeit. Gemessen bringt +1,0 % Grip
 −0,84 s in Zandvoort, −1,13 s in Spa, −0,95 s in Sakhir. **Faustregel:
 ein Prozent Grip ist rund eine Sekunde.** Damit ließ sich in Sekunden
 entscheiden statt in Prozent — sonst wäre `max_anteil = 0,015` eine Zahl
