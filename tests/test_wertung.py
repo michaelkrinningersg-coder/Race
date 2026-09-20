@@ -25,35 +25,70 @@ def wochenende(anzahl: int, reihenfolge: list[int]) -> list[wt.Rennergebnis]:
 
 
 # --- Punkte ---------------------------------------------------------------
-def test_punktetabelle_entspricht_dem_gdd(k):
-    # GDD 13: 40-35-30-25-20-18-16-14-12-11-10-9-8-7-6-5-4-3-2-1
-    erwartet = [40, 35, 30, 25, 20, 18, 16, 14, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
-    for platz, punkte in enumerate(erwartet, start=1):
-        assert wt.rennpunkte(k, platz) == punkte
+def test_die_leiter_faellt_in_den_vorgegebenen_schritten(k):
+    """Punkt 95: zehn Punkte auf den Zweiten, sechs auf den Dritten, dann drei."""
+    assert wt.rennpunkte(k, 1, 1) == k.wert("wertung", "sieger_liga1")
+    for liga in (1, 5, 10):
+        punkte = [wt.rennpunkte(k, liga, platz) for platz in range(1, 41)]
+        assert punkte[0] - punkte[1] == 10
+        assert punkte[1] - punkte[2] == 6
+        assert all(a - b == 3 for a, b in zip(punkte[2:], punkte[3:], strict=False))
 
 
-def test_ab_platz_21_gibt_es_keine_rennpunkte(k):
+def test_der_sieger_einer_liga_holt_so_viel_wie_der_ankerplatz_darueber(k):
+    """Punkt 95: Daher ueberlappen die Ligen."""
+    anker = k.wert("wertung", "ankerplatz")
+    for liga in range(2, k.wert("ligen", "anzahl") + 1):
+        assert wt.rennpunkte(k, liga, 1) == wt.rennpunkte(k, liga - 1, anker)
+
+
+def test_zwoelf_fahrer_je_liga_liegen_im_bereich_der_liga_darueber(k):
     autos = k.wert("rennen", "autos")
-    assert wt.rennpunkte(k, 21) == 0
-    assert wt.rennpunkte(k, autos) == 0
+    letzter_oben = wt.rennpunkte(k, 1, autos)
+    ueberlappend = sum(
+        1 for platz in range(1, autos + 1) if wt.rennpunkte(k, 2, platz) >= letzter_oben
+    )
+    assert ueberlappend == 12
 
 
-def test_qualifying_bringt_nur_den_ersten_drei_punkte(k):
-    assert [wt.qualifyingpunkte(k, platz) for platz in (1, 2, 3, 4)] == [5, 3, 1, 0]
+def test_jeder_platz_bekommt_punkte_ausserhalb_des_feldes_keine(k):
+    """Punkt 95: Alle 40 Plaetze zaehlen, auch die der Ausgefallenen."""
+    autos = k.wert("rennen", "autos")
+    assert wt.rennpunkte(k, 10, autos) > 0
+    assert wt.rennpunkte(k, 10, autos + 1) == 0
+
+
+def test_die_zusatzpunkte_sind_anteile_der_siegerpunkte(k):
+    """Punkt 95: aufgerundet, mindestens 1, je Liga eigene Zahlen."""
+    import math
+
+    for liga in range(1, k.wert("ligen", "anzahl") + 1):
+        sieg = wt.rennpunkte(k, liga, 1)
+        anteil = k.wert("wertung", "anteil_schnellste_runde")
+        assert wt.punkte_schnellste_runde(k, liga) == max(1, math.ceil(sieg * anteil))
+        for platz, teil in enumerate(k.wert("wertung", "anteil_qualifying"), start=1):
+            assert wt.qualifyingpunkte(k, liga, platz) == max(1, math.ceil(sieg * teil))
+    assert wt.qualifyingpunkte(k, 1, 4) == 0
+    # In Liga 1 sind das 10 fuer die schnellste Runde und 15/5/3 im Quali.
+    assert wt.punkte_schnellste_runde(k, 1) == 10
+    assert [wt.qualifyingpunkte(k, 1, p) for p in (1, 2, 3)] == [15, 5, 3]
 
 
 def test_schnellste_runde_zaehlt_auch_ohne_zielankunft(k):
-    # GDD 13 nennt das ausdruecklich.
+    # GDD 13 nennt das ausdruecklich - und seit Punkt 95 bekommt auch der
+    # Platz eines Ausgefallenen Punkte.
     ausgefallen = wt.Rennergebnis(
         fahrer=0, rennplatz=30, qualifyingplatz=25, schnellste_runde=True, ausgefallen=True
     )
-    assert wt.punkte_fuer(k, ausgefallen) == k.wert("wertung", "punkte_schnellste_runde")
+    assert wt.punkte_fuer(k, 1, ausgefallen) == (
+        wt.rennpunkte(k, 1, 30) + wt.punkte_schnellste_runde(k, 1)
+    )
 
 
 def test_punkte_eines_wochenendes_summieren_sich(k):
-    # Sieg (40) + Pole (5) + schnellste Runde (3)
+    # Sieg (1000) + Pole (15) + schnellste Runde (10) in Liga 1
     bestes = wt.Rennergebnis(fahrer=0, rennplatz=1, qualifyingplatz=1, schnellste_runde=True)
-    assert wt.punkte_fuer(k, bestes) == 48
+    assert wt.punkte_fuer(k, 1, bestes) == 1025
 
 
 # --- Tabelle --------------------------------------------------------------
@@ -63,8 +98,10 @@ def test_tabelle_summiert_ueber_mehrere_rennen(k):
     tabelle.verbuche(k, [ergebnis(1, 3), ergebnis(2, 1)])
 
     stand = {e.fahrer: e for e in tabelle.stand()}
-    assert stand[1].punkte == (40 + 5) + (30 + 1)
-    assert stand[2].punkte == (35 + 3) + (40 + 5)
+    sieg = wt.rennpunkte(k, 5, 1)
+    quali = [wt.qualifyingpunkte(k, 5, platz) for platz in (1, 2, 3)]
+    assert stand[1].punkte == (sieg + quali[0]) + (wt.rennpunkte(k, 5, 3) + quali[2])
+    assert stand[2].punkte == (wt.rennpunkte(k, 5, 2) + quali[1]) + (sieg + quali[0])
     assert stand[1].siege == 1 and stand[2].siege == 1
     assert stand[1].rennen == 2
 
@@ -181,7 +218,7 @@ def test_die_livewertung_zaehlt_die_punkte_der_lage_dazu(k) -> None:
 
     for nummer, zeile in stand.items():
         erwartet = next(e for e in lage if e.fahrer == nummer)
-        assert zeile.zuwachs == wt.punkte_fuer(k, erwartet)
+        assert zeile.zuwachs == wt.punkte_fuer(k, tabelle.liga, erwartet)
         assert zeile.punkte == vorher[nummer] + zeile.zuwachs
 
 

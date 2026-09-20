@@ -140,6 +140,39 @@ def test_platzierungen_sind_luckenlos(rennen) -> None:
     assert len({e.teilnehmer for e in rennen.ergebnisse}) == FELD
 
 
+def test_ausgefallene_stehen_nach_runden_und_zeit(k, zandvoort, mittel) -> None:
+    """Punkt 95: mehr Runden zuerst, bei gleicher Rundenzahl die kuerzere Zeit.
+
+    Bis dahin entschied unter gleich weit gekommenen Ausfaellen das Los.
+    Der erhoehte Streckenverschleiss sorgt dafuer, dass in diesem kurzen
+    Rennen ueberhaupt jemand ausfaellt.
+    """
+    feld = rn.starterfeld(k, LIGA, seedquelle=Seedquelle(1))
+    verlauf = rn.simuliere(
+        k, zandvoort, feld, 12, Seedquelle(1), mittel, streckenverschleiss=6.0
+    )
+    ausfaelle = [e for e in verlauf.ergebnisse if e.zeit_ms is None]
+    assert ausfaelle, "Der Test braucht Ausfaelle"
+
+    def letzte_rundenzeit(ergebnis) -> int:
+        enden = verlauf.protokolle[ergebnis.teilnehmer].rundenende_ms
+        return enden[-1] if enden else 0
+
+    # Mehr Runden stehen vorn.
+    assert [e.runden for e in ausfaelle] == sorted(
+        (e.runden for e in ausfaelle), reverse=True
+    )
+    # Und bei gleicher Rundenzahl der Schnellere.
+    paare = [
+        (davor, danach)
+        for davor, danach in zip(ausfaelle, ausfaelle[1:], strict=False)
+        if davor.runden == danach.runden
+    ]
+    assert paare, "Der Test braucht zwei Ausfaelle mit gleicher Rundenzahl"
+    for davor, danach in paare:
+        assert letzte_rundenzeit(davor) <= letzte_rundenzeit(danach)
+
+
 def test_sieger_faehrt_die_volle_distanz(rennen) -> None:
     assert rennen.ergebnisse[0].runden == rennen.runden
 

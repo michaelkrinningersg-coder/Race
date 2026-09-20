@@ -28,7 +28,6 @@ ANZAHL_HERSTELLER = 20              # GDD 12
 ANZAHL_EREIGNISSE = 35              # GDD 14
 ANZAHL_DEFEKTE = 20                 # GDD 14
 ANZAHL_WETTERZUSTAENDE = 5          # GDD 7
-ANZAHL_PUNKTERAENGE = 20            # GDD 13
 WAEHRUNGEN = {"G", "E", "Z"}        # Geld, Erfahrung, Zeit
 
 # Wem eine Eigenschaft neben der Wirkungsmatrix gehoert.
@@ -514,25 +513,66 @@ def _pruefe_wetter(k: Konfiguration) -> None:
 
 
 def _pruefe_wertung(k: Konfiguration) -> None:
-    punkte = k.wert("wertung", "punkte_rennen")
-    if len(punkte) != ANZAHL_PUNKTERAENGE:
+    """Prueft die Punkteleiter aus Punkt 95.
+
+    Zwei Dinge koennen an ihr schiefgehen, und beide faellt man erst
+    mitten in einer Saison auf die Fuesse: Die Leiter kann unter null
+    rutschen, wenn Schrittweite oder Ankerplatz zu gross werden, und die
+    Punkte koennen innerhalb einer Liga steigen statt fallen.
+    """
+    autos = k.wert("rennen", "autos")
+    ligen = k.wert("ligen", "anzahl")
+    anker = k.wert("wertung", "ankerplatz")
+    if not 2 <= anker <= autos:
         raise KonfigurationsFehler(
-            f"Punkte fuer {ANZAHL_PUNKTERAENGE} Plaetze erwartet, {len(punkte)} gefunden"
+            f"Der Ankerplatz muss zwischen 2 und {autos} liegen, gefunden {anker}"
         )
-    if any(davor < danach for davor, danach in zip(punkte, punkte[1:], strict=False)):
+
+    abstand = _leiterabstand(k)
+    if any(abstand(platz) >= abstand(platz + 1) for platz in range(1, autos)):
         raise KonfigurationsFehler("Die Rennpunkte muessen von Platz 1 an fallen")
 
-    quali = k.wert("wertung", "punkte_qualifying")
-    if len(quali) != 3:
+    sieger = k.wert("wertung", "sieger_liga1")
+    letzter = sieger - (ligen - 1) * abstand(anker) - abstand(autos)
+    if letzter < 1:
         raise KonfigurationsFehler(
-            f"Qualifying-Punkte fuer 3 Plaetze erwartet, {len(quali)} gefunden"
+            f"Die Punkteleiter reicht nicht ueber {ligen} Ligen: Der Letzte der "
+            f"untersten Liga kaeme auf {letzter} Punkte. Kleinere Schrittweite "
+            f"oder frueherer Ankerplatz."
         )
 
-    autos = k.wert("rennen", "autos")
-    if len(punkte) > autos:
+    quali = k.wert("wertung", "anteil_qualifying")
+    if not quali:
+        raise KonfigurationsFehler("Ohne Qualifying-Anteile gibt es keine Polepunkte")
+    if any(davor < danach for davor, danach in zip(quali, quali[1:], strict=False)):
+        raise KonfigurationsFehler("Die Qualifying-Anteile muessen von Platz 1 an fallen")
+    if len(quali) > autos:
         raise KonfigurationsFehler(
-            f"Mehr Punkteraenge ({len(punkte)}) als Autos im Rennen ({autos})"
+            f"Mehr Qualifying-Raenge ({len(quali)}) als Autos im Rennen ({autos})"
         )
+
+    takt = k.wert("auf_abstieg", "alle_rennen")
+    rennen = k.wert("kalender", "rennen_je_saison")
+    if not 1 <= takt <= rennen:
+        raise KonfigurationsFehler(
+            f"Gewechselt wird alle {takt} Rennen, eine Saison hat aber {rennen}"
+        )
+
+
+def _leiterabstand(k: Konfiguration):
+    """Der Punktabstand eines Platzes zum Sieger seiner Liga (Punkt 95)."""
+    erster_zweiter = k.wert("wertung", "abstand_erster_zweiter")
+    zweiter_dritter = k.wert("wertung", "abstand_zweiter_dritter")
+    schritt = k.wert("wertung", "schritt")
+
+    def abstand(platz: int) -> int:
+        if platz <= 1:
+            return 0
+        if platz == 2:
+            return int(erster_zweiter)
+        return int(erster_zweiter + zweiter_dritter + schritt * (platz - 3))
+
+    return abstand
 
 
 def _pruefe_sponsoren(k: Konfiguration) -> None:

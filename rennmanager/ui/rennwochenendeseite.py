@@ -549,7 +549,7 @@ class Rennwochenendeseite(QWidget):
                 (e for e in ergebnis.ergebnisse if e.fahrer == spieler.nummer), None
             )
             if eigen is not None:
-                punkte = kern_wertung.punkte_fuer(self._konfiguration, eigen)
+                punkte = kern_wertung.punkte_fuer(self._konfiguration, ergebnis.liga, eigen)
                 platz = "DNF" if eigen.ausgefallen else str(eigen.rennplatz)
                 zeilen.insert(
                     0,
@@ -571,7 +571,7 @@ class Rennwochenendeseite(QWidget):
                     "DNF" if e.ausgefallen else str(e.rennplatz),
                     fahrer.name + (" (SR)" if e.schnellste_runde else ""),
                     str(e.qualifyingplatz),
-                    str(kern_wertung.punkte_fuer(self._konfiguration, e)),
+                    str(kern_wertung.punkte_fuer(self._konfiguration, ergebnis.liga, e)),
                 ],
             )
             zeile.setForeground(0, QColor(self._lauf.welt.team_von(fahrer).farbe))

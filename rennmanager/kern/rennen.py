@@ -2163,9 +2163,20 @@ def _ergebnisse(
 ) -> tuple[Ergebnis, ...]:
     """Bildet die Schlusswertung.
 
+    Zuerst die Zielankuenfte, dann die Ausgefallenen (Punkt 95). Beide
+    Gruppen stehen nach demselben Massstab: mehr Runden zuerst, bei
+    gleicher Rundenzahl die kuerzere Zeit. Fuer einen Ausfall ist das die
+    Zeit seiner letzten vollendeten Runde - wer dieselbe Distanz
+    schneller zurueckgelegt hat, steht vorn.
+
+    Gewertet wird jeder Platz, auch der eines Ausgefallenen; die Punkte
+    dazu stehen in ``wertung``.
+
     GDD 4: Bei Gleichstand auf die Millisekunde liegt vorne, wer den
     hoeheren Durchschnitt der Basiseigenschaften hat; sonst entscheidet
-    das Los.
+    das Los. Bei den Ausfaellen greift das praktisch nur noch, wenn zwei
+    Autos die Ziellinie nie ueberfahren haben - dann gibt es keine Zeit,
+    die sie unterscheiden koennte.
     """
     los = seedquelle.zweig("gleichstand").generator()
     zufallsmarke = {i: float(los.random()) for i in range(lauf.anzahl)}
@@ -2176,7 +2187,9 @@ def _ergebnisse(
         return (
             0 if zeit is not None else 1,       # Zielankunft vor Ausfall
             -runden,                            # mehr Runden ist besser
-            zeit if zeit is not None else 0,    # frueher im Ziel ist besser
+            # Frueher im Ziel ist besser; beim Ausfall zaehlt die Zeit
+            # der letzten vollendeten Runde.
+            zeit if zeit is not None else lauf.linienzeit[i],
             -gesamtwert(konfiguration, lauf.teilnehmer[i].auto),
             zufallsmarke[i],
         )

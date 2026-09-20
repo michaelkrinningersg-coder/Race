@@ -1,21 +1,38 @@
-"""Saisonwertung, Auf- und Abstieg (GDD 13).
+"""Meisterschaft, Auf- und Abstieg (GDD 13, Punkt 95).
 
-Punkte je Rennwochenende:
+Die Meisterschaft laeuft ueber **alle** Ligen. Jeder Platz jeder Liga hat
+seine eigene Punktzahl auf einer durchgehenden Leiter:
 
-* Rennen, Plaetze 1 bis 20: 40-35-30-25-20-18-16-14-12-11-10-9-8-7-6-5-4-3-2-1
-* Schnellste Rennrunde: 3 Punkte, auch ohne Zielankunft
-* Qualifying, Plaetze 1 bis 3: 5-3-1
+    punkte(liga, platz) = sieger_liga1 - (liga - 1) * versatz - abstand(platz)
 
-Bei Gleichstand in der Saisonwertung liegt vorn, wer mehr Siege hat, dann
-mehr zweite Plaetze und so weiter.
+``abstand`` faellt innerhalb einer Liga: zehn Punkte vom Ersten zum
+Zweiten, sechs vom Zweiten zum Dritten, danach drei je Platz. Der
+``versatz`` ist der Abstand bis zum Ankerplatz - der Sieger einer Liga
+bekommt genau so viel wie dieser Platz der Liga darueber. Dadurch
+ueberlappen die Ligen: Mit den Werten aus der Konfiguration liegen zwoelf
+Fahrer jeder Liga im Punktebereich der Liga ueber ihnen.
 
-Am Saisonende steigen die Top 3 einer Liga auf und die letzten 3 ab; Liga 1
-kennt keinen Aufstieg, Liga 20 keinen Abstieg. Auf- und Abstieg gelten fuer
-einzelne Fahrer, nicht fuer Teams.
+Dazu kommen Zusatzpunkte als Anteil der Siegerpunkte **derselben** Liga,
+aufgerundet und mindestens 1: die schnellste Rennrunde (auch ohne
+Zielankunft, GDD 13) und die ersten drei des Qualifyings.
+
+Jeder der 40 Plaetze bekommt Punkte, auch die Ausgefallenen - sie stehen
+nach absolvierten Runden und Zeit hinter den Angekommenen (siehe
+``rennen._ergebnisse``).
+
+Bei Gleichstand liegt vorn, wer in der hoeheren Liga faehrt; danach
+entscheiden mehr Siege, mehr zweite Plaetze und so weiter.
+
+Auf- und Abstieg laufen nicht erst am Saisonende, sondern alle fuenf
+Rennen: Die besten drei einer Liga steigen auf, die letzten drei ab,
+entschieden nach der Gesamttabelle seit Saisonbeginn. Liga 1 kennt keinen
+Aufstieg, die unterste keinen Abstieg. Der Wechsel gilt fuer einzelne
+Fahrer, nicht fuer Teams; die gesammelten Punkte wandern mit.
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -59,25 +76,70 @@ class Eintrag:
         self.platzierungen[platz - 1] += 1
 
 
-def rennpunkte(konfiguration: Konfiguration, platz: int) -> int:
-    """Punkte fuer eine Rennplatzierung (GDD 13)."""
-    tabelle = konfiguration.wert("wertung", "punkte_rennen")
-    return int(tabelle[platz - 1]) if 1 <= platz <= len(tabelle) else 0
+def abstand(konfiguration: Konfiguration, platz: int) -> int:
+    """Wie viele Punkte dieser Platz hinter dem Sieger seiner Liga liegt."""
+    if platz <= 1:
+        return 0
+    erster_zweiter = konfiguration.wert("wertung", "abstand_erster_zweiter")
+    if platz == 2:
+        return int(erster_zweiter)
+    zweiter_dritter = konfiguration.wert("wertung", "abstand_zweiter_dritter")
+    schritt = konfiguration.wert("wertung", "schritt")
+    return int(erster_zweiter + zweiter_dritter + schritt * (platz - 3))
 
 
-def qualifyingpunkte(konfiguration: Konfiguration, platz: int) -> int:
-    """Punkte fuer einen Qualifying-Platz (GDD 13)."""
-    tabelle = konfiguration.wert("wertung", "punkte_qualifying")
-    return int(tabelle[platz - 1]) if 1 <= platz <= len(tabelle) else 0
+def versatz(konfiguration: Konfiguration) -> int:
+    """Der Punktabstand von einer Liga zur naechsten.
+
+    Er ist keine eigene Zahl, sondern der Abstand bis zum Ankerplatz: Der
+    Sieger einer Liga bekommt so viel wie dieser Platz der Liga darueber.
+    """
+    return abstand(konfiguration, konfiguration.wert("wertung", "ankerplatz"))
 
 
-def punkte_fuer(konfiguration: Konfiguration, ergebnis: Rennergebnis) -> int:
-    """Alle Punkte eines Fahrers an einem Rennwochenende."""
-    punkte = rennpunkte(konfiguration, ergebnis.rennplatz)
-    punkte += qualifyingpunkte(konfiguration, ergebnis.qualifyingplatz)
+def siegerpunkte(konfiguration: Konfiguration, liga: int) -> int:
+    """Was ein Sieg in dieser Liga bringt - der Bezug aller Zusatzpunkte."""
+    return int(
+        konfiguration.wert("wertung", "sieger_liga1") - (liga - 1) * versatz(konfiguration)
+    )
+
+
+def rennpunkte(konfiguration: Konfiguration, liga: int, platz: int) -> int:
+    """Punkte fuer eine Rennplatzierung in dieser Liga (GDD 13, Punkt 95).
+
+    Jeder der Plaetze bekommt Punkte; ausserhalb des Feldes gibt es keine.
+    """
+    if not 1 <= platz <= konfiguration.wert("rennen", "autos"):
+        return 0
+    return siegerpunkte(konfiguration, liga) - abstand(konfiguration, platz)
+
+
+def _anteilspunkte(konfiguration: Konfiguration, liga: int, anteil: float) -> int:
+    """Ein Anteil der Siegerpunkte, aufgerundet, mindestens 1 (Punkt 95)."""
+    return max(1, math.ceil(siegerpunkte(konfiguration, liga) * anteil - 1e-9))
+
+
+def qualifyingpunkte(konfiguration: Konfiguration, liga: int, platz: int) -> int:
+    """Punkte fuer einen Qualifying-Platz (GDD 13, Punkt 95)."""
+    anteile = konfiguration.wert("wertung", "anteil_qualifying")
+    if not 1 <= platz <= len(anteile):
+        return 0
+    return _anteilspunkte(konfiguration, liga, anteile[platz - 1])
+
+
+def punkte_schnellste_runde(konfiguration: Konfiguration, liga: int) -> int:
+    """Punkte fuer die schnellste Rennrunde, auch ohne Zielankunft."""
+    return _anteilspunkte(
+        konfiguration, liga, konfiguration.wert("wertung", "anteil_schnellste_runde")
+    )
+
+
+def punkte_fuer(konfiguration: Konfiguration, liga: int, ergebnis: Rennergebnis) -> int:
+    """Alle Punkte eines Fahrers an einem Rennwochenende dieser Liga."""
+    punkte = rennpunkte(konfiguration, liga, ergebnis.rennplatz)
+    punkte += qualifyingpunkte(konfiguration, liga, ergebnis.qualifyingplatz)
     if ergebnis.schnellste_runde:
-        # GDD 13: auch ohne Zielankunft.
-        punkte += konfiguration.wert("wertung", "punkte_schnellste_runde")
+        punkte += punkte_schnellste_runde(konfiguration, liga)
     return punkte
 
 
@@ -89,11 +151,15 @@ class Tabelle:
     eintraege: dict[int, Eintrag] = field(default_factory=dict)
 
     def verbuche(self, konfiguration: Konfiguration, ergebnisse: list[Rennergebnis]) -> None:
-        """Traegt ein ganzes Rennwochenende ein."""
+        """Traegt ein ganzes Rennwochenende ein.
+
+        Gewertet wird mit den Punkten **dieser** Liga; ein Fahrer, der
+        spaeter auf- oder absteigt, nimmt sie mit (siehe ``vollziehe``).
+        """
         autos = konfiguration.wert("rennen", "autos")
         for ergebnis in ergebnisse:
             eintrag = self.eintraege.setdefault(ergebnis.fahrer, Eintrag(ergebnis.fahrer))
-            eintrag.punkte += punkte_fuer(konfiguration, ergebnis)
+            eintrag.punkte += punkte_fuer(konfiguration, self.liga, ergebnis)
             eintrag.zaehle(ergebnis.rennplatz, autos)
             eintrag.rennen += 1
             if ergebnis.rennplatz == 1:
@@ -172,7 +238,7 @@ def livewertung(
     vorher = {e.fahrer: platz for platz, e in enumerate(tabelle.stand(), start=1)}
     punkte_vorher = {f: e.punkte for f, e in tabelle.eintraege.items()}
 
-    zuwachs = {e.fahrer: punkte_fuer(konfiguration, e) for e in ergebnisse}
+    zuwachs = {e.fahrer: punkte_fuer(konfiguration, tabelle.liga, e) for e in ergebnisse}
     platzierungen = {e.fahrer: e.rennplatz for e in ergebnisse}
     beteiligt = set(punkte_vorher) | set(zuwachs)
 
@@ -217,10 +283,12 @@ class Wechsel:
 def auf_und_abstieg(
     konfiguration: Konfiguration, tabellen: dict[int, Tabelle]
 ) -> tuple[Wechsel, ...]:
-    """Bestimmt alle Ligawechsel nach einer Saison (GDD 13).
+    """Bestimmt alle Ligawechsel einer Wechselrunde (GDD 13, Punkt 95).
 
-    Die Top 3 steigen auf, die letzten 3 ab. Liga 1 kennt keinen Aufstieg,
-    Liga 20 keinen Abstieg.
+    Die Top 3 einer Liga steigen auf, die letzten 3 ab - entschieden nach
+    der Gesamttabelle seit Saisonbeginn. Liga 1 kennt keinen Aufstieg, die
+    unterste keinen Abstieg. Gewechselt wird alle ``alle_rennen`` Rennen;
+    ``vollziehe`` traegt das Ergebnis in die Tabellen ein.
     """
     aufsteiger = konfiguration.wert("auf_abstieg", "aufsteiger")
     absteiger = konfiguration.wert("auf_abstieg", "absteiger")
@@ -237,6 +305,82 @@ def auf_und_abstieg(
             for eintrag in stand[-absteiger:]:
                 wechsel.append(Wechsel(eintrag.fahrer, liga, liga + 1))
     return tuple(wechsel)
+
+
+def weltstand(
+    konfiguration: Konfiguration, tabellen: dict[int, Tabelle]
+) -> list[tuple[int, Eintrag]]:
+    """Die Meisterschaft ueber alle Ligen, bester zuerst (Punkt 95).
+
+    Geliefert werden Paare ``(liga, eintrag)``. Bei Punktgleichheit liegt
+    vorn, wer in der hoeheren Liga faehrt - dort ist derselbe Punktestand
+    gegen staerkere Gegner geholt. Danach gilt dieselbe Regel wie in der
+    Ligatabelle: mehr Siege, dann mehr zweite Plaetze und so weiter.
+    """
+    del konfiguration  # die Regel steht fest, sie braucht keinen Wert
+    paare = [
+        (liga, eintrag)
+        for liga, tabelle in tabellen.items()
+        for eintrag in tabelle.eintraege.values()
+    ]
+    return sorted(
+        paare,
+        key=lambda paar: (
+            -paar[1].punkte,
+            paar[0],
+            [-anzahl for anzahl in paar[1].platzierungen],
+            paar[1].fahrer,
+        ),
+    )
+
+
+def weltplatz_von(
+    konfiguration: Konfiguration, tabellen: dict[int, Tabelle], fahrer: int
+) -> int:
+    """Der Platz eines Fahrers in der Meisterschaft ueber alle Ligen."""
+    for platz, (_liga, eintrag) in enumerate(weltstand(konfiguration, tabellen), start=1):
+        if eintrag.fahrer == fahrer:
+            return platz
+    raise WertungsFehler(f"Fahrer {fahrer} steht in keiner Tabelle")
+
+
+def vollziehe(tabellen: dict[int, Tabelle], wechsel: tuple[Wechsel, ...]) -> None:
+    """Traegt die Wechsel in die Tabellen ein (Punkt 95).
+
+    Der Eintrag wandert mitsamt seinen Punkten in die neue Liga: Die
+    Meisterschaft laeuft ueber alle Ligen, ein Aufstieg loescht also
+    nichts. Ab dem naechsten Rennen zaehlt er nach der Leiter seiner
+    neuen Liga.
+
+    Erst werden alle Eintraege herausgenommen, dann alle eingesetzt -
+    sonst schoebe ein Aufsteiger einen Absteiger derselben Runde aus der
+    Tabelle, je nachdem, in welcher Reihenfolge die Wechsel stehen.
+    """
+    unterwegs: list[tuple[Wechsel, Eintrag]] = []
+    for eintrag_wechsel in wechsel:
+        tabelle = tabellen.get(eintrag_wechsel.von_liga)
+        if tabelle is None or eintrag_wechsel.fahrer not in tabelle.eintraege:
+            raise WertungsFehler(
+                f"Fahrer {eintrag_wechsel.fahrer} steht nicht in Liga "
+                f"{eintrag_wechsel.von_liga}"
+            )
+        unterwegs.append((eintrag_wechsel, tabelle.eintraege.pop(eintrag_wechsel.fahrer)))
+    for eintrag_wechsel, eintrag in unterwegs:
+        ziel = tabellen.get(eintrag_wechsel.nach_liga)
+        if ziel is None:
+            raise WertungsFehler(f"Liga {eintrag_wechsel.nach_liga} gibt es nicht")
+        ziel.eintraege[eintrag.fahrer] = eintrag
+
+
+def wechselrennen(konfiguration: Konfiguration) -> int:
+    """Nach wie vielen Rennen auf- und abgestiegen wird (Punkt 95)."""
+    return int(konfiguration.wert("auf_abstieg", "alle_rennen"))
+
+
+def ist_wechselrennen(konfiguration: Konfiguration, rennen: int) -> bool:
+    """Ob nach diesem Rennen gewechselt wird."""
+    takt = wechselrennen(konfiguration)
+    return takt > 0 and rennen > 0 and rennen % takt == 0
 
 
 def pruefe_ligastaerken(konfiguration: Konfiguration, tabellen: dict[int, Tabelle]) -> None:

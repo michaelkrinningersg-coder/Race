@@ -61,9 +61,11 @@ class Karrierezahlen:
     ausfaelle: int = 0
     punkte: int = 0
 
-    def verbuche(self, konfiguration: Konfiguration, ergebnis: Rennergebnis) -> None:
+    def verbuche(
+        self, konfiguration: Konfiguration, ergebnis: Rennergebnis, liga: int
+    ) -> None:
         self.rennen += 1
-        self.punkte += punkte_fuer(konfiguration, ergebnis)
+        self.punkte += punkte_fuer(konfiguration, liga, ergebnis)
         if ergebnis.rennplatz == 1:
             self.siege += 1
         if ergebnis.rennplatz <= 3:
@@ -111,7 +113,7 @@ class Bilanz:
         self, konfiguration: Konfiguration, ergebnis: Rennergebnis, liga: int
     ) -> None:
         self.rennen += 1
-        self.punkte += punkte_fuer(konfiguration, ergebnis)
+        self.punkte += punkte_fuer(konfiguration, liga, ergebnis)
         if ergebnis.ausgefallen:
             self.ausfaelle += 1
         else:
@@ -333,9 +335,9 @@ class Statistik:
         :return: ob dabei ein **Renn**rundenrekord gefallen ist
         """
         for ergebnis in ergebnisse:
-            self.zahlen(ergebnis.fahrer).verbuche(self.konfiguration, ergebnis)
+            self.zahlen(ergebnis.fahrer).verbuche(self.konfiguration, ergebnis, liga)
             schluessel = (saison, liga, ergebnis.fahrer)
-            punkte = punkte_fuer(self.konfiguration, ergebnis)
+            punkte = punkte_fuer(self.konfiguration, liga, ergebnis)
             self.saisonpunkte[schluessel] = self.saisonpunkte.get(schluessel, 0) + punkte
             self.saisonverlauf[(liga, rennen, ergebnis.fahrer)] = punkte
             self.strecke_von(ergebnis.fahrer, strecke).verbuche(

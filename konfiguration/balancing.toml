@@ -1554,20 +1554,47 @@ anspruch_bekanntheit = 0.8
 # GDD 13 – Wertung, Auf- und Abstieg
 # ---------------------------------------------------------------------------
 [wertung]
-# Rennen, Plaetze 1-20
-punkte_rennen = [40, 35, 30, 25, 20, 18, 16, 14, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
-# Schnellste Rennrunde, auch ohne Zielankunft
-punkte_schnellste_runde = 3
-# Qualifying, Plaetze 1-3
-punkte_qualifying = [5, 3, 1]
-# Gleichstand: mehr Siege, dann mehr zweite Plaetze usw.
-gleichstand = "platzierungen_absteigend"
+# Punkt 95: Eine einzige Leiter ueber alle zehn Ligen statt einer Tabelle
+# je Liga. Die Meisterschaft laeuft ueber alle 400 Fahrer; wer in welcher
+# Liga faehrt, entscheidet nur, wie hoch seine Leitersprosse liegt.
+#
+#     punkte(liga, platz) = sieger_liga1 - (liga - 1) * versatz - abstand(platz)
+#
+# mit  abstand(1) = 0
+#      abstand(2) = abstand_erster_zweiter
+#      abstand(p) = abstand_erster_zweiter + abstand_zweiter_dritter
+#                   + schritt * (p - 3)            fuer p >= 3
+#      versatz    = abstand(ankerplatz)
+#
+# Der Versatz ist damit keine eigene Zahl, sondern eine Folge des
+# Ankerplatzes: Der Sieger einer Liga bekommt genau so viel wie dieser
+# Platz der Liga darueber. Mit den Werten unten sind das 82 Punkte je
+# Liga, eine Liga ist 127 Punkte breit, und 12 Fahrer je Liga liegen im
+# Punktebereich der Liga darueber.
+sieger_liga1 = 1000
+abstand_erster_zweiter = 10
+abstand_zweiter_dritter = 6
+schritt = 3
+ankerplatz = 25
+# Zusatzpunkte als Anteil der Siegerpunkte **derselben** Liga, immer
+# aufgerundet und mindestens 1 Punkt. Die schnellste Rennrunde zaehlt auch
+# ohne Zielankunft (GDD 13).
+anteil_schnellste_runde = 0.01
+anteil_qualifying = [0.015, 0.005, 0.0025]
+# Gleichstand in der Weltmeisterschaft: erst die hoehere Liga, dann mehr
+# Siege, dann mehr zweite Plaetze und so weiter.
+gleichstand = "hoehere_liga_dann_platzierungen"
 
 [auf_abstieg]
 aufsteiger = 3
 absteiger = 3
-# Liga 1 ohne Aufstieg, Liga 20 ohne Abstieg
+# Liga 1 ohne Aufstieg, die unterste ohne Abstieg
 gilt_fuer = "fahrer"
+# Punkt 95: Gewechselt wird nicht erst am Saisonende, sondern alle fuenf
+# Rennen - bei 20 Rennen je Saison also viermal. Entschieden wird nach der
+# Gesamttabelle seit Saisonbeginn.
+alle_rennen = 5
+grundlage = "gesamttabelle"
 
 [schnellsimulation]
 # Die uebrigen 19 Ligen nach jedem Rennwochenende des Spielers

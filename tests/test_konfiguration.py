@@ -101,11 +101,24 @@ def test_ueberholbedingungen(k: kf.Konfiguration) -> None:
 
 
 def test_punkte(k: kf.Konfiguration) -> None:
-    """GDD 13: 40-35-30-25-20-18-... fuer die Plaetze 1 bis 20."""
-    punkte = k.wert("wertung", "punkte_rennen")
-    assert punkte == [40, 35, 30, 25, 20, 18, 16, 14, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
-    assert k.wert("wertung", "punkte_schnellste_runde") == 3
-    assert k.wert("wertung", "punkte_qualifying") == [5, 3, 1]
+    """Punkt 95: die Leiter ueber alle Ligen, 1000 Punkte fuer Liga 1."""
+    assert k.wert("wertung", "sieger_liga1") == 1000
+    assert k.wert("wertung", "abstand_erster_zweiter") == 10
+    assert k.wert("wertung", "abstand_zweiter_dritter") == 6
+    assert k.wert("wertung", "schritt") == 3
+    assert k.wert("wertung", "ankerplatz") == 25
+    assert k.wert("wertung", "anteil_schnellste_runde") == 0.01
+    assert k.wert("wertung", "anteil_qualifying") == [0.015, 0.005, 0.0025]
+
+
+def test_die_leiter_bleibt_bis_zur_untersten_liga_positiv(k: kf.Konfiguration) -> None:
+    """Sonst faellt es erst mitten in einer Saison auf."""
+    from rennmanager.kern import wertung as wt
+
+    unterste = k.wert("ligen", "anzahl")
+    letzter = wt.rennpunkte(k, unterste, k.wert("rennen", "autos"))
+    assert letzter >= 1
+    assert wt.rennpunkte(k, 1, 1) == 1000
 
 
 def test_wetterzustaende(k: kf.Konfiguration) -> None:

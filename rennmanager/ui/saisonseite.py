@@ -463,7 +463,7 @@ class Saisonseite(QWidget):
         )
         for e in ergebnis.ergebnisse:
             fahrer = self._welt.fahrer[e.fahrer]
-            punkte = kern_wertung.punkte_fuer(self._konfiguration, e)
+            punkte = kern_wertung.punkte_fuer(self._konfiguration, ergebnis.liga, e)
             zeile = QTreeWidgetItem(
                 self._rennliste,
                 [

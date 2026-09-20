@@ -100,11 +100,13 @@ def test_ein_wochenende_fuellt_die_karrierezahlen(k, statistik):
     sieger = statistik.zahlen(7)
     assert (sieger.rennen, sieger.siege, sieger.podien, sieger.poles) == (1, 1, 1, 1)
     assert sieger.schnellste_runden == 1
-    assert sieger.punkte == 40 + 5 + 3
+    assert sieger.punkte == (
+        wt.rennpunkte(k, 5, 1) + wt.qualifyingpunkte(k, 5, 1) + wt.punkte_schnellste_runde(k, 5)
+    )
 
     zweiter = statistik.zahlen(8)
     assert (zweiter.siege, zweiter.podien, zweiter.poles) == (0, 1, 0)
-    assert zweiter.punkte == 35 + 1
+    assert zweiter.punkte == wt.rennpunkte(k, 5, 2) + wt.qualifyingpunkte(k, 5, 3)
 
     letzter = statistik.zahlen(9)
     assert letzter.punkte == 0
@@ -129,8 +131,10 @@ def test_punkte_werden_je_saison_und_liga_gefuehrt(k, statistik):
     """GDD 13: Gesamtpunkte je Liga und Saison."""
     statistik.verbuche_wochenende(2026, 1, 5, "Monza", ergebnisse((7, 1, 9)))
     statistik.verbuche_wochenende(2027, 1, 4, "Monza", ergebnisse((7, 2, 9)))
-    assert statistik.punkte_in(2026, 5, 7) == 40
-    assert statistik.punkte_in(2027, 4, 7) == 35
+    # Punkt 95: Die Punkte haengen an der Liga - derselbe Platz bringt
+    # oben mehr als unten.
+    assert statistik.punkte_in(2026, 5, 7) == wt.rennpunkte(k, 5, 1)
+    assert statistik.punkte_in(2027, 4, 7) == wt.rennpunkte(k, 4, 2)
     assert statistik.punkte_in(2026, 4, 7) == 0
 
 
