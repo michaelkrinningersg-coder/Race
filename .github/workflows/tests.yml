@@ -1,23 +1,21 @@
 name: Tests
 
+# Stillgelegt (Entscheidung des Auftraggebers): Der Testlauf passiert hier
+# in der Entwicklung, bevor etwas gepusht wird - ein zweiter Lauf auf dem
+# Runner bringt dieselbe Zahl und kostet bei jedem Push Rechenzeit. Der
+# Ablauf bleibt stehen und laesst sich von Hand ueber "Run workflow"
+# starten; ausserdem laeuft er weiter im Windows-Build vor dem Packen.
 on:
-  push:
-    branches: ["**"]
-  pull_request:
   workflow_dispatch:
 
 jobs:
   tests:
     name: Tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    # Auf Ansage laufen beide Systeme, sonst nur Linux (Entscheidung des
-    # Auftraggebers). Windows kostet je Push einen eigenen Runner und
-    # bringt bei einer Zwischenstufe nichts dazu; vor einer Auslieferung
-    # startet man den Lauf von Hand ueber "Run workflow".
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ github.event_name == 'workflow_dispatch' && fromJSON('["ubuntu-latest", "windows-latest"]') || fromJSON('["ubuntu-latest"]') }}
+        os: ["ubuntu-latest", "windows-latest"]
 
     steps:
       - uses: actions/checkout@v4

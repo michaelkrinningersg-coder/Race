@@ -111,8 +111,20 @@ def test_die_wahl_kommt_im_rennen_an(k, welt, strecken):
 
     verlauf = wochenende.fahre_rennen()
     stelle = [t.nummer for t in verlauf.teilnehmer].index(eigene[0])
-    geplant = [b.runde for b in verlauf.stopps_von(stelle) if not b.notstopp]
-    assert geplant == list(gewaehlt.stopps)
+    stopps = [b for b in verlauf.stopps_von(stelle) if not b.notstopp]
+    # Die Wahl ist gefahren worden: dieselben Mischungen, dieselbe Zahl
+    # von Stopps.
+    assert len(stopps) == len(gewaehlt.stopps)
+    assert [b.nach for b in stopps] == [
+        m.kuerzel for m in gewaehlt.mischungen[1:]
+    ]
+    # Die Stopprunde darf sich nach hinten verschieben, wenn der Satz an
+    # dem Tag noch ueber ``planstopp_ab_restprofil`` liegt - diese Regel
+    # gilt fuer den Spieler wie fuer die KI. Frueher als gewaehlt kommt
+    # niemand herein.
+    assert all(
+        gewaehlt.stopps[n] <= b.runde for n, b in enumerate(stopps)
+    )
 
 
 @pytest.fixture(scope="module")

@@ -185,8 +185,13 @@ def test_der_auftrag_folgt_dem_verschleiss(k) -> None:
     """Keine zweite Tabelle: Er kommt aus [reifen.mischungen]."""
     from rennmanager.kern import reifen as kern_reifen
 
+    bezug = next(
+        x.verschleiss
+        for x in kern_reifen.mischungen(k)
+        if x.kuerzel == k.wert("strecke", "gummierung", "bezugsmischung")
+    )
     for m in kern_reifen.mischungen(k):
-        assert gu.auftrag(k, m) == pytest.approx(m.verschleiss / 0.88, rel=1e-9)
+        assert gu.auftrag(k, m) == pytest.approx(m.verschleiss / bezug, rel=1e-9)
 
 
 def test_weich_holt_mehr_heraus_als_hart(k) -> None:

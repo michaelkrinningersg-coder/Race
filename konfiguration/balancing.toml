@@ -1194,10 +1194,17 @@ naesse_je_lage = { trocken = 0.0, heiss = 0.0, wechselhaft = 0.35, regen = 0.7, 
 [[reifen.mischungen.liste]]
 schluessel = "weich"
 name = "Weich"
+# Punkt 89: Die drei trockenen Mischungen halten durchgehend rund ein
+# Sechstel laenger als vorher (1,27 / 0,88 / 0,64 -> 1,05 / 0,73 /
+# 0,53). Die Verhaeltnisse untereinander bleiben, nur die Stints
+# werden laenger - noetig, seit ein Stint schon bei 40 Prozent
+# Restprofil endet statt bei 30. Der Gummi-Auftrag aus Punkt 88
+# haengt am selben Wert, bezieht sich aber auf Mittel und bleibt
+# deshalb, wo er war (1,44 / 1,00 / 0,73).
 kuerzel = "W"
 farbe = "#D7191C"
 tempo = 1.020          # rund 1,8 s je Runde schneller als hart
-verschleiss = 1.27
+verschleiss = 1.05
 naesse = 0.0
 
 [[reifen.mischungen.liste]]
@@ -1206,7 +1213,7 @@ name = "Mittel"
 kuerzel = "M"
 farbe = "#E8B93B"
 tempo = 1.010
-verschleiss = 0.88
+verschleiss = 0.73
 naesse = 0.0
 
 [[reifen.mischungen.liste]]
@@ -1215,7 +1222,7 @@ name = "Hart"
 kuerzel = "H"
 farbe = "#F2F0EB"
 tempo = 1.000
-verschleiss = 0.64
+verschleiss = 0.53
 naesse = 0.0
 
 [[reifen.mischungen.liste]]
@@ -1321,11 +1328,18 @@ weich_hoechstens_stopps = 3
 weich_hoechstens_streckenfaktor = 1.15
 # Das Boxenstoppfenster: Auf die berechnete optimale Stopprunde kommt ein
 # zufaelliges Delta von +/- diesem Anteil der Renndistanz, aufgerundet,
-# mindestens aber zwei Runden. Wichtig ist die Reihenfolge: Erst wird die
-# beste Kombination gerechnet, **dann** kommt das Delta drauf - nicht
-# umgekehrt.
-fenster_anteil = 0.05
-fenster_min_runden = 2
+# mindestens aber eine Runde - es bleiben also immer drei moegliche
+# Runden (eine frueher, die geplante, eine spaeter). Wichtig ist die
+# Reihenfolge: Erst wird die beste Kombination gerechnet, **dann** kommt
+# das Delta drauf - nicht umgekehrt.
+#
+# Punkt 91: von 5 auf 3 Prozent und von zwei auf eine Mindestrunde
+# (Entscheidung des Auftraggebers). Der Plan gilt jetzt dem Medianfahrer
+# und wird nicht mehr je Auto nachgerechnet; ein schmaleres Fenster haelt
+# die Abweichung vom geplanten Restprofil klein, entzerrt die Boxengasse
+# aber weiterhin.
+fenster_anteil = 0.03
+fenster_min_runden = 1
 # So viel Restprofil soll ein Stint planmaessig uebrig lassen - auch im
 # Ziel. Nur wenn das Zufallsfenster den letzten Stopp nach vorn zieht,
 # faellt es darunter. Damit fallen auf verschleissstarken Strecken die
@@ -1378,14 +1392,17 @@ variantenschwelle_je_100km_s = 15.0
 #
 # Faellt das Restprofil darunter, kommt das Auto in der naechsten Runde
 # herein - aber nicht mehr in den letzten Runden, dafuer gilt dieselbe
-# Sperre wie fuer jeden anderen Stopp (sperre_runden oben). Es ist
-# dieselbe Zahl wie mindest_restprofil weiter oben, und zwar absichtlich:
-# Der Planer laesst jeden Stint mit 30 Prozent enden, wer darunter faellt,
-# ist aus dem Plan gefallen.
-# Punkt 89: von 0,30 auf 0,40 (Entscheidung des Auftraggebers). Das
-# ist die Untergrenze des Stoppfensters - wer darunter faellt, ist
-# aus dem Plan gefallen und kommt herein.
-notstopp_ab_restprofil = 0.40
+# Sperre wie fuer jeden anderen Stopp (sperre_runden oben).
+#
+# Punkt 89: Der Notstopp bleibt bei 0,30, obwohl der Planer seine Stints
+# bei 40 Prozent enden laesst (Entscheidung des Auftraggebers). Die zehn
+# Punkte dazwischen sind **Luft fuer die Streuung**: Geplant wird auf
+# Sollwerten, gefahren wird mit Delta - auf den Verschleiss und auf die
+# Stopprunde. Faellt der Ausloeser mit dem Planerboden zusammen, wird
+# jedes Auto, das etwas schlechter mit den Reifen umgeht, zum
+# Zwangsstopp; gemessen stiegen sie damit von 38 auf 73 ueber die
+# fuenf Strecken.
+notstopp_ab_restprofil = 0.30
 # Wetterwechsel: Hoechstens so viele Runden faehrt ein Auto auf dem
 # falschen Reifen, bevor es hereinkommt. **Je Auto ausgewuerfelt** von
 # null bis zu diesem Wert (Entscheidung des Auftraggebers).
