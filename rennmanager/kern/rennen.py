@@ -727,6 +727,19 @@ class _Lauf:
         self.dt_s = konfiguration.wert("simulation", "zeitschritt_ms") / 1000.0
         # Der Wetter-Multiplikator auf Fehler und Unfaelle (GDD 7).
         self.wetter_fehlerfaktor = 1.0
+        # E1: Der Nachbar je Platz - ``[1, 2, ..., n-1, 0]``. ``np.roll``
+        # tat dasselbe und kostete auf dreissig Werten 6,4 Mikrosekunden;
+        # ein fertiger Indexvektor kostet 0,2. Bei einem Aufruf je
+        # Rechenschritt und 89.439 Schritten macht das den Unterschied.
+        self._nachbar = np.concatenate(
+            [np.arange(1, self.anzahl, dtype=int), np.zeros(1, dtype=int)]
+        )
+        # E8: Die Unfallrate haengt nur am Wetterfaktor und wird bei
+        # jedem nahen Paar gebraucht - gemessen 484.220 Mal je Rennen.
+        # Sie wird jetzt beim Wetterwechsel gebildet, nicht je Paar.
+        self._unfallrate = kern_zwischenfall.unfallrate(
+            konfiguration, self.dt_s, self.wetter_fehlerfaktor
+        )
         # Der Wetter-Multiplikator auf den Verschleiss (GDD 7). Der
         # Aufschlag fuer den falschen Reifen steckt nicht hier, sondern in
         # der Verschleissrate je Auto - sonst kaeme er zweimal.
@@ -1329,6 +1342,11 @@ class _Lauf:
         self.wetter_fehlerfaktor = float(
             self.k.wert("wetter", "zustand", zustand)["fehlerquote"]
         )
+        # E8: Dieselbe Rechnung wie bisher, nur einmal je Wetterwechsel
+        # statt bei jedem nahen Paar.
+        self._unfallrate = kern_zwischenfall.unfallrate(
+            self.k, self.dt_s, self.wetter_fehlerfaktor
+        )
         # Punkt 39: Das Wetter zehrt an den Reifen (GDD 7), und wer den
         # falschen Reifen fuer die Lage faehrt, zusaetzlich. Bisher stand
         # beides nur im Schnellmodus - in der vollen Simulation kostete
@@ -1372,7 +1390,10 @@ class _Lauf:
         # Faellt die Reaktionszeit mitten in den Schritt, faehrt das Auto
         # nur den Rest davon. Sonst gingen Unterschiede unter 50 ms
         # verloren - die Spanne betraegt laut GDD 4 aber nur 200 ms.
-        wirksam = np.clip((ende_ms - self.reaktion) / 1000.0, 0.0, dt)
+        # E2: ``arr.clip`` umgeht den Wrapper von ``np.clip`` und
+        # kostet auf dreissig Werten die Haelfte. Gerechnet wird
+        # dasselbe - ein Vergleich, keine Arithmetik.
+        wirksam = ((ende_ms - self.reaktion) / 1000.0).clip(0.0, dt)
 
         ziel = self._ziel_tempo(zeit_ms)
         # Aus dem Stand und hinter einem langsameren Auto wird mit der
@@ -1416,10 +1437,16 @@ class _Lauf:
         # zielt ein Auto auf das Tempo des schon passierten Punktes und
         # hinkt durch die Beschleunigungsgrenze dauerhaft einen Punkt
         # hinterher - auf einer Runde kostet das ueber eine Sekunde.
-        stelle = np.maximum(self.distanz, 0.0) / self.ds
-        index = np.mod(np.floor(stelle).astype(int), self.punkte)
+        # Die Strecke ab der Linie; vor dem Start ist sie negativ, und
+        # dort gilt der erste Profilpunkt. Sie wird zweimal gebraucht -
+        # hier und gleich fuer die kalten Reifen.
+        gefahren = np.maximum(self.distanz, 0.0)
+        stelle = gefahren / self.ds
+        # E5: ``np.floor`` stand hier zweimal fuer denselben Wert.
+        boden = np.floor(stelle)
+        index = np.mod(boden.astype(int), self.punkte)
         danach = np.mod(index + 1, self.punkte)
-        rest = stelle - np.floor(stelle)
+        rest = stelle - boden
 
         self.index = index
         hier = self.profile[self.laufende_nummer, index]
@@ -1428,7 +1455,7 @@ class _Lauf:
         # Anteil der Renndistanz - daran haengen die drei Verlaeufe aus
         # kern.tempoverlauf.
         anteil = (
-            np.clip(self.distanz / self.renndistanz, 0.0, 1.0)
+            (self.distanz / self.renndistanz).clip(0.0, 1.0)
             if self.renndistanz > 0.0
             else np.zeros(self.anzahl)
         )
@@ -1452,10 +1479,10 @@ class _Lauf:
         # Ermuedung ab der halben Distanz (GDD 8, Bereich er) und kalte
         # Reifen in der ersten Runde (Punkt 48).
         offen = max(1.0 - self.ermuedung_beginn, 1e-9)
-        fortschritt = np.clip((anteil - self.ermuedung_beginn) / offen, 0.0, 1.0)
+        fortschritt = ((anteil - self.ermuedung_beginn) / offen).clip(0.0, 1.0)
         ermuedung_tempo = 1.0 - self.ermuedung_verlust * fortschritt
         kalt = (
-            np.clip(1.0 - np.maximum(self.distanz, 0.0) / self.aufwaermstrecke, 0.0, 1.0)
+            (1.0 - gefahren / self.aufwaermstrecke).clip(0.0, 1.0)
             if self.aufwaermstrecke > 0.0
             else np.zeros(self.anzahl)
         )
@@ -1477,7 +1504,13 @@ class _Lauf:
 
         # Reihenfolge nach zurueckgelegter Strecke; danach steht fest, wer
         # vor wem faehrt.
-        reihenfolge = np.argsort(-self.distanz)
+        # E6: ``np.argsort`` laeuft ueber ``_wrapfunc`` und kostet damit
+        # rund zwei Mikrosekunden mehr als die Methode. Gerechnet wird
+        # dasselbe - derselbe Algorithmus, dasselbe Ergebnis. Die Sortierung
+        # ganz zu sparen lohnt sich nicht: Die Pruefung, ob sie noch
+        # stimmt, kostet gemessen 1,70 Mikrosekunden und das Sortieren
+        # selbst 1,63.
+        reihenfolge = (-self.distanz).argsort()
         vorne = reihenfolge[:-1]
         hinten = reihenfolge[1:]
 
@@ -1551,7 +1584,9 @@ class _Lauf:
         in_reichweite = (
             faehrt[hinten] & faehrt[vorne] & (abstand_m < self.unfall_abstand_m)
         )
-        for paar in np.flatnonzero(in_reichweite):
+        # E7: ``nonzero`` ist viermal billiger als ``np.flatnonzero``,
+        # das dieselbe Suche hinter einem Wrapper mit ``ravel`` macht.
+        for paar in in_reichweite.nonzero()[0]:
             self._prueft_unfall(int(hinten[paar]), int(vorne[paar]), zeit_ms)
 
         tempo_hinten = ziel[hinten]
@@ -1569,7 +1604,7 @@ class _Lauf:
         # Ein Auto tauscht je Zeitschritt hoechstens einmal die Position,
         # sonst rechnet die Schleife mit veralteten Abstaenden weiter.
         getauscht: set[int] = set()
-        for paar in np.flatnonzero(nah):
+        for paar in nah.nonzero()[0]:
             i = int(hinten[paar])
             j = int(vorne[paar])
             if i in getauscht or j in getauscht:
@@ -1628,9 +1663,11 @@ class _Lauf:
         :return: (hinten, vorne, Luecke in Metern) je Auto
         """
         auf_der_runde = np.mod(np.maximum(self.distanz, 0.0), self.laenge)
-        ordnung = np.argsort(auf_der_runde)
+        ordnung = auf_der_runde.argsort()
         hinten = ordnung
-        vorne = np.roll(ordnung, -1)
+        # E1: dasselbe wie ``np.roll(ordnung, -1)``, nur ohne dessen
+        # Verwaltungsaufwand.
+        vorne = ordnung[self._nachbar]
         lueck = np.mod(auf_der_runde[vorne] - auf_der_runde[hinten], self.laenge)
         return hinten, vorne, lueck
 
@@ -1656,8 +1693,7 @@ class _Lauf:
         if not (self.aktiv[hinten] and self.aktiv[vorne]):
             return False
 
-        rate = kern_zwischenfall.unfallrate(self.k, self.dt_s, self.wetter_fehlerfaktor)
-        if self.wuerfel.random() >= rate:
+        if self.wuerfel.random() >= self._unfallrate:
             return False
 
         beide = kern_zwischenfall.beide_betroffen(self.k, self.wuerfel)
@@ -1814,7 +1850,7 @@ class _Lauf:
         if not treffer.any():
             return
 
-        for i in np.flatnonzero(treffer):
+        for i in treffer.nonzero()[0]:
             i = int(i)
             while True:
                 nummer = int(self.naechster_messpunkt[i])
@@ -1844,7 +1880,7 @@ class _Lauf:
         if not treffer.any():
             return
 
-        for i in np.flatnonzero(treffer):
+        for i in treffer.nonzero()[0]:
             i = int(i)
             # In einem Schritt koennen mehrere Marken fallen.
             while not self.im_ziel[i]:

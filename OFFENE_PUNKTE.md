@@ -2441,3 +2441,39 @@ je Bild an eigener Zeit, davon nur 0,15 ms fürs Bauen der Zeilen. Der
 Rest ist Python-Logik je Zeile — unter anderem wird für jede der dreißig
 Zeilen die Liste aller Zwischenfälle dieses Autos neu gefiltert. Das
 stand nicht in D1 bis D10 und ist nicht gebaut.
+
+**Die Rennschleife: 13.906 → 10.696 ms je Rennen** (−23 %), bei
+unverändertem Fingerabdruck. Gebaut wurden E1, E2, E5, E7, E8 und der
+billige Teil von E6:
+
+| | was | Ersparnis |
+| --- | --- | ---: |
+| E1 | `np.roll` durch einen fertigen Indexvektor ersetzt | 6,42 → 0,21 µs je Aufruf |
+| E2 | `np.clip(a, …)` durch `a.clip(…)` ersetzt | 2,12 → 1,05 µs |
+| E5 | `np.floor` stand zweimal für denselben Wert | 2,65 → 2,32 µs |
+| E6 | `np.argsort(a)` durch `a.argsort()` ersetzt | −2 µs Wrapper |
+| E7 | `np.flatnonzero(m)` durch `m.nonzero()[0]` ersetzt | 1,13 → 0,28 µs |
+| E8 | Unfallrate beim Wetterwechsel statt bei jedem Paar | 484.220 → wenige Aufrufe |
+
+**Drei Vorschläge haben die Messung nicht überstanden:**
+
+**E3 — die konstanten Tempofaktoren zusammenziehen.** Geht nicht ohne
+Verhaltensänderung. Der Ausdruck `x * grip * form * reifen * defekt *
+kenntnis * …` wird von links nach rechts ausgewertet; ein vorberechnetes
+Teilprodukt ändert die Klammerung, und Gleitkomma-Multiplikation ist
+nicht assoziativ. Ein einziges verschobenes Bit kann über 89.439
+Schritte ein Überholmanöver kippen. Die bitgenaue Variante — dieselben
+Faktoren an Ort und Stelle multiplizieren statt neue Arrays anzulegen —
+bringt gemessen 2,09 → 2,02 µs, also drei Prozent. Nicht gebaut.
+
+**E4 — Ermüdung und Kaltreifen als Tabelle.** Dasselbe Problem: Eine
+vorberechnete Kurve liefert gerundete Zwischenwerte, keine identischen.
+Nicht gebaut.
+
+**E6 — `argsort` nur bei Änderung.** Die Prüfung, ob die Reihenfolge
+noch stimmt, kostet gemessen **1,70 µs** — das Sortieren selbst 1,63.
+Der Vorschlag war also von vornherein ein Verlust. Gebaut wurde
+stattdessen nur, den Wrapper zu umgehen.
+
+Die Lehre ist dieselbe wie bei D3: Ein Vorschlag mit einer plausiblen
+Begründung ist noch keine Verbesserung. Gemessen wird vorher.
