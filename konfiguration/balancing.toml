@@ -993,20 +993,39 @@ summe_ab_0_euro = 4_900_000
 # GDD 10 – Einnahmen
 # ---------------------------------------------------------------------------
 [preisgeld]
-# Siegpraemie je Liga; Zwischenligen werden interpoliert (Verfahren siehe [offen])
+# Punkt 95: Zehn Ligen, zehn feste Siegpraemien - interpoliert wird nichts
+# mehr. Die Kurve laesst sich nicht aus GDD 10 ableiten: Dort beginnt die
+# unterste Liga bei S = 157 und bekommt 4.000 EUR, die neue unterste
+# beginnt bei S = 20.000 und ist damit etwa so stark wie die alte Liga 10
+# (370.000 EUR). Folgte das Preisgeld der Staerke, laege die Spanne vom
+# Anfaenger zum Weltmeister bei 1,5 - eine Karriere ohne Aufstiegslohn.
+#
+# Verankert ist sie deshalb neu: Liga 1 bleibt bei 1.300.000 EUR wie im
+# GDD, Liga 10 steht bei 60.000 EUR, dazwischen geometrisch mit rund 1,41
+# je Liga. Die 60.000 stammen aus dem GDD-Ziel "Aufstieg in etwa 1,5
+# Saisons": Ein Ligaschritt kostet in Liga 10 nach der Kostenkurve rund
+# 365.000 EUR je Auto, bei vier Autos 1,46 Mio. ueber 30 Rennen; ein
+# Mittelfeldteam holt je Rennen etwa 0,8 Siegpraemien.
 [preisgeld.siegpraemie_euro]
-20 = 4_000
-15 = 100_000
-10 = 370_000
-5 = 840_000
+10 = 60_000
+9 = 85_000
+8 = 120_000
+7 = 170_000
+6 = 235_000
+5 = 330_000
+4 = 470_000
+3 = 660_000
+2 = 920_000
 1 = 1_300_000
 
 [preisgeld.anteil]
-# Anteil an der Siegpraemie je Platz; im GDD sind nur diese Stuetzstellen genannt
+# Anteil an der Siegpraemie je Platz; im GDD sind nur diese Stuetzstellen
+# genannt. Punkt 95: Das Feld hat 40 Autos, die Kurve endet also auf
+# Platz 40 statt 30 - sonst gingen zehn Autos leer aus.
 1 = 1.00
 2 = 0.80
 3 = 0.65
-30 = 0.05
+40 = 0.05
 
 [erfahrung]
 # EP-Betraege = Preisgeld / 10
@@ -2406,16 +2425,17 @@ verlust_am_ende_bei_maximum = 0.005
 [preisgeld.interpolation]
 # Entscheidung A: logarithmisch. Das GDD begruendet die Preisgelder relativ
 # ("Aufstieg in etwa 1,5 Saisons"), also muss auch die Interpolation ueber
-# das Verhaeltnis laufen. Linear erzeugt zwischen Liga 20 und 19 einen
-# Sprung von 5,8x, logarithmisch rund 1,9x je Liga.
+# das Verhaeltnis laufen. Seit Punkt 95 steht jede der zehn Ligen
+# ausdruecklich in der Tabelle; die Interpolation greift nur noch, wenn
+# jemand eine Liga ergaenzt, ohne ihre Praemie zu nennen.
 verfahren = "logarithmisch"
 
 [preisgeld.anteil_kurve]
-# Entscheidung A: geometrisch von Platz 3 (65 %) auf Platz 30 (5 %).
-# Ergibt einen Topf von rund 8,47 Siegpraemien je Rennen.
+# Entscheidung A: geometrisch von Platz 3 (65 %) auf den letzten Platz
+# (5 %). Punkt 95: Der letzte ist jetzt der vierzigste.
 verfahren = "geometrisch"
 von_platz = 3
-bis_platz = 30
+bis_platz = 40
 
 [preisgeld.startgeld]
 # Entscheidung A: Sockel unterhalb des Anteils fuer Platz 30.

@@ -158,24 +158,35 @@ def test_siegpraemien_treffen_die_stuetzstellen(k) -> None:
 
 
 def test_siegpraemie_waechst_mit_der_liga(k) -> None:
-    werte = [ei.siegpraemie(k, liga) for liga in range(20, 0, -1)]
+    unterste = k.wert("ligen", "anzahl")
+    werte = [ei.siegpraemie(k, liga) for liga in range(unterste, 0, -1)]
     assert werte == sorted(werte)
 
 
-def test_logarithmische_interpolation_haelt_das_verhaeltnis(k) -> None:
-    """Entscheidung zu Punkt 12: gleichmaessiger Faktor je Liga."""
+def test_die_praemien_steigen_gleichmaessig(k) -> None:
+    """Punkt 95: Zehn feste Werte, geometrisch mit rund 1,41 je Liga.
+
+    Von 60.000 in der untersten Liga auf 1.300.000 in Liga 1 - eine
+    Spanne von gut 21, damit ein Aufstieg sich auch finanziell lohnt.
+    """
+    unterste = k.wert("ligen", "anzahl")
     verhaeltnisse = [
-        ei.siegpraemie(k, liga - 1) / ei.siegpraemie(k, liga) for liga in range(20, 15, -1)
+        ei.siegpraemie(k, liga - 1) / ei.siegpraemie(k, liga)
+        for liga in range(unterste, 1, -1)
     ]
-    assert max(verhaeltnisse) - min(verhaeltnisse) < 0.02
+    assert all(1.3 < v < 1.5 for v in verhaeltnisse), verhaeltnisse
+    assert ei.siegpraemie(k, 1) / ei.siegpraemie(k, unterste) > 20
 
 
 def test_anteile_treffen_die_vorgaben(k) -> None:
-    """GDD 10: P1 100 %, P2 80 %, P3 65 %, P30 5 %."""
+    """GDD 10: P1 100 %, P2 80 %, P3 65 %, letzter Platz 5 %.
+
+    Punkt 95: Der letzte Platz ist seit dem Ligenumbau der vierzigste.
+    """
     assert ei.anteil(k, 1) == pytest.approx(1.00)
     assert ei.anteil(k, 2) == pytest.approx(0.80)
     assert ei.anteil(k, 3) == pytest.approx(0.65)
-    assert ei.anteil(k, 30) == pytest.approx(0.05)
+    assert ei.anteil(k, k.wert("rennen", "autos")) == pytest.approx(0.05)
 
 
 def test_anteile_fallen_monoton(k) -> None:
@@ -198,9 +209,10 @@ def test_erfahrung_folgt_dem_preisgeld(k) -> None:
 
 
 def test_erfahrung_belohnt_platz_und_ueberholen(k) -> None:
-    ohne = ei.erfahrung_fuer(k, 20, platz=20, ueberholmanoever=0)
-    mit_manoever = ei.erfahrung_fuer(k, 20, platz=20, ueberholmanoever=10)
-    besser = ei.erfahrung_fuer(k, 20, platz=1, ueberholmanoever=0)
+    unterste = k.wert("ligen", "anzahl")
+    ohne = ei.erfahrung_fuer(k, unterste, platz=20, ueberholmanoever=0)
+    mit_manoever = ei.erfahrung_fuer(k, unterste, platz=20, ueberholmanoever=10)
+    besser = ei.erfahrung_fuer(k, unterste, platz=1, ueberholmanoever=0)
     assert mit_manoever > ohne
     assert besser > ohne
     # Auch der Letzte bekommt etwas - sonst kaeme ein Anfaenger nie in Gang.
@@ -210,12 +222,14 @@ def test_erfahrung_belohnt_platz_und_ueberholen(k) -> None:
 def test_startgeld_ist_ein_sockel(k) -> None:
     """Entscheidung zu Punkt 14: 5 % der Siegpraemie fuer jeden Teilnehmer.
 
-    Das ist genau so viel wie der Anteil fuer Platz 30, der laut GDD 10
-    ebenfalls 5 % betraegt - der Letzte bekommt damit das Doppelte des
-    Sockels, der Sieger 105 % statt 100 %.
+    Das ist genau so viel wie der Anteil fuer den letzten Platz, der laut
+    GDD 10 ebenfalls 5 % betraegt - der Letzte bekommt damit das Doppelte
+    des Sockels, der Sieger 105 % statt 100 %. Seit Punkt 95 ist der
+    letzte Platz der vierzigste.
     """
-    for liga in (20, 10, 1):
-        assert ei.startgeld(k, liga) == ei.preisgeld(k, liga, 30)
+    letzter = k.wert("rennen", "autos")
+    for liga in (k.wert("ligen", "anzahl"), 5, 1):
+        assert ei.startgeld(k, liga) == ei.preisgeld(k, liga, letzter)
         assert ei.startgeld(k, liga) < ei.preisgeld(k, liga, 1) / 10
 
 
@@ -258,15 +272,20 @@ def test_laufzeit_und_gueltigkeit_im_band(k) -> None:
 
 def test_angebote_skalieren_mit_der_liga(k) -> None:
     """GDD 10: hoehere Ligen bringen bessere Sponsoren."""
-    unten = sp.wuerfle_angebote(k, 20, 1, Seedquelle(3))
+    unten = sp.wuerfle_angebote(k, k.wert("ligen", "anzahl"), 1, Seedquelle(3))
     oben = sp.wuerfle_angebote(k, 1, 1, Seedquelle(3))
-    assert max(a.grundbetrag for a in oben["auto_haupt"]) > max(
+    # Punkt 95: Die Sponsoren folgen der Siegpraemie, und deren Spanne ist
+    # mit zehn Ligen gut 21 statt der 325 von vorher. Gemessen wird
+    # deshalb gegen die Praemien und nicht gegen eine feste Zahl.
+    spanne = ei.siegpraemie(k, 1) / ei.siegpraemie(k, k.wert("ligen", "anzahl"))
+    gemessen = max(a.grundbetrag for a in oben["auto_haupt"]) / max(
         a.grundbetrag for a in unten["auto_haupt"]
-    ) * 100
+    )
+    assert gemessen > spanne * 0.8
 
 
 def test_hauptsponsor_zahlt_am_meisten(k) -> None:
-    for liga in (20, 10, 1):
+    for liga in (10, 5, 1):
         haupt = sp.grundbetrag_je_platz(k, liga, "auto_haupt")
         for platz in ("anzug", "helm", "muetze", "auto_neben_1"):
             assert haupt > sp.grundbetrag_je_platz(k, liga, platz)
@@ -297,7 +316,7 @@ def test_unbekannter_platz_meldet_fehler(k) -> None:
 
 # -- Karriere ---------------------------------------------------------------
 def test_karriere_startet_am_ersten_januar(k) -> None:
-    c = kr.beginne(k, 2026, liga=20)
+    c = kr.beginne(k, 2026, liga=10)
     assert c.heute.month == 1 and c.heute.day == 1
     assert c.konto.geld == ei.startkapital(k)
     assert c.konto.erfahrung == ei.starterfahrung(k)
@@ -312,7 +331,7 @@ def test_der_erfahrungssockel_traegt_den_ersten_tag(k) -> None:
     Rennen keinen einzigen Tag belegen. Der Sockel muss mindestens den
     ersten Trainings- **und** den ersten Werkstattschritt tragen.
     """
-    c = kr.beginne(k, 2026, liga=20)
+    c = kr.beginne(k, 2026, liga=10)
     c.belege_tag("D1")
     c.belege_tag("F10")
     assert c.wert("D1") == 10
@@ -321,7 +340,7 @@ def test_der_erfahrungssockel_traegt_den_ersten_tag(k) -> None:
 
 
 def test_tag_belegen_hebt_den_wert(k) -> None:
-    c = kr.beginne(k, 2026, liga=20)
+    c = kr.beginne(k, 2026, liga=10)
     # Ein belegter Tag kostet seit Punkt 69 auch etwas Erfahrung. Hier
     # geht es um die Plaetze, nicht um die Kasse - also ein Vorrat.
     c.konto = c.konto.mit(erfahrung=1_000)
@@ -336,21 +355,21 @@ def test_tag_belegen_hebt_den_wert(k) -> None:
 
 
 def test_an_rennwochenenden_laesst_sich_nichts_belegen(k) -> None:
-    c = kr.beginne(k, 2026, liga=20)
+    c = kr.beginne(k, 2026, liga=10)
     c.bis_zum_rennen()
     with pytest.raises(kr.KarriereFehler, match="nicht nutzbar"):
         c.belege_tag("D1")
 
 
 def test_sprung_zum_rennen(k) -> None:
-    c = kr.beginne(k, 2026, liga=20)
+    c = kr.beginne(k, 2026, liga=10)
     tage = c.bis_zum_rennen()
     assert c.heute == c.saison.erstes_rennen
     assert tage == (c.saison.erstes_rennen - c.saison.tage[0].datum).days
 
 
 def test_rennen_bringt_geld_und_erfahrung(k) -> None:
-    c = kr.beginne(k, 2026, liga=20)
+    c = kr.beginne(k, 2026, liga=10)
     vorher = c.konto.geld
     c.verbuche_rennen(platz=5, ueberholmanoever=3, kilometer_je_wetter={"regen": 100.0})
     assert c.konto.geld > vorher
@@ -370,7 +389,7 @@ def test_sponsorengeld_kommt_dazu(k) -> None:
 
 
 def test_wetterfaehigkeiten_zahlen_aus_ihrem_topf(k) -> None:
-    c = kr.beginne(k, 2026, liga=20)
+    c = kr.beginne(k, 2026, liga=10)
     vorschau = c.vorschau("regenfahren")
     assert vorschau.wettertopf == "regen"
     assert vorschau.erfahrung > 0
@@ -418,7 +437,7 @@ def test_ereignisse_zaehlen_je_rennen_nicht_je_fahrer(k) -> None:
     Die Lage gehoert dem Team. Wurde sie bei jedem Auto weitergezaehlt,
     lief jedes Ereignis viermal so schnell ab.
     """
-    c = kr.beginne(k, 2026, liga=20, fahrer=(1, 2, 3, 4))
+    c = kr.beginne(k, 2026, liga=10, fahrer=(1, 2, 3, 4))
     schluessel = next(
         eintrag["schluessel"]
         for eintrag in kern_ereignis.liste(k)
@@ -436,9 +455,9 @@ def test_ereignisse_zaehlen_je_rennen_nicht_je_fahrer(k) -> None:
 
 def test_ein_sponsorenvertrag_laeuft_seine_rennen(k) -> None:
     """Punkt 70: Ein Vertrag ueber N Rennen zahlt genau N-mal."""
-    c = kr.beginne(k, 2026, liga=20)
+    c = kr.beginne(k, 2026, liga=10)
     angebot = next(
-        iter(sp.wuerfle_angebote(k, 20, 0, Seedquelle(3)).values())
+        iter(sp.wuerfle_angebote(k, 10, 0, Seedquelle(3)).values())
     )[0]
     c.unterschreibe(angebot)
     gezahlt = 0
