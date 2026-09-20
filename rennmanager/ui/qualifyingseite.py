@@ -45,7 +45,9 @@ from PySide6.QtWidgets import (
 from rennmanager.kern.qualifying import Lage, Qualifying
 from rennmanager.kern.zeit import formatiere_dauer, formatiere_rueckstand
 from rennmanager.konfiguration import Konfiguration
+from rennmanager.ui.streckenansicht import Streckenansicht
 from rennmanager.ui.tabellen import verbinde_fahrerkarte
+from rennmanager.ui.wetterband import Wetterband
 
 FARBE_SCHNELLER = QColor("#2e7d32")
 FARBE_LANGSAMER = QColor("#c62828")
@@ -102,6 +104,11 @@ class Qualifyingseite(QWidget):
 
         spalte = QVBoxLayout(self)
         spalte.addLayout(self._baue_wiedergabe())
+        # Punkt 93 (A13): Wo war es trocken, wo nass. Direkt unter der
+        # Leiste, damit Zeitachse und Band dieselbe Breite haben und
+        # uebereinanderliegen.
+        self._wetterband = Wetterband()
+        spalte.addWidget(self._wetterband)
 
         inhalt = QHBoxLayout()
         inhalt.addWidget(self._baue_rangliste(), stretch=3)
@@ -129,6 +136,18 @@ class Qualifyingseite(QWidget):
         self._sofort.setEnabled(False)
         self._sofort.clicked.connect(self._zum_ende)
 
+        # Punkt 93 (A23): Bei 75 Minuten Session ist das der
+        # meistgebrauchte Knopf. Zwischen zwei Zielankuenften passiert
+        # nichts, was in der Tafel steht - dafuer den Zeitraffer
+        # hochzudrehen und wieder herunter ist Arbeit.
+        self._naechste = QPushButton("Naechste Ankunft")
+        self._naechste.setEnabled(False)
+        self._naechste.setToolTip(
+            "Springt zu dem Augenblick, in dem der naechste Fahrer ueber die "
+            "Linie kommt - dorthin, wo sich die Tafel aendert."
+        )
+        self._naechste.clicked.connect(self._zur_naechsten_ankunft)
+
         self._uhrzeit = QLabel("0:00.000")
         self._stand = QLabel("Noch kein Qualifying gefahren")
         self._fortschritt = QProgressBar()
@@ -138,6 +157,7 @@ class Qualifyingseite(QWidget):
         zeile.addWidget(self._zurueck)
         zeile.addWidget(QLabel("Zeitraffer:"))
         zeile.addWidget(self._raffer)
+        zeile.addWidget(self._naechste)
         zeile.addWidget(self._sofort)
         zeile.addWidget(self._uhrzeit)
         zeile.addWidget(self._stand)
@@ -173,6 +193,17 @@ class Qualifyingseite(QWidget):
         spalte = QVBoxLayout(seite)
         spalte.setContentsMargins(0, 0, 0, 0)
 
+        # Punkt 93 (A9): Die Ansicht gibt es fuers Rennen schon - hier
+        # faehrt sie die gezeiteten Runden ab. Wer in der Box steht oder
+        # sich aufwaermt, ist **nicht** darauf: Der Vorschlag war "ein
+        # Punkt, der die schnelle Runde abfaehrt", und ein Feld aus
+        # Aufwaermpunkten wuerde die zwei, auf die es ankommt, zudecken.
+        self._ansicht = Streckenansicht()
+        streckenkasten = QGroupBox("Strecke")
+        streckenspalte = QVBoxLayout(streckenkasten)
+        streckenspalte.addWidget(self._ansicht)
+        spalte.addWidget(streckenkasten, stretch=2)
+
         self._wetterfeld = QFormLayout()
         wetterkasten = QGroupBox("Wetter der Session")
         wetterkasten.setLayout(self._wetterfeld)
@@ -200,7 +231,9 @@ class Qualifyingseite(QWidget):
         sektoren = len(session.fahrten[0].sektoren_ms) if session.fahrten else 4
         self._rangliste.setHeaderLabels(self._kopfzeilen(sektoren))
         self._fortschritt.setRange(0, max(session.dauer_ms, 1))
-        for knopf in (self._abspielen, self._zurueck, self._sofort):
+        self._wetterband.zeige(session.wetter, session.dauer_ms)
+        self._ansicht.zeige(session.strecke)
+        for knopf in (self._abspielen, self._zurueck, self._sofort, self._naechste):
             knopf.setEnabled(True)
         self._waehle_zeitraffer()
         self._fuelle_wetter()
@@ -239,6 +272,24 @@ class Qualifyingseite(QWidget):
             self._halte_an()
             self._springe(self._session.dauer_ms)
 
+    def _zur_naechsten_ankunft(self) -> None:
+        """Punkt 93 (A23): Vor zu dem Moment, in dem sich die Tafel aendert.
+
+        Gesprungen wird **auf** die Ankunft, nicht eine Millisekunde
+        davor: Dort steht die neue Zeit schon in der Tafel und der
+        Verdraengungshinweis darueber. Ist keine mehr uebrig, geht es
+        ans Ende - dann ist die Session durch, und das ist die ehrliche
+        Antwort auf "was kommt noch".
+
+        Die Wiedergabe laeuft dabei weiter, wenn sie lief: Der Knopf ist
+        ein Vorspulen, kein Anhalten.
+        """
+        if self._session is None:
+            return
+        jetzt = self._zeit_ms
+        kommende = [f.ziel_ms for f in self._session.fahrten if f.ziel_ms > jetzt]
+        self._springe(min(kommende) if kommende else self._session.dauer_ms)
+
     def _takt(self) -> None:
         if self._session is None:
             return
@@ -264,6 +315,8 @@ class Qualifyingseite(QWidget):
         zeit = self._zeit_ms
         self._uhrzeit.setText(formatiere_dauer(int(zeit)))
         self._fortschritt.setValue(int(zeit))
+        self._wetterband.setze_marke(zeit)
+        self._zeichne_strecke(zeit)
         if not self._tabelle_faellig(zeit):
             return
 
@@ -319,6 +372,27 @@ class Qualifyingseite(QWidget):
             self._fuelle_aufstellung()
         else:
             self._leere_aufstellung()
+
+    def _zeichne_strecke(self, zeit: float) -> None:
+        """Punkt 93 (A9): Die Punkte derer, die gerade auf der Runde sind.
+
+        Laeuft **ausserhalb** des Takt-Deckels der Tabelle (D9): Die
+        Karte soll fluessig laufen, auch wenn die Zeiten nur alle 200 ms
+        nachgezogen werden.
+        """
+        session = self._session
+        if session is None:
+            return
+        punkte = []
+        for stand in session.lage_zu(zeit):
+            ort = session.ort_auf_der_runde(stand, zeit)
+            if ort is None:
+                continue
+            teilnehmer = session.teilnehmer[stand.fahrt.teilnehmer]
+            punkte.append(
+                (float(ort), teilnehmer.kuerzel, teilnehmer.farbe, teilnehmer.ist_spieler)
+            )
+        self._ansicht.zeige_autos(punkte)
 
     def _zeige_verdraengung(self, ankunft) -> None:
         """Punkt 93 (A7): Wer wen gerade um wie viel verdraengt hat.

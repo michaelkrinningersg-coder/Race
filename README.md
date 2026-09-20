@@ -447,6 +447,28 @@ hat. Das Fenster zaehlt in **Sessionzeit**, nicht in Bildschirmzeit: Bei
 50-fachem Zeitraffer waere eine Sekunde Bildschirmzeit fast eine Minute
 Session, und der Hinweis stuende dauernd da.
 
+Dazu drei Dinge um die Tafel herum:
+
+* **"Naechste Ankunft"** springt zu dem Augenblick, in dem der naechste
+  Fahrer ueber die Linie kommt - dorthin also, wo sich die Tafel
+  aendert. Bei 75 Minuten Session ist das der meistgebrauchte Knopf;
+  dafuer den Zeitraffer hochzudrehen und wieder herunter ist Arbeit.
+  Gesprungen wird **auf** die Ankunft, nicht eine Millisekunde davor:
+  Dort steht die neue Zeit schon da.
+* **Das Wetterband** unter der Wiedergabeleiste zeigt den ganzen
+  Verlauf: hell ist trocken, dunkel ist nass, ein Strich sagt, wo die
+  Wiedergabe steht. Die Farben sind **sequenziell**, nicht kategorial -
+  "wie nass" ist eine Groesse mit Richtung. Ein Regenabschnitt in
+  Minute 40 ist der Grund, warum eine Strategie aufgeht oder nicht, und
+  bisher sah man ihn erst, wenn man hineinfuhr. Dasselbe Band steht
+  spaeter im Rennen.
+* **Die Streckengrafik** faehrt die gezeiteten Runden ab. Wer in der Box
+  steht oder sich aufwaermt, ist nicht darauf - ein Feld aus
+  Aufwaermpunkten wuerde die zwei zudecken, auf die es ankommt. Gerechnet
+  wird der Ort ueber die **Sektorgrenzen**: Sie sind die einzigen
+  Stellen, an denen Zeit und Ort beide bekannt sind, innerhalb eines
+  Sektors wird linear interpoliert.
+
 ##### Warum Lila mitlaeuft und Gruen und Rot einfrieren
 
 Die Splits sind dreifarbig, und die beiden Farbgruppen messen bewusst

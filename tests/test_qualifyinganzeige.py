@@ -455,3 +455,113 @@ def test_nach_dem_fenster_leuchtet_die_pole_nicht_mehr(qtbot, konfig, session) -
     seite._springe(kunst.dauer_ms)
     erste = seite._rangliste.topLevelItem(0)
     assert erste.background(qs.SPALTE_AUTO).color() != qs.FARBE_NEUE_POLE
+
+
+# -- Punkt 93, Block 2 ------------------------------------------------------
+def test_der_knopf_springt_zur_naechsten_zielankunft(seite, session) -> None:
+    """A23: Bei 75 Minuten Session der meistgebrauchte Knopf."""
+    ziele = sorted(f.ziel_ms for f in session.fahrten)
+    seite._springe(0)
+    seite._zur_naechsten_ankunft()
+    assert seite.zeit_ms == ziele[0]
+    seite._zur_naechsten_ankunft()
+    assert seite.zeit_ms == ziele[1]
+
+
+def test_der_sprung_landet_auf_der_ankunft_nicht_davor(seite, session) -> None:
+    """Sonst stuende die neue Zeit noch nicht in der Tafel."""
+    ziele = sorted(f.ziel_ms for f in session.fahrten)
+    seite._springe(0)
+    seite._zur_naechsten_ankunft()
+    fertig = [z for z in _zeilen(seite) if z[qs.SPALTE_POS]]
+    assert len(fertig) == 1, "Genau der eben Angekommene steht mit Position da"
+    assert seite.zeit_ms == ziele[0]
+
+
+def test_nach_der_letzten_ankunft_geht_es_ans_ende(seite, session) -> None:
+    seite._springe(max(f.ziel_ms for f in session.fahrten))
+    seite._zur_naechsten_ankunft()
+    assert seite.zeit_ms == session.dauer_ms
+
+
+def test_das_wetterband_zeigt_den_ganzen_verlauf(seite, session) -> None:
+    """A13: Wo war es trocken, wo nass."""
+    band = seite._wetterband
+    abschnitte = band.abschnitte
+    assert len(abschnitte) == len(session.wetter.abschnitte)
+    assert [zustand for zustand, _von, _bis in abschnitte] == list(
+        session.wetter.zustaende
+    )
+    # Lueckenlos von null bis zum Sessionende.
+    assert abschnitte[0][1] == 0
+    assert abschnitte[-1][2] == session.dauer_ms
+    for vorher, nachher in zip(abschnitte, abschnitte[1:], strict=False):
+        assert vorher[2] == nachher[1]
+
+
+def test_die_marke_des_wetterbands_laeuft_mit(seite, session) -> None:
+    seite._springe(0)
+    assert seite._wetterband._marke_ms == 0
+    seite._springe(session.dauer_ms // 2)
+    assert seite._wetterband._marke_ms == session.dauer_ms // 2
+
+
+def test_nasser_ist_dunkler(konfig) -> None:
+    """Die Farben sind sequenziell, nicht kategorial.
+
+    "Wie nass" ist eine Groesse mit Richtung. Waeren die Toene bunt
+    durcheinander, muesste man die Legende lesen, statt das Band zu
+    sehen.
+    """
+    from rennmanager.ui.wetterband import Wetterband
+
+    reihe = ["trocken", "heiss", "wechselhaft", "regen", "starkregen"]
+    helligkeit = [Wetterband.farbe_fuer(z).lightness() for z in reihe]
+    # Heiss ist der eine Ausreisser - es ist ein Sonnenton, kein Nasston.
+    assert helligkeit[2] > helligkeit[3] > helligkeit[4]
+    assert helligkeit[0] > helligkeit[2]
+
+
+# -- Punkt 93, Block 3 ------------------------------------------------------
+def test_die_streckengrafik_zeigt_die_strecke_der_session(seite, session) -> None:
+    """A9: Die Ansicht gibt es fuers Rennen schon."""
+    assert seite._ansicht.strecke is session.strecke
+
+
+def test_auf_der_strecke_stehen_nur_die_auf_der_schnellen_runde(seite, session):
+    """Ein Feld aus Aufwaermpunkten wuerde die zwei zudecken, auf die es ankommt."""
+    fahrt = session.fahrten[0]
+    mitte = (fahrt.runde_ab_ms + fahrt.ziel_ms) / 2
+    seite._springe(mitte)
+
+    auf_der_runde = {
+        session.teilnehmer[s.fahrt.teilnehmer].kuerzel
+        for s in session.lage_zu(mitte)
+        if s.lage is ql.Lage.SCHNELLE_RUNDE
+    }
+    assert auf_der_runde, "Zu diesem Zeitpunkt muss jemand auf der Runde sein"
+    gezeichnet = {kuerzel for _ort, kuerzel, _farbe, _spieler in seite._ansicht._autos}
+    assert gezeichnet == auf_der_runde
+
+
+def test_am_anfang_und_am_ende_ist_die_strecke_leer(seite, session) -> None:
+    seite._springe(0)
+    assert seite._ansicht._autos == []
+    seite._springe(session.dauer_ms)
+    assert seite._ansicht._autos == []
+
+
+def test_der_punkt_wandert_die_runde_entlang(seite, session) -> None:
+    """Sonst waere es kein abfahrender Punkt, sondern ein stehender."""
+    fahrt = session.fahrten[0]
+    kuerzel = session.teilnehmer[fahrt.teilnehmer].kuerzel
+    orte = []
+    for anteil in (0.1, 0.4, 0.7, 0.95):
+        seite._springe(fahrt.runde_ab_ms + anteil * fahrt.zeit_ms)
+        orte += [
+            ort for ort, kz, _farbe, _spieler in seite._ansicht._autos if kz == kuerzel
+        ]
+    assert len(orte) == 4
+    assert orte == sorted(orte)
+    assert orte[0] < session.strecke.laenge_m * 0.2
+    assert orte[-1] > session.strecke.laenge_m * 0.9

@@ -187,6 +187,41 @@ class Qualifying:
     def startplatz(self, teilnehmer: int) -> int:
         return self.aufstellung.index(teilnehmer) + 1
 
+    def ort_auf_der_runde(self, stand: Stand, zeit_ms: float) -> float | None:
+        """Wo das Auto gerade auf seiner gezeiteten Runde ist, in Metern.
+
+        Gebraucht fuer die Streckengrafik im Qualifying (Punkt 93, A9):
+        ein Punkt, der die schnelle Runde abfaehrt. Wer in der Box steht,
+        auf der Aufwaermrunde ist oder schon im Ziel, hat keinen Ort -
+        dann steht hier ``None``, und die Grafik zeichnet ihn nicht.
+
+        **Gerechnet wird ueber die Sektorgrenzen.** Sie sind die einzigen
+        Stellen, an denen Zeit und Ort beide bekannt sind; innerhalb
+        eines Sektors wird linear interpoliert. Genauer geht es nicht,
+        ohne das Geschwindigkeitsprofil noch einmal zu fahren - und fuer
+        einen wandernden Punkt genuegt es: Der Fehler ist am groessten in
+        der Mitte eines Sektors und dort hoechstens ein paar Dutzend
+        Meter auf gut einem Kilometer.
+        """
+        if stand.lage is not Lage.SCHNELLE_RUNDE:
+            return None
+        fahrt = stand.fahrt
+        sektoren = self.strecke.sektoren
+        if not sektoren or len(fahrt.sektoren_ms) != len(sektoren):
+            return None
+
+        # Anfang und Ende jedes Sektors, in Zeit und in Metern.
+        uhr = float(fahrt.runde_ab_ms)
+        gelaufen = 0.0
+        for sektor, ende in zip(sektoren, fahrt.sektorenden_ms, strict=True):
+            if zeit_ms < ende:
+                dauer = max(float(ende) - uhr, 1.0)
+                anteil = min(max((zeit_ms - uhr) / dauer, 0.0), 1.0)
+                return gelaufen + anteil * sektor.laenge_m
+            uhr = float(ende)
+            gelaufen += sektor.laenge_m
+        return gelaufen
+
     # -- Was gerade passiert ist (Punkt 93) --------------------------------
     def letzte_zielankunft(self, zeit_ms: float, fenster_ms: float):
         """Die juengste Zielankunft - oder ``None``, wenn sie zu lange her ist.
