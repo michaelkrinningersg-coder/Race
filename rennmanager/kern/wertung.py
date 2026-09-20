@@ -211,6 +211,9 @@ class Livezeile:
     zuwachs: int
     platz_vorher: int
     punkte_vorher: int
+    # Punkt 95: In welcher Liga dieser Fahrer steht. In der Ligasicht ist
+    # das immer dieselbe, in der Weltsicht unterscheidet sie die Zeilen.
+    liga: int = 0
 
     @property
     def veraenderung(self) -> int:
@@ -259,9 +262,79 @@ def livewertung(
                 zuwachs=zuwachs.get(fahrer, 0),
                 platz_vorher=vorher.get(fahrer, platz),
                 punkte_vorher=punkte_vorher.get(fahrer, 0),
+                liga=tabelle.liga,
             )
         )
     return zeilen
+
+
+def weltlivewertung(
+    konfiguration: Konfiguration,
+    tabellen: dict[int, Tabelle],
+    liga: int,
+    ergebnisse: list[Rennergebnis],
+) -> list[Livezeile]:
+    """Die Meisterschaft ueber alle Ligen, waehrend ein Rennen laeuft.
+
+    Wie ``livewertung``, nur ueber alle Tabellen: Zu den Punkten bis zu
+    diesem Rennen kommt der Zuwachs der Fahrer, die gerade fahren.
+
+    **Nur eine Liga faehrt.** Beim gefuehrten Wochenende laufen die
+    uebrigen erst nach dem eigenen Rennen (siehe ``Wochenendlauf``);
+    ihre Zeilen stehen hier deshalb auf dem Stand vor diesem Wochenende.
+    Der Weltstand waehrend des Rennens ist damit eine Vorschau, die sich
+    am Ende des Wochenendes noch einmal bewegt.
+
+    Rein rechnerisch und ohne Nebenwirkung - die Tabellen bleiben, wie
+    sie sind.
+    """
+    vorher = {
+        eintrag.fahrer: platz
+        for platz, (_liga, eintrag) in enumerate(
+            weltstand(konfiguration, tabellen), start=1
+        )
+    }
+    punkte_vorher: dict[int, int] = {}
+    liga_von: dict[int, int] = {}
+    platzierungen_vorher: dict[int, list[int]] = {}
+    for nummer, tabelle in tabellen.items():
+        for eintrag in tabelle.eintraege.values():
+            punkte_vorher[eintrag.fahrer] = eintrag.punkte
+            liga_von[eintrag.fahrer] = nummer
+            platzierungen_vorher[eintrag.fahrer] = eintrag.platzierungen
+
+    zuwachs = {e.fahrer: punkte_fuer(konfiguration, liga, e) for e in ergebnisse}
+    platzierungen = {e.fahrer: e.rennplatz for e in ergebnisse}
+    for fahrer in zuwachs:
+        liga_von.setdefault(fahrer, liga)
+
+    def schluessel(fahrer: int) -> tuple:
+        # Wie ``weltstand``: Punkte, dann die hoehere Liga. Bei
+        # Gleichstand innerhalb einer Liga entscheidet, wer im laufenden
+        # Rennen weiter vorn ist - das ist die Zahl, die sich gerade
+        # aendert; fuer die uebrigen Ligen die bisherigen Platzierungen.
+        gesamt = punkte_vorher.get(fahrer, 0) + zuwachs.get(fahrer, 0)
+        return (
+            -gesamt,
+            liga_von.get(fahrer, liga),
+            platzierungen.get(fahrer, 10**6),
+            [-anzahl for anzahl in platzierungen_vorher.get(fahrer, ())],
+            fahrer,
+        )
+
+    beteiligt = set(punkte_vorher) | set(zuwachs)
+    return [
+        Livezeile(
+            fahrer=fahrer,
+            platz=platz,
+            punkte=punkte_vorher.get(fahrer, 0) + zuwachs.get(fahrer, 0),
+            zuwachs=zuwachs.get(fahrer, 0),
+            platz_vorher=vorher.get(fahrer, platz),
+            punkte_vorher=punkte_vorher.get(fahrer, 0),
+            liga=liga_von.get(fahrer, liga),
+        )
+        for platz, fahrer in enumerate(sorted(beteiligt, key=schluessel), start=1)
+    ]
 
 
 # ---------------------------------------------------------------------------

@@ -405,6 +405,9 @@ class Rennwochenendeseite(QWidget):
             self._wochenende.strecke,
             self._wochenende.qualifying,
             tabelle=self._lauf.tabelle(self._wochenende.liga),
+            # Punkt 95: Damit sich die Meisterschaft im Rennen auf alle
+            # zehn Ligen umschalten laesst.
+            tabellen=self._lauf.tabellen,
         )
         self._schritt = 2
         self._weiter.setEnabled(True)

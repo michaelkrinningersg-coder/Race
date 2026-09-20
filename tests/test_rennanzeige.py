@@ -428,8 +428,10 @@ def test_der_ticker_ist_ein_blatt_neben_den_tabellen(gefahren) -> None:
 # --- Punkt 73: Live-Meisterschaftsstand -----------------------------------
 # Spalten des Meisterschaftsblattes. Seit Punkt 82 steht "Team" dazwischen;
 # die Zahlen stehen hier einmal, statt in jedem Test zu stecken.
-MEISTER_PUNKTE = 5
-MEISTER_ZUWACHS = 6
+# Punkt 95: Seit der Weltsicht steht zwischen Platz und Auto eine
+# Ligaspalte; alles danach ist um eins gerueckt.
+MEISTER_PUNKTE = 6
+MEISTER_ZUWACHS = 7
 def _mit_tabelle(seite, konfig):
     """Gibt der Seite einen Meisterschaftsstand vor dem Rennen."""
     from rennmanager.kern import wertung as wt
@@ -461,6 +463,65 @@ def test_die_meisterschaft_zaehlt_die_punkte_der_lage_dazu(gefahren, konfig) -> 
         for stelle in range(liste.topLevelItemCount())
     ]
     assert punkte == sorted(punkte, reverse=True)
+
+
+def test_die_meisterschaft_laesst_sich_auf_alle_ligen_umschalten(
+    gefahren, konfig
+) -> None:
+    """Punkt 95: Die Meisterschaft laeuft ueber alle Ligen.
+
+    In der Weltsicht steht in jeder Zeile die Liga, und gezeigt wird ein
+    Ausschnitt - die Spitze und das Umfeld der eigenen Fahrer, nicht alle
+    vierhundert Zeilen.
+    """
+    from rennmanager.kern import wertung as wt
+    from rennmanager.ui.rennseite import WELT_SPITZE
+
+    _fenster, seite = gefahren
+    tabelle = _mit_tabelle(seite, konfig)
+    tabellen = {tabelle.liga: tabelle}
+    for liga in range(2, konfig.wert("ligen", "anzahl") + 1):
+        weitere = wt.Tabelle(liga)
+        weitere.verbuche(
+            konfig,
+            [
+                wt.Rennergebnis(fahrer=liga * 1000 + n, rennplatz=n + 1, qualifyingplatz=n + 1)
+                for n in range(konfig.wert("ligen", "autos_je_liga"))
+            ],
+        )
+        tabellen[liga] = weitere
+
+    seite.zeige_verlauf(
+        seite.verlauf, seite._ansicht.strecke, tabelle=tabelle, tabellen=tabellen
+    )
+    seite._halte_an()
+    seite._springe(seite.verlauf.dauer_ms * 0.7)
+    schlage_blatt_auf(seite, "meisterschaft")
+    liste = seite._meisterschaft
+
+    nur_liga = liste.topLevelItemCount()
+    seite._alle_ligen.setChecked(True)
+    welt = liste.topLevelItemCount()
+
+    # Ein Ausschnitt: mehr als die Spitze, aber nicht alle Fahrer.
+    gesamt = sum(len(t.eintraege) for t in tabellen.values())
+    assert WELT_SPITZE <= welt < gesamt
+    # Jede Zeile nennt ihre Liga, und die Plaetze sind Weltplaetze -
+    # lueckenhaft, weil dazwischen Fahrer stehen, die nicht gezeigt werden.
+    plaetze = [int(liste.topLevelItem(i).text(0)) for i in range(welt)]
+    assert plaetze == sorted(plaetze)
+    assert plaetze[-1] > welt, "Die Plaetze muessen Weltplaetze sein"
+    assert all(liste.topLevelItem(i).text(1) for i in range(welt))
+
+    # Dass der Stand wirklich ueber alle Ligen geht, zeigt der Kern: Die
+    # Anzeige sieht davon nur die Spitze, und die gehoert Liga 1.
+    alle = wt.weltlivewertung(konfig, tabellen, 1, seite._rennlage(
+        seite.verlauf, seite.verlauf.reihenfolge_zu(seite._zeit_ms), seite._zeit_ms
+    ))
+    assert {zeile.liga for zeile in alle} == set(tabellen)
+
+    seite._alle_ligen.setChecked(False)
+    assert liste.topLevelItemCount() == nur_liga
 
 
 def test_die_meisterschaft_zeigt_den_zuwachs(gefahren, konfig) -> None:
