@@ -298,3 +298,80 @@ def test_das_qualifying_zeigt_den_gummistand(qtbot, k, zandvoort) -> None:
     anfang = seite._gummianzeige.text()
     seite._springe(session.dauer_ms)
     assert seite._gummianzeige.text() != anfang, "Der Stand muss mitlaufen"
+
+
+# -- Die gruene Strecke frisst Reifen (Punkt 90) ----------------------------
+def test_die_gruene_strecke_frisst_am_meisten(k) -> None:
+    """Bei null ist der Verschleissfaktor der Gruen-Wert, nicht 1,0.
+
+    Anders als der Grip, der auf gruener Strecke genau 1,0 sein muss
+    (der Anker aus GDD 9 haengt daran), faengt der Verschleiss oben an:
+    Rauer Asphalt schmirgelt.
+    """
+    gruen = k.wert("strecke", "gummierung", "verschleiss_gruen")
+    assert gu.verschleissfaktor(k, 0.0) == pytest.approx(gruen)
+    assert gruen > 1.0
+
+
+def test_der_verschleiss_faellt_und_saettigt(k) -> None:
+    einstellung = k.wert("strecke", "gummierung")
+    reihe = [gu.verschleissfaktor(k, n) for n in (0, 100, 300, 1000, 5000, 100_000)]
+    assert reihe == sorted(reihe, reverse=True), "Er darf nie wieder steigen"
+    assert reihe[-1] == pytest.approx(einstellung["verschleiss_voll"], abs=1e-6)
+    assert all(wert >= einstellung["verschleiss_voll"] for wert in reihe)
+
+
+def test_der_erste_stint_ist_rund_ein_fuenftel_kuerzer(k) -> None:
+    """Die Entscheidung des Auftraggebers in einer Zahl.
+
+    Ein 20-Runden-Stint zu Beginn soll rund 18 Runden werden, am Ende
+    rund 21 - also ein Verhaeltnis um 1,2.
+    """
+    verhaeltnis = gu.verschleissfaktor(k, 0.0) / gu.verschleissfaktor(k, 100_000)
+    assert 1.15 <= verhaeltnis <= 1.30
+
+
+def test_die_mischung_aendert_am_asphalt_nichts(k) -> None:
+    """Wie stark die Strecke schmirgelt, ist keine Eigenschaft des Reifens."""
+    import inspect
+
+    assert "mischung" not in inspect.signature(gu.verschleissfaktor).parameters
+
+
+def test_der_stand_steigt_mit_der_feldgroesse(k) -> None:
+    eines = gu.stand_je_runde(k, 1, "trocken")
+    dreissig = gu.stand_je_runde(k, 30, "trocken")
+    assert dreissig == pytest.approx(30 * eines)
+    assert gu.stand_je_runde(k, 30, "regen") < 0.0
+
+
+def test_ein_rennen_frisst_am_anfang_mehr_als_am_ende(k, zandvoort, mittel) -> None:
+    """Der gefahrene Beleg: derselbe Satz, frueher mehr Abrieb je Runde.
+
+    Gemessen wird der Reifenzustand des Fuehrenden nach jeder Runde -
+    dazwischen darf kein Stopp liegen, deshalb faehrt das Feld ohne
+    Strategie. Das Wetter muss **durchgehend trocken** sein: Ein
+    Umschwung auf heiss hebt den Wetterfaktor und wuerde den
+    Streckeneffekt ueberdecken.
+    """
+    for seed in range(200):
+        wetter = kern_wetter.wuerfle(
+            k, zandvoort.name, 20 * 130_000, 90_000, Seedquelle(seed)
+        )
+        if set(wetter.zustaende) == {"trocken"}:
+            break
+    else:  # pragma: no cover - Notbremse
+        pytest.skip("Kein durchgehend trockener Wetterverlauf gefunden")
+
+    verlauf = rn.simuliere(
+        k, zandvoort, rn.starterfeld(k, LIGA), 20, Seedquelle(4711), mittel,
+        wetter=wetter,
+    )
+    marken = verlauf.protokolle[0].rundenende_ms
+    zustand = [1.0] + [float(verlauf.reifen_zu(zeit)[0]) for zeit in marken]
+    abrieb = [vorher - nachher for vorher, nachher in zip(zustand, zustand[1:])]
+    # Gemessen faellt er von 3,91 auf 3,41 Prozent je Runde - rund 13 %,
+    # genau das Stueck der Kurve, das 546 Auto-Runden hergeben.
+    assert abrieb[0] > abrieb[-1] * 1.10
+    # Und er faellt durchgehend, nicht nur am Rand.
+    assert abrieb == sorted(abrieb, reverse=True)

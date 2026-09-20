@@ -7,6 +7,8 @@ zwei Stopps - und **kein Stint unter 30 Prozent Restprofil**, auch nicht
 nach dem Zufallsfenster.
 """
 
+import math
+
 import numpy as np
 import pytest
 
@@ -337,6 +339,74 @@ def test_das_feld_faehrt_nicht_alles_dasselbe(k, zandvoort, strecken):
     assert len(folgen) > 1
 
 
+def test_alle_autos_fahren_den_plan_des_medianfahrers(k, zandvoort, strecken):
+    """Punkt 91: Kein Auto rechnet seine Stopprunden mehr selbst nach.
+
+    Frueher tat es das, und ein Auto, das die Reifen schlechter schont,
+    kam frueher herein - aus einer Handvoll Strategien wurden dreissig
+    Abwandlungen. Jetzt gilt der Plan des Medianfahrers fuer alle, und
+    zwei Autos auf derselben Variante unterscheiden sich nur noch um das
+    Boxenstoppfenster.
+    """
+    feld = kern_rennen.starterfeld(k, LIGA, seedquelle=Seedquelle(1))
+    runden = kern_rennen.rundenzahl(k, zandvoort, LIGA)
+    faktor = kern_reifen.streckenfaktor(
+        k, zandvoort, kern_reifen.mittlere_querbeschleunigung(strecken)
+    )
+    ergebnis = sg.feldstrategien(
+        k, [t.auto for t in feld], zandvoort, runden, faktor, None, Seedquelle(5)
+    )
+    fenster = max(
+        math.ceil(k.wert("boxenstopp", "strategie", "fenster_anteil") * runden),
+        k.wert("boxenstopp", "strategie", "fenster_min_runden"),
+    )
+    for nummer, strategie in zip(ergebnis.gewaehlt, ergebnis.je_auto, strict=True):
+        variante = ergebnis.varianten[nummer]
+        assert strategie.mischungen == variante.mischungen
+        for geplant, gefahren in zip(variante.stopps, strategie.stopps, strict=True):
+            assert abs(gefahren - geplant) <= fenster
+
+
+def test_die_zahl_der_strategien_zaehlt_die_varianten(k, zandvoort, strecken):
+    """Punkt 91: Was oben im Rennen steht."""
+    feld = kern_rennen.starterfeld(k, LIGA, seedquelle=Seedquelle(1))
+    runden = kern_rennen.rundenzahl(k, zandvoort, LIGA)
+    faktor = kern_reifen.streckenfaktor(
+        k, zandvoort, kern_reifen.mittlere_querbeschleunigung(strecken)
+    )
+    ergebnis = sg.feldstrategien(
+        k, [t.auto for t in feld], zandvoort, runden, faktor, None, Seedquelle(5)
+    )
+    assert ergebnis.strategiezahl == len(set(ergebnis.gewaehlt))
+    assert 1 <= ergebnis.strategiezahl <= len(ergebnis.varianten)
+    assert ergebnis.strategiezahl <= len(feld)
+
+
+def test_die_reihenfolge_ist_teil_der_variante(k, zandvoort, strecken):
+    """Punkt 91: Dieselben Mischungen in anderer Reihenfolge sind etwas anderes.
+
+    Frueher erbten alle Reihenfolgen einer Zusammenstellung dieselbe
+    Rennzeit - ein Stint kostete, was er kostet, egal wo er lag. Seit die
+    gruene Strecke am Anfang mehr Reifen frisst (Punkt 90), stimmt das
+    nicht mehr, und jede Reihenfolge wird einzeln gerechnet.
+    """
+    auto = gleichverteilt(k, 50_000)
+    runden = 40
+    gummi = tuple(
+        1.15 - 0.22 * n / (runden - 1) for n in range(runden)
+    )
+    weich = kern_reifen.mischung(k, "weich")
+    hart = kern_reifen.mischung(k, "hart")
+    gemeinsam = dict(
+        runden=runden, rundenzeit_ms=90_000.0, rundenlaenge_m=4_300.0,
+        stoppverlust_ms=25_000.0, gummifaktor=gummi,
+    )
+    frueh_weich = sg.bewerte(k, auto, (weich, hart), **gemeinsam)
+    spaet_weich = sg.bewerte(k, auto, (hart, weich), **gemeinsam)
+    assert frueh_weich is not None and spaet_weich is not None
+    assert frueh_weich.zeit_ms != spaet_weich.zeit_ms
+
+
 def test_gleicher_seed_gleiche_strategien(k, zandvoort, strecken):
     feld = kern_rennen.starterfeld(k, LIGA, seedquelle=Seedquelle(1))
     runden = kern_rennen.rundenzahl(k, zandvoort, LIGA)
@@ -498,3 +568,29 @@ def test_ein_passender_reifen_bleibt_draussen(k):
     regen = kern_reifen.mischung(k, "regen")
     abstand = k.wert("boxenstopp", "strategie", "abstand_min_runden")
     assert not sg.notstopp(k, regen, 1.0, abstand, 99, 0)
+
+
+# -- Die Anzeige (Punkt 91) -------------------------------------------------
+def test_die_rennseite_zeigt_die_zahl_der_strategien(qtbot, k, zandvoort) -> None:
+    """Oben im Rennen steht, wie viele Strategien unterwegs sind."""
+    pytest.importorskip("PySide6")
+    from rennmanager.ui.rennseite import Rennseite
+
+    feld = kern_rennen.starterfeld(k, LIGA, seedquelle=Seedquelle(1))
+    mittel = kern_rennen.mittlerer_ueberholzonenanteil(k, (zandvoort,))
+    verlauf = kern_rennen.simuliere(
+        k, zandvoort, feld, 3, Seedquelle(4711), mittel, strategiezahl=4
+    )
+    seite = Rennseite(k, None, None)
+    qtbot.addWidget(seite)
+    seite.zeige_verlauf(verlauf, zandvoort, None, tabelle=None)
+    seite._halte_an()
+    assert seite._strategiezahl.text() == "4"
+
+    # Ohne Angabe - der Laborfall - steht dort ein Strich, keine Null.
+    ohne = kern_rennen.simuliere(
+        k, zandvoort, feld, 3, Seedquelle(4711), mittel
+    )
+    seite.zeige_verlauf(ohne, zandvoort, None, tabelle=None)
+    seite._halte_an()
+    assert seite._strategiezahl.text() == "-"

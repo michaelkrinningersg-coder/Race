@@ -24,12 +24,13 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from itertools import combinations_with_replacement, permutations, product
+from itertools import product
 from typing import TYPE_CHECKING
 
 import numpy as np
 
 from rennmanager.kern import boxenstopp as kern_boxenstopp
+from rennmanager.kern import gummierung as kern_gummierung
 from rennmanager.kern import reifen as kern_reifen
 from rennmanager.kern import tempo as kern_tempo
 from rennmanager.kern import wetter as kern_wetter
@@ -304,6 +305,7 @@ def _stinttabelle(
     wetterfaktor: float,
     naesse,
     tempotabelle: np.ndarray | None = None,
+    gummifaktor=1.0,
 ) -> Stinttabelle:
     """Zeit und Restprofil nach n Runden auf diesem Satz.
 
@@ -316,9 +318,19 @@ def _stinttabelle(
     Startrunde: Ein Satz Trockenreifen, der in Runde 1 aufgezogen wird,
     haelt laenger als derselbe Satz ab Runde 40, wenn es ab Runde 20
     regnet.
+
+    ``gummifaktor`` ist dasselbe fuer die Strecke (Punkt 90): Sie frisst
+    am Anfang mehr Reifen als am Ende. Der Auftraggeber hat entschieden,
+    dass der Planer das kennt - den wachsenden **Grip** dagegen nicht.
+    Ein Stint am Rennanfang ist damit kuerzer als derselbe Stint am
+    Rennende, und die Reihenfolge der Mischungen ist keine freie Wahl
+    mehr.
     """
     feld = naesse_je_runde(naesse, runden)
-    wetterfeld = je_runde(wetterfaktor, runden, 1.0)
+    # Was von aussen am Reifen zehrt: das Wetter (GDD 7) und die Strecke
+    # selbst (Punkt 90). Beides haengt nur an der Runde, nicht an der
+    # Mischung - deshalb ein Feld statt zweier.
+    zehrfeld = je_runde(wetterfaktor, runden, 1.0) * je_runde(gummifaktor, runden, 1.0)
     if tempotabelle is None:
         tempotabelle = _tempotabelle(konfiguration, auto)
     verschleiss = np.array(
@@ -327,7 +339,7 @@ def _stinttabelle(
                 konfiguration, auto, misch, streckenfaktor, float(wf), float(n)
             )
             * rundenlaenge_m
-            for wf, n in zip(wetterfeld, feld, strict=True)
+            for wf, n in zip(zehrfeld, feld, strict=True)
         ]
     )
     mischfaktor = np.array(
@@ -347,7 +359,7 @@ def _stinttabelle(
             1.0 - aufgelaufen, 0.0, 1.0
         )
 
-    konstant = bool(np.all(feld == feld[0]) and np.all(wetterfeld == wetterfeld[0]))
+    konstant = bool(np.all(feld == feld[0]) and np.all(zehrfeld == zehrfeld[0]))
     if konstant:
         zeiten, rest = zeile(0)
         return Stinttabelle(zeiten=zeiten, rest=rest, konstant=True)
@@ -376,6 +388,7 @@ def bewerte(
     wetterfaktor: float = 1.0,
     naesse=0.0,
     tabellen: dict[str, Stinttabelle] | None = None,
+    gummifaktor=1.0,
 ) -> Variante | None:
     """Die beste Stoppverteilung fuer diese Mischungsfolge.
 
@@ -402,7 +415,7 @@ def bewerte(
         tabellen = {
             misch.schluessel: _stinttabelle(
                 konfiguration, auto, misch, runden, rundenzeit_ms, rundenlaenge_m,
-                streckenfaktor, wetterfaktor, naesse,
+                streckenfaktor, wetterfaktor, naesse, gummifaktor=gummifaktor,
             )
             for misch in set(folge)
         }
@@ -471,41 +484,6 @@ def bewerte(
     )
 
 
-def _reihenfolgen(eine: Variante, runden: int) -> list[Variante]:
-    """Alle Reihenfolgen einer Zusammenstellung, mit ihren Stopprunden.
-
-    Im Trockenen ist die Reihenfolge frei - ob erst der kurze oder erst
-    der lange Stint kommt, entscheidet der Fahrer. Die Rennzeit ist
-    dieselbe, die Stopprunden sind es nicht: Wer den langen Stint
-    vorzieht, stoppt spaeter.
-    """
-    laengen: list[int] = []
-    vorher = 0
-    for runde in eine.stopps:
-        laengen.append(runde - vorher)
-        vorher = runde
-    laengen.append(runden - vorher)
-
-    paare = list(zip(eine.mischungen, laengen, strict=True))
-    gesehen: set[tuple[str, ...]] = set()
-    ergebnis: list[Variante] = []
-    for reihenfolge in permutations(range(len(paare))):
-        mischungen = tuple(paare[i][0] for i in reihenfolge)
-        schluessel = tuple(m.schluessel for m in mischungen)
-        if schluessel in gesehen:
-            continue
-        gesehen.add(schluessel)
-        stopps: list[int] = []
-        gelaufen = 0
-        for i in reihenfolge[:-1]:
-            gelaufen += paare[i][1]
-            stopps.append(gelaufen)
-        ergebnis.append(
-            Variante(mischungen=mischungen, stopps=tuple(stopps), zeit_ms=eine.zeit_ms)
-        )
-    return ergebnis
-
-
 def varianten(
     konfiguration: Konfiguration,
     auto: Auto,
@@ -517,6 +495,7 @@ def varianten(
     wetterfaktor: float = 1.0,
     naesse: float = 0.0,
     pflicht_zwei: bool = True,
+    gummifaktor=1.0,
 ) -> list[Variante]:
     """Alle Mischungsfolgen, die nah genug an der besten liegen.
 
@@ -561,19 +540,15 @@ def varianten(
         misch.schluessel: _stinttabelle(
             konfiguration, auto, misch, runden, rundenzeit_ms, rundenlaenge_m,
             streckenfaktor, wetterfaktor, naesse, tempotabelle,
+            gummifaktor=gummifaktor,
         )
         for misch in brauchbar
     }
 
-    # Die Rennzeit haengt nur davon ab, **welche** Reifen gefahren werden,
-    # nicht in welcher Reihenfolge: Ein Stint kostet, was er kostet, egal
-    # ob er der erste oder der letzte ist. Gerechnet wird deshalb einmal
-    # je Zusammenstellung, und die Reihenfolgen erben das Ergebnis - aus
-    # 117 Folgen werden 31 Rechnungen.
     gefunden = _suche(
         konfiguration, auto, brauchbar, tabellen, runden, rundenzeit_ms,
         rundenlaenge_m, stoppverlust_ms, streckenfaktor, wetterfaktor, naesse,
-        pflicht_zwei, einstellung["stopps_max"],
+        pflicht_zwei, einstellung["stopps_max"], gummifaktor,
     )
     if not gefunden:
         # Geht es mit drei Stopps nicht auf, darf ein vierter dazu. Das ist
@@ -581,7 +556,7 @@ def varianten(
         gefunden = _suche(
             konfiguration, auto, brauchbar, tabellen, runden, rundenzeit_ms,
             rundenlaenge_m, stoppverlust_ms, streckenfaktor, wetterfaktor, naesse,
-            pflicht_zwei, einstellung["stopps_max_notfall"],
+            pflicht_zwei, einstellung["stopps_max_notfall"], gummifaktor,
         )
 
     if not gefunden:
@@ -625,16 +600,19 @@ def _suche(
     naesse: float,
     pflicht_zwei: bool,
     hoechstens: int,
+    gummifaktor=1.0,
 ) -> list[Variante]:
     """Alle tragfaehigen Varianten bis zu dieser Stoppzahl."""
     einstellung = konfiguration.wert("boxenstopp", "strategie")
-    # Bleibt das Wetter gleich, kostet ein Stint dasselbe, egal an welcher
-    # Stelle des Rennens er liegt - dann genuegt eine Rechnung je
-    # Zusammenstellung und die Reihenfolgen erben sie. Wechselt es, ist
-    # das nicht mehr wahr: Ein weicher Satz vor dem Regen ist etwas
-    # anderes als derselbe Satz danach. Dann wird jede Reihenfolge
-    # einzeln gerechnet.
-    konstant = all(tabelle.konstant for tabelle in tabellen.values())
+    # Punkt 91: Jede Reihenfolge wird einzeln gerechnet. Frueher galt:
+    # Ein Stint kostet, was er kostet, egal ob er der erste oder der
+    # letzte ist - dann genuegte eine Rechnung je Zusammenstellung, und
+    # die Reihenfolgen erbten sie. Seit die gruene Strecke am Anfang mehr
+    # Reifen frisst als am Ende (Punkt 90), stimmt das nicht mehr: Ein
+    # weicher Satz auf gruenem Asphalt ist etwas anderes als derselbe
+    # Satz auf eingegummiertem. Die Reihenfolge ist damit keine freie
+    # Wahl des Fahrers mehr, sondern Teil der Strategie - so hat es der
+    # Auftraggeber festgelegt.
     gefunden: list[Variante] = []
     for stopps in range(einstellung["stopps_min"], hoechstens + 1):
         # Entscheidung des Auftraggebers: Wer so oft hereinkommen muss,
@@ -643,22 +621,17 @@ def _suche(
         erlaubt = brauchbar
         if stopps > einstellung["weich_hoechstens_stopps"]:
             erlaubt = _ohne_weichste(konfiguration, brauchbar) or brauchbar
-        saetze = (
-            combinations_with_replacement(erlaubt, stopps + 1)
-            if konstant
-            else product(erlaubt, repeat=stopps + 1)
-        )
-        for satz in saetze:
+        for satz in product(erlaubt, repeat=stopps + 1):
             if pflicht_zwei and len({m.schluessel for m in satz}) < 2:
                 continue
             eine = bewerte(
                 konfiguration, auto, satz, runden, rundenzeit_ms, rundenlaenge_m,
                 stoppverlust_ms, streckenfaktor, wetterfaktor, naesse,
-                tabellen=tabellen,
+                tabellen=tabellen, gummifaktor=gummifaktor,
             )
             if eine is None:
                 continue
-            gefunden.extend(_reihenfolgen(eine, runden) if konstant else [eine])
+            gefunden.append(eine)
     return gefunden
 
 
@@ -695,8 +668,39 @@ def ki_strategie(
     rundenzeit_ms: float = 90_000.0,
     stoppverlust_ms: float = 25_000.0,
     auswahl: list[Variante] | None = None,
+    gummifaktor=1.0,
 ) -> Strategie:
-    """Die Strategie eines KI-Autos.
+    """Die Strategie eines KI-Autos - siehe ``gewaehlte_strategie``."""
+    return gewaehlte_strategie(
+        konfiguration, auto, runden, rundenlaenge_m, seedquelle, streckenfaktor,
+        wetterfaktor, naesse, pflicht_zwei, rundenzeit_ms, stoppverlust_ms,
+        auswahl, gummifaktor,
+    )[0]
+
+
+def gewaehlte_strategie(
+    konfiguration: Konfiguration,
+    auto: Auto,
+    runden: int,
+    rundenlaenge_m: float,
+    seedquelle: Seedquelle,
+    streckenfaktor: float = 1.0,
+    wetterfaktor: float = 1.0,
+    naesse: float = 0.0,
+    pflicht_zwei: bool = True,
+    rundenzeit_ms: float = 90_000.0,
+    stoppverlust_ms: float = 25_000.0,
+    auswahl: list[Variante] | None = None,
+    gummifaktor=1.0,
+) -> tuple[Strategie, int]:
+    """Die Strategie eines KI-Autos und **welche** Variante es genommen hat.
+
+    Die Nummer ist der Platz in ``auswahl``. Sie wird gebraucht, um
+    abzuzaehlen, wie viele verschiedene Strategien im Feld unterwegs sind
+    (Punkt 91); ohne sie liessen sich zwei Autos auf derselben Variante
+    nicht mehr von zweien auf verschiedenen unterscheiden, sobald das
+    Boxenstoppfenster die Stopprunden verschoben hat. ``-1`` steht fuer
+    den Notfallplan, der gar nicht aus der Auswahl stammt.
 
     **Erst rechnen, dann wuerfeln.** Alle zulaessigen Mischungsfolgen
     werden durchgerechnet und nach Rennzeit geordnet; was zu weit hinter
@@ -741,27 +745,26 @@ def ki_strategie(
             passende_mischung(konfiguration, float(feld[min(runde, runden - 1)]))
             for runde in (0, *stopps)
         )
-        return Strategie(mischungen=folge, stopps=stopps)
+        return Strategie(mischungen=folge, stopps=stopps), -1
 
-    gewaehlt = moeglich[int(wuerfel.integers(0, len(moeglich)))]
-    # Die Vorausberechnung gilt dem ganzen Feld - gefahren wird sie von
-    # diesem einen Auto. Welche Folgen zulaessig sind, entscheidet also
-    # das Referenzauto (so hat es der Auftraggeber gewollt), **wann**
-    # gewechselt wird, rechnet jedes Auto fuer sich: Ein Auto, das die
-    # Reifen schlechter schont, muss frueher herein, sonst steht es am
-    # Ende auf blankem Gummi. Das ist eine Rechnung je Auto, nicht
-    # hundert - die Folge steht ja schon fest.
-    eigen = bewerte(
-        konfiguration, auto, gewaehlt.mischungen, runden, rundenzeit_ms,
-        rundenlaenge_m, stoppverlust_ms, streckenfaktor, wetterfaktor, naesse,
-    )
-    if eigen is not None:
-        gewaehlt = eigen
+    nummer = int(wuerfel.integers(0, len(moeglich)))
+    gewaehlt = moeglich[nummer]
+    # Punkt 91: **Kein Nachrechnen je Auto mehr.** Frueher rechnete jedes
+    # Auto die Stopprunden seiner Folge noch einmal mit seinen eigenen
+    # Werten - wer die Reifen schlechter schont, kam frueher herein. Der
+    # Auftraggeber hat entschieden, dass die Strategie ohne dieses Delta
+    # gerechnet wird: Der Plan gilt dem Medianfahrer des Feldes, und was
+    # ein Auto davon abweicht, faengt im Rennen der Zwangsstopp bei 30
+    # Prozent ab. So faehrt das Feld wirklich die zugelassenen
+    # Strategien und nicht dreissig Abwandlungen davon.
+    #
     # Das Fenster darf die Mindestprofil-Regel nicht aushebeln. Geprueft
-    # wird gegen die nasseste Lage des Rennens - sie zehrt am staerksten,
-    # also haelt die Grenze dann auch in jeder anderen.
+    # wird gegen die nasseste Lage des Rennens und die gruenste Strecke -
+    # beides zehrt am staerksten, also haelt die Grenze dann auch sonst.
     haerteste = float(naesse_je_runde(naesse, runden).max())
-    zaehrendste = float(je_runde(wetterfaktor, runden, 1.0).max())
+    zaehrendste = float(
+        (je_runde(wetterfaktor, runden, 1.0) * je_runde(gummifaktor, runden, 1.0)).max()
+    )
     hoechststints = tuple(
         hoechststint_runden(
             konfiguration, auto, misch, rundenlaenge_m,
@@ -774,7 +777,7 @@ def ki_strategie(
         stopps=_mit_fenster(
             konfiguration, gewaehlt.stopps, runden, wuerfel, hoechststints
         ),
-    )
+    ), nummer
 
 
 def _mit_fenster(
@@ -1005,6 +1008,42 @@ def verschleissvorhersage(
     )
 
 
+def gummivorhersage(
+    konfiguration: Konfiguration,
+    wetter,
+    runden: int,
+    rundenzeit_ms: float,
+    autos: int = 1,
+) -> tuple[float, ...]:
+    """Der Verschleissfaktor der **Strecke** je Rennrunde (Punkt 90).
+
+    Die gruene Strecke frisst Reifen, die eingegummierte schont sie. Der
+    Stand zaehlt Auto-Runden, also steigt er mit der Feldgroesse: Ein
+    Rennen mit dreissig Autos gummiert dreissigmal so schnell ein wie
+    eine einsame Runde. Gefragt wird zur **Mitte** jeder Runde, wie bei
+    der Naesse - das ist der beste einzelne Wert fuer eine Runde, in der
+    der Stand ja weiter steigt.
+
+    Der Auftraggeber hat entschieden, dass der Planer diesen Faktor
+    kennt. Den wachsenden **Grip** kennt er nicht; der bleibt eine
+    Ueberraschung der Strecke.
+    """
+    if wetter is None:
+        return (1.0,) * runden
+    stand = 0.0
+    werte: list[float] = []
+    for n in range(runden):
+        lage = wetter.zustand_zu((n + 0.5) * rundenzeit_ms)
+        schritt = kern_gummierung.stand_je_runde(konfiguration, autos, lage)
+        werte.append(
+            kern_gummierung.verschleissfaktor(
+                konfiguration, max(0.0, stand + schritt / 2.0)
+            )
+        )
+        stand = max(0.0, stand + schritt)
+    return tuple(werte)
+
+
 def lagen_im_rennen(konfiguration: Konfiguration, wetter, runden: int, rundenzeit_ms: float):
     """Welche Wetterlagen im Rennen ueberhaupt vorkommen.
 
@@ -1106,6 +1145,21 @@ class Rennstrategien:
     rundenzeit_ms: float
     stoppverlust_ms: float
     lagen: tuple[str, ...]
+    # Punkt 91: Je Auto der Platz der Variante, die es genommen hat -
+    # ``-1`` fuer den Notfallplan. Daraus wird die Zahl oben im Rennen:
+    # wie viele verschiedene Strategien ueberhaupt unterwegs sind.
+    gewaehlt: tuple[int, ...] = ()
+
+    @property
+    def strategiezahl(self) -> int:
+        """Wie viele verschiedene Varianten im Feld gefahren werden.
+
+        Gezaehlt wird die **gewaehlte Variante**, nicht die gefahrene
+        Stopprunde: Zwei Autos auf derselben Variante fahren dieselbe
+        Strategie, auch wenn das Boxenstoppfenster ihre Stopps um eine
+        Runde auseinanderzieht.
+        """
+        return len(set(self.gewaehlt))
 
 
 def feldstrategien(
@@ -1122,19 +1176,26 @@ def feldstrategien(
 
     So hat es der Auftraggeber festgelegt: **Eine** Vorausberechnung
     entscheidet, welche Mischungsfolgen zulaessig sind; unter ihnen waehlt
-    jedes Auto zufaellig. Gerechnet wird gegen das staerkste Auto des
-    Feldes - es setzt den Massstab, an dem die Schwelle haengt.
+    jedes Auto zufaellig.
 
-    Wann gestoppt wird, rechnet danach jedes Auto fuer sich (siehe
-    ``ki_strategie``): Ein Auto, das die Reifen schlechter schont, muss
-    frueher herein, sonst steht es am Ende auf blankem Gummi.
+    **Gerechnet wird mit dem Medianfahrer des Feldes** (Punkt 91), und
+    zwar so, als waere das Auto allein auf der Strecke. Frueher setzte
+    das staerkste Auto den Massstab und jedes Auto rechnete seine
+    Stopprunden danach noch einmal mit den eigenen Werten nach. Das gab
+    dreissig Abwandlungen statt einer Handvoll Strategien. Jetzt steht
+    ein Satz zugelassener Varianten fest, die Autos ziehen daraus, und
+    was ein einzelnes Auto vom Median abweicht, faengt im Rennen der
+    Zwangsstopp ab.
 
     Das Wetter geht als **ganze Vorhersage** ein, nicht als Startlage. Es
     steht vor dem Rennen fest (GDD 7), also darf die Strategie es kennen.
+    Dasselbe gilt fuer den Zustand der Strecke: Sie frisst am Anfang mehr
+    Reifen als am Ende (Punkt 90), und der Planer weiss das.
     """
     if not autos:
         raise StrategieFehler("Ohne Autos gibt es keine Strategien")
-    referenz = max(autos, key=lambda a: gesamtwert(konfiguration, a))
+    nach_wert = sorted(autos, key=lambda a: gesamtwert(konfiguration, a))
+    referenz = nach_wert[len(nach_wert) // 2]
     grenzen = grenzen_aus(konfiguration, referenz)
     rundenzeit = float(
         kern_tempo.rundenzeit_ms(strecke, kern_tempo.geschwindigkeitsprofil(strecke, grenzen))
@@ -1148,27 +1209,35 @@ def feldstrategien(
     )
     naesse = vorhersage(konfiguration, wetter, runden, rundenzeit)
     wetterfaktor = verschleissvorhersage(konfiguration, wetter, runden, rundenzeit)
+    gummifaktor = gummivorhersage(
+        konfiguration, wetter, runden, rundenzeit, len(autos)
+    )
     lagen = lagen_im_rennen(konfiguration, wetter, runden, rundenzeit)
     pflicht = pflicht_zwei_mischungen(konfiguration, lagen)
 
     moeglich = varianten(
         konfiguration, referenz, runden, rundenzeit, strecke.laenge_m, stoppverlust,
-        streckenfaktor, wetterfaktor, naesse, pflicht,
+        streckenfaktor, wetterfaktor, naesse, pflicht, gummifaktor,
     )
-    je_auto = tuple(
-        ki_strategie(
-            konfiguration, auto, runden, strecke.laenge_m,
+    # Punkt 91: Jedes Auto bekommt den Plan des Medianfahrers - die
+    # eigenen Werte gehen nicht mehr ein. Gewuerfelt wird nur noch,
+    # **welche** der zugelassenen Varianten es faehrt und wohin das
+    # Boxenstoppfenster ihre Stopprunden schiebt.
+    gezogen = tuple(
+        gewaehlte_strategie(
+            konfiguration, referenz, runden, strecke.laenge_m,
             seedquelle.zweig("strategie", i),
             streckenfaktor, wetterfaktor, naesse, pflicht,
-            rundenzeit, stoppverlust, moeglich,
+            rundenzeit, stoppverlust, moeglich, gummifaktor,
         )
-        for i, auto in enumerate(autos)
+        for i in range(len(autos))
     )
     return Rennstrategien(
-        je_auto=je_auto,
+        je_auto=tuple(s for s, _ in gezogen),
         varianten=tuple(moeglich),
         pflicht_zwei=pflicht,
         rundenzeit_ms=rundenzeit,
         stoppverlust_ms=stoppverlust,
         lagen=tuple(lagen),
+        gewaehlt=tuple(n for _, n in gezogen),
     )

@@ -2628,9 +2628,9 @@ Exponent:
 
 | | `verschleiss` | Auftrag | Ansprechen |
 | --- | ---: | ---: | ---: |
-| Weich | 1,27 | 1,44 | 1,20 |
-| Mittel | 0,88 | 1,00 | 1,00 |
-| Hart | 0,64 | 0,73 | 0,85 |
+| Weich | 1,05 | 1,44 | 1,20 |
+| Mittel | 0,73 | 1,00 | 1,00 |
+| Hart | 0,53 | 0,73 | 0,85 |
 
 Der Auftrag ist **linear**, das Ansprechen **gedämpft** (Exponent 0,5) —
 der zweite Zusammenhang ist der schwächere. Entscheidungen des
@@ -2646,10 +2646,109 @@ Teil stehen: Ein trockenes Feld der Liga 1 fährt 46 % Hart, 32 % Mittel
 und 22 % Weich, das Feldmittel des Auftrags liegt bei **0,973**.
 
 **Der Auftrag gilt nur beim Aufbau.** Abgewaschen wird vom Regen, nicht
-vom Reifen; sonst würde ein Intermediate (Verschleiß 1,10) stärker
+vom Reifen; sonst würde ein Intermediate stärker
 abwaschen als ein Regenreifen. Ein Test hält das fest.
 
 **Die Strategie weiß davon nichts** und soll es vorerst auch nicht:
 `strategie.py` plant aus Verschleiß und Mischungstempo. Weich wird damit
 spät im Rennen relativ besser, ohne dass die Planung es einrechnet — die
 KI schöpft es nicht aus, und wer es bemerkt, hat einen echten Vorteil.
+
+
+---
+
+## Punkt 90 und 91: Die grüne Strecke frisst Reifen, und der Planer
+## rechnet neu
+
+**Der Auftrag, in zwei Teilen.** Erstens: „Grüne Strecke frisst Reifen
+implementieren, aber Umverteilung, den ganzen Effekt wirklich moderat,
+nicht zu extrem. Der erste Stint wäre also rund 20 % kürzer als der
+letzte." Zweitens: die Strategien ohne das Delta rechnen, mit dem
+Medianfahrer, allein auf der Strecke, die Reihenfolge tatsächlich
+verwenden und oben im Rennen anzeigen, wie viele Strategien unterwegs
+sind.
+
+### Die grüne Strecke
+
+Derselbe Stand, der den Grip hebt, senkt den Verschleiß — über dieselbe
+Kurve, nur von 1,15 (grün) nach 0,928 (voll eingegummiert). Keine
+Mischung darin: Wie stark der Asphalt schmirgelt, ist eine Eigenschaft
+der Strecke, nicht des Reifens.
+
+Gemessen in Zandvoort, 20 Runden, durchgehend trocken, ohne Strategie:
+Der Abrieb je Runde fällt von **3,91 %** auf **3,41 %** — 13 % weniger,
+genau das Stück der Kurve, das 546 Auto-Runden hergeben. Über ein volles
+Rennen (1.800 Auto-Runden) wären es die vollen 19 %.
+
+Der Planer rechnet den Faktor **mit** (sonst setzt er den ersten Stint
+zu lang an), den wachsenden Grip **nicht** — so entschieden.
+
+### Warum die Reihenfolge jetzt zählt
+
+Bisher galt: Ein Stint kostet, was er kostet, egal ob er der erste oder
+der letzte ist. Deshalb genügte **eine** Rechnung je Zusammenstellung,
+und alle Reihenfolgen erbten das Ergebnis — aus 117 Folgen wurden 31
+Rechnungen. Seit die grüne Strecke am Anfang mehr frisst, stimmt das
+nicht mehr, und jede Reihenfolge wird einzeln gerechnet. Kosten: 224 ms
+statt 60 für ein Feld von 30 Autos über 69 Runden — vertretbar.
+
+### Der Plan gilt dem Medianfahrer
+
+Vorher setzte das **stärkste** Auto den Maßstab, und danach rechnete
+*jedes* Auto seine Stopprunden noch einmal mit den eigenen Werten nach.
+Aus einer Handvoll Strategien wurden dreißig Abwandlungen. Jetzt steht
+ein Satz zugelassener Varianten fest, die Autos ziehen daraus, und was
+ein einzelnes Auto vom Median abweicht, fängt im Rennen der Zwangsstopp
+bei 30 % Restprofil ab. Das Boxenstoppfenster geht von ±5 % auf ±3 %
+der Renndistanz, mindestens eine Runde — es bleiben immer drei mögliche
+Stopprunden.
+
+### Was der Messlauf zeigt — und was noch fehlt
+
+Fünf Strecken, Liga 1, trocken, 30 Autos:
+
+| Strecke | Faktor | Rd | Varianten | Verteilung | Notstopps |
+| --- | ---: | ---: | ---: | --- | ---: |
+| Zandvoort | 1,263 | 69 | 14 / 13 gefahren | 2 Stopps 14 %, 3 Stopps 86 % | 4 |
+| Sao Paulo | 1,132 | 69 | 82 / 26 | 1:14 %, 2:31 %, 3:55 % | 5 |
+| Nürburgring | 1,074 | 58 | 67 / 26 | 1:3 %, 2:10 %, 3:86 % | 4 |
+| Silverstone | 0,890 | 51 | 85 / 24 | 1:10 %, 2:17 %, 3:72 % | 3 |
+| Monza | 0,537 | 51 | 21 / 17 | 0:7 %, 1:86 %, 2:7 % | 1 |
+
+**Vier-Stopp-Strategien kommen nirgends mehr vor**, und die Zwangsstopps
+sind von 29 auf 17 gefallen. Die gewünschten Verteilungen sind damit
+aber **nicht** erreicht: Zandvoort soll 30/70 zwischen zwei und drei
+Stopps liegen, Monza 60/40 zwischen einem und zweien.
+
+**Der Grund ist strukturell.** Wie viele Stopps eine Strecke verlangt,
+hängt daran, wie viele Runden ein Satz trägt, und das hängt am
+Streckenfaktor. Der spannt von 1,263 bis 0,537 — Faktor **2,35**:
+
+| Strecke | Faktor | Rd | W | M | H | mögliche Stopps |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Zandvoort | 1,263 | 69 | 15 | 22 | 30 | 2–4 |
+| Sao Paulo | 1,132 | 69 | 17 | 25 | 34 | 2–4 |
+| Nürburgring | 1,074 | 58 | 15 | 22 | 30 | 1–3 |
+| Silverstone | 0,890 | 51 | 16 | 23 | 32 | 1–3 |
+| Monza | 0,537 | 51 | 26 | 38 | 53 | 0–1 |
+
+Monza kommt mit **einem** Stopp aus und braucht keinen zweiten;
+Zandvoort schafft **keinen** Zwei-Stopp mehr. Beide Ziele zugleich
+verlangen, dass sich die Stintlängen der Strecken höchstens um Faktor
+1,5 unterscheiden — ein einzelner Verschleißwert für W, M und H kann
+das nicht leisten, weil er beide Strecken in dieselbe Richtung
+verschiebt.
+
+**Vorschlag, noch nicht gebaut:** ein Exponent auf den Streckenfaktor,
+`streckenfaktor ^ e`, gemessen:
+
+| e | Zandvoort wirkt | Monza wirkt | Spanne | Zandvoort | Monza |
+| ---: | ---: | ---: | ---: | --- | --- |
+| 1,0 (heute) | 1,263 | 0,537 | 2,35 | 2–4 | 0–1 |
+| 0,7 | 1,178 | 0,647 | 1,82 | 2–4 | 1–2 |
+| **0,5** | **1,124** | **0,733** | **1,53** | **2–3** | **1–2** |
+| 0,4 | 1,098 | 0,780 | 1,41 | 1–4 | 1–2 |
+
+Bei 0,5 und 0,7 stimmen beide Enden; bei 0,4 wird Zandvoort schon zu
+weich. Die Aufteilung **innerhalb** einer Strecke (30/70, 60/40) hängt
+danach nur noch an der Variantenschwelle.

@@ -125,3 +125,43 @@ def faktor(konfiguration: Konfiguration, stand: float, mischung=None) -> float:
 def anteil(konfiguration: Konfiguration, stand: float, mischung=None) -> float:
     """Derselbe Aufschlag als Anteil, fuer die Anzeige: 0,0136 statt 1,0136."""
     return faktor(konfiguration, stand, mischung) - 1.0
+
+
+def verschleissfaktor(konfiguration: Konfiguration, stand: float) -> float:
+    """Was die Strecke bei diesem Stand am Reifenverschleiss aendert (Punkt 90).
+
+    Rauer Asphalt schmirgelt, eingegummierter Asphalt traegt. Derselbe
+    Stand, der den Grip hebt, senkt also auch den Verschleiss - ueber
+    dieselbe Kurve, nur von ``verschleiss_gruen`` nach
+    ``verschleiss_voll``.
+
+    **Umverteilung, nicht mehr Verschleiss.** Die beiden Zahlen sind so
+    gewaehlt, dass ein volles Rennen ueber alles gerechnet ungefaehr dort
+    herauskommt, wo es vorher lag; der Verschleiss wandert nur vom Ende
+    an den Anfang. Der erste Stint faellt dadurch rund ein Fuenftel
+    kuerzer aus als der letzte.
+
+    **Ohne Mischung.** Wie stark der Asphalt schmirgelt, ist eine
+    Eigenschaft der Strecke, nicht des Reifens - anders als beim Auftrag
+    und beim Ansprechen steht hier deshalb kein Mischungsfaktor.
+    """
+    einstellung = konfiguration.wert("strecke", "gummierung")
+    gruen = float(einstellung["verschleiss_gruen"])
+    voll = float(einstellung["verschleiss_voll"])
+    halbwert = float(einstellung["halbwert_runden"])
+    if stand <= 0.0 or halbwert <= 0.0:
+        return gruen
+    return gruen + (voll - gruen) * (1.0 - math.exp(-stand / halbwert))
+
+
+def stand_je_runde(konfiguration: Konfiguration, autos: int, zustand: str) -> float:
+    """Wie schnell der Stand steigt, wenn ``autos`` Autos unterwegs sind.
+
+    Der Stand zaehlt Auto-Runden, nicht Runden: Dreissig Autos gummieren
+    dreissigmal so schnell ein wie eines. Wer vor dem Rennen abschaetzen
+    will, wie die Strecke Runde um Runde aussieht - der Strategieplaner
+    tut das -, braucht genau diese Umrechnung. Gerechnet wird mit der
+    Bezugsmischung; welche Mischung welches Auto faehrt, steht vor dem
+    Rennen noch nicht fest.
+    """
+    return je_runde(konfiguration, zustand) * max(int(autos), 0)

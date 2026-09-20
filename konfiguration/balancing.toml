@@ -297,6 +297,31 @@ halbwert_runden = 500
 bezugsmischung = "M"
 ansprechen_exponent = 0.5
 
+# Punkt 90: Die gruene Strecke frisst Reifen. Rauer Asphalt schmirgelt,
+# eingegummierter Asphalt traegt - derselbe Stand, der den Grip hebt,
+# senkt also auch den Verschleiss. Der Faktor laeuft ueber dieselbe
+# Kurve wie der Grip, nur von ``verschleiss_gruen`` nach
+# ``verschleiss_voll``:
+#
+#   Verschleissfaktor(n) = gruen + (voll - gruen) * (1 - e^(-n / halbwert))
+#
+# **Umverteilung, nicht mehr Verschleiss.** Die beiden Zahlen sind so
+# gewaehlt, dass ein volles Rennen ueber alles gerechnet ungefaehr dort
+# herauskommt, wo es vorher lag - der Verschleiss wandert nur vom Ende
+# an den Anfang. Das Verhaeltnis 1,15 zu 0,928 ist 1,24: Der erste Stint
+# faellt rund ein Fuenftel kuerzer aus als der letzte. Ein Stint, der in
+# der Rennmitte 20 Runden traegt, traegt am Anfang 18 und am Ende 21.
+#
+# **Keine Mischung darin.** Wie stark der Asphalt schmirgelt, ist eine
+# Eigenschaft der Strecke, nicht des Reifens; hier steht deshalb kein
+# Auftrag und kein Ansprechen.
+#
+# Der Planer rechnet diesen Faktor **mit** (die Strecke frisst am Anfang
+# mehr, das gehoert in die Stintlaenge), den wachsenden Grip aber
+# **nicht** - so hat es der Auftraggeber festgelegt.
+verschleiss_gruen = 1.15
+verschleiss_voll = 0.928
+
 # Was eine gefahrene Auto-Runde je Lage am Stand aendert. Trocken und
 # heiss bauen auf, Regen waescht ab, wechselhaft nur sehr wenig. Wird es
 # nach dem Regen wieder trocken, baut sich derselbe Stand wieder auf.

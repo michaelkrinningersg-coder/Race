@@ -357,10 +357,21 @@ def _fahre_rennen(
     strategien = vorbereitung.strategien
     wetter = vorbereitung.wetter
     je_auto = list(strategien.je_auto)
+    # Punkt 91: Womit das Feld unterwegs ist - die gezogene Variante je
+    # Auto. Wer vom Spieler eine eigene Strategie bekommen hat, zaehlt
+    # mit seiner Wahl; sonst kaeme die Zahl oben im Rennen zu klein
+    # heraus, wenn der Spieler etwas faehrt, was sonst niemand faehrt.
+    kennungen: list[object] = list(
+        strategien.gewaehlt or range(len(strategien.je_auto))
+    )
     for stelle, teilnehmer in enumerate(gestartet):
         gewaehlt = (wahl or {}).get(teilnehmer.nummer)
         if gewaehlt is not None:
             je_auto[stelle] = gewaehlt
+            kennungen[stelle] = (
+                tuple(m.schluessel for m in gewaehlt.mischungen),
+                tuple(gewaehlt.stopps),
+            )
     verlauf = kern_rennen.simuliere(
         konfiguration,
         strecke,
@@ -371,6 +382,7 @@ def _fahre_rennen(
         wetter=wetter,
         streckenverschleiss=streckenverschleiss,
         strategien=tuple(je_auto),
+        strategiezahl=len(set(kennungen)),
         mischungspflicht=strategien.pflicht_zwei,
         liga=liga,
         # Die Startaufstellung ordnet das Feld um; Kenntnisfaktor und

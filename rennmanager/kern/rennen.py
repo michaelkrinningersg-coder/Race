@@ -272,6 +272,12 @@ class Rennverlauf:
     # Regen, Starkregen und wechselhaftem Wetter ist die Pflicht
     # aufgehoben.
     mischungspflicht: bool = False
+    # Punkt 91: Wie viele verschiedene Strategien im Feld unterwegs sind.
+    # Gezaehlt wird die **gewaehlte Variante**, nicht die gefahrene
+    # Stopprunde - zwei Autos auf derselben Variante fahren dieselbe
+    # Strategie, auch wenn das Boxenstoppfenster ihre Stopps um eine
+    # Runde auseinanderzieht. ``0`` heisst: nicht bekannt (Laborfall).
+    strategiezahl: int = 0
     # Punkt 75: Je Auto die Uhrzeiten an den Messpunkten, in der
     # Reihenfolge der Ueberfahrten. Der Index ist ``Runde * Punkte je
     # Runde + Nummer des Punkts``. Daraus wird der Abstand zweier Autos
@@ -749,6 +755,12 @@ class _Lauf:
         # Punkt 88: Gefahrene Auto-Runden auf dieser Strecke in dieser
         # Session. Daraus wird der Grip-Aufschlag der Gummierung.
         self.gummierung = 0.0
+        # Punkt 90: Und derselbe Stand senkt den Verschleiss - die gruene
+        # Strecke frisst Reifen, die eingegummierte schont sie. Ohne
+        # Wetterverlauf bleibt der Faktor neutral, genau wie
+        # ``wetter_verschleiss``: Der Laborfall hat keine Strecke, die
+        # sich veraendert.
+        self.gummi_verschleiss = 1.0
         # E1: Der Nachbar je Platz - ``[1, 2, ..., n-1, 0]``. ``np.roll``
         # tat dasselbe und kostete auf dreissig Werten 6,4 Mikrosekunden;
         # ein fertiger Indexvektor kostet 0,2. Bei einem Aufruf je
@@ -1271,7 +1283,10 @@ class _Lauf:
         )
         naechste = float(
             self.verschleiss[i]
-            + self.verschleiss_je_meter[i] * self.laenge * self.wetter_verschleiss
+            + self.verschleiss_je_meter[i]
+            * self.laenge
+            * self.wetter_verschleiss
+            * self.gummi_verschleiss
         )
         if 1.0 - naechste <= schwelle:
             return False
@@ -1380,6 +1395,13 @@ class _Lauf:
         # Naesse rechnet die Funktion mit trockener Strecke, und ein
         # Intermediate gilt ihr dann schon als Fehlgriff.
         self.wetter_verschleiss = float(kern_wetter.verschleissfaktor(self.k, zustand))
+        # Punkt 90: Dazu der Zustand der Strecke selbst. Er steht neben
+        # dem Wetterfaktor und nicht in ihm - das Wetter zehrt an den
+        # Reifen, der Asphalt schmirgelt sie ab, und beides aendert sich
+        # in seinem eigenen Takt.
+        self.gummi_verschleiss = float(
+            kern_gummierung.verschleissfaktor(self.k, self.gummierung)
+        )
         naesse = kern_reifen.naesse_von(self.k, zustand)
         if naesse != self.naesse_jetzt:
             self.naesse_jetzt = naesse
@@ -1442,7 +1464,10 @@ class _Lauf:
         # zusaetzlich (Punkt 39) - beides steckt in
         # ``wetter_verschleiss`` und wird beim Rundenwechsel gesetzt.
         self.verschleiss += (
-            (self.distanz - vorher) * self.verschleiss_je_meter * self.wetter_verschleiss
+            (self.distanz - vorher)
+            * self.verschleiss_je_meter
+            * self.wetter_verschleiss
+            * self.gummi_verschleiss
         )
         # Eine angefangene Pause nach einem Fehler laeuft ab.
         self.pause_ms = np.maximum(self.pause_ms - dt * 1000.0, 0.0)
@@ -2058,6 +2083,7 @@ def simuliere(
     rhythmusfaktor: tuple[float, ...] | None = None,
     hoechstdauer_ms: int | None = None,
     strategien: tuple[kern_strategie.Strategie, ...] | None = None,
+    strategiezahl: int = 0,
     mischungspflicht: bool = False,
     liga: int | None = None,
     fortschritt: Callable[[int, int], None] | None = None,
@@ -2086,6 +2112,9 @@ def simuliere(
         abweichen laesst. GDD 9 kalibriert ausdruecklich ohne Zufall, und
         fuer die Massensimulation aus GDD 15 ist es ebenfalls noetig.
     :param hoechstdauer_ms: Notbremse gegen ein Rennen, das nie endet
+    :param strategiezahl: wie viele verschiedene Strategien im Feld
+        unterwegs sind (Punkt 91) - reine Anzeigegroesse, das Rennen
+        rechnet ohne sie
     :param strategien: Mischungsfolge und Stopprunden je Auto (Punkt 39),
         aus rennmanager.kern.strategie. Ohne Angabe faehrt jedes Auto das
         ganze Rennen auf einem Satz - das brauchen die Kalibrierung und
@@ -2195,6 +2224,7 @@ def simuliere(
         gummierung=np.array(gummibilder, dtype=np.float32) if wetter is not None else None,
         boxenstopps=tuple(lauf.boxenstopps),
         mischungspflicht=mischungspflicht,
+        strategiezahl=strategiezahl,
         messzeiten=tuple(tuple(zeiten) for zeiten in lauf.messzeiten),
         messpunkte_je_runde=len(lauf.messpunkte),
     )

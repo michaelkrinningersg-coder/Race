@@ -567,6 +567,21 @@ unter den ueberlebenden waehlt jedes Auto zufaellig. Deshalb faehrt nicht
 das ganze Feld dasselbe, und trotzdem faehrt niemand offensichtlichen
 Unsinn.
 
+**Gerechnet wird mit dem Medianfahrer, allein auf der Strecke.** Frueher
+setzte das staerkste Auto den Massstab, und danach rechnete *jedes* Auto
+seine Stopprunden noch einmal mit den eigenen Werten nach - wer die
+Reifen schlechter schont, kam frueher herein. Das gab dreissig
+Abwandlungen statt einer Handvoll Strategien. Jetzt steht ein Satz
+zugelassener Varianten fest, die Autos ziehen daraus, und was ein
+einzelnes Auto vom Median abweicht, faengt im Rennen der Zwangsstopp bei
+30 Prozent Restprofil ab. Oben im Rennen steht, wie viele verschiedene
+Strategien unterwegs sind.
+
+Danach - und **nur** danach - kommt das Boxenstoppfenster: ein
+zufaelliges Delta von +/- 3 Prozent der Renndistanz auf jede Stopprunde,
+mindestens aber eine Runde, so dass immer drei Runden moeglich bleiben.
+Es entzerrt die Boxengasse, ohne den Plan zu veraendern.
+
 **Zwei Grenzen fuer die weichste Trockenmischung.** Sie faellt weg, wo
 sie ohnehin nicht traegt: bei einer Strategie mit **mehr als drei
 Stopps** - wer so oft herein muss, hat auf dem weichsten Gummi nichts
@@ -677,9 +692,9 @@ Exponenten:
 
 | | `verschleiss` | Auftrag | Ansprechen |
 | --- | ---: | ---: | ---: |
-| Weich | 1,27 | 1,44 | 1,20 |
-| Mittel | 0,88 | 1,00 | 1,00 |
-| Hart | 0,64 | 0,73 | 0,85 |
+| Weich | 1,05 | 1,44 | 1,20 |
+| Mittel | 0,73 | 1,00 | 1,00 |
+| Hart | 0,53 | 0,73 | 0,85 |
 
 Der **Auftrag** ist linear: Gummi auf der Strecke *ist* abgefahrener
 Reifen, was 1,44-mal so schnell abbaut, laesst 1,44-mal so viel liegen.
@@ -688,7 +703,7 @@ in den liegenden Gummi einarbeitet, ist der schwaechere Zusammenhang.
 Ein Exponent statt fuenf erfundener Zahlen, und genau eine Stellschraube.
 
 Der Auftrag gilt **nur beim Aufbau**. Abgewaschen wird vom Regen, nicht
-vom Reifen; ein Intermediate (Verschleiss 1,10) darf nicht staerker
+vom Reifen; ein Intermediate darf nicht staerker
 abwaschen als ein Regenreifen.
 
 Gemessen in Zandvoort, reine Physik:
@@ -705,12 +720,49 @@ Zum Vergleich: Weich ist an sich **1,70 s** schneller als Hart
 den Kopf. Bei Exponent 1,0 waeren es 53 %, und ein spaeter weicher
 Stint waere fast erzwungen.
 
-**Die Strategie weiss davon nichts.** `strategie.py` plant Stints aus
-Verschleiss und Mischungstempo; Gummi kennt sie nicht. Weich wird damit
-spaet im Rennen relativ besser, ohne dass die Planung es einrechnet -
-die KI schoepft es nicht aus, und wer es bemerkt, hat einen Vorteil. So
-gewollt (Entscheidung des Auftraggebers); es der Planung beizubringen
-waere ein eigener Punkt.
+**Den Grip kennt die Strategie nicht.** `strategie.py` plant Stints aus
+Verschleiss und Mischungstempo; den Gummi-Aufschlag kennt sie nicht.
+Weich wird damit spaet im Rennen relativ besser, ohne dass die Planung
+es einrechnet - die KI schoepft es nicht aus, und wer es bemerkt, hat
+einen Vorteil. So gewollt (Entscheidung des Auftraggebers).
+
+#### Die gruene Strecke frisst Reifen
+
+Rauer Asphalt schmirgelt, eingegummierter Asphalt traegt. Derselbe
+Stand, der den Grip hebt, senkt also auch den Verschleiss - ueber
+dieselbe Kurve, nur von `verschleiss_gruen` nach `verschleiss_voll`:
+
+    Verschleissfaktor(n) = 1,15 + (0,928 - 1,15) * (1 - e^(-n / 500))
+
+| Auto-Runden | Faktor | Ein 20-Runden-Stint waere |
+| ---: | ---: | ---: |
+| 0 (gruen) | 1,150 | 17 Runden |
+| 200 | 1,077 | 19 Runden |
+| 500 | 1,010 | 20 Runden |
+| 900 | 0,965 | 21 Runden |
+| 1.800 (Rennende) | 0,934 | 21 Runden |
+
+**Umverteilung, nicht mehr Verschleiss.** Die beiden Zahlen sind so
+gewaehlt, dass ein volles Rennen ueber alles gerechnet ungefaehr dort
+herauskommt, wo es vorher lag; der Verschleiss wandert nur vom Ende an
+den Anfang. Das Verhaeltnis 1,15 zu 0,928 ist 1,24 - der erste Stint
+faellt rund ein Fuenftel kuerzer aus als der letzte.
+
+**Ohne Mischung.** Wie stark der Asphalt schmirgelt, ist eine
+Eigenschaft der Strecke, nicht des Reifens; anders als beim Auftrag und
+beim Ansprechen steht hier kein Mischungsfaktor.
+
+**Das** kennt die Strategie sehr wohl (Entscheidung des Auftraggebers):
+Der Planer rechnet mit dem Verschleissfaktor je Runde, weil er sonst
+den ersten Stint zu lang ansetzt. Den wachsenden Grip rechnet er
+weiterhin nicht mit.
+
+Damit ist auch die **Reihenfolge der Mischungen** keine freie Wahl mehr.
+Frueher galt: Ein Stint kostet, was er kostet, egal ob er der erste oder
+der letzte ist - dann genuegte eine Rechnung je Zusammenstellung, und
+die Reihenfolgen erbten sie. Jetzt ist ein weicher Satz auf gruenem
+Asphalt etwas anderes als derselbe Satz auf eingegummiertem, und jede
+Reihenfolge wird einzeln gerechnet.
 
 #### Warum ein Prozent Grip eine Sekunde ist
 

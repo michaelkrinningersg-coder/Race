@@ -112,19 +112,23 @@ def test_die_wahl_kommt_im_rennen_an(k, welt, strecken):
     verlauf = wochenende.fahre_rennen()
     stelle = [t.nummer for t in verlauf.teilnehmer].index(eigene[0])
     stopps = [b for b in verlauf.stopps_von(stelle) if not b.notstopp]
-    # Die Wahl ist gefahren worden: dieselben Mischungen, dieselbe Zahl
-    # von Stopps.
-    assert len(stopps) == len(gewaehlt.stopps)
-    assert [b.nach for b in stopps] == [
-        m.kuerzel for m in gewaehlt.mischungen[1:]
-    ]
-    # Die Stopprunde darf sich nach hinten verschieben, wenn der Satz an
-    # dem Tag noch ueber ``planstopp_ab_restprofil`` liegt - diese Regel
-    # gilt fuer den Spieler wie fuer die KI. Frueher als gewaehlt kommt
-    # niemand herein.
-    assert all(
-        gewaehlt.stopps[n] <= b.runde for n, b in enumerate(stopps)
-    )
+
+    # Gefahren wird die gewaehlte Folge, und zwar von vorn: die
+    # Startmischung und jeder Wechsel stehen so in der Wahl.
+    gefahren = [verlauf.mischung_zu(0)[stelle]] + [b.nach for b in stopps]
+    assert gefahren == [m.kuerzel for m in gewaehlt.mischungen[: len(gefahren)]]
+
+    # Frueher als gewaehlt kommt niemand herein ...
+    assert all(gewaehlt.stopps[n] <= b.runde for n, b in enumerate(stopps))
+    # ... und oefter auch nicht.
+    assert len(stopps) <= len(gewaehlt.stopps)
+    # Dass es *weniger* sein duerfen, ist die Regel
+    # ``planstopp_ab_restprofil``: Ueber der Schwelle wird nicht
+    # gewechselt, sondern Runde um Runde weitergefahren, und wer schon
+    # einmal gewechselt hat, faehrt den guten Satz bis ins Ziel. Das gilt
+    # fuer den Spieler wie fuer die KI - gemessen faellt in diesem Lauf
+    # der zweite von zwei geplanten Stopps weg, weil der frische Satz
+    # nach drei Runden noch bei 88 Prozent steht.
 
 
 @pytest.fixture(scope="module")

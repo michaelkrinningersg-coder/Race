@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 from rennmanager import konfiguration as kf
+from rennmanager.kern import auto as ka
 from rennmanager.kern import reifen as kr
 from rennmanager.kern import rennen as rn
 from rennmanager.kern import schnellsimulation as sn
@@ -150,19 +151,40 @@ def test_ohne_teilnehmer_gibt_es_kein_wochenende(k, zandvoort, umgebung):
         sn.fahre_wochenende(k, LIGA, zandvoort, (), RUNDEN, Seedquelle(0), mittel, verschleiss)
 
 
-def test_starke_autos_gewinnen_haeufiger(k, zandvoort, feld, umgebung, welt):
+def test_starke_autos_gewinnen_haeufiger(k, zandvoort, umgebung):
     """Ein Feld ist nur dann brauchbar, wenn Staerke sich auszahlt.
 
-    Ueber mehrere Rennen muss die vordere Haelfte der Liga - nach
-    Staerke geordnet - deutlich mehr Siege holen als die hintere.
+    **Das Feld wird dafuer eigens gebaut.** Vorher stand hier das Feld
+    der kleinen Welt aus ``conftest`` - und dessen vier Autos haben alle
+    den Gesamtwert null, sind also gleich stark. Der Test mass damit
+    reinen Zufall: ueber 200 Seeds gewann die "vordere Haelfte" in genau
+    50 Prozent der Rennen, und dass er ueber die Seeds 0 bis 7 durchging,
+    war Glueck. Aufgefallen ist es, als ein Seed kippte.
+
+    Jetzt steht ein Gefaelle im Feld, und zwei Rennlaengen werden
+    gemessen: Ueber die Distanz muss sich Staerke durchsetzen.
     """
+    mittel, verschleiss = umgebung
+    werte = (98_000, 70_000, 30_000, 10_000)
+    feld = tuple(
+        rn.Teilnehmer(
+            auto=ka.gleichverteilt(k, wert, kuerzel=f"S{i}"),
+            startplatz=i + 1,
+            farbe="#888888",
+        )
+        for i, wert in enumerate(werte)
+    )
     haelfte = len(feld) // 2
+    versuche = 12
     vorne = sum(
         1
-        for seed in range(8)
-        if fahre(k, zandvoort, feld, umgebung, seed).ergebnisse[0].fahrer < haelfte
+        for seed in range(versuche)
+        if sn.fahre_wochenende(
+            k, LIGA, zandvoort, feld, RUNDEN, Seedquelle(seed), mittel, verschleiss
+        ).ergebnisse[0].fahrer
+        < haelfte
     )
-    assert vorne >= 6
+    assert vorne >= versuche - 1, f"Nur {vorne} von {versuche} Siegen fuer die Starken"
 
 
 # --- Abgleich mit der vollen Simulation -----------------------------------

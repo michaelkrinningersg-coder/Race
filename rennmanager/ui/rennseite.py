@@ -267,9 +267,21 @@ class Rennseite(QWidget):
         zeile.addWidget(self._raffer)
         zeile.addWidget(self._sofort)
         self._wetteranzeige = QLabel("-")
+        # Punkt 91: Wie viele verschiedene Strategien das Feld faehrt.
+        # Der Planer laesst eine Handvoll Varianten zu und verteilt sie
+        # zufaellig; hier steht, wie viele davon wirklich unterwegs sind.
+        self._strategiezahl = QLabel("-")
+        self._strategiezahl.setToolTip(
+            "Wie viele verschiedene Reifenstrategien im Feld gefahren werden. "
+            "Zwei Autos auf derselben Variante zaehlen einmal, auch wenn "
+            "ihre Stopprunden um eine Runde auseinanderliegen."
+        )
         zeile.addWidget(self._uhrzeit)
         zeile.addWidget(self._rundenstand)
         zeile.addWidget(self._fortschritt, stretch=1)
+        zeile.addWidget(QLabel("Strategien:"))
+        zeile.addWidget(self._strategiezahl)
+        zeile.addSpacing(12)
         zeile.addWidget(QLabel("Wetter:"))
         zeile.addWidget(self._wetteranzeige)
         zeile.addSpacing(12)
@@ -455,6 +467,10 @@ class Rennseite(QWidget):
         self._gewaehlt = None
         self._zeige_auswahl()
         self._fortschritt.setRange(0, max(verlauf.dauer_ms, 1))
+        # Punkt 91: Steht einmal je Rennen fest und aendert sich nicht.
+        self._strategiezahl.setText(
+            str(verlauf.strategiezahl) if verlauf.strategiezahl else "-"
+        )
         for knopf in (self._abspielen, self._zurueck, self._sofort):
             knopf.setEnabled(True)
         self._waehle_zeitraffer()

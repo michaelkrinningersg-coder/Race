@@ -167,10 +167,27 @@ def zeige(lauf: dict) -> None:
         f"(Streckenfaktor {wahl.faktor:.3f}, {wahl.strecke.laenge_m / 1000:.2f} km, "
         f"{runden} Runden)"
     )
+    strategien = lauf["strategien"]
     print(
         f"Wetter: {lagen}  (Seed {lauf['wetterseed']})   "
-        f"Mischungspflicht: {'ja' if lauf['strategien'].pflicht_zwei else 'nein'}"
+        f"Mischungspflicht: {'ja' if strategien.pflicht_zwei else 'nein'}"
     )
+    # Punkt 91: Der Planer laesst eine Handvoll Varianten zu; die Autos
+    # ziehen daraus. Beide Zahlen gehoeren nebeneinander - wenn von
+    # zwanzig zugelassenen Varianten nur drei gezogen werden, liegt das
+    # am Feld, nicht am Planer.
+    gezogen = Counter(n for n in strategien.gewaehlt if n >= 0)
+    print(
+        f"Varianten: {len(strategien.varianten)} zugelassen, "
+        f"{strategien.strategiezahl} davon gefahren"
+    )
+    for nummer, wie_oft in sorted(gezogen.items()):
+        v = strategien.varianten[nummer]
+        rueckstand = (v.zeit_ms - strategien.varianten[0].zeit_ms) / 1000.0
+        print(
+            f"   {v.folge:18s} Stopps {str(list(v.stopps)):14s} "
+            f"+{rueckstand:5.1f} s   {wie_oft:2d} Autos"
+        )
     # Wer ausfaellt, stoppt nicht mehr - ohne diese Spalte sieht eine Null
     # in "Stopps" nach einer Strategie aus, die es gar nicht gab. Nicht ins
     # Ziel gekommen ist, wer ausgefallen ist; weniger Runden als der Erste
@@ -225,7 +242,11 @@ def zeige(lauf: dict) -> None:
     verteilung = Counter(je_auto)
     print(
         "Verteilung: "
-        + "   ".join(f"{zahl} Stopps: {verteilung[zahl]:2d} Autos" for zahl in sorted(verteilung))
+        + "   ".join(
+            f"{zahl} Stopps: {verteilung[zahl]:2d} Autos "
+            f"({verteilung[zahl] / len(je_auto) * 100:4.1f} %)"
+            for zahl in sorted(verteilung)
+        )
     )
     print(
         f"Restprofil beim Stopp: min {reste[0]:.1f} %  "

@@ -372,6 +372,11 @@ def fahre_wochenende(
         zustand = wetter.zustand_zu(gesamtzeit[aktiv].min() if aktiv.any() else 0.0)
         wetter_fehler = float(konfiguration.wert("wetter", "zustand", zustand)["fehlerquote"])
         wetter_verschleiss = kern_wetter.verschleissfaktor(konfiguration, zustand)
+        # Punkt 90: Die gruene Strecke frisst Reifen, die eingegummierte
+        # schont sie - wie in der vollen Simulation. Der Stand gilt zum
+        # Beginn der Runde; was diese Runde dazulegt, wirkt erst in der
+        # naechsten.
+        gummi_verschleiss = kern_gummierung.verschleissfaktor(konfiguration, gummistand)
         naesse_jetzt = kern_reifen.naesse_von(konfiguration, zustand)
         if naesse_jetzt != naesse_lage:
             naesse_lage = naesse_jetzt
@@ -428,7 +433,7 @@ def fahre_wochenende(
             # Fuer die Wetter-Erfahrung aus GDD 10: Die Runde zaehlt zu der
             # Lage, die zu ihrem Beginn galt.
             kilometer[i][zustand] += strecke.laenge_m / 1000.0
-            verschleiss[i] += verschleiss_je_runde[i] * wetter_verschleiss
+            verschleiss[i] += verschleiss_je_runde[i] * wetter_verschleiss * gummi_verschleiss
             gefahrene_runden[i] += 1
 
             # --- Boxenstopp (Punkt 39) --------------------------------
@@ -451,7 +456,8 @@ def fahre_wochenende(
             ):
                 einstellung = konfiguration.wert("boxenstopp", "strategie")
                 kuenftig = 1.0 - float(
-                    verschleiss[i] + verschleiss_je_runde[i] * wetter_verschleiss
+                    verschleiss[i]
+                    + verschleiss_je_runde[i] * wetter_verschleiss * gummi_verschleiss
                 )
                 if kuenftig > kern_strategie.verschiebeschwelle(
                     konfiguration, nach_notstopp=bool(letzter_war_notstopp[i])
