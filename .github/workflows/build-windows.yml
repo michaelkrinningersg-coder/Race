@@ -1,8 +1,11 @@
 name: Windows-Build
 
+# Nur auf Ansage (Entscheidung des Auftraggebers) und bei einem
+# Versionsschild. Der Build lief bisher bei jedem Push auf jedem Zweig
+# mit; das kostet bei jeder Zwischenstufe einen Windows-Runner, ohne dass
+# jemand die .exe braucht.
 on:
   push:
-    branches: ["**"]
     tags: ["v*"]
   workflow_dispatch:
 

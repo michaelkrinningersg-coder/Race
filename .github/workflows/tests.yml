@@ -10,10 +10,14 @@ jobs:
   tests:
     name: Tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    # Auf Ansage laufen beide Systeme, sonst nur Linux (Entscheidung des
+    # Auftraggebers). Windows kostet je Push einen eigenen Runner und
+    # bringt bei einer Zwischenstufe nichts dazu; vor einer Auslieferung
+    # startet man den Lauf von Hand ueber "Run workflow".
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: ${{ github.event_name == 'workflow_dispatch' && fromJSON('["ubuntu-latest", "windows-latest"]') || fromJSON('["ubuntu-latest"]') }}
 
     steps:
       - uses: actions/checkout@v4

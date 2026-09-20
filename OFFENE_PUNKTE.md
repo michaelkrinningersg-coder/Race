@@ -2516,3 +2516,48 @@ Der Reifenzustand wird dagegen nur angezeigt — als Balken und als
 Prozentzahl — und nie für eine Entscheidung gelesen; die Simulation
 rechnet auf `verschleiss`. Dort ist `float32` unbedenklich und halbiert
 den Speicher: **10,7 → 8,0 MB** je Rennen.
+
+### 87. Der Fingerabdruck war als CI-Anker ein Fehlentwurf
+
+**Die CI wurde rot, und zwar zu Recht — aber nicht wegen des Codes.**
+`test_rennfingerabdruck.py` hielt zwei Hashwerte fest, gebildet über
+alle rohen `float64`-Distanzen eines Rennens: 670.000 Zahlen. Auf der
+Maschine, auf der sie entstanden, ist das ein scharfes Werkzeug; E1 bis
+E8 ließen sich damit als bitgenau verhaltensgleich belegen, und das
+stimmt auch weiterhin.
+
+Als CI-Anker war es falsch. Die Tests laufen auf **Linux und Windows**,
+NumPy ist nur als `>=1.26` gefordert. Verschiedene Rechner nehmen
+verschiedene SIMD-Pfade und liefern in der letzten Stelle andere Bits.
+Der Anker **musste** dort rot werden, ohne dass am Rennen irgendetwas
+falsch war. Ein Test, der aus einem Grund rot wird, den er nicht meint,
+ist schlimmer als kein Test — er kostet Vertrauen in alle anderen mit.
+
+Belegt: derselbe Commit (`e5931d3`, an der Testzahl 1048 erkennbar) ist
+hier grün und dort rot, und **beide** Anker wichen ab — ein Codefehler
+träfe eher einen.
+
+**Was jetzt gilt:**
+
+* Die Kennzahl bleibt, im Werkzeug, wo sie hingehört:
+  `python -m werkzeuge.profil_rennen --fingerabdruck`, vor und nach
+  einer Änderung auf **derselben** Maschine. Genau so wurde sie
+  gebraucht.
+* Der Test prüft, was überall gilt: gleicher Seed → gleiches Rennen
+  (auf einer Maschine sogar bitgleich), anderer Seed → anderes Rennen,
+  und ein grober Plausibilitätsrahmen. Verglichen wird dabei, was ein
+  Spieler sieht — Rundenzeiten, Sektoren, Ergebnisse, Stopps,
+  Zwischenfälle —, alles ganze Zahlen.
+* Der maschinenunabhängige Anker für die Physik ist die **Kalibrierung**
+  (GDD 9): eine einzelne Runde ohne Zufall und ohne Verkehr, Zandvoort
+  bei S=98.000 auf 180,00 km/h. Die hängt an keiner Maschine.
+
+**Nebenbefund:** Ein um ein Bit verschobener Eingangswert ließ Rennen,
+Rundenzeiten und Ergebnisse gemessen **unverändert**. Die Simulation ist
+also nicht so chaotisch, dass jedes Bit durchschlägt — die Abweichung
+zwischen den Rechnern entsteht breiter als an einer einzelnen Stelle.
+
+**Windows läuft nur noch auf Ansage** (Entscheidung des Auftraggebers).
+`tests.yml` fährt bei einem Push nur Linux und beide Systeme erst bei
+„Run workflow"; `build-windows.yml` läuft nur noch bei einem
+Versionsschild `v*` oder von Hand.

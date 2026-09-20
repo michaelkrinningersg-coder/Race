@@ -57,6 +57,15 @@ BILDER = 150
 def fingerabdruck(verlauf: kern_rennen.Rennverlauf) -> str:
     """Eine Kennzahl, die sich aendert, sobald sich das Rennen aendert.
 
+    **Nur auf derselben Maschine vergleichbar.** Der Hash geht ueber die
+    rohen ``float64``-Distanzen - 670.000 Zahlen -, und die letzte Stelle
+    davon haengt am Rechner: verschiedene NumPy-Bauten und verschiedene
+    Prozessoren nehmen verschiedene SIMD-Pfade. Vor und nach einer
+    Aenderung auf **einem** Rechner aufgerufen ist das genau das richtige
+    Werkzeug und sagt auf das Bit, ob sich etwas geaendert hat; als
+    Anker in einem Test, der auf Linux und Windows laeuft, war es ein
+    Fehlentwurf (siehe tests/test_rennfingerabdruck.py).
+
     Genommen wird, woran ein Spieler einen Unterschied merken wuerde:
     jede Distanz jedes Autos zu jedem Bild, alle Rundenzeiten, alle
     Sektorzeiten und die Ergebnisse. Ein einziges verschobenes Bit faellt
