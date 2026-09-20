@@ -74,10 +74,47 @@ def test_der_grip_hat_sein_optimum_bei_fuenfundachtzig_prozent(k) -> None:
     assert max(werte)[1] == round(bestes_profil * 100)
     assert rf.grip(k, 1.0) < rf.grip(k, bestes_profil)
     assert rf.grip(k, 0.95) > rf.grip(k, 1.0)
-    # Am Boden bleibt die unterste Stuetzstelle - deutlich unter der Haelfte
-    # des frischen Reifens.
+    # Am Boden bleibt die unterste Stuetzstelle: langsam, aber nicht
+    # unfahrbar. Geprueft wird die **Regel**, nicht die Zahl - der
+    # Auftraggeber hat den Boden in Punkt 89 auf genau die Haelfte des
+    # frischen Reifens gelegt, und ein Test, der "deutlich unter der
+    # Haelfte" fest verdrahtet, faellt dann ohne Grund.
     assert rf.grip(k, 0.0) == pytest.approx(min(einstellung["grip_stuetzstellen"]))
-    assert rf.grip(k, 0.0) < rf.grip(k, 1.0) / 2.0
+    # Deutlich unter dem frischen Reifen, aber noch fahrbar - die Zahl
+    # selbst steht in der Konfiguration und hat sich schon zweimal
+    # bewegt (Punkt 89: erst 0,30, dann 0,45, jetzt 0,50).
+    assert rf.grip(k, 0.0) < rf.grip(k, 1.0) * 0.8
+    assert rf.grip(k, 0.0) >= rf.grip(k, bestes_profil) / 2.0
+
+
+def test_die_kurve_hat_die_form_aus_punkt_89(k) -> None:
+    """Die Vorgabe des Auftraggebers, Abschnitt fuer Abschnitt.
+
+    Nicht die Stuetzstellen selbst - die stehen in der Konfiguration -,
+    sondern was sie bedeuten sollen: ein kurzer Einfahrweg, eine flache
+    Mitte und ein Ende, das erst zoegert und dann faellt.
+    """
+    # Der frische Reifen steht ueber 0,89, das Optimum bei 85 Prozent.
+    assert rf.grip(k, 1.00) > 0.89
+    assert rf.grip(k, 0.95) > rf.grip(k, 1.00)
+    assert rf.grip(k, 0.85) == pytest.approx(rf.bestgrip(k))
+
+    # Die Mitte ist flach: von 85 auf 50 Prozent hoechstens drei Punkte.
+    assert 0.0 < rf.grip(k, 0.85) - rf.grip(k, 0.50) <= 0.03
+
+    # Danach wird es ernst, aber in Stufen.
+    assert rf.grip(k, 0.50) > rf.grip(k, 0.40) > rf.grip(k, 0.30)
+
+    # Unter dreissig Prozent: erst flach, dann immer steiler. Jeder
+    # Fuenferschritt faellt staerker als der davor.
+    stufen = [
+        rf.grip(k, r / 100.0) - rf.grip(k, (r - 5) / 100.0)
+        for r in range(30, 0, -5)
+    ]
+    assert all(a < b for a, b in zip(stufen, stufen[1:], strict=False)), (
+        f"Der Abfall muss zunehmen, gemessen: "
+        f"{[round(s, 3) for s in stufen]}"
+    )
 
 
 def test_die_fehlerquote_folgt_derselben_kurve(k) -> None:

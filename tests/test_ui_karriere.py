@@ -367,7 +367,13 @@ def test_fenster_speichert_und_laedt_einen_spielstand(
     # ... bis der Stand geladen ist.
     zweites.uebernimm(kern_spielstand.lade(konfig, pfad))
     assert zweites.karriereseite.karriere.werte["F1"] == karriere.werte["F1"]
-    assert [d["schluessel"] for d in zweites.karriereseite.karriere.defekte] == ["X7"]
+    # Die Defekte kommen aus dem gefahrenen Rennen - welche es sind,
+    # haengt am Balancing und hat sich mit Punkt 89 geaendert. Geprueft
+    # wird deshalb die **Rundreise**: Was vorher da war, ist nachher da.
+    assert karriere.defekte, "Ohne Defekt prueft dieser Test nichts"
+    assert [d["schluessel"] for d in zweites.karriereseite.karriere.defekte] == [
+        d["schluessel"] for d in karriere.defekte
+    ]
     assert zweites.saisonseite.lauf.gefahren == 1
     assert zweites.welt == fenster.welt
     # Die Statistik des Wochenendes ist ebenfalls da.
