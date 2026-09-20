@@ -200,7 +200,7 @@ def test_in_der_untersten_liga_greift_der_abzug(k, strecken):
 
     from rennmanager.kern import rennen as kern_rennen
 
-    feld = kern_rennen.starterfeld(k, 20)
+    feld = kern_rennen.starterfeld(k, 10)
     schwaechstes = min((t.auto for t in feld), key=lambda a: sum(a.werte.values()))
     grenzen = kern_tempo.grenzen_aus(k, schwaechstes)
     deckel = k.wert("boxenstopp", "limit_kmh") / 3.6
@@ -218,7 +218,7 @@ def test_auch_in_der_untersten_liga_kostet_die_durchfahrt(k, strecken):
     """Ohne den Abzug waere ein Stopp dort an manchen Stellen umsonst."""
     from rennmanager.kern import rennen as kern_rennen
 
-    feld = kern_rennen.starterfeld(k, 20)
+    feld = kern_rennen.starterfeld(k, 10)
     schwaechstes = min((t.auto for t in feld), key=lambda a: sum(a.werte.values()))
     grenzen = kern_tempo.grenzen_aus(k, schwaechstes)
     for strecke in strecken:

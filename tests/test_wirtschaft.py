@@ -179,13 +179,14 @@ def test_anteile_treffen_die_vorgaben(k) -> None:
 
 
 def test_anteile_fallen_monoton(k) -> None:
-    werte = [ei.anteil(k, platz) for platz in range(1, 31)]
+    autos = k.wert("rennen", "autos")
+    werte = [ei.anteil(k, platz) for platz in range(1, autos + 1)]
     assert werte == sorted(werte, reverse=True)
 
 
 def test_platz_ausserhalb_meldet_fehler(k) -> None:
     with pytest.raises(ei.EinnahmenFehler, match="Platz"):
-        ei.anteil(k, 31)
+        ei.anteil(k, k.wert("rennen", "autos") + 1)
 
 
 def test_erfahrung_folgt_dem_preisgeld(k) -> None:

@@ -49,7 +49,7 @@ LIGA = 1
 # Verteilung - vier von dreissig Autos, also 13 Prozent des Feldes, die
 # ueber Strategie nichts aussagen. Gemessen wird deshalb eine Liga ohne
 # Spielerteam: dreissig KI-Autos mit Gesamtwerten von 76.768 bis 94.632.
-SPIELERLIGA = 20
+SPIELERLIGA = 10
 # Lagen, unter denen die Trockenmischungen ueberhaupt zur Wahl stehen.
 TROCKEN = {"trocken", "heiss"}
 # So viele Seeds werden hoechstens probiert, bis das Wetter trocken bleibt.

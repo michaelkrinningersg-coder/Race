@@ -23,7 +23,7 @@ ANZAHL_FAHRZEUG_UPGRADES = 16       # GDD 5
 ANZAHL_FAHRER_EIGENSCHAFTEN = 16    # GDD 6
 ANZAHL_MIT_GELDANTEIL = 18          # GDD 9: "18 Faehigkeiten haben einen Geldanteil"
 ANZAHL_STRECKEN = 20                # GDD 3
-ANZAHL_LIGEN = 20                   # GDD 12
+ANZAHL_LIGEN = 10                   # GDD 12, seit Punkt 95 zehn statt zwanzig
 ANZAHL_HERSTELLER = 20              # GDD 12
 ANZAHL_EREIGNISSE = 35              # GDD 14
 ANZAHL_DEFEKTE = 20                 # GDD 14
@@ -459,6 +459,28 @@ def _pruefe_ligen(k: Konfiguration) -> None:
     anzahl = k.wert("ligen", "anzahl")
     if anzahl != ANZAHL_LIGEN:
         raise KonfigurationsFehler(f"{ANZAHL_LIGEN} Ligen erwartet, {anzahl} gefunden")
+
+    # Punkt 95: Der Korridor steht als Formel in der Konfiguration; die
+    # Eintraege unter [[ligen.kontrolle]] sind Pruefwerte dazu. Laufen die
+    # beiden auseinander, hat jemand an einem Ende gedreht und am anderen
+    # nicht - das faellt hier auf, nicht erst in einer schiefen Welt.
+    unten = float(k.wert("ligen", "unterste_s"))
+    oben = float(k.wert("ligen", "oberste_s"))
+    rest = 1.0 - k.wert("ligen", "ueberlappung_anteil")
+    if not 0.0 < rest <= 1.0:
+        raise KonfigurationsFehler("Die Ligaueberlappung muss zwischen 0 und 1 liegen")
+    if oben <= unten:
+        raise KonfigurationsFehler("oberste_s muss groesser sein als unterste_s")
+    breite = (oben - unten) / ((anzahl - 1) * rest + 1.0)
+    for pruef in k.wert("ligen", "kontrolle"):
+        liga = pruef["liga"]
+        letzter = unten + (anzahl - liga) * breite * rest
+        erwartet = (round(letzter + breite), round(letzter))
+        gefunden = (pruef["s_bester"], pruef["s_letzter"])
+        if erwartet != gefunden:
+            raise KonfigurationsFehler(
+                f"Liga {liga}: Korridor ergibt {erwartet}, Pruefwert sagt {gefunden}"
+            )
 
     abgedeckt: set[int] = set()
     for gruppe in k.wert("ligen", "namen"):

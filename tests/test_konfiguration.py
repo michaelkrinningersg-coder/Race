@@ -63,14 +63,15 @@ def test_jeder_bereich_hat_wirkende_faehigkeiten(k: kf.Konfiguration) -> None:
 
 
 def test_ligennamen(k: kf.Konfiguration) -> None:
-    """GDD 12: Platin/Gold/Silber/Bronze mit je 5 Stufen, Startliga Bronze 5."""
+    """Punkt 95: fuenf Stufen zu je zwei Ligen, Startliga Eisen 2."""
     assert k.ligenname(1) == "Platin 1"
-    assert k.ligenname(5) == "Platin 5"
-    assert k.ligenname(6) == "Gold 1"
-    assert k.ligenname(11) == "Silber 1"
-    assert k.ligenname(16) == "Bronze 1"
-    assert k.ligenname(20) == "Bronze 5"
-    assert k.ligenname(k.wert("ligen", "startliga")) == "Bronze 5"
+    assert k.ligenname(2) == "Platin 2"
+    assert k.ligenname(3) == "Gold 1"
+    assert k.ligenname(5) == "Silber 1"
+    assert k.ligenname(7) == "Bronze 1"
+    assert k.ligenname(9) == "Eisen 1"
+    assert k.ligenname(10) == "Eisen 2"
+    assert k.ligenname(k.wert("ligen", "startliga")) == "Eisen 2"
 
 
 def test_strecken(k: kf.Konfiguration) -> None:
@@ -264,38 +265,53 @@ def test_kalibrierung_stuetzpunkte(k: kf.Konfiguration) -> None:
     )
 
 
-def test_kalibrierung_reproduziert_die_ligatabelle(k: kf.Konfiguration) -> None:
-    """Die S-Werte aus GDD 9 ergeben die dort genannten Geschwindigkeiten."""
+def test_der_korridor_spannt_zwanzigtausend_bis_hunderttausend(k: kf.Konfiguration) -> None:
+    """Punkt 95: Liga 10 beginnt bei 20.000, Liga 1 endet bei 100.000."""
+    from rennmanager.kern.welt import ligagrenzen
+
+    anzahl = k.wert("ligen", "anzahl")
+    assert ligagrenzen(k, 1)[0] == k.wert("ligen", "oberste_s")
+    assert ligagrenzen(k, anzahl)[1] == k.wert("ligen", "unterste_s")
+
+
+def test_alle_ligen_sind_gleich_breit_und_ueberlappen_zu_einem_viertel(
+    k: kf.Konfiguration,
+) -> None:
+    """Punkt 95: gleiche Breite auf der Skala, 25 % Ueberlappung nach oben."""
+    from rennmanager.kern.welt import ligagrenzen
+
+    anzahl = k.wert("ligen", "anzahl")
+    anteil = k.wert("ligen", "ueberlappung_anteil")
+    grenzen = [ligagrenzen(k, liga) for liga in range(1, anzahl + 1)]
+
+    breiten = [bester - letzter for bester, letzter in grenzen]
+    assert max(breiten) - min(breiten) <= 1  # nur Rundung
+
+    for oben, unten in zip(grenzen, grenzen[1:], strict=False):
+        # Der Beste der tieferen Liga liegt um den Ueberlappungsanteil
+        # im Bereich der hoeheren.
+        hineinragend = unten[0] - oben[1]
+        assert hineinragend / breiten[0] == pytest.approx(anteil, abs=0.001)
+
+
+def test_die_kontrollwerte_passen_zum_korridor(k: kf.Konfiguration) -> None:
+    """Die Pruefwerte in der Konfiguration stammen aus derselben Formel."""
+    from rennmanager.kern.welt import ligagrenzen
+
     for zeile in k.wert("ligen", "kontrolle"):
-        assert _tempo(k, zeile["s_bester"]) == pytest.approx(
-            zeile["bester_kmh"], abs=0.05
-        ), f"Liga {zeile['liga']} Bester"
-        assert _tempo(k, zeile["s_letzter"]) == pytest.approx(
-            zeile["letzter_kmh"], abs=0.05
-        ), f"Liga {zeile['liga']} Letzter"
+        assert ligagrenzen(k, zeile["liga"]) == (zeile["s_bester"], zeile["s_letzter"])
 
 
-def test_ligastufen_haben_den_richtigen_abstand(k: kf.Konfiguration) -> None:
-    """GDD 9: +6,32 km/h je Liga, Ueberlappung 0,3 km/h, Feldbreite 6,62 km/h."""
-    bester20 = k.wert("ligen", "bester_liga20_kmh")
-    zuwachs = k.wert("ligen", "zuwachs_je_liga_kmh")
-    ueberlappung = k.wert("ligen", "ueberlappung_kmh")
+def test_liga_eins_bleibt_so_breit_wie_bisher(k: kf.Konfiguration) -> None:
+    """Punkt 95: Liga 1 orientiert sich am alten Korridor, unten wird es breiter."""
+    from rennmanager.kern.welt import ligagrenzen
 
-    def bester(liga: int) -> float:
-        return bester20 + zuwachs * (20 - liga)
+    def breite_prozent(liga: int) -> float:
+        bester, letzter = ligagrenzen(k, liga)
+        return (_tempo(k, bester) / _tempo(k, letzter) - 1.0) * 100.0
 
-    def letzter(liga: int) -> float:
-        if liga == 20:
-            return k.wert("ligen", "letzter_liga20_kmh")
-        return bester(liga + 1) - ueberlappung
-
-    for zeile in k.wert("ligen", "kontrolle"):
-        liga = zeile["liga"]
-        assert bester(liga) == pytest.approx(zeile["bester_kmh"], abs=0.05)
-        assert letzter(liga) == pytest.approx(zeile["letzter_kmh"], abs=0.05)
-
-    # Feldbreite: zwischen dem Besten und dem Letzten derselben Liga
-    assert bester(10) - letzter(10) == pytest.approx(6.62, abs=0.01)
+    assert breite_prozent(1) == pytest.approx(3.83, abs=0.05)
+    assert breite_prozent(10) == pytest.approx(11.72, abs=0.05)
 
 
 def test_kosten_reproduzieren_die_tabelle(k: kf.Konfiguration) -> None:
@@ -317,11 +333,8 @@ def test_kostensumme_reproduziert_die_tabelle(k: kf.Konfiguration) -> None:
 
 
 def test_renndistanz(k: kf.Konfiguration) -> None:
-    """GDD 4: Liga 20 = 100 km, je Liga +10 km, Liga 1 = 290 km."""
-    basis = k.wert("rennen", "distanz_liga20_km")
-    zuwachs = k.wert("rennen", "distanz_zuwachs_je_liga_km")
-    assert basis == 100
-    assert basis + zuwachs * (20 - 1) == 290
+    """Punkt 95: Jede Liga faehrt dieselbe volle Distanz von 290 km."""
+    assert k.wert("rennen", "distanz_km") == 290
 
 
 # -- Fehlermeldungen --------------------------------------------------------

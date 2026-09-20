@@ -50,7 +50,7 @@ def test_beide_modi_fahren_dieselbe_strategie(ohne_verschiebung, monza, feld, um
     assert flott.siegerzeit_ms > 0
 
 
-def test_beide_modi_kosten_die_stopps_gleich_viel(k, monza, feld, umgebung):
+def test_beide_modi_kosten_die_stopps_gleich_viel(ohne_verschiebung, monza, feld, umgebung):
     """Der Schnellmodus darf durch Stopps nicht anders verlieren als der Zeitraffer.
 
     Verglichen wird der **Unterschied**, den die Stopps machen: einmal
@@ -66,7 +66,14 @@ def test_beide_modi_kosten_die_stopps_gleich_viel(k, monza, feld, umgebung):
     ist der Preis des Schnellmodus und keine Abweichung, die sich
     wegrechnen liesse.
     """
-    mittel, verschleiss = umgebung
+    mittel, _verschleiss = umgebung
+    # Wie beim Strategietest nebenan: kein Streckenverschleiss, der einen
+    # Zwangsstopp ausloest, und keine Verschiebeschwelle. Sonst faehrt
+    # jedes Modell eine andere Zahl von Stopps - gemessen wurden mit dem
+    # hohen Verschleiss 1 gegen 3 Stopps -, und der Vergleich misst nicht
+    # mehr, was ein Stopp kostet, sondern wie viele es waren.
+    k = ohne_verschiebung
+    verschleiss = VERSCHLEISS_PLANSTOPP
     hart = kern_reifen.mischung(k, "hart")
     ohne = sg.Strategie(mischungen=(hart,), stopps=())
     mit = strategie_mit(k, (8, 16))
@@ -74,15 +81,22 @@ def test_beide_modi_kosten_die_stopps_gleich_viel(k, monza, feld, umgebung):
     wetter = rennwetter(k, monza, feld, TROCKEN)
     assert len(wetter.zustaende) == 1, "Der Test braucht ein Rennen ohne Wetterwechsel"
 
+    # Nur die Spitze des Feldes: Verglichen wird, was zwei Stopps kosten.
+    # Der Schnellmodus kennt keinen Verkehr, der volle schon - wer nach
+    # dem Stopp in ein Feld von vierzig Autos zurueckkommt, verliert dort
+    # zusaetzlich Zeit, und die stuende hier als Unterschied der Modelle
+    # da. Mit sechs Autos ist die Boxengasse die einzige Quelle.
+    schmal = feld[:6]
+
     def zeiten(strategie):
         voll = rn.simuliere(
-            k, monza, feld, RUNDEN, Seedquelle(TROCKEN), mittel, wetter=wetter,
+            k, monza, schmal, RUNDEN, Seedquelle(TROCKEN), mittel, wetter=wetter,
             streckenverschleiss=verschleiss,
-            strategien=tuple(strategie for _ in feld),
+            strategien=tuple(strategie for _ in schmal),
         )
         flott = schnell.fahre_wochenende(
-            k, LIGA, monza, feld, RUNDEN, Seedquelle(TROCKEN), mittel, verschleiss,
-            strategien=tuple(strategie for _ in feld),
+            k, LIGA, monza, schmal, RUNDEN, Seedquelle(TROCKEN), mittel, verschleiss,
+            strategien=tuple(strategie for _ in schmal),
         )
         return voll.ergebnisse[0].zeit_ms, flott.siegerzeit_ms
 

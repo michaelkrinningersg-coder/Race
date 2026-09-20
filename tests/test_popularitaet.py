@@ -27,7 +27,7 @@ def k() -> kf.Konfiguration:
 
 @pytest.fixture(scope="module")
 def welt(k) -> kw.Welt:
-    return kw.erzeuge(k, Seedquelle(SEED).zweig("welt"), spielerliga=20)
+    return kw.erzeuge(k, Seedquelle(SEED).zweig("welt"), spielerliga=10)
 
 
 @pytest.fixture(scope="module")
@@ -45,7 +45,7 @@ def test_alle_fahrer_bekommen_einen_anfangswert(gestreut, welt) -> None:
 def test_die_popularitaet_haengt_nicht_an_der_ligastaerke(gestreut, welt, k) -> None:
     """Abgestimmt: Bekanntheit ist nicht dasselbe wie Schnelligkeit."""
     oben = [gestreut.stand(f.nummer) for f in welt.fahrer if f.liga == 1]
-    unten = [gestreut.stand(f.nummer) for f in welt.fahrer if f.liga == 20]
+    unten = [gestreut.stand(f.nummer) for f in welt.fahrer if f.liga == 10]
     # Dieselbe Verteilung - die Mittelwerte duerfen sich kaum unterscheiden.
     assert statistics.mean(oben) == pytest.approx(statistics.mean(unten), rel=0.20)
 

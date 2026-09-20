@@ -70,7 +70,7 @@ def test_die_monatsrate_ist_ein_zwoelftel(k) -> None:
 
 def test_jeder_monat_bringt_genau_eine_rate(k) -> None:
     """Auch wer viele Tage am Stueck weiterschaltet, bekommt keine doppelt."""
-    c = kr.beginne(k, 2026, liga=20, teambudget=12_000_000)
+    c = kr.beginne(k, 2026, liga=10, teambudget=12_000_000)
     for _ in range(90):  # 1. Januar bis Ende Maerz
         c.tag_weiter()
     raten = [
@@ -82,7 +82,7 @@ def test_jeder_monat_bringt_genau_eine_rate(k) -> None:
 
 def test_ein_sprung_zum_rennen_verschluckt_keine_rate(k) -> None:
     """``bis_zum_rennen`` ueberspringt Wochen - die Raten muessen kommen."""
-    c = kr.beginne(k, 2026, liga=20, teambudget=12_000_000)
+    c = kr.beginne(k, 2026, liga=10, teambudget=12_000_000)
     c.bis_zum_rennen()
     raten = [
         b for b in c.kassenbuch.buchungen if b.unterkategorie == kb.MONATSBUDGET
@@ -91,7 +91,7 @@ def test_ein_sprung_zum_rennen_verschluckt_keine_rate(k) -> None:
 
 
 def test_ohne_budget_gibt_es_keine_raten(k) -> None:
-    c = kr.beginne(k, 2026, liga=20)
+    c = kr.beginne(k, 2026, liga=10)
     for _ in range(60):
         c.tag_weiter()
     assert not [
@@ -107,7 +107,7 @@ def test_der_saldo_des_buchs_ist_der_kontostand(k) -> None:
     Startkapital, Monatsraten, ein belegter Tag, ein Sofortkauf, ein
     Rennen mit Preis- und Startgeld.
     """
-    c = kr.beginne(k, 2026, liga=20, teambudget=12_000_000)
+    c = kr.beginne(k, 2026, liga=10, teambudget=12_000_000)
     c.konto = c.konto.mit(erfahrung=500_000)
     c.belege_tag("F10")
     # Eine Faehigkeit, die sich sofort kaufen laesst - also ohne Zeit.
@@ -120,7 +120,7 @@ def test_der_saldo_des_buchs_ist_der_kontostand(k) -> None:
 
 
 def test_ein_kauf_steht_unter_entwicklung(k) -> None:
-    c = kr.beginne(k, 2026, liga=20)
+    c = kr.beginne(k, 2026, liga=10)
     c.konto = c.konto.mit(geld=5_000_000, erfahrung=500_000)
     c.belege_tag("F10")
     unter = {
@@ -132,7 +132,7 @@ def test_ein_kauf_steht_unter_entwicklung(k) -> None:
 
 
 def test_ein_rennen_trennt_preisgeld_startgeld_und_sponsoren(k) -> None:
-    c = kr.beginne(k, 2026, liga=20)
+    c = kr.beginne(k, 2026, liga=10)
     c.verbuche_rennen(platz=1)
     kategorien = {
         (b.hauptkategorie, b.unterkategorie) for b in c.kassenbuch.buchungen
@@ -154,7 +154,7 @@ def _seite(qtbot, karriere, konfiguration):
 
 
 def test_die_seite_zeigt_die_hauptkategorien(qtbot, k) -> None:
-    c = kr.beginne(k, 2026, liga=20, teambudget=12_000_000)
+    c = kr.beginne(k, 2026, liga=10, teambudget=12_000_000)
     c.verbuche_rennen(platz=1)
     seite = _seite(qtbot, c, k)
     assert kb.TEAM in seite.hauptkategorien()
@@ -167,7 +167,7 @@ def test_ohne_karriere_stuerzt_die_seite_nicht_ab(qtbot, k) -> None:
 
 
 def test_der_zeitraum_laesst_sich_auf_eine_saison_einengen(qtbot, k) -> None:
-    c = kr.beginne(k, 2026, liga=20, teambudget=12_000_000)
+    c = kr.beginne(k, 2026, liga=10, teambudget=12_000_000)
     for _ in range(40):
         c.tag_weiter()
     seite = _seite(qtbot, c, k)
@@ -178,7 +178,7 @@ def test_der_zeitraum_laesst_sich_auf_eine_saison_einengen(qtbot, k) -> None:
 
 
 def test_jede_unterkategorie_traegt_ihre_einzelbuchungen(qtbot, k) -> None:
-    c = kr.beginne(k, 2026, liga=20, teambudget=12_000_000)
+    c = kr.beginne(k, 2026, liga=10, teambudget=12_000_000)
     for _ in range(40):
         c.tag_weiter()
     seite = _seite(qtbot, c, k)

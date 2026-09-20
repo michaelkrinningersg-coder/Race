@@ -142,7 +142,7 @@ def zandvoort(k):
 
 @pytest.fixture(scope="module")
 def feld(k):
-    return rn.starterfeld(k, liga=20)
+    return rn.starterfeld(k, liga=10)
 
 
 def test_kenntnis_macht_im_rennen_schneller(k, zandvoort, feld):

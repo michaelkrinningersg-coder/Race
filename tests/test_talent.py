@@ -42,7 +42,7 @@ def quelle() -> Seedquelle:
 
 @pytest.fixture(scope="module")
 def welt(k: kf.Konfiguration) -> kw.Welt:
-    return kw.erzeuge(k, Seedquelle(SEED).zweig("welt"), spielerliga=20)
+    return kw.erzeuge(k, Seedquelle(SEED).zweig("welt"), spielerliga=10)
 
 
 # -- Talent ------------------------------------------------------------------
@@ -81,7 +81,7 @@ def test_potentiale_folgen_der_leiter_der_welt(k, quelle, welt) -> None:
     )
     leiter = kt._leiter(k)
     assert len(leiter) == anzahl
-    for liga in (1, 5, 10, 15):
+    for liga in (1, 4, 7, 10):
         anfang = (liga - 1) * je_liga
         soll = sum(leiter[anfang : anfang + je_liga]) / je_liga
         ist = sum(potentiale[anfang : anfang + je_liga]) / je_liga
@@ -110,7 +110,7 @@ def test_wer_frueh_seinen_gipfel_hat_waechst_schneller(k) -> None:
 
 def test_ein_junger_fahrer_waechst_auf_sein_potential_zu(k, quelle, welt) -> None:
     """Lueckenschluss: Jedes Jahr ein Anteil des Abstands."""
-    fahrer = next(f for f in welt.liga(20) if not f.ist_spieler)
+    fahrer = next(f for f in welt.liga(10) if not f.ist_spieler)
     talent = kt.talent(k, fahrer.nummer, fahrer.geburtstag, quelle)
     ruecktritt = kg.ruecktrittsalter(k, fahrer.nummer, quelle)
 
@@ -131,9 +131,14 @@ def test_ein_alter_fahrer_baut_ab(k, quelle, welt) -> None:
     talent = kt.talent(k, fahrer.nummer, fahrer.geburtstag, quelle)
     ruecktritt = max(kg.ruecktrittsalter(k, fahrer.nummer, quelle), talent.abbaualter + 2)
 
-    auf_dem_gipfel = kt.gewachsen(
-        k, fahrer.auto, talent, alter=talent.abbaualter, ruecktrittsalter=ruecktritt
-    )
+    # Erst auf den Gipfel wachsen lassen: Ein Fahrer, der noch weit unter
+    # seinem Ziel steht, legt auch bei sinkendem Ziel noch zu - das sagt
+    # nichts ueber den Abbau. Zehn Schritte reichen zum Anschluss.
+    auf_dem_gipfel = fahrer.auto
+    for _ in range(10):
+        auf_dem_gipfel = kt.gewachsen(
+            k, auf_dem_gipfel, talent, alter=talent.abbaualter, ruecktrittsalter=ruecktritt
+        )
     danach = kt.gewachsen(
         k, auf_dem_gipfel, talent, alter=ruecktritt, ruecktrittsalter=ruecktritt
     )
@@ -183,7 +188,7 @@ def test_ein_newgen_auf_einem_eigenen_platz_bleibt_beim_spieler(k, welt, quelle)
 
 # -- Jedes Auto gehoert seinem Fahrer ---------------------------------------
 def test_jedes_auto_wird_einzeln_entwickelt(k) -> None:
-    karriere = kk.beginne(k, 2026, 20, fahrer=(400, 401, 402, 403), fahrernummer=400)
+    karriere = kk.beginne(k, 2026, 10, fahrer=(400, 401, 402, 403), fahrernummer=400)
     assert karriere.fahrer == (400, 401, 402, 403)
 
     karriere.werte["F1"] = 5_000
@@ -198,7 +203,7 @@ def test_jedes_auto_wird_einzeln_entwickelt(k) -> None:
 
 def test_belegte_plaetze_gelten_je_auto(k) -> None:
     """An einem Tag wird an einem Auto gearbeitet - jedes hat eigene Plaetze."""
-    karriere = kk.beginne(k, 2026, 20, fahrer=(400, 401), fahrernummer=400)
+    karriere = kk.beginne(k, 2026, 10, fahrer=(400, 401), fahrernummer=400)
     karriere.belegt.add("Werkstatt")
     assert karriere.belegt == {"Werkstatt"}
     karriere.waehle_fahrer(401)
@@ -207,7 +212,7 @@ def test_belegte_plaetze_gelten_je_auto(k) -> None:
 
 def test_ein_neuer_fahrer_bringt_ein_leeres_auto_mit(k) -> None:
     """Entscheidung des Auftraggebers: Das Auto geht mit seinem Fahrer."""
-    karriere = kk.beginne(k, 2026, 20, fahrer=(400, 401), fahrernummer=400)
+    karriere = kk.beginne(k, 2026, 10, fahrer=(400, 401), fahrernummer=400)
     karriere.werte["F1"] = 60_000
     karriere.belegt.add("Werkstatt")
 
@@ -220,7 +225,7 @@ def test_ein_neuer_fahrer_bringt_ein_leeres_auto_mit(k) -> None:
 
 
 def test_ohne_nachfolger_rueckt_die_auswahl_weiter(k) -> None:
-    karriere = kk.beginne(k, 2026, 20, fahrer=(400, 401), fahrernummer=400)
+    karriere = kk.beginne(k, 2026, 10, fahrer=(400, 401), fahrernummer=400)
     karriere.fahrer_geht(400)
     assert karriere.fahrer == (401,)
     assert karriere.fahrernummer == 401
@@ -252,7 +257,7 @@ def test_im_winter_ist_ein_teil_des_feldes_frei(k, welt, quelle) -> None:
 
 def test_ein_starker_fahrer_kostet_mehr(k, welt, quelle) -> None:
     oben = max(welt.liga(1), key=lambda f: gesamtwert(k, f.auto))
-    unten = min(welt.liga(20), key=lambda f: gesamtwert(k, f.auto))
+    unten = min(welt.liga(10), key=lambda f: gesamtwert(k, f.auto))
     assert (
         tr.angebot(k, welt, oben.nummer, 2027, quelle).gehalt
         > tr.angebot(k, welt, unten.nummer, 2027, quelle).gehalt
@@ -276,7 +281,7 @@ def test_ein_fahrer_geht_nicht_fuer_nichts_in_eine_tiefere_liga(k, welt, quelle)
     oben = max(welt.liga(2), key=lambda f: gesamtwert(k, f.auto))
     fair = tr.angebot(k, welt, oben.nummer, 2027, quelle)
     antwort = tr.pruefe(
-        k, welt, oben.nummer, fair, ziel_liga=20, ziel_auto_wert=0.0,
+        k, welt, oben.nummer, fair, ziel_liga=10, ziel_auto_wert=0.0,
         jahr=2027, seedquelle=quelle,
     )
     assert not antwort.angenommen
@@ -285,10 +290,10 @@ def test_ein_fahrer_geht_nicht_fuer_nichts_in_eine_tiefere_liga(k, welt, quelle)
 
 def test_genug_geld_ueberzeugt_auch_ohne_auto(k, welt, quelle) -> None:
     """Der Spieler setzt jeden in ein leeres Auto - Geld muss das wettmachen."""
-    fahrer = welt.liga(19)[0]
+    fahrer = welt.liga(9)[0]
     mager = tr.angebot(k, welt, fahrer.nummer, 2027, quelle)
     assert not tr.pruefe(
-        k, welt, fahrer.nummer, mager, ziel_liga=20, ziel_auto_wert=0.0,
+        k, welt, fahrer.nummer, mager, ziel_liga=10, ziel_auto_wert=0.0,
         jahr=2027, seedquelle=quelle,
     ).angenommen
 
@@ -296,7 +301,7 @@ def test_genug_geld_ueberzeugt_auch_ohne_auto(k, welt, quelle) -> None:
         k, welt, fahrer.nummer, 2027, quelle, gehalt=mager.gehalt * 20
     )
     antwort = tr.pruefe(
-        k, welt, fahrer.nummer, reichlich, ziel_liga=19, ziel_auto_wert=0.0,
+        k, welt, fahrer.nummer, reichlich, ziel_liga=9, ziel_auto_wert=0.0,
         jahr=2027, seedquelle=quelle,
     )
     assert antwort.angenommen
@@ -305,14 +310,14 @@ def test_genug_geld_ueberzeugt_auch_ohne_auto(k, welt, quelle) -> None:
 
 def test_wer_bekannt_ist_will_mehr(k, welt, quelle) -> None:
     """Popularitaet aus Punkt 5 macht einen Fahrer anspruchsvoller."""
-    fahrer = welt.liga(19)[0]
+    fahrer = welt.liga(9)[0]
     gebot = tr.angebot(k, welt, fahrer.nummer, 2027, quelle, gehalt=1_400_000)
     ohne = tr.pruefe(
-        k, welt, fahrer.nummer, gebot, ziel_liga=19, ziel_auto_wert=0.0,
+        k, welt, fahrer.nummer, gebot, ziel_liga=9, ziel_auto_wert=0.0,
         jahr=2027, seedquelle=quelle, bekanntheit=0.0,
     )
     mit = tr.pruefe(
-        k, welt, fahrer.nummer, gebot, ziel_liga=19, ziel_auto_wert=0.0,
+        k, welt, fahrer.nummer, gebot, ziel_liga=9, ziel_auto_wert=0.0,
         jahr=2027, seedquelle=quelle, bekanntheit=1.0,
     )
     assert mit.ueberzeugung < ohne.ueberzeugung
@@ -320,23 +325,26 @@ def test_wer_bekannt_ist_will_mehr(k, welt, quelle) -> None:
 
 # -- Transfermarkt angeschlossen ---------------------------------------------
 def test_gehalt_haengt_an_dem_was_er_verdienen_kann(k, welt, quelle) -> None:
-    """Ein Liga-20-Sieg bringt 4.000 EUR, ein Liga-1-Sieg das
+    """Ein Sieg in der untersten Liga bringt weit weniger als einer in Liga 1;
     Dreihundertfache - ein fester Grundbetrag taete es nicht."""
     oben = max(welt.liga(1), key=lambda f: gesamtwert(k, f.auto))
     unten = max(
-        (f for f in welt.liga(20) if not f.ist_spieler),
+        (f for f in welt.liga(10) if not f.ist_spieler),
         key=lambda f: gesamtwert(k, f.auto),
     )
     hoch = tr.angebot(k, welt, oben.nummer, 2027, quelle).gehalt
     tief = tr.angebot(k, welt, unten.nummer, 2027, quelle).gehalt
     # Die Spanne muss die der Siegpraemien widerspiegeln, nicht eine
-    # ausgedachte: sonst waere ein Liga-20-Team sofort zahlungsunfaehig.
-    assert hoch > tief * 50
-    assert tief < ke.siegpraemie(k, 20) * 2
+    # ausgedachte: sonst waere ein Team der untersten Liga sofort
+    # zahlungsunfaehig. Gemessen wird deshalb gegen die Praemien selbst.
+    anzahl = k.wert("ligen", "anzahl")
+    praemienspanne = ke.siegpraemie(k, 1) / ke.siegpraemie(k, anzahl)
+    assert hoch / tief > praemienspanne * 0.8
+    assert tief < ke.siegpraemie(k, anzahl) * 2
 
 
 def test_die_karriere_zahlt_gehaelter_und_zaehlt_vertraege_herunter(k) -> None:
-    karriere = kk.beginne(k, 2026, 20, fahrer=(400, 401), fahrernummer=400)
+    karriere = kk.beginne(k, 2026, 10, fahrer=(400, 401), fahrernummer=400)
     karriere.konto = karriere.konto.mit(geld=1_000_000)
     karriere.verpflichte(500, gehalt=120_000, laufzeit=2)
     assert karriere.gehaltssumme == 120_000
@@ -354,7 +362,7 @@ def test_die_karriere_zahlt_gehaelter_und_zaehlt_vertraege_herunter(k) -> None:
 
 def test_ohne_geld_wird_nur_gezahlt_was_da_ist(k) -> None:
     """GDD 10 kennt keine Schulden und keinen Bankrott."""
-    karriere = kk.beginne(k, 2026, 20, fahrer=(400,), fahrernummer=400)
+    karriere = kk.beginne(k, 2026, 10, fahrer=(400,), fahrernummer=400)
     karriere.verpflichte(500, gehalt=10_000_000, laufzeit=3)
     gezahlt = karriere.zahle_gehaelter()
     assert gezahlt == 1_000  # das Startkapital
@@ -362,14 +370,14 @@ def test_ohne_geld_wird_nur_gezahlt_was_da_ist(k) -> None:
 
 
 def test_eine_ungedeckte_abloese_wird_abgelehnt(k) -> None:
-    karriere = kk.beginne(k, 2026, 20, fahrer=(400,), fahrernummer=400)
+    karriere = kk.beginne(k, 2026, 10, fahrer=(400,), fahrernummer=400)
     with pytest.raises(kk.KarriereFehler, match="nicht gedeckt"):
         karriere.verpflichte(500, gehalt=1_000, laufzeit=1, abloese=999_999)
     assert 500 not in karriere.fahrer
 
 
 def test_ein_verpflichteter_faehrt_ein_leeres_auto(k) -> None:
-    karriere = kk.beginne(k, 2026, 20, fahrer=(400,), fahrernummer=400)
+    karriere = kk.beginne(k, 2026, 10, fahrer=(400,), fahrernummer=400)
     karriere.werte["F1"] = 50_000
     karriere.verpflichte(500, gehalt=0, laufzeit=1)
     assert set(karriere.werte_von(500).values()) == {0}
@@ -380,34 +388,37 @@ def test_ein_verpflichteter_faehrt_ein_leeres_auto(k) -> None:
 def test_vier_fahrer_verdienen_viermal(k, welt) -> None:
     """Der Teamchef verdient an allen seinen Autos, nicht an einem."""
     eigene = [f.nummer for f in welt.spielerfahrer]
-    karriere = kk.beginne(k, 2026, 20, fahrer=tuple(eigene), fahrernummer=eigene[0])
+    karriere = kk.beginne(k, 2026, 10, fahrer=tuple(eigene), fahrernummer=eigene[0])
     anfang = karriere.konto.geld
 
     for nummer in eigene:
-        karriere.verbuche_rennen(platz=1, fahrer=nummer, liga=20)
+        karriere.verbuche_rennen(platz=1, fahrer=nummer, liga=10)
     vier = karriere.konto.geld - anfang
 
-    einer = kk.beginne(k, 2026, 20, fahrer=(eigene[0],), fahrernummer=eigene[0])
+    einer = kk.beginne(k, 2026, 10, fahrer=(eigene[0],), fahrernummer=eigene[0])
     vorher = einer.konto.geld
-    einer.verbuche_rennen(platz=1, fahrer=eigene[0], liga=20)
+    einer.verbuche_rennen(platz=1, fahrer=eigene[0], liga=10)
     assert vier == (einer.konto.geld - vorher) * len(eigene)
 
 
 def test_preisgeld_folgt_der_liga_des_einzelnen_fahrers(k) -> None:
     """Die vier koennen in vier Ligen stehen - jeder verdient dort."""
-    karriere = kk.beginne(k, 2026, 20, fahrer=(400, 401), fahrernummer=400)
+    karriere = kk.beginne(k, 2026, 10, fahrer=(400, 401), fahrernummer=400)
     anfang = karriere.konto.geld
-    karriere.verbuche_rennen(platz=1, fahrer=400, liga=20)
-    in_liga_20 = karriere.konto.geld - anfang
+    anzahl = k.wert("ligen", "anzahl")
+    karriere.verbuche_rennen(platz=1, fahrer=400, liga=anzahl)
+    unten = karriere.konto.geld - anfang
 
     zwischen = karriere.konto.geld
-    karriere.verbuche_rennen(platz=1, fahrer=401, liga=5)
-    in_liga_5 = karriere.konto.geld - zwischen
-    assert in_liga_5 > in_liga_20 * 100
+    karriere.verbuche_rennen(platz=1, fahrer=401, liga=1)
+    oben = karriere.konto.geld - zwischen
+    # Der Unterschied ist genau der der Siegpraemien beider Ligen.
+    erwartet = ke.siegpraemie(k, 1) / ke.siegpraemie(k, anzahl)
+    assert oben / unten == pytest.approx(erwartet, rel=0.01)
 
 
 def test_sponsoren_sitzen_auf_dem_auto_eines_fahrers(k) -> None:
-    karriere = kk.beginne(k, 2026, 20, fahrer=(400, 401), fahrernummer=400)
+    karriere = kk.beginne(k, 2026, 10, fahrer=(400, 401), fahrernummer=400)
     angebot = kern_sponsoren.Angebot(
         platz="Fronthaube",
         name="Testsponsor",

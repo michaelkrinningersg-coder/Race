@@ -208,7 +208,7 @@ def test_zweimal_ausloesen_frischt_auf_statt_zu_stapeln(k):
 
 # --- Zusammenspiel mit der Karriere ---------------------------------------
 def test_ohne_seedquelle_gibt_es_keine_ereignisse(k):
-    c = kk.beginne(k, 2026, liga=20)
+    c = kk.beginne(k, 2026, liga=10)
     assert c.ereignisplan == {}
     for _ in range(40):
         c.tag_weiter()
@@ -216,7 +216,7 @@ def test_ohne_seedquelle_gibt_es_keine_ereignisse(k):
 
 
 def test_eine_saison_loest_ereignisse_aus(k):
-    c = kk.beginne(k, 2026, liga=20, seedquelle=Seedquelle(4711))
+    c = kk.beginne(k, 2026, liga=10, seedquelle=Seedquelle(4711))
     geplant = sum(len(v) for v in c.ereignisplan.values())
     assert geplant > 0
     while c.heute < c.saison.tage[-1].datum:
@@ -228,7 +228,7 @@ def test_eine_saison_loest_ereignisse_aus(k):
 
 
 def test_einmaliges_geld_landet_auf_dem_konto(k):
-    c = kk.beginne(k, 2026, liga=20)
+    c = kk.beginne(k, 2026, liga=10)
     vorher = c.konto.geld
     meldung = c._loese_ereignis_aus("E7")  # Sponsorbonus
     assert meldung.geld > 0
@@ -236,7 +236,7 @@ def test_einmaliges_geld_landet_auf_dem_konto(k):
 
 
 def test_einmalige_erfahrung_landet_auf_dem_konto(k):
-    c = kk.beginne(k, 2026, liga=20)
+    c = kk.beginne(k, 2026, liga=10)
     # Das Konto faengt nicht mehr bei null an - seit dem
     # Erfahrungssockel zaehlt der Zuwachs, nicht der Stand.
     vorher = c.konto.erfahrung
@@ -246,14 +246,14 @@ def test_einmalige_erfahrung_landet_auf_dem_konto(k):
 
 
 def test_dauerhaftes_ereignis_hebt_den_wert_selbst(k):
-    c = kk.beginne(k, 2026, liga=20)
+    c = kk.beginne(k, 2026, liga=10)
     assert c.werte["D8"] == 0
     c._loese_ereignis_aus("E11")  # Fahrsicherheitstraining: D8 +1 % dauerhaft
     assert c.werte["D8"] == k.wert("ereignisse", "dauerhaft", "mindestschritt")
 
 
 def test_gesperrtes_laesst_sich_nicht_entwickeln(k):
-    c = kk.beginne(k, 2026, liga=20)
+    c = kk.beginne(k, 2026, liga=10)
     c._loese_ereignis_aus("E6")  # F5 und F6 nicht entwickelbar
     assert {"F5", "F6"} <= c.gesperrt()
     with pytest.raises(kk.KarriereFehler, match="gesperrt"):
@@ -264,7 +264,7 @@ def test_gesperrtes_laesst_sich_nicht_entwickeln(k):
 
 def test_trainingsverletzung_sperrt_das_ganze_fahrertraining(k):
     """E2 sperrt 'fahrertraining', nicht eine einzelne Faehigkeit."""
-    c = kk.beginne(k, 2026, liga=20)
+    c = kk.beginne(k, 2026, liga=10)
     c._loese_ereignis_aus("E2")
     gesperrt = c.gesperrt()
     assert "D1" in gesperrt and "D2" in gesperrt
@@ -274,7 +274,7 @@ def test_trainingsverletzung_sperrt_das_ganze_fahrertraining(k):
 
 
 def test_reisechaos_kostet_zwei_nutzbare_tage(k):
-    c = kk.beginne(k, 2026, liga=20)
+    c = kk.beginne(k, 2026, liga=10)
     vorher = c.offene_tage
     c._loese_ereignis_aus("E29")
     assert len(c.verlorene_tage) == 2
@@ -290,7 +290,7 @@ def test_reisechaos_kostet_zwei_nutzbare_tage(k):
 def test_fahrwerte_tragen_ereignisse_und_defekte(k):
     werte = dict.fromkeys([f.schluessel for f in k.faehigkeiten], 10_000)
     werte.update(dict.fromkeys(k.zusatzfaehigkeiten, 10_000))
-    c = kk.beginne(k, 2026, liga=20, werte=werte)
+    c = kk.beginne(k, 2026, liga=10, werte=werte)
 
     c._loese_ereignis_aus("E1")  # D2 -15 %, D1 -10 %
     c.uebernimm_defekte(("X1",))  # F1 -2,5 %
@@ -304,7 +304,11 @@ def test_fahrwerte_tragen_ereignisse_und_defekte(k):
 
 
 def test_defekte_lassen_sich_reparieren(k):
-    c = kk.beginne(k, 2026, liga=20)
+    # Seit Punkt 95 ist die unterste Liga die zehnte, und eine Reparatur
+    # kostet dort ein Vielfaches des Startkapitals. Geprueft wird hier die
+    # Buchung, nicht die Kassenlage - also Geld auf das Konto.
+    c = kk.beginne(k, 2026, liga=10)
+    c.konto = c.konto.mit(geld=1_000_000)
     c.uebernimm_defekte(("X13",))
     assert len(c.offene_reparaturen) == 1
 
@@ -323,7 +327,8 @@ def test_reparatur_ohne_geld_scheitert(k):
 
 
 def test_ereignis_bis_reparatur_kostet_ebenfalls(k):
-    c = kk.beginne(k, 2026, liga=20)
+    c = kk.beginne(k, 2026, liga=10)
+    c.konto = c.konto.mit(geld=1_000_000)   # siehe oben: Buchung, nicht Kassenlage
     c._loese_ereignis_aus("E8")  # Motorschaden im Test
     assert [s for s, _, _ in c.offene_reparaturen] == ["E8"]
     c.repariere("E8")
@@ -332,7 +337,7 @@ def test_ereignis_bis_reparatur_kostet_ebenfalls(k):
 
 
 def test_kopie_teilt_den_zustand_nicht(k):
-    c = kk.beginne(k, 2026, liga=20)
+    c = kk.beginne(k, 2026, liga=10)
     c._loese_ereignis_aus("E1")
     c.uebernimm_defekte(("X1",))
 
@@ -356,7 +361,7 @@ def test_ein_ereignis_trifft_einen_fahrer_nicht_das_team(k) -> None:
     from rennmanager.kern import karriere as kk
     from rennmanager.kern.zufall import Seedquelle
 
-    c = kk.beginne(k, 2026, liga=20, fahrer=(1, 2, 3, 4), seedquelle=Seedquelle(7))
+    c = kk.beginne(k, 2026, liga=10, fahrer=(1, 2, 3, 4), seedquelle=Seedquelle(7))
     for _ in range(90):
         try:
             c.tag_weiter()
@@ -380,7 +385,7 @@ def test_die_meldung_nennt_den_getroffenen_fahrer(k) -> None:
     from rennmanager.kern import karriere as kk
     from rennmanager.kern.zufall import Seedquelle
 
-    c = kk.beginne(k, 2026, liga=20, fahrer=(1, 2, 3, 4), seedquelle=Seedquelle(7))
+    c = kk.beginne(k, 2026, liga=10, fahrer=(1, 2, 3, 4), seedquelle=Seedquelle(7))
     c.benenne_fahrer(
         {1: "Aaron Abt", 2: "Bodo Berg", 3: "Cem Cetin", 4: "Dirk Daum"}
     )
@@ -400,7 +405,7 @@ def test_jeder_fahrer_zaehlt_seine_ereignisse_selbst_herunter(k) -> None:
     """Der Zyklus laeuft fuer alle, aber jeder hat seine eigenen."""
     from rennmanager.kern import karriere as kk
 
-    c = kk.beginne(k, 2026, liga=20, fahrer=(1, 2))
+    c = kk.beginne(k, 2026, liga=10, fahrer=(1, 2))
     schluessel = next(
         eintrag["schluessel"]
         for eintrag in ev.liste(k)

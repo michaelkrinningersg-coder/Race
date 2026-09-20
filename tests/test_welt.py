@@ -1,4 +1,4 @@
-"""Tests fuer die Welt: 600 Autos, 150 Teams, 20 Ligen (GDD 12)."""
+"""Tests fuer die Welt: 400 Autos, 100 Teams, 10 Ligen (GDD 12, Punkt 95)."""
 
 from __future__ import annotations
 
@@ -29,8 +29,8 @@ def welt(k) -> w.Welt:
 
 
 # -- Umfang -----------------------------------------------------------------
-def test_sechshundert_autos_in_zwanzig_ligen(welt, k) -> None:
-    """GDD 1: 20 Ligen x 30 Autos = 600 Autos."""
+def test_vierhundert_autos_in_zehn_ligen(welt, k) -> None:
+    """Punkt 95: 10 Ligen x 40 Autos = 400 Autos."""
     ligen = k.wert("ligen", "anzahl")
     je_liga = k.wert("ligen", "autos_je_liga")
     assert len(welt.fahrer) == ligen * je_liga
@@ -134,7 +134,7 @@ def test_hoehere_ligen_sind_staerker(welt, k) -> None:
 
 
 def test_liga_ist_nach_staerke_geordnet(welt) -> None:
-    for liga in (1, 10, 20):
+    for liga in (1, 5, 10):
         werte = [sum(f.auto.werte.values()) for f in welt.liga(liga)]
         assert werte == sorted(werte, reverse=True)
 
@@ -149,13 +149,24 @@ def test_profile_streuen_um_den_mittelwert(welt, k) -> None:
     bereich = k.wert("ki", "bereichs_streuung")
     untere = (1 - bereich) * (1 - rauschen)
     obere = (1 + bereich) * (1 + rauschen)
-    for fahrer in welt.liga(10):
+    # Gemessen wird gegen den **eigenen** Mittelwert des Fahrers, und der
+    # ist selbst gewuerfelt: Faellt er niedrig aus, steht der hoechste
+    # Einzelwert weiter darueber, als das Produkt beider Streuungen
+    # hergibt. Ueber 1.980 KI-Fahrer aus fuenf Weltseeds gemessen lagen
+    # die Extreme bei 1,769 (nominal 1,625) und 0,496 (nominal 0,525);
+    # die Zuschlaege decken das ab.
+    zuschlag_oben, zuschlag_unten = 1.12, 0.92
+    # Ohne den Spieler: Sein Team startet ohne Karriere bei null, und
+    # seit Punkt 95 steht es in Liga 10 - ein Mittelwert von 0 hat keine
+    # Streuung, an der sich etwas messen liesse.
+    ki = [f for f in welt.liga(10) if not f.ist_spieler]
+    for fahrer in ki:
         werte = list(fahrer.auto.werte.values())
         mittel = statistics.mean(werte)
-        assert min(werte) >= mittel * untere * 0.95
-        assert max(werte) <= mittel * obere * 1.05
+        assert min(werte) >= mittel * untere * zuschlag_unten
+        assert max(werte) <= mittel * obere * zuschlag_oben
     # Und die Spezialisierung unterscheidet sich wirklich je Fahrer.
-    regen = [f.auto.wetterwert("regenfahren") / max(f.auto.wert("D1"), 1) for f in welt.liga(10)]
+    regen = [f.auto.wetterwert("regenfahren") / max(f.auto.wert("D1"), 1) for f in ki]
     assert max(regen) - min(regen) > 0.2
 
 
@@ -168,6 +179,8 @@ def test_das_bereichsprofil_macht_spezialisten(welt, k) -> None:
 
     spannen = []
     for fahrer in welt.liga(10):
+        if fahrer.ist_spieler:   # startet bei null, siehe oben
+            continue
         bereiche = list(bereichswerte(k, fahrer.auto).values())
         spannen.append((max(bereiche) - min(bereiche)) / statistics.mean(bereiche))
     assert statistics.mean(spannen) > 0.30
@@ -185,7 +198,7 @@ def test_das_bereichsprofil_aendert_die_staerke_nicht(welt, k) -> None:
     from rennmanager.kern import talent as kern_talent
 
     quelle = Seedquelle(SEED)
-    for liga in (1, 10, 20):
+    for liga in (1, 5, 10):
         for fahrer in welt.liga(liga)[:5]:
             if fahrer.ist_spieler:
                 continue
@@ -303,7 +316,7 @@ def test_teamnamen_sind_eindeutig(welt) -> None:
 
 def test_teamfarben_unterscheiden_sich_je_liga(welt) -> None:
     """GDD 4: Autos als Punkte in Teamfarbe - im Rennen muss man sie trennen."""
-    for liga in (1, 10, 20):
+    for liga in (1, 5, 10):
         farben = {welt.team_von(f).farbe for f in welt.liga(liga)}
         assert len(farben) >= 20
 
@@ -314,31 +327,40 @@ def test_teamfarbe_ist_nicht_die_herstellerfarbe(welt) -> None:
     assert abweichend > len(welt.teams) * 0.8
 
 
-def test_budget_waechst_mit_der_liga(welt) -> None:
-    """GDD 10: KI-Budgets sind Anzeige; sie sollen zur Liga passen."""
+def test_budget_waechst_mit_der_liga(welt, k) -> None:
+    """GDD 10: KI-Budgets sind Anzeige; sie folgen der Siegpraemie der Liga."""
+    from rennmanager.kern import einnahmen as ke
 
     def mittlere_liga(team) -> float:
         return statistics.mean(welt.fahrer[i].liga for i in team.fahrer)
 
-    oben = [t.budget for t in welt.teams if mittlere_liga(t) <= 6]
-    unten = [t.budget for t in welt.teams if mittlere_liga(t) >= 15]
+    anzahl = k.wert("ligen", "anzahl")
+    oben = [t.budget for t in welt.teams if mittlere_liga(t) <= 3]
+    unten = [t.budget for t in welt.teams if mittlere_liga(t) >= anzahl - 2]
     assert oben and unten
-    assert statistics.mean(oben) > statistics.mean(unten) * 5
+
+    # Das Budget ist ein festes Vielfaches der Siegpraemie. Gemessen wird
+    # deshalb gegen deren Verhaeltnis und nicht gegen eine Zahl, die beim
+    # naechsten Balancing daneben liegt.
+    erwartet = ke.siegpraemie(k, 2) / ke.siegpraemie(k, anzahl - 1)
+    gemessen = statistics.mean(oben) / statistics.mean(unten)
+    assert gemessen > 1.0
+    assert 0.5 < gemessen / erwartet < 2.0
 
 
 # -- Reproduzierbarkeit -----------------------------------------------------
 def test_gleicher_seed_gleiche_welt(k) -> None:
     """GDD 12: Alles per Seed erzeugt."""
-    erste = w.erzeuge(k, Seedquelle(99), spielerliga=20)
-    zweite = w.erzeuge(k, Seedquelle(99), spielerliga=20)
+    erste = w.erzeuge(k, Seedquelle(99), spielerliga=10)
+    zweite = w.erzeuge(k, Seedquelle(99), spielerliga=10)
     assert [f.name for f in erste.fahrer] == [f.name for f in zweite.fahrer]
     assert [t.name for t in erste.teams] == [t.name for t in zweite.teams]
     assert erste.fahrer[0].auto.werte == zweite.fahrer[0].auto.werte
 
 
 def test_anderer_seed_andere_welt(k) -> None:
-    erste = w.erzeuge(k, Seedquelle(99), spielerliga=20)
-    zweite = w.erzeuge(k, Seedquelle(100), spielerliga=20)
+    erste = w.erzeuge(k, Seedquelle(99), spielerliga=10)
+    zweite = w.erzeuge(k, Seedquelle(100), spielerliga=10)
     assert [f.name for f in erste.fahrer] != [f.name for f in zweite.fahrer]
 
 

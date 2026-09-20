@@ -211,7 +211,7 @@ def _karriere(k):
     from rennmanager.kern import karriere as kk
     from rennmanager.kern.zufall import Seedquelle
 
-    return kk.beginne(k, 2026, liga=20, fahrer=(1, 2, 3, 4), seedquelle=Seedquelle(7))
+    return kk.beginne(k, 2026, liga=10, fahrer=(1, 2, 3, 4), seedquelle=Seedquelle(7))
 
 
 def _zeitfaehigkeit(k, karriere):
@@ -323,7 +323,7 @@ def test_ein_programm_uebersteht_speichern_und_laden(k, tmp_path) -> None:
     from rennmanager.kern import welt as kern_welt
     from rennmanager.kern.zufall import Seedquelle
 
-    welt = kern_welt.erzeuge(k, Seedquelle(7).zweig("welt"), spielerliga=20)
+    welt = kern_welt.erzeuge(k, Seedquelle(7).zweig("welt"), spielerliga=10)
     stand = sp.aus_teilen(
         seed=7,
         saisonjahr=2026,

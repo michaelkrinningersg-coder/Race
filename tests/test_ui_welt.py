@@ -511,7 +511,10 @@ def test_editor_rechnet_nach_einer_aenderung_neu(qtbot, konfig: kf.Konfiguration
     # Liga 1 gibt es in jeder Weltgroesse, und der Spieler faehrt nie dort.
     waehle_liga(seite.liga_auswahl, 1)
 
-    zeile = seite.liste.topLevelItem(0)
+    # Der **letzte** der Liga, nicht der erste: Seit Punkt 95 endet der
+    # Korridor von Liga 1 genau auf dem Skalenmaximum, der Beste steht
+    # also schon dort - ihn auf das Maximum zu setzen aendert nichts.
+    zeile = seite.liste.topLevelItem(seite.liste.topLevelItemCount() - 1)
     seite.liste.setCurrentItem(zeile)
     nummer = zeile.data(0, Qt.UserRole)
     vorher = zeile.data(5, Zeile.SORTIERROLLE)

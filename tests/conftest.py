@@ -54,7 +54,7 @@ def keine_modalen_dialoge(monkeypatch):
 # --- Kleine Welt fuer teure Laeufe (Punkt 77) -----------------------------
 # Die getesteten Regeln sind **groesseninvariant**: Auf- und Abstieg,
 # Punktevergabe und Tabellensortierung stimmen mit 3 Ligen zu je 4 Autos
-# genauso wie mit 20 zu je 30. Gemessen kostet ein Rennwochenende dabei
+# genauso wie mit 10 zu je 40. Gemessen kostet ein Rennwochenende dabei
 # 1,45 statt 54,27 Sekunden - Faktor 37. Wer die Groesse selbst prueft,
 # nimmt ``kf.lade()``; alle anderen nehmen das hier.
 #
@@ -69,12 +69,13 @@ KLEINE_AUTOS_JE_LIGA = 4
 # Oberflaeche meldet es per Dialog, und den faengt
 # ``keine_modalen_dialoge`` ab.
 KLEINE_RENNEN = 2
-# Die Renndistanz bleibt **echt**. Verkleinern braechte gemessen 24,5 auf
-# 8,8 Sekunden je ausfuehrlichem Wochenende, laesst aber keine
-# Reifenstrategie mehr zu: Bei sechs Runden traegt kein Boxenstopp, die
-# Variantenliste bleibt leer, und fuenf Tests fallen aus. Wer sie
-# trotzdem will, fordert sie an: ``verkleinert(distanz_km=30)``.
-KLEINE_DISTANZ_KM = None
+# Die Renndistanz: Seit Punkt 95 faehrt jede Liga die vollen 290 km. Fuer
+# die kleine Welt sind das zu viele Runden - ihre schwaechste Liga braucht
+# dann mehr Stopps, als ``stopps_max`` zulaesst, und die Variantenliste
+# bleibt leer. 100 km sind die Distanz, die bis Punkt 95 in der untersten
+# Liga galt: kurz genug fuer den Testlauf, lang genug fuer eine
+# Reifenstrategie. Unter etwa 60 km traegt kein Boxenstopp mehr.
+KLEINE_DISTANZ_KM = 100
 
 
 def verkleinert(
@@ -87,9 +88,9 @@ def verkleinert(
     """Dieselbe Konfiguration in klein - Groessen als Parameter.
 
     Alle Balancing-Werte bleiben, wie sie sind; nur die **Groesse** der
-    Welt schrumpft. Die Ligastaerken rechnen sich aus
-    ``bester_liga20_kmh`` und ``zuwachs_je_liga_kmh``, laufen also weiter,
-    nur ueber weniger Stufen.
+    Welt schrumpft. Der Ligakorridor spannt weiter ``unterste_s`` bis
+    ``oberste_s``, nur ueber weniger Stufen - jede Liga wird dadurch
+    breiter.
 
     :param ligen: Zahl der Ligen
     :param autos_je_liga: Fahrer je Liga
@@ -97,9 +98,9 @@ def verkleinert(
         stehen. Ein kurzer Kalender laesst die Saison im Test enden - die
         Oberflaeche meldet das per Dialog, den ``keine_modalen_dialoge``
         abfaengt.
-    :param distanz_km: Renndistanz der untersten Liga; ``None`` laesst die
-        echte Distanz stehen. Vorsicht: Unter etwa 60 km traegt kein
-        Boxenstopp mehr, und die Reifenstrategie findet keine Variante.
+    :param distanz_km: Renndistanz aller Ligen; ``None`` laesst die echte
+        Distanz stehen. Vorsicht: Unter etwa 60 km traegt kein Boxenstopp
+        mehr, und die Reifenstrategie findet keine Variante.
     """
     import copy
     from dataclasses import replace
@@ -134,8 +135,7 @@ def verkleinert(
     if rennen is not None:
         roh["kalender"]["rennen_je_saison"] = rennen
     if distanz_km is not None:
-        roh["rennen"]["distanz_liga20_km"] = distanz_km
-        roh["rennen"]["distanz_zuwachs_je_liga_km"] = 0
+        roh["rennen"]["distanz_km"] = distanz_km
     return replace(gross, roh=roh)
 
 
@@ -157,7 +157,7 @@ def konfig(kleine_konfiguration):
 
 @pytest.fixture(scope="module")
 def grosse_konfiguration():
-    """Die echte Konfiguration mit 20 Ligen zu je 30 Autos."""
+    """Die echte Konfiguration mit 10 Ligen zu je 40 Autos."""
     from rennmanager import konfiguration as kf
 
     return kf.lade()

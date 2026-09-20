@@ -98,7 +98,7 @@ def test_platz_von_meldet_unbekannte_fahrer(k):
 # --- Auf- und Abstieg -----------------------------------------------------
 @pytest.fixture
 def volle_tabellen(k) -> dict[int, wt.Tabelle]:
-    """20 Ligen zu je 30 Fahrern; Fahrernummer = Liga * 100 + Rang."""
+    """Alle Ligen voll besetzt; Fahrernummer = Liga * 100 + Rang."""
     autos = k.wert("ligen", "autos_je_liga")
     tabellen = {}
     for liga in range(1, k.wert("ligen", "anzahl") + 1):
@@ -114,12 +114,15 @@ def test_top_drei_steigen_auf_und_letzte_drei_ab(k, volle_tabellen):
     for w in wechsel:
         nach_liga.setdefault(w.von_liga, []).append(w)
 
-    # Liga 10 schickt drei nach oben und drei nach unten.
-    zehn = nach_liga[10]
-    assert sorted(w.fahrer for w in zehn if w.ist_aufstieg) == [1000, 1001, 1002]
-    assert sorted(w.fahrer for w in zehn if not w.ist_aufstieg) == [1027, 1028, 1029]
-    assert {w.nach_liga for w in zehn if w.ist_aufstieg} == {9}
-    assert {w.nach_liga for w in zehn if not w.ist_aufstieg} == {11}
+    # Eine Liga in der Mitte schickt drei nach oben und drei nach unten.
+    autos = k.wert("ligen", "autos_je_liga")
+    mitte = nach_liga[5]
+    assert sorted(w.fahrer for w in mitte if w.ist_aufstieg) == [500, 501, 502]
+    assert sorted(w.fahrer for w in mitte if not w.ist_aufstieg) == [
+        500 + autos - 3, 500 + autos - 2, 500 + autos - 1
+    ]
+    assert {w.nach_liga for w in mitte if w.ist_aufstieg} == {4}
+    assert {w.nach_liga for w in mitte if not w.ist_aufstieg} == {6}
 
 
 def test_liga_eins_kennt_keinen_aufstieg_und_liga_zwanzig_keinen_abstieg(k, volle_tabellen):

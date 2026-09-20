@@ -74,7 +74,15 @@ if TYPE_CHECKING:  # pragma: no cover
 # Version 4: Der Punkteverlauf der laufenden Saison (Tabelle
 # ``saisonverlauf``, Punkt 9). Aeltere Staende werden gelesen; ihr Verlauf
 # beginnt dann beim naechsten gefahrenen Rennen.
-SPIELSTAND_VERSION = 10
+# Version 11: Der Ligenumbau aus Punkt 95 - 10 Ligen zu je 40 Autos statt
+# 20 zu je 30, ein neuer Korridor und ein neues Punktesystem. Ein alter
+# Stand traegt 600 Fahrer in 20 Ligen und Punkte aus einer Tabelle, die es
+# nicht mehr gibt; umrechnen liesse sich das nur, indem man Zahlen
+# erfindet. Entscheidung des Auftraggebers: abweisen, nichts portieren.
+SPIELSTAND_VERSION = 11
+
+# Der aelteste Stand, den dieses Programm noch lesen kann.
+MINDESTVERSION = 11
 
 # Punkt 17: Autosave und Schnellspeicher liegen an einem festen Ort,
 # damit sie ohne Dateidialog geschrieben werden koennen.
@@ -758,6 +766,13 @@ def lade(konfiguration: Konfiguration, pfad: Path | str) -> Spielstand:
                 raise SpielstandFehler(
                     f"Der Spielstand hat Version {kopf['version']}, dieses Programm "
                     f"kennt hoechstens {SPIELSTAND_VERSION}"
+                )
+            if kopf["version"] < MINDESTVERSION:
+                raise SpielstandFehler(
+                    f"Der Spielstand hat Version {kopf['version']} und stammt aus der "
+                    f"Zeit vor dem Ligenumbau (20 Ligen zu je 30 Autos). Er laesst "
+                    f"sich nicht umrechnen; dieses Programm braucht mindestens "
+                    f"Version {MINDESTVERSION}. Bitte eine neue Karriere anfangen."
                 )
 
             welt = _lies_welt(verbindung, kopf["seed"])

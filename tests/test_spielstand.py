@@ -144,6 +144,15 @@ def test_neuere_version_faellt_auf(k, gespielt, tmp_path):
         sp.lade(k, pfad)
 
 
+def test_stand_vor_dem_ligenumbau_wird_abgewiesen(k, gespielt, tmp_path):
+    """Punkt 95: Alte Staende werden abgewiesen, nichts wird portiert."""
+    pfad = sp.speichere(gespielt, tmp_path / "stand.sqlite")
+    with sqlite3.connect(pfad) as verbindung:
+        verbindung.execute("UPDATE kopf SET version = ?", (sp.MINDESTVERSION - 1,))
+    with pytest.raises(sp.SpielstandFehler, match="Ligenumbau"):
+        sp.lade(k, pfad)
+
+
 # --- Welt -----------------------------------------------------------------
 def test_die_welt_kommt_unveraendert_zurueck(gespielt, geladen):
     """Nach dem ersten Auf- und Abstieg laesst sie sich nicht mehr aus dem
@@ -361,82 +370,11 @@ def test_der_kalender_des_dritten_jahres_kommt_zurueck(k, nach_zwei_saisons, tmp
     assert geladen.karriere.heute.year == 2028
 
 
-def mache_zu_version_1(pfad) -> None:
-    """Baut einen Stand auf das Schema der Version 1 zurueck.
-
-    Damit laesst sich pruefen, dass aeltere Staende weiter lesbar sind -
-    und nicht nur, dass der Code eine Fallunterscheidung hat.
-    """
-    with sqlite3.connect(pfad) as verbindung:
-        verbindung.row_factory = sqlite3.Row
-        zeilen = list(
-            verbindung.execute(
-                "SELECT saison, liga, fahrer, punkte FROM historiezeile "
-                "ORDER BY saison, liga, platz"
-            )
-        )
-        alt: dict[tuple[int, int], tuple[list[int], list[int]]] = {}
-        for z in zeilen:
-            fahrer, punkte = alt.setdefault((z["saison"], z["liga"]), ([], []))
-            fahrer.append(z["fahrer"])
-            punkte.append(z["punkte"])
-
-        verbindung.execute("DROP TABLE historiezeile")
-        verbindung.execute("DROP TABLE historie")
-        verbindung.execute(
-            "CREATE TABLE historie (saison INTEGER NOT NULL, liga INTEGER NOT NULL, "
-            "reihenfolge TEXT NOT NULL, punkte TEXT NOT NULL, PRIMARY KEY (saison, liga))"
-        )
-        verbindung.executemany(
-            "INSERT INTO historie VALUES (?, ?, ?, ?)",
-            [
-                (saison, liga, ",".join(map(str, f)), ",".join(map(str, p)))
-                for (saison, liga), (f, p) in alt.items()
-            ],
-        )
-        verbindung.execute("UPDATE kopf SET version = 1")
-
-
-@pytest.mark.skip(
-    reason="Punkt 77: Saisonwechsel wird erst geprueft, wenn eine "
-    "einzelne Saison sauber steht. Entscheidung des Auftraggebers."
-)
-def test_ein_stand_der_version_1_bleibt_lesbar(k, nach_zwei_saisons, tmp_path):
-    pfad = sp.speichere(nach_zwei_saisons, tmp_path / "alt.sqlite")
-    mache_zu_version_1(pfad)
-
-    geladen = sp.lade(k, pfad)
-    neu = nach_zwei_saisons.statistik.abschluss(2026, LIGA)
-    alt = geladen.statistik.abschluss(2026, LIGA)
-    assert alt.reihenfolge == neu.reihenfolge
-    assert alt.punkte == neu.punkte
-    assert alt.platz_von(alt.meister) == 1
-    # Die Zahlen, die es in Version 1 nicht gab, bleiben auf 0.
-    assert alt.zeilen[0].siege == 0
-    assert alt.zeilen[0].rennen == 0
-
-
-def mache_zu_version_4(pfad) -> None:
-    """Baut einen Stand auf das Schema der Version 4 zurueck (ohne Bilanzen)."""
-    with sqlite3.connect(pfad) as verbindung:
-        verbindung.execute("DROP TABLE streckenbilanz")
-        verbindung.execute("DROP TABLE wetterbilanz")
-        verbindung.execute("UPDATE kopf SET version = 4")
-
-
-def test_ein_stand_der_version_4_bleibt_lesbar(k, gespielt, tmp_path):
-    """Punkt 21 und 23 kamen erst mit Version 5 dazu."""
-    pfad = sp.speichere(gespielt, tmp_path / "v4.sqlite")
-    assert gespielt.statistik.streckenbilanz
-    mache_zu_version_4(pfad)
-
-    geladen = sp.lade(k, pfad)
-    # Alles andere steht noch; die Bilanzen fangen bei null an, weil die
-    # einzelnen Rennen von damals nirgends aufgehoben sind.
-    assert geladen.statistik.streckenbilanz == {}
-    assert geladen.statistik.wetterbilanz == {}
-    assert geladen.statistik.karriere.keys() == gespielt.statistik.karriere.keys()
-    assert geladen.gefahrene_rennen == gespielt.gefahrene_rennen
+# Die Tests, die Staende der Versionen 1 und 4 zurueckbauten und wieder
+# lasen, sind mit Punkt 95 entfallen: Seit dem Ligenumbau weist
+# ``lade`` alles unterhalb von ``MINDESTVERSION`` ab (Entscheidung des
+# Auftraggebers: nichts portieren). Dass es abgewiesen wird, prueft
+# ``test_stand_vor_dem_ligenumbau_wird_abgewiesen`` weiter oben.
 
 
 def test_die_bilanzen_ueberstehen_speichern_und_laden(k, gespielt, tmp_path):

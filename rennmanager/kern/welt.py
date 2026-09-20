@@ -181,23 +181,31 @@ def lade_namen(konfiguration: Konfiguration) -> dict:
         return tomllib.load(datei)
 
 
+def ligagrenzen(konfiguration: Konfiguration, liga: int) -> tuple[int, int]:
+    """Der Korridor einer Liga als ``(s_bester, s_letzter)`` (Punkt 95).
+
+    Alle Ligen sind auf der Werteskala gleich breit und ueberlappen die
+    naechste um einen festen Anteil. Damit haengt der Korridor nicht mehr
+    an einer Ziel-Durchschnittsgeschwindigkeit je Liga - die gibt es seit
+    dem Umbau auf zehn Ligen nicht mehr.
+    """
+    unten = float(konfiguration.wert("ligen", "unterste_s"))
+    oben = float(konfiguration.wert("ligen", "oberste_s"))
+    anzahl = konfiguration.wert("ligen", "anzahl")
+    rest = 1.0 - konfiguration.wert("ligen", "ueberlappung_anteil")
+    breite = (oben - unten) / ((anzahl - 1) * rest + 1.0)
+    letzter = unten + (anzahl - liga) * breite * rest
+    return round(letzter + breite), round(letzter)
+
+
 def ligastaerken(konfiguration: Konfiguration, liga: int, anzahl: int) -> list[int]:
     """Staerken einer Liga, vom Besten zum Letzten (GDD 9).
 
     Oeffentlich, weil Punkt 35 die Liga nach jedem Winter darauf
     zurueckholt: Die KI entwickelt sich *innerhalb* ihrer Liga, die Liga
-    selbst bleibt auf dem Korridor aus GDD 9.
+    selbst bleibt auf dem Korridor.
     """
-    kontrolle = {z["liga"]: z for z in konfiguration.wert("ligen", "kontrolle")}
-    if liga in kontrolle:
-        bester = kontrolle[liga]["s_bester"]
-        letzter = kontrolle[liga]["s_letzter"]
-    else:
-        # Zwischen den Stuetzstellen aus GDD 9 wird interpoliert: Das
-        # Tempo waechst je Liga um einen festen Betrag, der Wert S ergibt
-        # sich daraus durch Umkehren der Kalibrierfunktion.
-        bester = _wert_zu_tempo(konfiguration, _bestes_tempo(konfiguration, liga))
-        letzter = _wert_zu_tempo(konfiguration, _letztes_tempo(konfiguration, liga))
+    bester, letzter = ligagrenzen(konfiguration, liga)
     return [
         round(letzter + (bester - letzter) * nummer / (anzahl - 1))
         for nummer in range(anzahl - 1, -1, -1)
@@ -218,29 +226,6 @@ def liga_zu_staerke(konfiguration: Konfiguration, wert: float) -> int:
         if wert >= ligastaerken(konfiguration, liga, je_liga)[-1]:
             return liga
     return ligen
-
-
-def _bestes_tempo(konfiguration: Konfiguration, liga: int) -> float:
-    basis = konfiguration.wert("ligen", "bester_liga20_kmh")
-    zuwachs = konfiguration.wert("ligen", "zuwachs_je_liga_kmh")
-    return basis + zuwachs * (konfiguration.wert("ligen", "anzahl") - liga)
-
-
-def _letztes_tempo(konfiguration: Konfiguration, liga: int) -> float:
-    if liga == konfiguration.wert("ligen", "anzahl"):
-        return konfiguration.wert("ligen", "letzter_liga20_kmh")
-    return _bestes_tempo(konfiguration, liga + 1) - konfiguration.wert(
-        "ligen", "ueberlappung_kmh"
-    )
-
-
-def _wert_zu_tempo(konfiguration: Konfiguration, tempo_kmh: float) -> int:
-    """Kehrt die Kalibrierfunktion aus GDD 9 um: v(S) -> S."""
-    basis = konfiguration.wert("kalibrierung", "basis_kmh")
-    spanne = konfiguration.wert("kalibrierung", "spanne_kmh")
-    referenz = konfiguration.wert("skala", "referenz")
-    anteil = max((tempo_kmh - basis) / spanne, 0.0)
-    return int(round(referenz * anteil * anteil))
 
 
 def kuerzel_fuer(nachname: str, vergeben: set[str]) -> str:
@@ -416,6 +401,9 @@ def erzeuge(
     je_liga = konfiguration.wert("ligen", "autos_je_liga")
     team_anzahl = konfiguration.wert("teams", "anzahl")
     je_team = konfiguration.wert("teams", "autos_je_team")
+
+    if spielerliga is not None and not 1 <= spielerliga <= ligen:
+        raise WeltFehler(f"Spielerliga {spielerliga} liegt ausserhalb von 1 bis {ligen}")
 
     gesamt = ligen * je_liga
     if team_anzahl * je_team != gesamt:

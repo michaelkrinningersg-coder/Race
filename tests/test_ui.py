@@ -66,7 +66,7 @@ def test_pruefmodus_laedt_die_konfiguration(capsys) -> None:
     assert starte(["rennmanager", PRUEFMODUS]) == 0
     ausgabe = capsys.readouterr().out
     assert "GDD-Version" in ausgabe
-    assert "20 Ligen" in ausgabe
+    assert "10 Ligen" in ausgabe
 
 
 def test_streckenseite_zeigt_die_erste_strecke(qtbot, konfig: kf.Konfiguration) -> None:

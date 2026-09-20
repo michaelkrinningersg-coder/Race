@@ -7,7 +7,7 @@ Regeln kommen alle aus der Abstimmung mit dem Auftraggeber:
 * Transferfenster im Winter, Verpflichtung kostet **Gehalt plus Abloese**.
 * Der Fahrer **waegt ab**: Liga, Auto und Geld gegeneinander.
 * Ein neuer Fahrer bringt ein **leeres Auto** mit - beim Spieler in
-  Liga 20 ist das Auto also fast immer ein Minus, und Geld muss es
+  der untersten Liga ist das Auto also fast immer ein Minus, und Geld muss es
   ausgleichen.
 """
 
@@ -35,7 +35,7 @@ def quelle():
 
 @pytest.fixture(scope="module")
 def welt(k, quelle):
-    return kern_welt.erzeuge(k, quelle.zweig("welt"), spielerliga=20)
+    return kern_welt.erzeuge(k, quelle.zweig("welt"), spielerliga=10)
 
 
 @pytest.fixture(scope="module")
@@ -93,9 +93,9 @@ def marktwert_von(k, welt, quelle, nummer, jahr):
 
 def test_der_bessere_fahrer_kostet_mehr(k, welt, quelle, jahr):
     liga1 = sorted(welt.liga(1), key=lambda f: -gesamtwert(k, f.auto))
-    liga20 = sorted(welt.liga(20), key=lambda f: -gesamtwert(k, f.auto))
+    liga_unten = sorted(welt.liga(10), key=lambda f: -gesamtwert(k, f.auto))
     oben = marktwert_von(k, welt, quelle, liga1[0].nummer, jahr)
-    unten = marktwert_von(k, welt, quelle, liga20[-1].nummer, jahr)
+    unten = marktwert_von(k, welt, quelle, liga_unten[-1].nummer, jahr)
     assert oben > unten
 
 
@@ -146,7 +146,7 @@ def test_niemand_geht_freiwillig_eine_liga_tiefer(k, welt, quelle, jahr):
     marktwert = marktwert_von(k, welt, quelle, fahrer.nummer, jahr)
     antwort = antwort_auf(
         k, welt, quelle, fahrer.nummer, jahr,
-        liga=20, autowert=wert, gehalt=marktwert,
+        liga=10, autowert=wert, gehalt=marktwert,
     )
     assert not antwort.angenommen
     assert "tiefere Liga" in antwort.grund

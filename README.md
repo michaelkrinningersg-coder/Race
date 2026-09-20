@@ -7,7 +7,16 @@ die Arbeitsregeln stehen in [CLAUDE.md](CLAUDE.md).
 **Stand: alle zehn Schritte der Umsetzungsreihenfolge sind durch.** Eine
 Karriere laeuft vom 1. Januar bis zum Auf- und Abstieg, mit Ereignissen,
 Rundenrekorden, Historie und Spielstand auf der Platte. Dazu der Editor aus
-GDD 15 (Debug-Ansicht), mit dem sich jeder der 600 Fahrer aendern laesst.
+GDD 15 (Debug-Ansicht), mit dem sich jeder Fahrer aendern laesst.
+
+> **Umbau laeuft (Punkt 95).** Die Welt steht seit Schritt 1 auf **10 Ligen
+> zu je 40 Autos** (400 Fahrer, 100 Teams), der Ligakorridor spannt
+> S = 20.000 bis 100.000 mit 25 % Ueberlappung, und jede Liga faehrt die
+> volle Distanz von 290 km. Punktesystem, Auf- und Abstieg, Preisgeld und
+> Sektorform folgen in den naechsten Schritten. Alles weiter unten, was
+> noch von 20 Ligen, 30 Autos, 600 Fahrern oder Liga 20 als unterster Liga
+> spricht, ist Text von vor dem Umbau und wird am Ende in einem Zug
+> nachgezogen - samt der Messwerte, die neu gemessen werden.
 
 ## Aufbau
 

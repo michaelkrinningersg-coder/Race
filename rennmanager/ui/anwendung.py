@@ -76,10 +76,12 @@ def pruefe() -> int:
         f"(Soll {soll:.2f}, Abweichung {runde.schnitt_kmh - soll:+.2f})"
     )
     # Ein Kurzrennen ueber zwei Runden: prueft die Rennschleife im Bundle.
+    # Gemessen wird in der untersten Liga - dort startet der Spieler.
+    unterste = konfiguration.wert("ligen", "anzahl")
     verlauf = kern_rennen.simuliere(
         konfiguration,
         referenz,
-        kern_rennen.starterfeld(konfiguration, 20, umgedreht=True),
+        kern_rennen.starterfeld(konfiguration, unterste, umgedreht=True),
         2,
         Seedquelle(1),
         kern_rennen.mittlerer_ueberholzonenanteil(konfiguration, strecken),
@@ -93,17 +95,17 @@ def pruefe() -> int:
     )
     # Ein Rennwochenende im Schnellmodus und seine Wertung: prueft die
     # Bausteine der Saison (GDD 13) im fertigen Bundle.
-    feld = kern_rennen.starterfeld(konfiguration, 20, seedquelle=Seedquelle(2))
+    feld = kern_rennen.starterfeld(konfiguration, unterste, seedquelle=Seedquelle(2))
     schnell = kern_schnell.fahre_wochenende(
         konfiguration,
-        20,
+        unterste,
         referenz,
         feld,
         2,
         Seedquelle(2),
         kern_rennen.mittlerer_ueberholzonenanteil(konfiguration, strecken),
     )
-    tabelle = kern_wertung.Tabelle(20)
+    tabelle = kern_wertung.Tabelle(unterste)
     tabelle.verbuche(konfiguration, schnell.ergebnisse)
     bester = tabelle.stand()[0]
     print(
@@ -120,7 +122,8 @@ def pruefe() -> int:
         f"{len(saison.nachsaison)} Tage Nachsaison"
     )
     print(
-        f"Wirtschaft:    Siegpraemie Liga 20 {euro(kern_einnahmen.siegpraemie(konfiguration, 20))}"
+        f"Wirtschaft:    Siegpraemie Liga {unterste} "
+        f"{euro(kern_einnahmen.siegpraemie(konfiguration, unterste))}"
         f", Liga 1 {euro(kern_einnahmen.siegpraemie(konfiguration, 1))}"
         f", Startkapital {euro(kern_einnahmen.startkapital(konfiguration))}"
         f" und {kern_einnahmen.starterfahrung(konfiguration)} EP"

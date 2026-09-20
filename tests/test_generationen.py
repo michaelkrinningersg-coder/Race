@@ -3,7 +3,7 @@
 Die Regeln kommen vom Auftraggeber: Jeder Fahrer hat ein gewuerfeltes
 Ruecktrittsalter, je Winter tritt hoechstens eine feste Zahl ab, die
 frei gewordenen Plaetze werden **von unten nach Platzierung** aufgefuellt,
-und die Newgens steigen in Liga 20 ein. Entwickelt wird jeder nach
+und die Newgens steigen in der untersten Liga ein. Entwickelt wird jeder nach
 **seinem eigenen Talent** - der Ligakorridor aus GDD 9 gilt nur noch beim
 Weltstart.
 """
@@ -30,7 +30,7 @@ def quelle():
 
 @pytest.fixture(scope="module")
 def welt(k, quelle):
-    return kern_welt.erzeuge(k, quelle.zweig("welt"), spielerliga=20)
+    return kern_welt.erzeuge(k, quelle.zweig("welt"), spielerliga=10)
 
 
 @pytest.fixture(scope="module")
@@ -134,14 +134,14 @@ def test_derselbe_seed_dieselben_ruecktritte(k, welt, quelle, startjahr):
 # -- Newgens ----------------------------------------------------------------
 def test_ein_newgen_ist_jung_und_vollstaendig(k, quelle, startjahr):
     neu = gen.newgen(
-        k, nummer=9000, team=0, liga=20, jahr=startjahr + 5,
+        k, nummer=9000, team=0, liga=10, jahr=startjahr + 5,
         seedquelle=quelle.zweig("jahrgang", startjahr + 5),
         seedquelle_talent=quelle,
         vergebene_namen=set(), vergebene_kuerzel=set(),
     )
     stichtag = kern_kalender.saisonstart(k, startjahr + 5)
     assert neu.nummer == 9000
-    assert neu.liga == 20
+    assert neu.liga == 10
     assert neu.name and neu.land
     assert 15 <= neu.alter_am(stichtag) <= 25
     assert len(neu.auto.werte) == len(k.faehigkeiten)
@@ -153,7 +153,7 @@ def test_zwei_newgens_bekommen_verschiedene_namen(k, quelle, startjahr):
     erzeugt = []
     for n in range(12):
         neu = gen.newgen(
-            k, nummer=9000 + n, team=0, liga=20, jahr=startjahr + 5,
+            k, nummer=9000 + n, team=0, liga=10, jahr=startjahr + 5,
             seedquelle=quelle.zweig("jahrgang", startjahr + 5),
             seedquelle_talent=quelle,
             vergebene_namen=namen, vergebene_kuerzel=kuerzel,
@@ -169,12 +169,12 @@ def test_das_talent_haengt_an_der_fahrernummer_nicht_am_jahrgang(k, quelle, star
     from rennmanager.kern import talent as kern_talent
 
     erst = gen.newgen(
-        k, nummer=9100, team=0, liga=20, jahr=startjahr + 3,
+        k, nummer=9100, team=0, liga=10, jahr=startjahr + 3,
         seedquelle=quelle.zweig("jahrgang", startjahr + 3),
         seedquelle_talent=quelle, vergebene_namen=set(), vergebene_kuerzel=set(),
     )
     spaeter = gen.newgen(
-        k, nummer=9100, team=0, liga=20, jahr=startjahr + 9,
+        k, nummer=9100, team=0, liga=10, jahr=startjahr + 9,
         seedquelle=quelle.zweig("jahrgang", startjahr + 9),
         seedquelle_talent=quelle, vergebene_namen=set(), vergebene_kuerzel=set(),
     )

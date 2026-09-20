@@ -606,10 +606,14 @@ def startdistanz_m(konfiguration: Konfiguration, startplatz: int) -> float:
 
 
 def rundenzahl(konfiguration: Konfiguration, strecke: Strecke, liga: int) -> int:
-    """Rundenzahl = Distanz durch Streckenlaenge, aufgerundet (GDD 4)."""
-    basis = konfiguration.wert("rennen", "distanz_liga20_km")
-    zuwachs = konfiguration.wert("rennen", "distanz_zuwachs_je_liga_km")
-    distanz_km = basis + zuwachs * (konfiguration.wert("ligen", "anzahl") - liga)
+    """Rundenzahl = Distanz durch Streckenlaenge, aufgerundet (GDD 4).
+
+    Punkt 95: Die Distanz haengt nicht mehr an der Liga - jede faehrt die
+    volle. ``liga`` bleibt im Aufruf stehen, damit die Rundenzahl eine
+    Frage des Rennens bleibt und nicht der Strecke allein.
+    """
+    del liga
+    distanz_km = konfiguration.wert("rennen", "distanz_km")
     return max(1, math.ceil(distanz_km * 1000.0 / strecke.laenge_m))
 
 
@@ -2022,7 +2026,9 @@ class _Lauf:
                 zeit_ms=zeit_ms,
                 angreifer=hinten,
                 verteidiger=vorne,
-                runde=int(self.distanz[hinten] // self.laenge) + 1,
+                # Vor der Ziellinie ist die Distanz negativ - ein Vorbeigang
+                # auf dem Startfeld gehoert trotzdem zur ersten Runde.
+                runde=max(1, int(self.distanz[hinten] // self.laenge) + 1),
             )
         )
         return True
@@ -2381,7 +2387,7 @@ def starterfeld(
     umgedreht: bool = False,
     seedquelle: Seedquelle | None = None,
 ) -> tuple[Teilnehmer, ...]:
-    """Baut ein Feld aus 30 Autos fuer eine Liga.
+    """Baut ein Feld fuer eine Liga, so gross wie [rennen] autos sagt.
 
     Die Staerken sind gleichmaessig zwischen dem Letzten und dem Besten der
     Liga verteilt, wie es die Kalibriertabelle in GDD 9 vorgibt. Mit einer
@@ -2400,16 +2406,15 @@ def starterfeld(
         Ueberholen zu pruefen
     :param seedquelle: ohne Angabe hat jedes Auto ueberall denselben Wert
     """
-    kontrolle = {zeile["liga"]: zeile for zeile in konfiguration.wert("ligen", "kontrolle")}
-    if liga not in kontrolle:
-        bekannt = ", ".join(str(nummer) for nummer in sorted(kontrolle))
-        raise ValueError(
-            f"Fuer Liga {liga} liegt kein Kontrollwert vor; vorhanden sind {bekannt}"
-        )
+    # Punkt 95: Der Korridor kommt aus der Formel und gilt fuer jede Liga;
+    # die Kontrollwerte sind nur noch Pruefwerte. Der Import steht hier,
+    # weil welt seinerseits Teilnehmer aus diesem Modul holt.
+    from rennmanager.kern.welt import ligagrenzen
 
-    zeile = kontrolle[liga]
-    schwaechster = zeile["s_letzter"]
-    staerkster = zeile["s_bester"]
+    anzahl_ligen = konfiguration.wert("ligen", "anzahl")
+    if not 1 <= liga <= anzahl_ligen:
+        raise ValueError(f"Liga {liga} liegt ausserhalb von 1 bis {anzahl_ligen}")
+    staerkster, schwaechster = ligagrenzen(konfiguration, liga)
     anzahl = konfiguration.wert("rennen", "autos")
     hersteller = konfiguration.hersteller
     streuung = konfiguration.wert("ki", "profil_streuung")

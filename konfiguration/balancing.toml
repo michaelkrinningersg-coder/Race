@@ -79,73 +79,79 @@ hoechstgeschwindigkeit_bei_referenz_kmh = 400.0
 # GDD 9 / 12 – Ligen
 # ---------------------------------------------------------------------------
 [ligen]
-anzahl = 20
-autos_je_liga = 30
-# Tempo des Besten je Liga: Liga 20 = 60,0 km/h, je Liga aufwaerts +6,32 km/h
-bester_liga20_kmh = 60.0
-zuwachs_je_liga_kmh = 6.32
-# Der Letzte einer Liga ist 0,3 km/h langsamer als der Beste der Liga darunter
-ueberlappung_kmh = 0.3
-# Ausnahme Liga 20: Der Letzte faehrt 56,0 km/h
-letzter_liga20_kmh = 56.0
-startliga = 20
+anzahl = 10
+autos_je_liga = 40
+# Punkt 95: Der Ligakorridor haengt nicht mehr an einer Ziel-Durchschnitts-
+# geschwindigkeit je Liga, sondern steht direkt auf der Werteskala. Liga 10
+# beginnt bei S = 20 000, Liga 1 endet bei S = 100 000. Alle zehn Ligen sind
+# gleich breit, benachbarte Ligen ueberlappen zu 25 %:
+#
+#     breite  = (oberste_s - unterste_s) / ((anzahl - 1) * (1 - ueberlappung) + 1)
+#     schritt = breite * (1 - ueberlappung)
+#     s_letzter(liga) = unterste_s + (anzahl - liga) * schritt
+#     s_bester(liga)  = s_letzter(liga) + breite
+#
+# Mit den Werten unten: breite = 10 322,58 und schritt = 7 741,94.
+# Liga 1 trifft damit fast genau den alten Korridor (3,83 % Feldbreite gegen
+# 3,80 % bisher); nach unten wird das Feld breiter, Liga 10 kommt auf 11,72 %.
+unterste_s = 20_000
+oberste_s = 100_000
+ueberlappung_anteil = 0.25
+startliga = 10
 
-# Kontrollwerte aus der Tabelle in GDD 9 (Pruefwerte fuer die Kalibrierung)
+# Pruefwerte zum Korridor. Sie stammen aus derselben Formel; weicht
+# ligastaerken() davon ab, faellt die Konfigurationspruefung.
 [[ligen.kontrolle]]
-liga = 20
-bester_kmh = 60.0
-letzter_kmh = 56.0
-s_bester = 157
-s_letzter = 6
+liga = 1
+s_bester = 100_000
+s_letzter = 89_677
 
 [[ligen.kontrolle]]
-liga = 15
-bester_kmh = 91.6
-letzter_kmh = 85.0
-s_bester = 8_400
-s_letzter = 5_640
-
-[[ligen.kontrolle]]
-liga = 10
-bester_kmh = 123.2
-letzter_kmh = 116.6
-s_bester = 29_170
-s_letzter = 23_780
+liga = 3
+s_bester = 84_516
+s_letzter = 74_194
 
 [[ligen.kontrolle]]
 liga = 5
-bester_kmh = 154.8
-letzter_kmh = 148.2
-s_bester = 62_470
-s_letzter = 54_460
+s_bester = 69_032
+s_letzter = 58_710
 
 [[ligen.kontrolle]]
-liga = 1
-bester_kmh = 180.1
-letzter_kmh = 173.5
-s_bester = 98_130
-s_letzter = 88_010
+liga = 8
+s_bester = 45_806
+s_letzter = 35_484
 
-# Ligennamen: Platin, Gold, Silber, Bronze mit je 5 Stufen (GDD 12)
+[[ligen.kontrolle]]
+liga = 10
+s_bester = 30_323
+s_letzter = 20_000
+
+# Ligennamen: fuenf Stufen zu je zwei Ligen (Punkt 95). Die vier Namen aus
+# GDD 12 bleiben in ihrer Reihenfolge, unten kommt Eisen dazu.
 [[ligen.namen]]
 stufe = "Platin"
 von_liga = 1
-bis_liga = 5
+bis_liga = 2
 
 [[ligen.namen]]
 stufe = "Gold"
-von_liga = 6
-bis_liga = 10
+von_liga = 3
+bis_liga = 4
 
 [[ligen.namen]]
 stufe = "Silber"
-von_liga = 11
-bis_liga = 15
+von_liga = 5
+bis_liga = 6
 
 [[ligen.namen]]
 stufe = "Bronze"
-von_liga = 16
-bis_liga = 20
+von_liga = 7
+bis_liga = 8
+
+[[ligen.namen]]
+stufe = "Eisen"
+von_liga = 9
+bis_liga = 10
 
 # ---------------------------------------------------------------------------
 # GDD 2 – Kalender und Zeitmodell
@@ -477,10 +483,11 @@ datei = "YasMarina"
 # GDD 4 – Rennsimulation
 # ---------------------------------------------------------------------------
 [rennen]
-autos = 30
-# Renndistanz: Liga 20 = 100 km, je Liga aufwaerts +10 km (Liga 1 = 290 km)
-distanz_liga20_km = 100
-distanz_zuwachs_je_liga_km = 10
+autos = 40
+# Punkt 95: Jede Liga faehrt dieselbe Distanz - die volle. Bisher war sie
+# gestaffelt (Liga 20 = 100 km, je Liga aufwaerts +10 km bis 290 km in
+# Liga 1); der Spitzenwert gilt jetzt ueberall.
+distanz_km = 290
 # Rundenzahl = Distanz / Streckenlaenge, aufgerundet
 rundenzahl_aufrunden = true
 
@@ -1066,7 +1073,9 @@ verkleinert_durch = "D12"
 # GDD 12 – Teams, Hersteller, KI
 # ---------------------------------------------------------------------------
 [teams]
-anzahl = 150
+# Punkt 95: 10 Ligen zu je 40 Autos sind 400 Autos. Vier Autos je Team sind
+# aus GDD 12 gesetzt und bleiben, also sinkt die Teamzahl von 150 auf 100.
+anzahl = 100
 autos_je_team = 4
 # Teamnamen aus zwei Teilen (siehe namen.toml). Das GDD nennt fuer Teams
 # nur die Felder, nicht die Namensbildung; Begruendung in OFFENE_PUNKTE.md.
@@ -1292,11 +1301,11 @@ limit_kmh = 80
 # strenger die Boxengasse. So hat es der Auftraggeber gesetzt. Jeder
 # Eintrag gilt **bis** zu seiner Liga einschliesslich; ohne Treffer gilt
 # ``limit_kmh``.
+# Punkt 95: Die neue Liga 10 ist etwa so stark wie die alte Liga 10, die
+# beiden untersten Stufen von 65 und 60 km/h haben damit keine Liga mehr.
 limit_je_liga = [
     { bis_liga = 5, kmh = 80 },
     { bis_liga = 10, kmh = 70 },
-    { bis_liga = 15, kmh = 65 },
-    { bis_liga = 20, kmh = 60 },
 ]
 # Wo die Strecke ohnehin langsamer als das Limit ist - in den unteren
 # Ligen kommt das oft vor -, gilt nicht das Limit, sondern das
