@@ -327,7 +327,8 @@ def test_defekte_lassen_sich_reparieren(k):
 
 
 def test_reparatur_ohne_geld_scheitert(k):
-    c = kk.beginne(k, 2026, liga=1)  # teure Liga, kleines Startkapital
+    c = kk.beginne(k, 2026, liga=1)  # teure Liga
+    c.konto = c.konto.mit(geld=-c.konto.geld)   # und ein leeres Konto
     c.uebernimm_defekte(("X13",))
     with pytest.raises(kk.KarriereFehler, match="Konto"):
         c.repariere("X13")

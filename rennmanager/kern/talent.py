@@ -233,12 +233,19 @@ def stand_mit(
     Liga-1-Potential hat erst einen Bruchteil davon, landet dadurch von
     allein weit unten - und ist damit das versteckte Talent, nach dem im
     Transfermarkt gesucht wird. Ohne jede Sonderregel.
+
+    Punkt 95: Nach unten begrenzt ``mindeststaerke`` das Ergebnis. Wer
+    wenig Potential hat und dazu jung ist, faellt sonst so weit unter die
+    unterste Liga, dass er in ihr nicht mehr mitfaehrt. Das versteckte
+    Talent bleibt davon unberuehrt - es steht ohnehin weit ueber dem
+    Boden.
     """
-    return (
+    erreicht = (
         talent.gipfelstaerke
         * reifegrad(konfiguration, talent, alter)
         * zielfaktor(konfiguration, talent, alter, ruecktrittsalter)
     )
+    return max(float(konfiguration.wert("talent", "mindeststaerke")), erreicht)
 
 
 def profil(

@@ -234,10 +234,10 @@ def test_startgeld_ist_ein_sockel(k) -> None:
 
 
 def test_startkapital(k) -> None:
-    assert ei.startkapital(k) == 1_000
-    # Punkt 95: Mit dem Startwert 2.500 kostet ein Tag mehr EP; der Sockel
-    # ist mit der Kostenkurve mitgewachsen.
-    assert ei.starterfahrung(k) == 45
+    # Punkt 95: Beide sind mit dem Startwert 12.000 mitgewachsen - ein
+    # belegter Tag kostet dort das 56-fache von S = 0.
+    assert ei.startkapital(k) == 55_000
+    assert ei.starterfahrung(k) == 1_100
 
 
 # -- Sponsoren --------------------------------------------------------------

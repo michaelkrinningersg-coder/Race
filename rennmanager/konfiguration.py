@@ -481,6 +481,17 @@ def _pruefe_ligen(k: Konfiguration) -> None:
                 f"Liga {liga}: Korridor ergibt {erwartet}, Pruefwert sagt {gefunden}"
             )
 
+    # Punkt 95: Der Boden der erreichten Staerke gehoert unter den
+    # Korridorboden. Daraus werden die **Potentiale** gezogen; was ein
+    # Fahrer heute kann, liegt darunter. Stuende der Boden darueber, waere
+    # jeder Fahrer der Welt sofort besser als sein eigenes Potential.
+    boden = k.wert("talent", "mindeststaerke")
+    if not 0 <= boden <= unten:
+        raise KonfigurationsFehler(
+            f"Die Mindeststaerke {boden} muss zwischen 0 und dem Korridorboden "
+            f"{unten:.0f} liegen"
+        )
+
     abgedeckt: set[int] = set()
     for gruppe in k.wert("ligen", "namen"):
         abgedeckt.update(range(gruppe["von_liga"], gruppe["bis_liga"] + 1))

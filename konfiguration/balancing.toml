@@ -948,18 +948,22 @@ k0_erfahrung = 5.0
 k0_erfahrung_zeit = 2.0
 # Nur Einzelkauf, kein Mehrfachkauf
 mehrfachkauf = false
-startkapital_euro = 1000
+# Punkt 95: Mit dem Startwert 12.000 kostet ein belegter Tag nicht mehr
+# 50 EUR, sondern rund 2.800 - der Tageszuwachs ist max(10, 1 %), also
+# +120 statt +10, und jeder Schritt kostet mehr. Der Faktor ist 56.
+# Mitskaliert, damit das Startkapital dieselben rund zwanzig Tage kauft
+# wie bisher: 1.000 x 56 = 56.000, abgerundet auf 55.000.
+startkapital_euro = 55_000
 # Punkt 95: Womit die vier eigenen Autos in eine neue Karriere gehen.
 # GDD 1 nennt 0, und das stimmte, solange die unterste Liga bei S = 157
 # begann. Seit dem Ligenumbau beginnt sie bei 20.000: Ein Auto mit 0
-# faehrt in Zandvoort 277,8 s je Runde, das schwaechste KI-Auto der
-# Startliga 205,2 s und das staerkste 138,6 s - ueber die Renndistanz
-# waeren das 69 Runden Rueckstand, und herauskaufen liesse es sich nicht
-# (350.000 EUR je Auto gegen rund 240.000 EUR Saisoneinnahmen).
-# Gewaehlt ist deshalb die Staerke des schwaechsten KI-Autos der
-# Startliga: 203,8 s gegen dessen 205,2 s. Der Spieler faehrt hinterher,
-# aber im selben Rennen.
-startwert_spieler = 2_500
+# faehrt in Zandvoort 277,8 s je Runde gegen 138,6 s des Ligabesten -
+# ueber die Renndistanz 69 Runden Rueckstand, und herauskaufen liesse es
+# sich nicht (350.000 EUR je Auto gegen rund 240.000 EUR Saisoneinnahmen).
+# Der Spieler startet deshalb auf demselben Boden wie die KI: auf
+# ``mindeststaerke``. Er faehrt damit 154,7 s - hinterher, aber im selben
+# Rennen.
+startwert_spieler = 12_000
 # Erfahrungssockel zum Start (Entscheidung des Auftraggebers). Seit ein
 # belegter Tag auch Erfahrung kostet, stuende der Spieler am 1. Januar
 # sonst mit null da: Der erste Zeitkauf kostet 2 EP, Erfahrung gibt es
@@ -967,12 +971,11 @@ startwert_spieler = 2_500
 # damit tot. Zwanzig reichen fuer einen Handvoll erster Schritte; ab dem
 # ersten Rennen spielt der Sockel keine Rolle mehr (Platz 12 bringt 243,
 # ein Sieg 775 EP).
-# Punkt 95: Mit dem Startwert 2.500 kostet ein belegter Tag nicht mehr 2
-# bis 5 EP, sondern das 2,12-fache - die Kostenkurve waechst mit
-# (1 + S/1000)^0,6. Zwanzig EP trugen damit nicht einmal mehr den ersten
+# Derselbe Faktor 56 wie beim Startkapital: Ein Tag kostet bei S = 12.000
+# rund 112 EP statt 2. Zwanzig EP truegen nicht einmal mehr den ersten
 # Trainings- **und** den ersten Werkstatttag, wofuer der Sockel gedacht
-# ist. Mitskaliert: 20 x 2,12 = 42, aufgerundet auf 45.
-startkapital_erfahrung = 45
+# ist. 20 x 56 = 1.120, abgerundet auf 1.100.
+startkapital_erfahrung = 1_100
 
 # Kontrollwerte aus der Tabelle in GDD 9
 [[kosten.kontrolle]]
@@ -1236,6 +1239,16 @@ reife_am_gipfel = 0.90
 # Was ein Achtzehnjaehriger schon von seinem Potential mitbringt. Ohne
 # das stuende ein Einsteiger bei null und wuerde jede Runde ueberrundet.
 anfang_anteil = 0.12
+# Punkt 95: Der Boden der Welt. Die erreichte Staerke eines Fahrers ist
+# sein Gipfel mal Reifegrad mal Zielfaktor - ein junger Fahrer mit
+# schwachem Potential landete damit bei 2.500, waehrend die unterste Liga
+# bei 17.700 beginnt. Gemessen fuhr er in Zandvoort 205 s gegen 139 s des
+# Ligabesten. Der Boden faengt genau diesen Schwanz ab: Gemessen stehen
+# 17 von 396 KI-Fahrern darauf, die Ligen 1 bis 9 bleiben unberuehrt, und
+# Liga 10 reicht von 12.000 bis 17.662 statt von 2.559 bis 17.662.
+# Er liegt unter dem Korridorboden aus [ligen] - der beschreibt die
+# **Potentiale**, dieser Wert das erreichte Koennen.
+mindeststaerke = 12_000
 
 # ---------------------------------------------------------------------------
 # Punkt 39 - Reifenmischungen

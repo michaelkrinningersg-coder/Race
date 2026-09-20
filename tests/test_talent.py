@@ -125,6 +125,34 @@ def test_ein_junger_fahrer_waechst_auf_sein_potential_zu(k, quelle, welt) -> Non
     assert abstaende[-1] < abstaende[0]
 
 
+def test_niemand_faellt_unter_die_mindeststaerke(k, quelle, welt) -> None:
+    """Punkt 95: Der Boden der Welt.
+
+    Erreichte Staerke ist Gipfel mal Reifegrad mal Zielfaktor - ein
+    junger Fahrer mit schwachem Potential landete damit bei 2.500,
+    waehrend die unterste Liga bei 17.700 beginnt, und fuhr im Rennen
+    50 % langsamer als der Ligabeste. Der Boden faengt genau diesen
+    Schwanz ab.
+    """
+    boden = k.wert("talent", "mindeststaerke")
+    werte = [gesamtwert(k, f.auto) for f in welt.fahrer if not f.ist_spieler]
+    assert min(werte) >= boden - 1   # eine Rundung Toleranz
+    # Und er greift wirklich: In der untersten Liga steht jemand darauf.
+    unterste = [
+        gesamtwert(k, f.auto)
+        for f in welt.liga(k.wert("ligen", "anzahl"))
+        if not f.ist_spieler
+    ]
+    assert min(unterste) == pytest.approx(boden, abs=1)
+
+
+def test_der_boden_laesst_die_oberen_ligen_unberuehrt(k, welt) -> None:
+    boden = k.wert("talent", "mindeststaerke")
+    for liga in (1, 5):
+        werte = [gesamtwert(k, f.auto) for f in welt.liga(liga) if not f.ist_spieler]
+        assert min(werte) > boden * 1.5
+
+
 def test_ein_alter_fahrer_baut_ab(k, quelle, welt) -> None:
     """Ab dem Abbaualter sinkt das Ziel - dieselbe Luecke, andere Richtung."""
     fahrer = next(f for f in welt.liga(5) if not f.ist_spieler)
@@ -366,7 +394,7 @@ def test_ohne_geld_wird_nur_gezahlt_was_da_ist(k) -> None:
     karriere = kk.beginne(k, 2026, 10, fahrer=(400,), fahrernummer=400)
     karriere.verpflichte(500, gehalt=10_000_000, laufzeit=3)
     gezahlt = karriere.zahle_gehaelter()
-    assert gezahlt == 1_000  # das Startkapital
+    assert gezahlt == k.wert("kosten", "startkapital_euro")
     assert karriere.konto.geld == 0
 
 
