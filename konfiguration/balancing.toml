@@ -593,6 +593,13 @@ gezeitete_runden = 1
 # Wetter zwangslaeufig mehrfach dreht und die Startreihenfolge mehr
 # entscheidet als die Fahrleistung.
 abstand_runden = 1.25
+# Punkt 93 (A7 und A8): Wie lange ein frisches Ereignis in der
+# Zeitentafel nachleuchtet - der Verdraengungshinweis und die neue Pole.
+# Gemessen in **Sessionzeit**, nicht in Bildschirmzeit: Bei 50-fachem
+# Zeitraffer waere eine Sekunde Bildschirmzeit fast eine Minute Session,
+# und der Hinweis staende dauernd da. Acht Sekunden sind rund ein
+# Zehntel einer Qualirunde.
+hervorhebung_ms = 8000
 
 [qualifying.wetter]
 # Selbst mit ueberlappendem Start dauert eine Session in Spa fast zwei
@@ -1474,7 +1481,7 @@ eignungsgrenze = 0.30
 # entschieden haette.
 #
 # Die Gewichte gleichen das aus (Entscheidung des Auftraggebers):
-# Ein-Stopp-Varianten zehnmal, Zwei-Stopp-Varianten 2,6-mal so
+# Ein-Stopp-Varianten zehnmal, Zwei-Stopp-Varianten 2,75-mal so
 # wahrscheinlich wie Drei-Stopp-Varianten. Gezogen wird weiterhin nur
 # aus den Varianten, die die Vorausberechnung zugelassen hat - das
 # Gewicht aendert die Auswahl nicht, nur ihre Haeufigkeit.
@@ -1482,7 +1489,7 @@ eignungsgrenze = 0.30
 # Eine Stoppzahl, die hier nicht steht, gilt mit 1,0.
 [boxenstopp.strategie.variantengewicht]
 1 = 10.0
-2 = 2.6
+2 = 2.75
 3 = 1.0
 
 # ---------------------------------------------------------------------------

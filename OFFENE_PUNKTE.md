@@ -2794,7 +2794,7 @@ zieht, lässt das Feld schon deshalb öfter dreimal stoppen — gemessen
 planten in Zandvoort 86 und am Nürburgring 97 Prozent der Autos drei
 Stopps, ohne dass das jemand entschieden hätte.
 
-Gewichte: **1 Stopp ×10, 2 Stopps ×2,6, 3 Stopps ×1.** Gezogen wird
+Gewichte: **1 Stopp ×10, 2 Stopps ×2,75, 3 Stopps ×1.** Gezogen wird
 weiterhin nur aus den zugelassenen Varianten — das Gewicht ändert die
 Auswahl nicht, nur ihre Häufigkeit.
 

@@ -51,12 +51,26 @@ FARBE_SCHNELLER = QColor("#2e7d32")
 FARBE_LANGSAMER = QColor("#c62828")
 # Punkt 82: dasselbe Lila wie fuer den schnellsten Sektor im Rennen.
 FARBE_BESTER = QColor("#8e24aa")
+# Punkt 93 (A6): Wer gerade auf seiner gezeiteten Runde ist, bekommt
+# einen kuehlen Schimmer - dezent genug, dass er die Wechselfarben der
+# Zeilen nicht erschlaegt, deutlich genug, dass man ihn unter dreissig
+# Zeilen findet.
+FARBE_UNTERWEGS = QColor("#eaf1f8")
+# Punkt 93 (A8): Und wer sich gerade die Pole geholt hat, leuchtet kurz
+# golden auf. Beides sind Hintergruende, keine Schrift: Die Schrift
+# traegt schon die Teamfarbe.
+FARBE_NEUE_POLE = QColor("#fff2c9")
 
 SPALTE_POS = 0
 SPALTE_AUTO = 1
 SPALTE_ZEIT = 2
 SPALTE_RUECKSTAND = 3
-SPALTE_SEKTOR_AB = 4
+# Punkt 93 (A2): Der Abstand zum Vordermann steht neben dem Rueckstand
+# auf die Spitze. Zwei verschiedene Fragen - "wie weit bin ich hinten"
+# und "wen habe ich direkt vor mir" -, und die Tafel beantwortete bisher
+# nur die erste.
+SPALTE_INTERVALL = 4
+SPALTE_SEKTOR_AB = 5
 
 
 class Qualifyingseite(QWidget):
@@ -133,6 +147,13 @@ class Qualifyingseite(QWidget):
     def _baue_rangliste(self) -> QWidget:
         kasten = QGroupBox("Zeitenmonitor")
         spalte = QVBoxLayout(kasten)
+        # Punkt 93 (A7): Kommt einer ins Ziel, steht hier kurz, wen er um
+        # wie viel verdraengt hat. Eine eigene Zeile und keine Spalte:
+        # Es betrifft immer nur ein Auto, und in einer Spalte muesste man
+        # es unter dreissig Zeilen suchen.
+        self._verdraengung = QLabel(" ")
+        self._verdraengung.setStyleSheet("font-weight: bold;")
+        spalte.addWidget(self._verdraengung)
         self._rangliste = QTreeWidget()
         self._rangliste.setHeaderLabels(self._kopfzeilen(4))
         self._rangliste.setRootIsDecorated(False)
@@ -143,7 +164,7 @@ class Qualifyingseite(QWidget):
 
     @staticmethod
     def _kopfzeilen(sektoren: int) -> list[str]:
-        kopf = ["Pos", "Auto", "Zeit", "Rueckstand"]
+        kopf = ["Pos", "Auto", "Zeit", "Rueckstand", "Intervall"]
         kopf += [f"S{nummer + 1}" for nummer in range(sektoren)]
         return kopf + ["Lage", "Wetter", "Form"]
 
@@ -254,15 +275,42 @@ class Qualifyingseite(QWidget):
         bestzeit = fertig[0].zeit_ms if fertig else None
         lila = session.beste_splits_zu(zeit)
 
+        # Punkt 93 (A7 und A8): Was gerade passiert ist - wer sich
+        # eingereiht hat und ob dabei die Pole gewechselt ist.
+        ankunft = session.letzte_zielankunft(
+            zeit, self._konfiguration.wert("qualifying", "hervorhebung_ms")
+        )
+        self._zeige_verdraengung(ankunft)
+        frische_pole = (
+            ankunft.fahrt.teilnehmer if ankunft is not None and ankunft.neue_pole else None
+        )
+
         self._rangliste.clear()
         # Die Position gilt nur fuer stehende Runden - wer noch faehrt,
         # hat noch keine. lage_zu() liefert die Fertigen zuerst, der
         # Zaehler laeuft also einfach mit.
         platz = 0
+        vorherige_zeit: int | None = None
         for zeile in stand:
             if zeile.ist_fertig:
                 platz += 1
-            self._fuelle_zeile(zeile, platz if zeile.ist_fertig else None, bestzeit, lila)
+            # A2: Der Abstand zum Vordermann - also zur zuletzt
+            # eingetragenen stehenden Zeit. Der Erste hat keinen.
+            intervall = (
+                zeile.zeit_ms - vorherige_zeit
+                if zeile.ist_fertig and vorherige_zeit is not None
+                else None
+            )
+            self._fuelle_zeile(
+                zeile,
+                platz if zeile.ist_fertig else None,
+                bestzeit,
+                lila,
+                intervall=intervall,
+                frische_pole=frische_pole,
+            )
+            if zeile.ist_fertig:
+                vorherige_zeit = zeile.zeit_ms
         for spalte in range(self._rangliste.columnCount()):
             self._rangliste.resizeColumnToContents(spalte)
 
@@ -271,6 +319,28 @@ class Qualifyingseite(QWidget):
             self._fuelle_aufstellung()
         else:
             self._leere_aufstellung()
+
+    def _zeige_verdraengung(self, ankunft) -> None:
+        """Punkt 93 (A7): Wer wen gerade um wie viel verdraengt hat.
+
+        Ausserhalb des Fensters bleibt die Zeile leer - aber nicht
+        wirklich leer, sondern mit einem Leerzeichen: Sonst springt die
+        Tabelle bei jeder Ankunft um die Zeilenhoehe nach unten.
+        """
+        if ankunft is None or self._session is None:
+            self._verdraengung.setText(" ")
+            return
+        teilnehmer = self._session.teilnehmer
+        wer = teilnehmer[ankunft.fahrt.teilnehmer].kuerzel
+        if ankunft.verdraengt is None:
+            self._verdraengung.setText(f"{wer} reiht sich auf P{ankunft.platz} ein")
+            return
+        wen = teilnehmer[ankunft.verdraengt.teilnehmer].kuerzel
+        abstand = formatiere_rueckstand(ankunft.abstand_ms)
+        pole = "  -  neue Pole!" if ankunft.neue_pole else ""
+        self._verdraengung.setText(
+            f"P{ankunft.platz}: {wer} verdraengt {wen} um {abstand}{pole}"
+        )
 
     def _zeige_gummi(self, stand) -> None:
         """Wie viel Gummi die Strecke gerade hergibt (Punkt 88).
@@ -283,7 +353,15 @@ class Qualifyingseite(QWidget):
         jetzt = max(gefahren) if gefahren else 0.0
         self._gummianzeige.setText(f"+{jetzt * 100:.2f} %")
 
-    def _fuelle_zeile(self, stand, platz: int | None, bestzeit: int | None, lila) -> None:
+    def _fuelle_zeile(
+        self,
+        stand,
+        platz: int | None,
+        bestzeit: int | None,
+        lila,
+        intervall: int | None = None,
+        frische_pole: int | None = None,
+    ) -> None:
         session = self._session
         fahrt = stand.fahrt
         teilnehmer = session.teilnehmer[fahrt.teilnehmer]
@@ -298,6 +376,7 @@ class Qualifyingseite(QWidget):
                 if stand.ist_fertig and bestzeit is not None and stand.zeit_ms > bestzeit
                 else ""
             ),
+            formatiere_rueckstand(intervall) if intervall is not None else "",
         ]
         spalten += ["" for _ in fahrt.sektoren_ms]
         spalten += [
@@ -322,6 +401,19 @@ class Qualifyingseite(QWidget):
             schrift.setBold(True)
             for spalte in range(self._rangliste.columnCount()):
                 zeile.setFont(spalte, schrift)
+
+        # A8 geht A6 vor: Wer sich gerade die Pole geholt hat, ist nicht
+        # mehr auf der Runde - und selbst wenn, waere das die groessere
+        # Nachricht.
+        if frische_pole is not None and fahrt.teilnehmer == frische_pole:
+            self._hinterlege(zeile, FARBE_NEUE_POLE)
+        elif stand.lage is Lage.SCHNELLE_RUNDE:
+            self._hinterlege(zeile, FARBE_UNTERWEGS)
+
+    def _hinterlege(self, zeile: QTreeWidgetItem, farbe: QColor) -> None:
+        """Faerbt die ganze Zeile - eine halbe saehe nach Fehler aus."""
+        for spalte in range(self._rangliste.columnCount()):
+            zeile.setBackground(spalte, farbe)
 
     def _faerbe_splits(self, zeile: QTreeWidgetItem, stand, lila) -> None:
         """Traegt die gesetzten Splits ein und faerbt sie."""

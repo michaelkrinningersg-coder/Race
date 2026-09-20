@@ -388,3 +388,47 @@ def test_lila_wandert_beim_abspielen_weiter(session) -> None:
 
 def test_ohne_gefahrenen_sektor_gibt_es_kein_lila(session) -> None:
     assert all(halter is None for halter in session.beste_splits_zu(0))
+
+
+# -- Was gerade passiert ist (Punkt 93) -------------------------------------
+def test_die_letzte_zielankunft_nennt_platz_und_verdraengten(k, strecke) -> None:
+    session = ql.fahre(k, strecke, rn.starterfeld(k, LIGA), Seedquelle(0))
+    fenster = k.wert("qualifying", "hervorhebung_ms")
+    for fahrt in sorted(session.fahrten, key=lambda f: f.ziel_ms):
+        ankunft = session.letzte_zielankunft(fahrt.ziel_ms, fenster)
+        assert ankunft is not None
+        if ankunft.fahrt is not fahrt:
+            continue  # zwei in derselben Millisekunde
+        # Der Platz stimmt mit dem Stand in diesem Augenblick ueberein.
+        bisher = sorted(
+            (f for f in session.fahrten if f.ziel_ms <= fahrt.ziel_ms),
+            key=lambda f: (f.zeit_ms, f.reihenfolge),
+        )
+        assert ankunft.platz == bisher.index(fahrt) + 1
+        if ankunft.platz == len(bisher):
+            assert ankunft.verdraengt is None, "Hinten reiht man sich ein"
+            assert ankunft.abstand_ms == 0
+        else:
+            assert ankunft.verdraengt is bisher[ankunft.platz]
+            assert ankunft.abstand_ms > 0
+
+
+def test_ausserhalb_des_fensters_gibt_es_keine_ankunft(k, strecke) -> None:
+    """Sonst stuende der letzte Wechsel bis zum Sessionende da."""
+    session = ql.fahre(k, strecke, rn.starterfeld(k, LIGA), Seedquelle(0))
+    fenster = k.wert("qualifying", "hervorhebung_ms")
+    letzte = max(f.ziel_ms for f in session.fahrten)
+    assert session.letzte_zielankunft(letzte, fenster) is not None
+    assert session.letzte_zielankunft(letzte + fenster + 1, fenster) is None
+    # Und vor der ersten Ankunft gibt es nichts zu melden.
+    erste = min(f.ziel_ms for f in session.fahrten)
+    assert session.letzte_zielankunft(erste - 1, fenster) is None
+
+
+def test_der_erste_eroeffnet_die_pole_statt_sie_zu_uebernehmen(k, strecke) -> None:
+    session = ql.fahre(k, strecke, rn.starterfeld(k, LIGA), Seedquelle(0))
+    fenster = k.wert("qualifying", "hervorhebung_ms")
+    erste = min(session.fahrten, key=lambda f: f.ziel_ms)
+    ankunft = session.letzte_zielankunft(erste.ziel_ms, fenster)
+    assert ankunft is not None and ankunft.platz == 1
+    assert not ankunft.neue_pole, "Vorher stand dort niemand"

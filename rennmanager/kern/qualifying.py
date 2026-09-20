@@ -139,6 +139,23 @@ class Stand:
 
 
 @dataclass(frozen=True)
+class Zielankunft:
+    """Wer sich gerade eingereiht hat - und was das bewegt hat (Punkt 93).
+
+    ``verdraengt`` ist das Auto, das durch diese Ankunft einen Platz
+    nach hinten gerutscht ist, ``abstand_ms`` der Vorsprung darauf.
+    Reiht sich einer hinten ein, verdraengt er niemanden; dann steht
+    dort ``None`` und ``abstand_ms`` ist null.
+    """
+
+    fahrt: Fahrt
+    platz: int
+    verdraengt: Fahrt | None
+    abstand_ms: int
+    neue_pole: bool
+
+
+@dataclass(frozen=True)
 class Qualifying:
     """Das Ergebnis einer Qualifying-Session."""
 
@@ -169,6 +186,45 @@ class Qualifying:
 
     def startplatz(self, teilnehmer: int) -> int:
         return self.aufstellung.index(teilnehmer) + 1
+
+    # -- Was gerade passiert ist (Punkt 93) --------------------------------
+    def letzte_zielankunft(self, zeit_ms: float, fenster_ms: float):
+        """Die juengste Zielankunft - oder ``None``, wenn sie zu lange her ist.
+
+        Die Zeitentafel zeigt damit, was gerade passiert ist: wer sich
+        eingereiht hat, wen er dabei nach hinten geschoben hat und ob er
+        die Pole uebernommen hat. ``fenster_ms`` zaehlt in **Sessionzeit**
+        und nicht in Bildschirmzeit - bei 50-fachem Zeitraffer waere eine
+        Sekunde Bildschirmzeit fast eine Minute Session, und der Hinweis
+        staende dauernd da.
+
+        :return: eine ``Zielankunft`` oder ``None``
+        """
+        angekommen = [f for f in self.fahrten if f.ziel_ms <= zeit_ms]
+        if not angekommen:
+            return None
+        neueste = max(angekommen, key=lambda f: f.ziel_ms)
+        if zeit_ms - neueste.ziel_ms > fenster_ms:
+            return None
+
+        # Der Stand **in dem Moment**, in dem er ueber die Linie kam.
+        stand = sorted(angekommen, key=lambda f: (f.zeit_ms, f.reihenfolge))
+        platz = stand.index(neueste) + 1
+        # Wen er nach hinten geschoben hat: den, der jetzt hinter ihm
+        # steht. Wer sich hinten einreiht, verdraengt niemanden.
+        verdraengt = stand[platz] if platz < len(stand) else None
+        return Zielankunft(
+            fahrt=neueste,
+            platz=platz,
+            verdraengt=verdraengt,
+            abstand_ms=(
+                int(verdraengt.zeit_ms - neueste.zeit_ms) if verdraengt else 0
+            ),
+            # Pole ist neu, wenn er sich auf eins setzt und vorher schon
+            # jemand anders dort stand. Der allererste Fahrer der Session
+            # uebernimmt keine Pole, er eroeffnet sie.
+            neue_pole=platz == 1 and len(stand) > 1,
+        )
 
     # -- Uebertragung (Punkt 85) -------------------------------------------
     def lage_zu(self, zeit_ms: float) -> tuple[Stand, ...]:

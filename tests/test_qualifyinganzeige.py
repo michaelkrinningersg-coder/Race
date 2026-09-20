@@ -277,3 +277,181 @@ def test_der_erste_fahrer_hat_keine_splitfarbe(seite, session) -> None:
     for nummer, farbe in enumerate(werte):
         assert lila[nummer] == erster.teilnehmer
         assert farbe == qs.FARBE_BESTER.name()
+
+
+# -- Punkt 93, Block 1 ------------------------------------------------------
+def _nach_der_nten_ankunft(session, n: int) -> float:
+    """Der Zeitpunkt kurz nach der n-ten Zielankunft der Session."""
+    ziele = sorted(f.ziel_ms for f in session.fahrten)
+    return ziele[n - 1] + 1
+
+
+def test_die_tafel_hat_eine_spalte_fuers_intervall(seite, session) -> None:
+    """A2: Rueckstand auf die Spitze und Abstand zum Vordermann.
+
+    Zwei verschiedene Fragen - die Tafel beantwortete bisher nur die
+    erste.
+    """
+    liste = seite._rangliste
+    kopf = [liste.headerItem().text(s) for s in range(liste.columnCount())]
+    assert kopf[qs.SPALTE_RUECKSTAND] == "Rueckstand"
+    assert kopf[qs.SPALTE_INTERVALL] == "Intervall"
+
+
+def test_die_intervalle_summieren_sich_zum_rueckstand(seite, session) -> None:
+    """Sonst stuenden zwei Zahlen da, die einander widersprechen."""
+    seite._springe(session.dauer_ms)
+    zeilen = [z for z in _zeilen(seite) if z[qs.SPALTE_POS]]
+    assert len(zeilen) == len(session.fahrten)
+    # Der Fuehrende hat weder Rueckstand noch Intervall.
+    assert zeilen[0][qs.SPALTE_RUECKSTAND] == ""
+    assert zeilen[0][qs.SPALTE_INTERVALL] == ""
+
+    def sekunden(text: str) -> float:
+        return float(text.replace("+", "").replace(",", "."))
+
+    gesamt = 0.0
+    for zeile in zeilen[1:]:
+        gesamt += sekunden(zeile[qs.SPALTE_INTERVALL])
+        assert sekunden(zeile[qs.SPALTE_RUECKSTAND]) == pytest.approx(gesamt, abs=0.002)
+
+
+def test_wer_auf_der_schnellen_runde_ist_wird_hervorgehoben(seite, session) -> None:
+    """A6: Unter dreissig Zeilen findet man ihn sonst nicht.
+
+    Der Zeitpunkt wird **gesucht**, nicht geraten: Die Mitte zwischen
+    Ausfahrt und Ziel liegt noch in der Aufwaermrunde, dort ist niemand
+    auf der gezeiteten.
+    """
+    fahrt = session.fahrten[0]
+    mitte = (fahrt.runde_ab_ms + fahrt.ziel_ms) / 2
+    seite._springe(mitte)
+    liste = seite._rangliste
+    unterwegs = [
+        liste.topLevelItem(i)
+        for i in range(liste.topLevelItemCount())
+        if liste.topLevelItem(i).text(_spalte_lage(session))
+        == ql.Lage.SCHNELLE_RUNDE.bezeichnung
+    ]
+    assert unterwegs, "Zu diesem Zeitpunkt muss jemand auf der Runde sein"
+    for zeile in unterwegs:
+        assert zeile.background(qs.SPALTE_AUTO).color() == qs.FARBE_UNTERWEGS
+    # Und wer noch in der Box steht, bleibt unbehelligt.
+    wartend = [
+        liste.topLevelItem(i)
+        for i in range(liste.topLevelItemCount())
+        if liste.topLevelItem(i).text(_spalte_lage(session)) == ql.Lage.WARTET.bezeichnung
+    ]
+    for zeile in wartend:
+        assert zeile.background(qs.SPALTE_AUTO).color() != qs.FARBE_UNTERWEGS
+
+
+def test_nach_einer_ankunft_steht_da_wer_verdraengt_wurde(seite, session) -> None:
+    """A7: Kommt einer ins Ziel, steht kurz da, wen er um wie viel schob.
+
+    Gesucht wird eine Ankunft, die wirklich jemanden verdraengt hat -
+    wer sich hinten einreiht, schiebt niemanden, und die dritte Ankunft
+    dieser Session tut genau das.
+    """
+    fenster = seite._konfiguration.wert("qualifying", "hervorhebung_ms")
+    mit_wirkung = [
+        f
+        for f in session.fahrten
+        if (a := session.letzte_zielankunft(f.ziel_ms, fenster)) is not None
+        and a.fahrt is f
+        and a.verdraengt is not None
+    ]
+    assert mit_wirkung, "Diese Session muss Verdraengungen haben"
+    seite._springe(mit_wirkung[0].ziel_ms)
+
+    text = seite._verdraengung.text()
+    assert "verdraengt" in text, text
+    ankunft = session.letzte_zielankunft(seite.zeit_ms, fenster)
+    assert ankunft is not None and ankunft.verdraengt is not None
+    assert session.teilnehmer[ankunft.fahrt.teilnehmer].kuerzel in text
+    assert session.teilnehmer[ankunft.verdraengt.teilnehmer].kuerzel in text
+
+
+def test_der_hinweis_verschwindet_wieder(seite, session) -> None:
+    """Sonst stuende am Ende der Session der letzte Wechsel fuer immer da."""
+    fenster = seite._konfiguration.wert("qualifying", "hervorhebung_ms")
+    seite._springe(_nach_der_nten_ankunft(session, 3))
+    assert seite._verdraengung.text().strip()
+    seite._springe(_nach_der_nten_ankunft(session, 3) + fenster + 1)
+    assert seite._verdraengung.text() == " "
+
+
+def _kunst_session(konfig, session) -> ql.Qualifying:
+    """Drei Autos, jedes schneller als das vorige - also zwei Polewechsel.
+
+    Die echte Session taugt dafuer nicht: Dort faehrt das schnellste
+    Auto zuerst (die Reihenfolge des ersten Rennens ist aufsteigend nach
+    Qualifying-Faehigkeit), seine 132,260 s haelt bis zum Schluss, und
+    die Pole wechselt kein einziges Mal. Hier steht die Reihenfolge fest,
+    statt sie aus einem Seed zu hoffen.
+    """
+    vorlage = session.fahrten[0]
+    fahrten = tuple(
+        ql.Fahrt(
+            teilnehmer=n,
+            reihenfolge=n,
+            beginn_ms=n * 60_000,
+            ziel_ms=n * 60_000 + 200_000,
+            zeit_ms=100_000 - n * 1_000,
+            sektoren_ms=vorlage.sektoren_ms,
+            tagesform=1.0,
+            zustand="trocken",
+            grip=1.0,
+        )
+        for n in range(3)
+    )
+    return ql.Qualifying(
+        strecke=session.strecke,
+        teilnehmer=session.teilnehmer[:3],
+        fahrten=fahrten,
+        wetter=session.wetter,
+        aufstellung=(2, 1, 0),
+        dauer_ms=fahrten[-1].ziel_ms + 10_000,
+    )
+
+
+def test_der_erste_im_ziel_uebernimmt_keine_pole(konfig, session) -> None:
+    """Er eroeffnet sie - verdraengt hat er niemanden."""
+    kunst = _kunst_session(konfig, session)
+    fenster = konfig.wert("qualifying", "hervorhebung_ms")
+    erste = kunst.letzte_zielankunft(kunst.fahrten[0].ziel_ms, fenster)
+    assert erste is not None
+    assert erste.platz == 1
+    assert erste.verdraengt is None
+    assert not erste.neue_pole
+
+
+def test_die_neue_pole_leuchtet_auf(qtbot, konfig, session) -> None:
+    """A8: Und nur sie - nicht jede Ankunft."""
+    kunst = _kunst_session(konfig, session)
+    seite = qs.Qualifyingseite(konfig)
+    qtbot.addWidget(seite)
+    seite.zeige_session(kunst)
+
+    # Die zweite Ankunft ist schneller als die erste: Pole wechselt.
+    seite._springe(kunst.fahrten[1].ziel_ms)
+    liste = seite._rangliste
+    erste = liste.topLevelItem(0)
+    assert erste.text(qs.SPALTE_POS) == "1"
+    assert erste.background(qs.SPALTE_AUTO).color() == qs.FARBE_NEUE_POLE
+    assert "neue Pole" in seite._verdraengung.text()
+    # Die uebrigen Zeilen leuchten nicht mit.
+    for i in range(1, liste.topLevelItemCount()):
+        assert liste.topLevelItem(i).background(qs.SPALTE_AUTO).color() != (
+            qs.FARBE_NEUE_POLE
+        )
+
+
+def test_nach_dem_fenster_leuchtet_die_pole_nicht_mehr(qtbot, konfig, session) -> None:
+    kunst = _kunst_session(konfig, session)
+    seite = qs.Qualifyingseite(konfig)
+    qtbot.addWidget(seite)
+    seite.zeige_session(kunst)
+    seite._springe(kunst.dauer_ms)
+    erste = seite._rangliste.topLevelItem(0)
+    assert erste.background(qs.SPALTE_AUTO).color() != qs.FARBE_NEUE_POLE

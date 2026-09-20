@@ -422,6 +422,31 @@ trifft die Rundenzeit also nicht zwingend. Ohne diese Festlegung waere
 ein Auto fuer einen Takt im Ziel, ohne seinen letzten Split gesetzt zu
 haben - derselbe Rundungsfall wie bei der idealen Runde im Rennen.
 
+##### Was die Tafel sonst noch zeigt (Punkt 93)
+
+Vier Dinge, die die Uebertragung lesbar machen:
+
+* **Intervall** als eigene Spalte neben dem Rueckstand. Zwei
+  verschiedene Fragen - "wie weit bin ich hinten" und "wen habe ich
+  direkt vor mir" -, und die Tafel beantwortete bisher nur die erste.
+  Die Intervalle summieren sich genau zum Rueckstand; ein Test haelt das
+  fest.
+* **Wer gerade auf seiner gezeiteten Runde ist**, bekommt einen kuehlen
+  Schimmer hinter der Zeile. Unter dreissig Zeilen findet man ihn sonst
+  nicht.
+* **Wer sich gerade eingereiht hat**, steht ueber der Tabelle: *"P4: GUN
+  verdraengt ME4 um +0,132 s"*. Eine eigene Zeile und keine Spalte - es
+  betrifft immer nur ein Auto.
+* **Die neue Pole leuchtet golden auf.** Der Erste der Session
+  uebernimmt dabei keine Pole, er eroeffnet sie.
+
+Die Rechnung dazu steht im Kern und nicht in der Anzeige:
+`session.letzte_zielankunft(t, fenster)` liefert die juengste Ankunft
+mit Platz, Verdraengtem, Abstand und der Frage, ob die Pole gewechselt
+hat. Das Fenster zaehlt in **Sessionzeit**, nicht in Bildschirmzeit: Bei
+50-fachem Zeitraffer waere eine Sekunde Bildschirmzeit fast eine Minute
+Session, und der Hinweis stuende dauernd da.
+
 ##### Warum Lila mitlaeuft und Gruen und Rot einfrieren
 
 Die Splits sind dreifarbig, und die beiden Farbgruppen messen bewusst
@@ -589,7 +614,7 @@ Drei-Stopp-Folge 81. Wer gleich verteilt zieht, laesst das Feld schon
 deshalb oefter dreimal stoppen - gemessen planten in Zandvoort 86 und am
 Nuerburgring 97 Prozent der Autos drei Stopps, ohne dass das jemand
 entschieden haette. Die Gewichte gleichen das aus: Ein-Stopp-Varianten
-**zehnmal**, Zwei-Stopp-Varianten **2,6-mal** so wahrscheinlich wie
+**zehnmal**, Zwei-Stopp-Varianten **2,75-mal** so wahrscheinlich wie
 Drei-Stopp-Varianten. Gezogen wird weiterhin nur aus dem, was die
 Vorausberechnung zugelassen hat - das Gewicht aendert die Auswahl nicht,
 nur ihre Haeufigkeit.
