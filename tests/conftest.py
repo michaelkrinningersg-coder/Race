@@ -134,6 +134,15 @@ def verkleinert(
     roh["auf_abstieg"]["absteiger"] = wechsler
     if rennen is not None:
         roh["kalender"]["rennen_je_saison"] = rennen
+        # Punkt 95: Gewechselt wird alle fuenf von zwanzig Rennen, also
+        # jedes Viertel der Saison. Derselbe Anteil im kurzen Kalender,
+        # mindestens aber jedes Rennen - sonst gaebe es in der kleinen
+        # Welt nie einen Wechsel, und der Saisonabschluss waere leer.
+        anteil_takt = (
+            gross.wert("auf_abstieg", "alle_rennen")
+            / gross.wert("kalender", "rennen_je_saison")
+        )
+        roh["auf_abstieg"]["alle_rennen"] = max(1, round(anteil_takt * rennen))
     if distanz_km is not None:
         roh["rennen"]["distanz_km"] = distanz_km
     return replace(gross, roh=roh)

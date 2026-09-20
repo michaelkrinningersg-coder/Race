@@ -203,15 +203,17 @@ class Statistik:
     qualirekorde: dict[tuple[str, int], Rekord] = field(default_factory=dict)
     karriere: dict[int, Karrierezahlen] = field(default_factory=dict)
     historie: list[Saisonabschluss] = field(default_factory=list)
-    # Punkte je (Saison, Liga, Fahrer) - GDD 13: "Gesamtpunkte je Liga und
-    # Saison".
-    saisonpunkte: dict[tuple[int, int, int], int] = field(default_factory=dict)
-    # Punkte je (Liga, Rennen, Fahrer) der *laufenden* Saison (Punkt 9).
-    # Nur daraus laesst sich zeichnen, wer wann gefuehrt hat. Beim
+    # Punkte je (Saison, Fahrer). Punkt 95: Die Meisterschaft laeuft ueber
+    # alle Ligen, und ein Fahrer wechselt sie mitten in der Saison - seine
+    # Punkte je Liga zu fuehren hiesse, seinen Stand auf zwei Schluessel zu
+    # verteilen. Welche Liga er gefahren hat, steht in der Historie.
+    saisonpunkte: dict[tuple[int, int], int] = field(default_factory=dict)
+    # Punkte je (Rennen, Fahrer) der *laufenden* Saison (Punkt 9). Nur
+    # daraus laesst sich zeichnen, wer wann gefuehrt hat. Beim
     # Saisonwechsel wird die Sammlung geleert: Der Endstand steht dann in
-    # der Historie, und 600 Fahrer mal 20 Rennen mal beliebig viele
+    # der Historie, und 400 Fahrer mal 20 Rennen mal beliebig viele
     # Saisons waere ein Spielstand, der nur noch waechst.
-    saisonverlauf: dict[tuple[int, int, int], int] = field(default_factory=dict)
+    saisonverlauf: dict[tuple[int, int], int] = field(default_factory=dict)
     # Punkt 21 und 23: Summen je (Fahrer, Strecke) und je (Fahrer,
     # Wetterlage). Siehe ``Bilanz``, warum Summen und keine Rennliste.
     streckenbilanz: dict[tuple[int, str], Bilanz] = field(default_factory=dict)
@@ -336,10 +338,10 @@ class Statistik:
         """
         for ergebnis in ergebnisse:
             self.zahlen(ergebnis.fahrer).verbuche(self.konfiguration, ergebnis, liga)
-            schluessel = (saison, liga, ergebnis.fahrer)
+            schluessel = (saison, ergebnis.fahrer)
             punkte = punkte_fuer(self.konfiguration, liga, ergebnis)
             self.saisonpunkte[schluessel] = self.saisonpunkte.get(schluessel, 0) + punkte
-            self.saisonverlauf[(liga, rennen, ergebnis.fahrer)] = punkte
+            self.saisonverlauf[(rennen, ergebnis.fahrer)] = punkte
             self.strecke_von(ergebnis.fahrer, strecke).verbuche(
                 self.konfiguration, ergebnis, liga
             )
@@ -492,15 +494,21 @@ class Statistik:
                 zahlen.punkte += zeile.punkte
         return summen
 
-    def punkte_in(self, saison: int, liga: int, fahrer: int) -> int:
-        return self.saisonpunkte.get((saison, liga, fahrer), 0)
+    def punkte_in(self, saison: int, fahrer: int) -> int:
+        """Die Meisterschaftspunkte eines Fahrers in dieser Saison."""
+        return self.saisonpunkte.get((saison, fahrer), 0)
 
     # -- Verlauf der laufenden Saison (Punkt 9) ----------------------------
-    def gefahrene_rennen(self, liga: int) -> tuple[int, ...]:
-        """Die Rennnummern, die diese Liga in der laufenden Saison hat."""
-        return tuple(sorted({rennen for (li, rennen, _) in self.saisonverlauf if li == liga}))
+    def gefahrene_rennen(self) -> tuple[int, ...]:
+        """Die Rennnummern der laufenden Saison.
 
-    def punktestand(self, liga: int, fahrer: int) -> tuple[int, ...]:
+        Alle Ligen fahren dieselben Rennen; seit Punkt 95 waere eine
+        Frage je Liga auch irrefuehrend, weil Fahrer die Liga mitten in
+        der Saison wechseln.
+        """
+        return tuple(sorted({rennen for (rennen, _) in self.saisonverlauf}))
+
+    def punktestand(self, fahrer: int) -> tuple[int, ...]:
         """Der aufsummierte Punktestand eines Fahrers, Rennen fuer Rennen.
 
         Die Liste ist so lang wie die Zahl der gefahrenen Rennen; ein
@@ -508,8 +516,8 @@ class Statistik:
         """
         stand = 0
         verlauf = []
-        for rennen in self.gefahrene_rennen(liga):
-            stand += self.saisonverlauf.get((liga, rennen, fahrer), 0)
+        for rennen in self.gefahrene_rennen():
+            stand += self.saisonverlauf.get((rennen, fahrer), 0)
             verlauf.append(stand)
         return tuple(verlauf)
 

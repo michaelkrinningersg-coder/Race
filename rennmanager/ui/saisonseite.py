@@ -68,7 +68,6 @@ class Saisonseite(QWidget):
     ) -> None:
         super().__init__(parent)
         self._konfiguration = konfiguration
-        self._welt = welt
         # Statistik und Streckenkenntnis ueberdauern die Saison (GDD 6 und
         # 13); das Fenster haelt sie und reicht sie herein.
         self._lauf = Saisonlauf(
@@ -104,6 +103,16 @@ class Saisonseite(QWidget):
         self._aktualisiere()
 
     # -- Aufbau ------------------------------------------------------------
+    @property
+    def _welt(self) -> Welt:
+        """Die Welt des Laufs - nicht die von der Konstruktion.
+
+        Seit Punkt 95 wird alle fuenf Rennen auf- und abgestiegen; der
+        Lauf tauscht dabei seine Welt aus. Eine festgehaltene Kopie zeigte
+        danach Fahrer in Ligen, in denen sie nicht mehr fahren.
+        """
+        return self._lauf.welt
+
     def _baue_kopf(self) -> QHBoxLayout:
         zeile = QHBoxLayout()
 
@@ -251,7 +260,8 @@ class Saisonseite(QWidget):
         except (kern_saison.SaisonFehler, kern_wertung.WertungsFehler) as fehler:
             QMessageBox.warning(self, "Saisonwechsel", str(fehler))
             return
-        self._welt = self._lauf.welt
+        # ``_welt`` liest jetzt aus dem Lauf - der neue Lauf bringt seine
+        # Welt schon mit.
         self._letztes = None
         # Nach einem Auf- oder Abstieg faehrt der Spieler woanders.
         spieler = self._welt.spieler
@@ -418,7 +428,7 @@ class Saisonseite(QWidget):
             fahrer = self._welt.fahrer[eintrag.fahrer]
             team = self._welt.team_von(fahrer)
             reihen.append(
-                (fahrer.kuerzel, team.farbe, statistik.punktestand(liga, fahrer.nummer))
+                (fahrer.kuerzel, team.farbe, statistik.punktestand(fahrer.nummer))
             )
             self._fahrernummern.append(fahrer.nummer)
         self._punkteansicht.zeige(reihen)

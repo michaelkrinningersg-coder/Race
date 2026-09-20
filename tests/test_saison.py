@@ -33,7 +33,7 @@ pytestmark = pytest.mark.skip(
 
 SEED = 12
 # Punkt 77: Diese Tests fahren ganze Rennwochenenden. In voller Groesse
-# sind das 20 Ligen zu je 30 Autos und gemessen 54 Sekunden je Wochenende;
+# sind das 10 Ligen zu je 40 Autos und gemessen rund eine Minute je Wochenende;
 # mit der kleinen Welt aus ``conftest`` sind es 1,45 Sekunden. Geprueft
 # wird hier, *dass* gebucht, gewertet und fortgeschrieben wird - dafuer
 # genuegen drei Ligen zu je vier Autos. Wer die Ligastruktur selbst
@@ -48,14 +48,14 @@ def k(kleine_konfiguration) -> kf.Konfiguration:
 
 @pytest.fixture(scope="module")
 def grosse_konfiguration() -> kf.Konfiguration:
-    """Die echte Welt mit 20 Ligen - nur, wo die Groesse Gegenstand ist."""
+    """Die echte Welt mit zehn Ligen - nur, wo die Groesse Gegenstand ist."""
     return kf.lade()
 
 
 @pytest.fixture(scope="module")
 def grosse_welt(grosse_konfiguration) -> kw.Welt:
     return kw.erzeuge(
-        grosse_konfiguration, Seedquelle(SEED).zweig("welt"), spielerliga=20
+        grosse_konfiguration, Seedquelle(SEED).zweig("welt"), spielerliga=10
     )
 
 

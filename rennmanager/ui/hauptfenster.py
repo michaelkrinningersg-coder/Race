@@ -170,6 +170,11 @@ class Hauptfenster(QMainWindow):
         # Fahrer, die es so nicht mehr gibt (Saisonwechsel, Editor,
         # geladener Spielstand).
         self._schliesse_fahrerkarten()
+        # Die alte Saisonseite haelt noch die alte Welt. Solange die neue
+        # nicht steht, ist ``self._welt`` der Stand - sonst baute die
+        # Weltseite sich aus einem Lauf auf, der gerade ersetzt wird
+        # (``laufende_welt``).
+        self._saisonseite = None
         self._reiter = QTabWidget()
         self._reiter.addTab(self._baue_uebersichtsseite(), "Uebersicht")
         self._streckenseite = Streckenseite(self._konfiguration)
@@ -314,7 +319,7 @@ class Hauptfenster(QMainWindow):
             nummer,
             statistik=self._statistik,
             kenntnis=self._kenntnis,
-            tabelle=lauf.tabelle(self._welt.fahrer[nummer].liga),
+            tabelle=lauf.tabelle(lauf.welt.fahrer[nummer].liga),
             strecken=lauf.strecken,
             popularitaet=self._popularitaet,
             jahr=lauf.jahr,
@@ -331,6 +336,10 @@ class Hauptfenster(QMainWindow):
         aber neu lesen; Karriere und Statistik ebenso.
         """
         self._saisonseite._aktualisiere()
+        # Punkt 95: Nach jedem fuenften Rennen stehen Fahrer in anderen
+        # Ligen. Die Seiten, die eine eigene Kopie der Welt halten,
+        # bekommen sie hier nachgereicht.
+        self._ziehe_werte_nach()
         self.statusBar().showMessage(
             f"Rennwochenende gefahren - {self._saisonseite.lauf.gefahren} von "
             f"{self._saisonseite.lauf.rennen_je_saison} Rennen",
@@ -463,8 +472,14 @@ class Hauptfenster(QMainWindow):
 
     @property
     def welt(self) -> kern_welt.Welt:
-        """Die erzeugte Welt dieses Fensters."""
-        return self._welt
+        """Die Welt dieses Fensters, wie sie gerade steht.
+
+        Seit Punkt 95 wechseln Fahrer mitten in der Saison die Liga; wer
+        nach der Welt fragt, meint diesen Stand und nicht den vom
+        Karrierebeginn. Der liegt in ``_welt`` und dient nur noch als
+        Ausgangspunkt fuer eine neue Karriere.
+        """
+        return self.laufende_welt
 
     @property
     def anzeigewelt(self) -> kern_welt.Welt:
@@ -475,9 +490,22 @@ class Hauptfenster(QMainWindow):
         Werte anzeigt, braucht diese Welt - ``self._welt`` bleibt der
         Ausgangsstand, aus dem eine neue Karriere startet.
         """
+        welt = self.laufende_welt
         if getattr(self, "_karriere", None) is None:
-            return self._welt
-        return self._welt.mit_autos(self._karriere.entwickelte_autos(self._welt))
+            return welt
+        return welt.mit_autos(self._karriere.entwickelte_autos(welt))
+
+    @property
+    def laufende_welt(self) -> kern_welt.Welt:
+        """Die Welt, wie sie gerade steht - mit allen Ligawechseln.
+
+        Seit Punkt 95 wird alle fuenf Rennen auf- und abgestiegen, und der
+        Saisonlauf tauscht dabei seine Welt aus. ``self._welt`` ist der
+        Ausgangsstand und bleibt es; wer wissen will, wer heute in welcher
+        Liga faehrt, fragt hier.
+        """
+        seite = getattr(self, "_saisonseite", None)
+        return self._welt if seite is None else seite.lauf.welt
 
     def _ziehe_werte_nach(self) -> None:
         """Gibt der Weltseite die frisch entwickelten Autos."""
@@ -569,7 +597,7 @@ class Hauptfenster(QMainWindow):
         return kern_spielstand.aus_teilen(
             seed=self._seedquelle.seed,
             saisonjahr=self._karriere.saison.jahr,
-            welt=self._welt,
+            welt=self.laufende_welt,
             karriere=self._karriere,
             tabellen=self._saisonseite.lauf.tabellen,
             statistik=self._statistik,

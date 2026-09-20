@@ -149,7 +149,7 @@ class Ligawochenende:
 
 @dataclass(frozen=True)
 class Wochenende:
-    """Ein komplettes Rennwochenende ueber alle 20 Ligen (GDD 13)."""
+    """Ein komplettes Rennwochenende ueber alle Ligen (GDD 13)."""
 
     nummer: int
     strecke: str
@@ -159,6 +159,14 @@ class Wochenende:
     verlauf: Rennverlauf | None = None
     qualifying: Qualifying | None = None
     ausfuehrliche_liga: int | None = None
+    # Punkt 95: Alle fuenf Rennen wird auf- und abgestiegen. Faellt dieses
+    # Rennen auf eine Wechselrunde, stehen hier die Wechsel, die danach
+    # vollzogen wurden - sonst bleibt es leer.
+    wechsel: tuple[Wechsel, ...] = ()
+
+    @property
+    def ist_wechselrunde(self) -> bool:
+        return bool(self.wechsel)
 
     def liga(self, nummer: int) -> Ligawochenende:
         return self.ligen[nummer]
@@ -736,6 +744,10 @@ class Saisonlauf:
             liga: Tabelle(liga) for liga in range(1, konfiguration.wert("ligen", "anzahl") + 1)
         }
         self.wochenenden: list[Wochenende] = []
+        # Punkt 95: Die Wechsel der letzten Wechselrunde dieses Laufs. Ein
+        # geladener Stand faengt hier leer an - seine Wechsel sind laengst
+        # vollzogen und stehen in der Welt, nicht mehr zum Nachlesen.
+        self.letzter_wechsel: tuple[Wechsel, ...] = ()
         # Punkt 35: Was der letzte Generationswechsel bewegt hat.
         self.letzter_winter: Winterbericht | None = None
         # Rennen, die vor dem Laden eines Spielstands schon gefahren waren
@@ -1051,12 +1063,55 @@ class Saisonlauf:
             self._verbuche_karriere(ergebnis, spieler, zaehlt=stelle == 0)
 
     def schliesse_wochenende_ab(self, ergebnis: Wochenende) -> Wochenende:
-        """Haengt das gefahrene Wochenende an und beendet den Renntag."""
+        """Haengt das gefahrene Wochenende an und beendet den Renntag.
+
+        Faellt das Rennen auf eine Wechselrunde, wird hier auf- und
+        abgestiegen (Punkt 95) - das Ergebnis haengt am Wochenende.
+        """
+        wechsel = self.wechselrunde(ergebnis.nummer)
+        if wechsel:
+            ergebnis = replace(ergebnis, wechsel=wechsel)
         self.wochenenden.append(ergebnis)
         # Der Renntag ist vorbei; der naechste Tag gehoert schon wieder
         # der Planung (GDD 2).
         self._schliesse_renntag_ab()
         return ergebnis
+
+    def wechselrunde(self, rennen: int) -> tuple[Wechsel, ...]:
+        """Steigt nach diesem Rennen auf und ab, wenn es faellig ist.
+
+        Alle fuenf Rennen gehen die besten drei einer Liga hoch und die
+        letzten drei runter, entschieden nach der Gesamttabelle seit
+        Saisonbeginn (Punkt 95). Die gesammelten Punkte wandern mit: Die
+        Meisterschaft laeuft ueber alle Ligen, ein Aufstieg loescht also
+        nichts, er hebt nur die Sprosse fuer die naechsten Rennen.
+
+        Vollzogen wird an drei Stellen zugleich - in den Tabellen, in der
+        Welt und, wenn der eigene Fahrer betroffen ist, in der Karriere.
+        Sonst faehre das naechste Rennen mit einer Aufstellung, die zur
+        Tabelle nicht mehr passt.
+        """
+        if not kern_wertung.ist_wechselrennen(self.konfiguration, rennen):
+            return ()
+        kern_wertung.pruefe_ligastaerken(self.konfiguration, self.tabellen)
+        wechsel = kern_wertung.auf_und_abstieg(self.konfiguration, self.tabellen)
+        if not wechsel:
+            return ()
+        kern_wertung.vollziehe(self.tabellen, wechsel)
+        self.welt = wende_wechsel_an(self.welt, wechsel)
+        self._ziehe_karriere_nach()
+        self.letzter_wechsel = wechsel
+        return wechsel
+
+    def _ziehe_karriere_nach(self) -> None:
+        """Setzt die Liga der Karriere auf die ihres Fahrers (Punkt 95)."""
+        if self.karriere is None:
+            return
+        eigener = next(
+            (f for f in self.welt.fahrer if f.nummer == self.karriere.fahrernummer), None
+        )
+        if eigener is not None:
+            self.karriere.liga = eigener.liga
 
     def fahre_rennen(self, ausfuehrliche_liga: int | None = None) -> Wochenende:
         """Faehrt das naechste Rennwochenende in allen 20 Ligen (GDD 13).
@@ -1206,14 +1261,17 @@ class Saisonlauf:
 
     # -- Saisonende --------------------------------------------------------
     def auf_und_abstieg(self) -> tuple[Wechsel, ...]:
-        """Die Ligawechsel nach dem letzten Rennen (GDD 13)."""
+        """Die Ligawechsel der letzten Wechselrunde (GDD 13, Punkt 95).
+
+        Seit dem Wechsel alle fuenf Rennen sind sie schon vollzogen, wenn
+        die Saison endet; hier stehen sie nur noch zum Nachlesen.
+        """
         if not self.ist_fertig:
             raise SaisonFehler(
                 f"Erst nach Rennen {self.rennen_je_saison} steht der Auf- und Abstieg fest; "
                 f"gefahren sind {self.gefahren}"
             )
-        kern_wertung.pruefe_ligastaerken(self.konfiguration, self.tabellen)
-        return kern_wertung.auf_und_abstieg(self.konfiguration, self.tabellen)
+        return self.letzter_wechsel
 
     def schliesse_ab(self) -> tuple[Wechsel, ...]:
         """Schreibt die Saison in die Historie und liefert die Wechsel (GDD 13)."""
@@ -1223,8 +1281,14 @@ class Saisonlauf:
         return wechsel
 
     def naechste_welt(self) -> Welt:
-        """Die Welt der Folgesaison, mit vollzogenen Ligawechseln (GDD 13)."""
-        return wende_wechsel_an(self.welt, self.schliesse_ab())
+        """Die Welt der Folgesaison (GDD 13, Punkt 95).
+
+        Die Ligawechsel sind schon vollzogen - zuletzt nach dem letzten
+        Rennen der Saison. ``schliesse_ab`` schreibt hier nur noch die
+        Historie fort.
+        """
+        self.schliesse_ab()
+        return self.welt
 
     def platzierungen(self) -> dict[int, int]:
         """Je Fahrer sein Platz in der abgelaufenen Saison (Punkt 35).

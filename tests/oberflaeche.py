@@ -169,4 +169,8 @@ def fahre_saison_zu_ende(konfig, seite) -> None:
             ],
         )
     lauf.vorgefahren = konfig.wert("kalender", "rennen_je_saison")
+    # Punkt 95: Nach dem letzten Rennen wird gewechselt. Das gefakte
+    # Saisonende muss das mitmachen, sonst steht der Lauf am Ende mit
+    # Tabellen da, die nie in eine Wechselrunde gelaufen sind.
+    lauf.wechselrunde(lauf.vorgefahren)
     seite._aktualisiere()

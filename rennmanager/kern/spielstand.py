@@ -281,17 +281,15 @@ CREATE TABLE karrierezahl (
 );
 CREATE TABLE saisonpunkt (
     saison INTEGER NOT NULL,
-    liga INTEGER NOT NULL,
     fahrer INTEGER NOT NULL,
     punkte INTEGER NOT NULL,
-    PRIMARY KEY (saison, liga, fahrer)
+    PRIMARY KEY (saison, fahrer)
 );
 CREATE TABLE saisonverlauf (
-    liga INTEGER NOT NULL,
     rennen INTEGER NOT NULL,
     fahrer INTEGER NOT NULL,
     punkte INTEGER NOT NULL,
-    PRIMARY KEY (liga, rennen, fahrer)
+    PRIMARY KEY (rennen, fahrer)
 );
 CREATE TABLE streckenbilanz (
     fahrer INTEGER NOT NULL,
@@ -691,12 +689,12 @@ def _schreibe_statistik(
         ],
     )
     verbindung.executemany(
-        "INSERT INTO saisonpunkt VALUES (?, ?, ?, ?)",
-        [(s, li, f, p) for (s, li, f), p in statistik.saisonpunkte.items()],
+        "INSERT INTO saisonpunkt VALUES (?, ?, ?)",
+        [(s, f, p) for (s, f), p in statistik.saisonpunkte.items()],
     )
     verbindung.executemany(
-        "INSERT INTO saisonverlauf VALUES (?, ?, ?, ?)",
-        [(li, r, f, p) for (li, r, f), p in statistik.saisonverlauf.items()],
+        "INSERT INTO saisonverlauf VALUES (?, ?, ?)",
+        [(r, f, p) for (r, f), p in statistik.saisonverlauf.items()],
     )
     for tabelle, bilanzen in (
         ("streckenbilanz", statistik.streckenbilanz),
@@ -1118,10 +1116,10 @@ def _lies_statistik(
             punkte=z["punkte"],
         )
     for z in verbindung.execute("SELECT * FROM saisonpunkt"):
-        statistik.saisonpunkte[(z["saison"], z["liga"], z["fahrer"])] = z["punkte"]
+        statistik.saisonpunkte[(z["saison"], z["fahrer"])] = z["punkte"]
     if version >= VERLAUF_AB_VERSION:
         statistik.saisonverlauf = {
-            (z["liga"], z["rennen"], z["fahrer"]): z["punkte"]
+            (z["rennen"], z["fahrer"]): z["punkte"]
             for z in verbindung.execute("SELECT * FROM saisonverlauf")
         }
     if version >= BILANZ_AB_VERSION:

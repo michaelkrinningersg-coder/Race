@@ -380,7 +380,7 @@ class Fahrerkarte(QDialog):
                 (
                     mitfahrer.kuerzel,
                     self._welt.team_von(mitfahrer).farbe,
-                    self._statistik.punktestand(liga, mitfahrer.nummer),
+                    self._statistik.punktestand(mitfahrer.nummer),
                 )
             )
             if mitfahrer.nummer == self._fahrer.nummer:

@@ -127,15 +127,20 @@ def test_zahlen_summieren_sich_ueber_saisons(k, statistik):
     assert statistik.zahlen(7).siegquote == 1.0
 
 
-def test_punkte_werden_je_saison_und_liga_gefuehrt(k, statistik):
-    """GDD 13: Gesamtpunkte je Liga und Saison."""
+def test_punkte_werden_je_saison_gefuehrt(k, statistik):
+    """Punkt 95: Die Meisterschaft laeuft ueber alle Ligen, je Saison eine Summe.
+
+    Gewertet wird trotzdem mit den Punkten der Liga, in der gefahren
+    wurde - derselbe Platz bringt oben mehr als unten. Ein Fahrer, der
+    mitten in der Saison die Liga wechselt, sammelt beides auf derselben
+    Summe.
+    """
     statistik.verbuche_wochenende(2026, 1, 5, "Monza", ergebnisse((7, 1, 9)))
+    statistik.verbuche_wochenende(2026, 2, 4, "Spa", ergebnisse((7, 2, 9)))
     statistik.verbuche_wochenende(2027, 1, 4, "Monza", ergebnisse((7, 2, 9)))
-    # Punkt 95: Die Punkte haengen an der Liga - derselbe Platz bringt
-    # oben mehr als unten.
-    assert statistik.punkte_in(2026, 5, 7) == wt.rennpunkte(k, 5, 1)
-    assert statistik.punkte_in(2027, 4, 7) == wt.rennpunkte(k, 4, 2)
-    assert statistik.punkte_in(2026, 4, 7) == 0
+    assert statistik.punkte_in(2026, 7) == wt.rennpunkte(k, 5, 1) + wt.rennpunkte(k, 4, 2)
+    assert statistik.punkte_in(2027, 7) == wt.rennpunkte(k, 4, 2)
+    assert statistik.punkte_in(2025, 7) == 0
 
 
 def test_bestenliste_ordnet_nach_dem_merkmal(k, statistik):
@@ -211,9 +216,7 @@ def test_der_saisonlauf_fuellt_die_statistik(k):
     # Und die Punkte stehen doppelt: in der Tabelle und in der Statistik.
     unterste = k.wert("ligen", "anzahl")
     for eintrag in lauf.tabelle(unterste).stand():
-        assert (
-            lauf.statistik.punkte_in(2026, unterste, eintrag.fahrer) == eintrag.punkte
-        )
+        assert lauf.statistik.punkte_in(2026, eintrag.fahrer) == eintrag.punkte
 
 
 def test_die_streckenkenntnis_waechst_mit_dem_saisonlauf(k):

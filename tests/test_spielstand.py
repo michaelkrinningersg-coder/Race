@@ -73,7 +73,9 @@ def gespielt(k, strecken) -> sp.Spielstand:
     return sp.aus_teilen(
         seed=SEED,
         saisonjahr=2026,
-        welt=welt,
+        # Punkt 95: nach dem Rennen kann schon gewechselt worden sein -
+        # die Welt des Laufs, nicht die von vorhin.
+        welt=lauf.welt,
         karriere=karriere,
         tabellen=lauf.tabellen,
         statistik=lauf.statistik,
