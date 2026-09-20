@@ -247,9 +247,16 @@ def test_einmalige_erfahrung_landet_auf_dem_konto(k):
 
 def test_dauerhaftes_ereignis_hebt_den_wert_selbst(k):
     c = kk.beginne(k, 2026, liga=10)
-    assert c.werte["D8"] == 0
+    assert c.werte["D8"] == k.wert("kosten", "startwert_spieler")
     c._loese_ereignis_aus("E11")  # Fahrsicherheitstraining: D8 +1 % dauerhaft
-    assert c.werte["D8"] == k.wert("ereignisse", "dauerhaft", "mindestschritt")
+    # max(+10, +1 %): Seit dem Startwert 2.500 (Punkt 95) ist das Prozent
+    # die groessere der beiden Zahlen, vorher war es der Mindestschritt.
+    start = k.wert("kosten", "startwert_spieler")
+    schritt = max(
+        k.wert("ereignisse", "dauerhaft", "mindestschritt"),
+        round(start * k.wert("ereignisse", "dauerhaft", "bezugsanteil")),
+    )
+    assert c.werte["D8"] == start + schritt
 
 
 def test_gesperrtes_laesst_sich_nicht_entwickeln(k):

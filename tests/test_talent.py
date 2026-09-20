@@ -156,7 +156,8 @@ def test_dem_spieler_gehoeren_vier_autos_in_liga_zwanzig(k, welt) -> None:
     assert len(eigene) == k.wert("teams", "autos_je_team")
     assert {f.liga for f in eigene} == {k.wert("ligen", "startliga")}
     assert len({f.team for f in eigene}) == 1
-    assert all(set(f.auto.werte.values()) == {0} for f in eigene)
+    start = k.wert("kosten", "startwert_spieler")
+    assert all(set(f.auto.werte.values()) == {start} for f in eigene)
 
 
 def test_auch_eigene_fahrer_werden_faellig(k, welt, quelle) -> None:
@@ -193,10 +194,10 @@ def test_jedes_auto_wird_einzeln_entwickelt(k) -> None:
 
     karriere.werte["F1"] = 5_000
     assert karriere.werte_von(400)["F1"] == 5_000
-    assert karriere.werte_von(401)["F1"] == 0
+    assert karriere.werte_von(401)["F1"] == k.wert("kosten", "startwert_spieler")
 
     karriere.waehle_fahrer(401)
-    assert karriere.werte["F1"] == 0
+    assert karriere.werte["F1"] == k.wert("kosten", "startwert_spieler")
     with pytest.raises(kk.KarriereFehler, match="gehoert nicht zum Team"):
         karriere.waehle_fahrer(999)
 
@@ -218,7 +219,7 @@ def test_ein_neuer_fahrer_bringt_ein_leeres_auto_mit(k) -> None:
 
     karriere.fahrer_geht(400, nachfolger=404)
     assert karriere.fahrer == (401, 404)
-    assert karriere.werte_von(404)["F1"] == 0
+    assert karriere.werte_von(404)["F1"] == k.wert("kosten", "startwert_spieler")
     assert karriere.belegte_plaetze[404] == set()
     # Die Auswahl wandert auf den Nachfolger, nicht ins Leere.
     assert karriere.fahrernummer == 404
@@ -380,7 +381,7 @@ def test_ein_verpflichteter_faehrt_ein_leeres_auto(k) -> None:
     karriere = kk.beginne(k, 2026, 10, fahrer=(400,), fahrernummer=400)
     karriere.werte["F1"] = 50_000
     karriere.verpflichte(500, gehalt=0, laufzeit=1)
-    assert set(karriere.werte_von(500).values()) == {0}
+    assert set(karriere.werte_von(500).values()) == {k.wert("kosten", "startwert_spieler")}
     # Das Auto des Alten bleibt, wie es war.
     assert karriere.werte_von(400)["F1"] == 50_000
 

@@ -268,14 +268,20 @@ def test_geburtsdatum_ergibt_ein_uebliches_alter(welt, k) -> None:
 
 
 # -- Spieler ----------------------------------------------------------------
-def test_alle_eigenen_fahrer_starten_mit_werten_auf_null(welt, k) -> None:
-    """Der Teamchef startet mit vier Fahrern auf 0 in der Startliga."""
+def test_alle_eigenen_fahrer_starten_auf_dem_startwert(welt, k) -> None:
+    """Punkt 95: vier Fahrer auf dem Startwert in der Startliga.
+
+    Bis dahin waren es vier Fahrer auf 0 (GDD 1). Seit die unterste Liga
+    bei S = 20.000 beginnt, traegt das nicht mehr - siehe
+    ``startwert_spieler`` in der Konfiguration.
+    """
     eigene = welt.spielerfahrer
+    start = k.wert("kosten", "startwert_spieler")
     assert len(eigene) == k.wert("teams", "autos_je_team")
     for fahrer in eigene:
         assert fahrer.liga == k.wert("ligen", "startliga")
-        assert set(fahrer.auto.werte.values()) == {0}
-        assert set(fahrer.auto.wetterwerte.values()) == {0}
+        assert set(fahrer.auto.werte.values()) == {start}
+        assert set(fahrer.auto.wetterwerte.values()) == {start}
 
 
 def test_dem_spieler_gehoert_ein_ganzes_team(welt) -> None:

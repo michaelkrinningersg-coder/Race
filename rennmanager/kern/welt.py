@@ -602,11 +602,14 @@ def _erzeuge_fahrer(
                 konfiguration, nummer, seedquelle, saisonjahr
             )
 
-            # Die eigenen Fahrer starten mit allen Werten auf 0 - sie
-            # muessen sich alles erarbeiten (GDD 1, jetzt fuer alle vier).
+            # Die eigenen Fahrer starten auf dem Startwert aus der
+            # Konfiguration - sie muessen sich alles Weitere erarbeiten
+            # (GDD 1, jetzt fuer alle vier). Punkt 95: Der Startwert ist
+            # nicht mehr 0; warum, steht bei ``startwert_spieler``.
             if ist_spieler:
-                werte = {f.schluessel: 0 for f in konfiguration.faehigkeiten}
-                wetterwerte = dict.fromkeys(zusatz, 0)
+                start = konfiguration.wert("kosten", "startwert_spieler")
+                werte = {f.schluessel: start for f in konfiguration.faehigkeiten}
+                wetterwerte = dict.fromkeys(zusatz, start)
             else:
                 # Sein Profil ist sein Potential, herunterskaliert auf
                 # das, was er in diesem Alter davon erreicht hat.

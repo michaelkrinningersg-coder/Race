@@ -235,7 +235,9 @@ def test_startgeld_ist_ein_sockel(k) -> None:
 
 def test_startkapital(k) -> None:
     assert ei.startkapital(k) == 1_000
-    assert ei.starterfahrung(k) == 20
+    # Punkt 95: Mit dem Startwert 2.500 kostet ein Tag mehr EP; der Sockel
+    # ist mit der Kostenkurve mitgewachsen.
+    assert ei.starterfahrung(k) == 45
 
 
 # -- Sponsoren --------------------------------------------------------------
@@ -320,7 +322,7 @@ def test_karriere_startet_am_ersten_januar(k) -> None:
     assert c.heute.month == 1 and c.heute.day == 1
     assert c.konto.geld == ei.startkapital(k)
     assert c.konto.erfahrung == ei.starterfahrung(k)
-    assert set(c.werte.values()) == {0}
+    assert set(c.werte.values()) == {k.wert("kosten", "startwert_spieler")}
 
 
 def test_der_erfahrungssockel_traegt_den_ersten_tag(k) -> None:
@@ -331,11 +333,13 @@ def test_der_erfahrungssockel_traegt_den_ersten_tag(k) -> None:
     Rennen keinen einzigen Tag belegen. Der Sockel muss mindestens den
     ersten Trainings- **und** den ersten Werkstattschritt tragen.
     """
+    start = k.wert("kosten", "startwert_spieler")
+    zuwachs = ew.tageszuwachs(k, start)
     c = kr.beginne(k, 2026, liga=10)
     c.belege_tag("D1")
     c.belege_tag("F10")
-    assert c.wert("D1") == 10
-    assert c.wert("F10") == 10
+    assert c.wert("D1") == start + zuwachs
+    assert c.wert("F10") == start + zuwachs
     assert c.konto.erfahrung >= 0
 
 
@@ -345,13 +349,17 @@ def test_tag_belegen_hebt_den_wert(k) -> None:
     # geht es um die Plaetze, nicht um die Kasse - also ein Vorrat.
     c.konto = c.konto.mit(erfahrung=1_000)
     c.belege_tag("D1")
-    assert c.wert("D1") == 10
+    assert c.wert("D1") == k.wert("kosten", "startwert_spieler") + ew.tageszuwachs(
+        k, k.wert("kosten", "startwert_spieler")
+    )
     # Derselbe Platz geht heute nicht noch einmal.
     with pytest.raises(kr.KarriereFehler, match="belegt"):
         c.belege_tag("D2")
     # Der Werkstattplatz ist aber frei.
     c.belege_tag("F10")
-    assert c.wert("F10") == 10
+    assert c.wert("F10") == k.wert("kosten", "startwert_spieler") + ew.tageszuwachs(
+        k, k.wert("kosten", "startwert_spieler")
+    )
 
 
 def test_an_rennwochenenden_laesst_sich_nichts_belegen(k) -> None:

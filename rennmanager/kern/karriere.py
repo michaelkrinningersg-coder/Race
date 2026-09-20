@@ -1137,14 +1137,20 @@ class Karriere:
 
 
 def leere_werte(konfiguration: Konfiguration) -> dict[str, int]:
-    """Ein frisches Auto: alle Werte auf 0.
+    """Ein frisches Auto: alle Werte auf dem Startwert aus GDD 9.
 
     So faengt jeder eigene Fahrer an - beim Start des Spiels und wenn er
     einen abgetretenen ersetzt. Ein neuer Fahrer bringt ein leeres, nicht
     upgegradetes Auto mit (Entscheidung des Auftraggebers).
+
+    Punkt 95: Der Startwert ist nicht mehr 0, sondern die Staerke des
+    schwaechsten KI-Autos der Startliga - siehe ``startwert_spieler`` in
+    der Konfiguration. Bei 0 waere eine neue Karriere seit dem
+    Ligenumbau nicht fahrbar.
     """
-    werte = {f.schluessel: 0 for f in konfiguration.faehigkeiten}
-    werte.update(dict.fromkeys(konfiguration.zusatzfaehigkeiten, 0))
+    start = konfiguration.wert("kosten", "startwert_spieler")
+    werte = {f.schluessel: start for f in konfiguration.faehigkeiten}
+    werte.update(dict.fromkeys(konfiguration.zusatzfaehigkeiten, start))
     return werte
 
 

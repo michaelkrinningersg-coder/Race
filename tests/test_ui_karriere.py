@@ -54,11 +54,14 @@ def test_tag_belegen_ueber_die_oberflaeche(qtbot, konfig: kf.Konfiguration) -> N
 
     seite.waehle("D1")
     seite._belege_tag()
-    assert seite.karriere.wert("D1") == 10
+    from rennmanager.kern import entwicklung as ew
+
+    start = konfig.wert("kosten", "startwert_spieler")
+    assert seite.karriere.wert("D1") == start + ew.tageszuwachs(konfig, start)
 
     seite.waehle("F10")
     seite._belege_tag()
-    assert seite.karriere.wert("F10") == 10
+    assert seite.karriere.wert("F10") == start + ew.tageszuwachs(konfig, start)
     assert len(seite.karriere.belegt) == 2
 
 
@@ -94,7 +97,8 @@ def test_sofortkauf_ueber_die_oberflaeche(qtbot, konfig: kf.Konfiguration) -> No
     vorher = seite.karriere.konto.geld
     seite.waehle("F1")
     seite._kaufe()
-    assert seite.karriere.wert("F1") == 10
+    start = konfig.wert("kosten", "startwert_spieler")
+    assert seite.karriere.wert("F1") == start + konfig.wert("zeitmodell", "kaufschritt")
     assert seite.karriere.konto.geld < vorher
     # Ein Sofortkauf verbraucht keinen Tagesplatz.
     assert not seite.karriere.belegt
@@ -292,7 +296,9 @@ def test_neue_karriere_setzt_alles_auf_anfang(qtbot, konfig) -> None:
         assert spieler.liga == konfig.wert("ligen", "startliga")
         # Das Auto traegt den neuen Namen, die Werte bleiben auf 0.
         assert spieler.auto.name == f"Jonas Weidinger{stelle}"
-        assert set(spieler.auto.werte.values()) == {0}
+        assert set(spieler.auto.werte.values()) == {
+            konfig.wert("kosten", "startwert_spieler")
+        }
     spieler = eigene[0]
 
     # Saison, Statistik und Karriere stehen wieder am Anfang.
@@ -361,7 +367,9 @@ def test_fenster_speichert_und_laedt_einen_spielstand(
     # Ein frisches Fenster kennt davon nichts ...
     zweites = Hauptfenster(konfig)
     qtbot.addWidget(zweites)
-    assert zweites.karriereseite.karriere.werte["F1"] == 0
+    assert zweites.karriereseite.karriere.werte["F1"] == konfig.wert(
+        "kosten", "startwert_spieler"
+    )
     assert zweites.saisonseite.lauf.gefahren == 0
 
     # ... bis der Stand geladen ist.
@@ -460,7 +468,7 @@ def test_schnellspeichern_und_schnellladen(qtbot, konfig) -> None:
 
     assert fenster.schnellladen()
     assert fenster.karriere.wert("D1") == vorher
-    assert fenster.karriere.wert("F10") == 0
+    assert fenster.karriere.wert("F10") == konfig.wert("kosten", "startwert_spieler")
 
 
 def test_schnellladen_ohne_stand_meldet_sich(qtbot, konfig, monkeypatch) -> None:

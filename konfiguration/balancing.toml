@@ -949,6 +949,17 @@ k0_erfahrung_zeit = 2.0
 # Nur Einzelkauf, kein Mehrfachkauf
 mehrfachkauf = false
 startkapital_euro = 1000
+# Punkt 95: Womit die vier eigenen Autos in eine neue Karriere gehen.
+# GDD 1 nennt 0, und das stimmte, solange die unterste Liga bei S = 157
+# begann. Seit dem Ligenumbau beginnt sie bei 20.000: Ein Auto mit 0
+# faehrt in Zandvoort 277,8 s je Runde, das schwaechste KI-Auto der
+# Startliga 205,2 s und das staerkste 138,6 s - ueber die Renndistanz
+# waeren das 69 Runden Rueckstand, und herauskaufen liesse es sich nicht
+# (350.000 EUR je Auto gegen rund 240.000 EUR Saisoneinnahmen).
+# Gewaehlt ist deshalb die Staerke des schwaechsten KI-Autos der
+# Startliga: 203,8 s gegen dessen 205,2 s. Der Spieler faehrt hinterher,
+# aber im selben Rennen.
+startwert_spieler = 2_500
 # Erfahrungssockel zum Start (Entscheidung des Auftraggebers). Seit ein
 # belegter Tag auch Erfahrung kostet, stuende der Spieler am 1. Januar
 # sonst mit null da: Der erste Zeitkauf kostet 2 EP, Erfahrung gibt es
@@ -956,7 +967,12 @@ startkapital_euro = 1000
 # damit tot. Zwanzig reichen fuer einen Handvoll erster Schritte; ab dem
 # ersten Rennen spielt der Sockel keine Rolle mehr (Platz 12 bringt 243,
 # ein Sieg 775 EP).
-startkapital_erfahrung = 20
+# Punkt 95: Mit dem Startwert 2.500 kostet ein belegter Tag nicht mehr 2
+# bis 5 EP, sondern das 2,12-fache - die Kostenkurve waechst mit
+# (1 + S/1000)^0,6. Zwanzig EP trugen damit nicht einmal mehr den ersten
+# Trainings- **und** den ersten Werkstatttag, wofuer der Sockel gedacht
+# ist. Mitskaliert: 20 x 2,12 = 42, aufgerundet auf 45.
+startkapital_erfahrung = 45
 
 # Kontrollwerte aus der Tabelle in GDD 9
 [[kosten.kontrolle]]
@@ -2505,9 +2521,12 @@ muetze = 0.10
 
 # --- Punkt 34: Dauerhafte Prozentwirkungen der Ereignisse (GDD 14) --------
 [ereignisse.dauerhaft]
-# Elf Ereignisse wirken "dauerhaft", meist mit +/-1 %. Der Spieler startet
-# laut GDD 1 aber mit allen Werten auf 0 - ein Prozentsatz davon waere
-# null. Gerechnet wird deshalb wie im Zeitmodell aus GDD 2: max(+10, +1 %).
+# Elf Ereignisse wirken "dauerhaft", meist mit +/-1 %. Bei niedrigen Werten
+# waere ein Prozentsatz davon fast nichts - gerechnet wird deshalb wie im
+# Zeitmodell aus GDD 2: max(+10, +1 %). Seit dem Startwert 2.500 aus
+# Punkt 95 ist beim Spieler von Anfang an das Prozent die groessere Zahl;
+# der Mindestschritt traegt jetzt die Werte, die ein Ereignis nach unten
+# gedrueckt hat.
 # Bei abweichenden Prozentsaetzen skaliert der Mindestschritt mit, damit
 # die Ereignisse untereinander im Verhaeltnis bleiben: +2 % ergibt
 # mindestens +20, -0,5 % hoechstens -5.
