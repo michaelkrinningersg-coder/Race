@@ -369,7 +369,7 @@ def test_ein_rennen_frisst_am_anfang_mehr_als_am_ende(k, zandvoort, mittel) -> N
     )
     marken = verlauf.protokolle[0].rundenende_ms
     zustand = [1.0] + [float(verlauf.reifen_zu(zeit)[0]) for zeit in marken]
-    abrieb = [vorher - nachher for vorher, nachher in zip(zustand, zustand[1:])]
+    abrieb = [vorher - nachher for vorher, nachher in zip(zustand, zustand[1:], strict=False)]
     # Gemessen faellt er von 3,91 auf 3,41 Prozent je Runde - rund 13 %,
     # genau das Stueck der Kurve, das 546 Auto-Runden hergeben.
     assert abrieb[0] > abrieb[-1] * 1.10

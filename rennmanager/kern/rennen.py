@@ -211,6 +211,42 @@ class Boxenstopp:
 
 
 @dataclass(frozen=True)
+class Strategieblatt:
+    """Eine im Rennen vertretene Strategie (Punkt 92).
+
+    **Ohne Namen.** Wer welche Strategie faehrt, bleibt geheim - so hat
+    es der Auftraggeber festgelegt. Die Autonummern stehen hier nur,
+    damit die Anzeige den Rueckstand der Gruppe mitteln kann; auf den
+    Bildschirm kommen sie nicht.
+
+    ``zeit_ms`` ist die Rennzeit, die der Planer fuer diese Folge
+    gerechnet hat - **ohne Verkehr**, mit dem Medianfahrer, allein auf
+    der Strecke. Was im Rennen daraus wird, steht daneben und
+    unterscheidet sich: Verkehr, Fahrer und Fehler kommen dazu.
+    ``None`` steht fuer eine Folge, die der Spieler selbst
+    zusammengestellt hat - fuer sie hat der Planer keine Zeit gerechnet.
+    """
+
+    folge: str
+    stopps: tuple[int, ...]
+    autos: tuple[int, ...]
+    zeit_ms: float | None = None
+
+    @property
+    def anzahl(self) -> int:
+        return len(self.autos)
+
+    @property
+    def schluessel(self) -> tuple[str, tuple[int, ...]]:
+        """Was diese Strategie von jeder anderen unterscheidet.
+
+        Die Folge allein genuegt nicht: Zweimal M-H-M mit Stopps in
+        Runde 20/40 und in Runde 15/45 sind zwei Strategien.
+        """
+        return self.folge, self.stopps
+
+
+@dataclass(frozen=True)
 class Ergebnis:
     """Das Ergebnis eines Autos am Rennende."""
 
@@ -272,12 +308,13 @@ class Rennverlauf:
     # Regen, Starkregen und wechselhaftem Wetter ist die Pflicht
     # aufgehoben.
     mischungspflicht: bool = False
-    # Punkt 91: Wie viele verschiedene Strategien im Feld unterwegs sind.
-    # Gezaehlt wird die **gewaehlte Variante**, nicht die gefahrene
-    # Stopprunde - zwei Autos auf derselben Variante fahren dieselbe
-    # Strategie, auch wenn das Boxenstoppfenster ihre Stopps um eine
-    # Runde auseinanderzieht. ``0`` heisst: nicht bekannt (Laborfall).
-    strategiezahl: int = 0
+    # Punkt 91 und 92: Welche Strategien im Feld vertreten sind, je
+    # Strategie eine Zeile. Gezaehlt wird die **gewaehlte Variante**,
+    # nicht die gefahrene Stopprunde - zwei Autos auf derselben Variante
+    # fahren dieselbe Strategie, auch wenn das Boxenstoppfenster ihre
+    # Stopps um eine Runde auseinanderzieht. Leer heisst: nicht bekannt
+    # (Laborfall).
+    strategieblaetter: tuple[Strategieblatt, ...] = ()
     # Punkt 75: Je Auto die Uhrzeiten an den Messpunkten, in der
     # Reihenfolge der Ueberfahrten. Der Index ist ``Runde * Punkte je
     # Runde + Nummer des Punkts``. Daraus wird der Abstand zweier Autos
@@ -289,6 +326,11 @@ class Rennverlauf:
     @property
     def anzahl(self) -> int:
         return len(self.teilnehmer)
+
+    @property
+    def strategiezahl(self) -> int:
+        """Wie viele verschiedene Strategien unterwegs sind (Punkt 91)."""
+        return len(self.strategieblaetter)
 
     def bild_zu(self, zeit_ms: float) -> int:
         """Index des letzten Bildes, das nicht nach ``zeit_ms`` liegt."""
@@ -2083,7 +2125,7 @@ def simuliere(
     rhythmusfaktor: tuple[float, ...] | None = None,
     hoechstdauer_ms: int | None = None,
     strategien: tuple[kern_strategie.Strategie, ...] | None = None,
-    strategiezahl: int = 0,
+    strategieblaetter: tuple[Strategieblatt, ...] = (),
     mischungspflicht: bool = False,
     liga: int | None = None,
     fortschritt: Callable[[int, int], None] | None = None,
@@ -2112,9 +2154,9 @@ def simuliere(
         abweichen laesst. GDD 9 kalibriert ausdruecklich ohne Zufall, und
         fuer die Massensimulation aus GDD 15 ist es ebenfalls noetig.
     :param hoechstdauer_ms: Notbremse gegen ein Rennen, das nie endet
-    :param strategiezahl: wie viele verschiedene Strategien im Feld
-        unterwegs sind (Punkt 91) - reine Anzeigegroesse, das Rennen
-        rechnet ohne sie
+    :param strategieblaetter: welche Strategien im Feld vertreten sind
+        (Punkt 91 und 92) - reine Anzeigegroesse, das Rennen rechnet
+        ohne sie
     :param strategien: Mischungsfolge und Stopprunden je Auto (Punkt 39),
         aus rennmanager.kern.strategie. Ohne Angabe faehrt jedes Auto das
         ganze Rennen auf einem Satz - das brauchen die Kalibrierung und
@@ -2224,7 +2266,7 @@ def simuliere(
         gummierung=np.array(gummibilder, dtype=np.float32) if wetter is not None else None,
         boxenstopps=tuple(lauf.boxenstopps),
         mischungspflicht=mischungspflicht,
-        strategiezahl=strategiezahl,
+        strategieblaetter=strategieblaetter,
         messzeiten=tuple(tuple(zeiten) for zeiten in lauf.messzeiten),
         messpunkte_je_runde=len(lauf.messpunkte),
     )

@@ -248,6 +248,24 @@ def zeige(lauf: dict) -> None:
             for zahl in sorted(verteilung)
         )
     )
+    # Punkt 92: Was der Planer vorhatte und was daraus wurde. Die beiden
+    # Zeilen gehen auseinander, weil planstopp_ab_restprofil einen Stopp
+    # wieder streicht, wenn der Satz an dem Tag noch zu gut dafuer ist -
+    # wer schon gewechselt hat, faehrt den guten Satz bis ins Ziel. Ohne
+    # diesen Vergleich sieht es so aus, als plane der Planer falsch.
+    geplant = Counter(
+        len(strategien.varianten[n].stopps) if n >= 0 else 0
+        for i, n in enumerate(strategien.gewaehlt)
+        if i in set(im_ziel)
+    )
+    print(
+        "Davon geplant: "
+        + "   ".join(
+            f"{zahl} Stopps: {geplant[zahl]:2d} Autos "
+            f"({geplant[zahl] / max(sum(geplant.values()), 1) * 100:4.1f} %)"
+            for zahl in sorted(geplant)
+        )
+    )
     print(
         f"Restprofil beim Stopp: min {reste[0]:.1f} %  "
         f"25 % {perzentil(reste, 0.25):.1f} %  "

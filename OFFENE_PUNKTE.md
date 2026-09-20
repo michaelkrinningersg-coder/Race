@@ -2752,3 +2752,92 @@ verschiebt.
 Bei 0,5 und 0,7 stimmen beide Enden; bei 0,4 wird Zandvoort schon zu
 weich. Die Aufteilung **innerhalb** einer Strecke (30/70, 60/40) hängt
 danach nur noch an der Variantenschwelle.
+
+
+---
+
+## Punkt 92: Exponent, Schwelle, Gewichtung, Strategieblatt
+
+Vier Entscheidungen des Auftraggebers auf einmal, alle gebaut und
+gemessen.
+
+### Der Exponent auf den Streckenfaktor
+
+Der rohe Faktor spannt von 1,263 (Zandvoort) bis 0,537 (Monza) — das
+2,35fache. So weit auseinander ließen sich die Stoppzahlen nicht mehr
+einfangen. Auf den **Verschleiß** wirkt jetzt `streckenfaktor ^ 0,5`;
+der Faktor selbst bleibt roh, sonst fiele
+`weich_hoechstens_streckenfaktor` auf allen zwanzig Strecken weg.
+
+**Gibt es Strecken, die bei 1–3 landen?** Ja, acht von zwanzig. Gemessen
+über alle Strecken, trocken, mit der neuen Schwelle:
+
+| Spanne | Strecken |
+| --- | --- |
+| 2–3 Stopps | 12: Zandvoort, Budapest, Shanghai, Oschersleben, Catalunya, Sao Paulo, Austin, Mexiko-Stadt, Yas Marina, Nürburgring, Suzuka, Hockenheim |
+| 1–3 Stopps | 8: Norisring, Montreal, Silverstone, Sakhir, Melbourne, Spa, Spielberg, Monza |
+
+Zandvoort landet bei 2–3, Monza bei 1–3 (gefahren 1–2). Keine Strecke
+braucht mehr vier Stopps, keine kommt mehr ohne aus.
+
+### Die Variantenschwelle
+
+Sockel und Je-100-km-Anteil je ×1,2: 15 → 18 s. Bei 100 km sind das
+36 s, bei 300 km 72 s.
+
+### Die Gewichtung beim Ziehen
+
+Naturgemäß gibt es mehr Varianten mit mehr Stopps: Bei drei
+Trockenmischungen hat eine Ein-Stopp-Folge 3² = 9 Reihenfolgen, eine
+Zwei-Stopp-Folge 27 und eine Drei-Stopp-Folge 81. Wer gleich verteilt
+zieht, lässt das Feld schon deshalb öfter dreimal stoppen — gemessen
+planten in Zandvoort 86 und am Nürburgring 97 Prozent der Autos drei
+Stopps, ohne dass das jemand entschieden hätte.
+
+Gewichte: **1 Stopp ×8, 2 Stopps ×2, 3 Stopps ×1.** Gezogen wird
+weiterhin nur aus den zugelassenen Varianten — das Gewicht ändert die
+Auswahl nicht, nur ihre Häufigkeit.
+
+### Der Messlauf
+
+Fünf Strecken, Liga 1, trocken, 30 Autos. „Geplant" ist die gezogene
+Variante, „gefahren" das Ergebnis:
+
+| Strecke | Faktor | Geplant | Gefahren | Notstopps |
+| --- | ---: | --- | --- | ---: |
+| Zandvoort | 1,263 | 2x 14 %, 3x 86 % | 1x 14 %, 2x 10 %, 3x 76 % | 5 |
+| Sao Paulo | 1,132 | 2x 63 %, 3x 37 % | 1x 13 %, 2x 83 %, 3x 3 % | 4 |
+| Nürburgring | 1,074 | 2x 7 %, 3x 93 % | 2x 21 %, 3x 79 % | 6 |
+| Silverstone | 0,890 | 2x 10 %, 3x 90 % | 1x 7 %, 2x 21 %, 3x 72 % | 3 |
+| Monza | 0,537 | 1x 31 %, 2x 24 %, 3x 45 % | 0x 3 %, 1x 69 %, 2x 24 %, 3x 3 % | 1 |
+
+**Monza liegt bei 69 zu 24 zwischen einem und zwei Stopps** — das Ziel
+war 60 zu 40. **Zandvoort liegt bei 10 zu 76** — das Ziel war 30 zu 70.
+
+### Was noch dazwischensteht
+
+Zwei Dinge erklären den Rest der Abweichung, beide gemessen:
+
+1. **Der Variantenvorrat je Strecke.** Auf trocken/heiß überleben in
+   Zandvoort nur 3 von 17 Varianten mit zwei Stopps; mit Gewicht 2 macht
+   das 6 von 20 Gewichtseinheiten, also 30 % — und aus 29 Autos wurden
+   daraus 4. Am Nürburgring sind es 2 von 69, also 5,6 %. Die Gewichtung
+   kann nur verteilen, was der Planer zulässt.
+2. **Das Rennen streicht Stopps.** `planstopp_ab_restprofil = 0,55`
+   verschiebt einen geplanten Stopp, solange der Satz noch zu gut dafür
+   ist, und wer schon einmal gewechselt hat, fährt den guten Satz dann
+   bis ins Ziel. Auf Monza wurden aus 45 % geplanten Drei-Stopp-Rennen
+   3 % gefahrene; in Zandvoort entstehen so die 14 % Ein-Stopp-Rennen,
+   die der Planer nie vorgesehen hatte.
+
+Wenn die Zielverteilungen genauer getroffen werden sollen, sind das die
+beiden Stellschrauben — nicht mehr die Gewichtung.
+
+### Das Strategieblatt
+
+Ein Klick auf die Zahl oben im Rennen öffnet eine Übersicht: je
+vertretener Strategie die Mischungsfolge, die geplanten Stopprunden, wie
+viele Autos sie fahren, die gerechnete Zeit **ohne Verkehr** und den
+mittleren Rückstand **im Rennen** zum gezeigten Zeitpunkt. Der
+Unterschied zwischen beiden Spalten ist genau das, was die Rechnung
+nicht kennt. Wer welche Strategie fährt, bleibt geheim.

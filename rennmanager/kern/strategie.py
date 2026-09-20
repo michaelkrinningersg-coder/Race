@@ -678,6 +678,37 @@ def ki_strategie(
     )[0]
 
 
+def variantengewicht(konfiguration: Konfiguration, stopps: int) -> float:
+    """Mit welchem Gewicht eine Variante mit so vielen Stopps gezogen wird.
+
+    Naturgemaess gibt es mehr Varianten mit mehr Stopps: Bei drei
+    Trockenmischungen hat eine Ein-Stopp-Folge 3^2 = 9 Reihenfolgen,
+    eine Zwei-Stopp-Folge 27 und eine Drei-Stopp-Folge 81. Wer gleich
+    verteilt zieht, laesst das Feld schon deshalb oefter dreimal
+    stoppen - gemessen planten in Zandvoort 86 und am Nuerburgring 97
+    Prozent der Autos drei Stopps, ohne dass das jemand entschieden
+    haette. Die Gewichte gleichen das aus.
+    """
+    tabelle = konfiguration.wert("boxenstopp", "strategie", "variantengewicht")
+    return float(tabelle.get(str(stopps), 1.0))
+
+
+def _ziehe(konfiguration: Konfiguration, moeglich: list[Variante], wuerfel) -> int:
+    """Zieht eine der zugelassenen Varianten, gewichtet nach Stoppzahl.
+
+    Gezogen wird **nur** aus dem, was die Vorausberechnung zugelassen
+    hat - das Gewicht aendert die Auswahl nicht, nur ihre Haeufigkeit.
+    """
+    gewichte = np.array(
+        [variantengewicht(konfiguration, v.anzahl_stopps) for v in moeglich],
+        dtype=float,
+    )
+    summe = gewichte.sum()
+    if summe <= 0.0:  # pragma: no cover - Notbremse
+        return int(wuerfel.integers(0, len(moeglich)))
+    return int(wuerfel.choice(len(moeglich), p=gewichte / summe))
+
+
 def gewaehlte_strategie(
     konfiguration: Konfiguration,
     auto: Auto,
@@ -747,7 +778,7 @@ def gewaehlte_strategie(
         )
         return Strategie(mischungen=folge, stopps=stopps), -1
 
-    nummer = int(wuerfel.integers(0, len(moeglich)))
+    nummer = _ziehe(konfiguration, moeglich, wuerfel)
     gewaehlt = moeglich[nummer]
     # Punkt 91: **Kein Nachrechnen je Auto mehr.** Frueher rechnete jedes
     # Auto die Stopprunden seiner Folge noch einmal mit seinen eigenen

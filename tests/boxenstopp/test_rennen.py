@@ -12,6 +12,7 @@ from rennmanager.kern import strategie as sg
 from rennmanager.kern.zufall import Seedquelle
 from tests.boxenstopp.hilfen import (
     RUNDEN,
+    VERSCHLEISS,
     VERSCHLEISS_MILD,
     VERSCHLEISS_PLANSTOPP,
     strategie_mit,
@@ -236,3 +237,19 @@ def test_nach_einem_zwangsstopp_wartet_der_planstopp_laenger(k, monza, feld, umg
                 )
                 geprueft += 1
     assert geprueft, "Kein Planstopp nach einem Zwangsstopp - der Test prueft nichts"
+
+
+def test_die_testkonstanten_wirken_wie_gedacht(k):
+    """Punkt 92: Der Exponent darf die Testkonstanten nicht entwerten.
+
+    Die drei Streckenfaktoren dieser Tests sind auf eine **Wirkung**
+    eingestellt - 3,0 erzwingt Stopps, 1,5 laesst einen geplanten Stopp
+    zu, 0,8 verschiebt ihn. Seit der Streckenfaktor mit einem Exponenten
+    in den Verschleiss eingeht, sind die eingetippten Zahlen die rohen.
+    Aendert jemand den Exponenten, faellt es hier auf und nicht erst in
+    drei Tests weiter unten, die dann raetselhaft anderes messen.
+    """
+    wirkt = kern_reifen.wirksamer_streckenfaktor
+    assert wirkt(k, VERSCHLEISS) == pytest.approx(3.0, abs=0.01)
+    assert wirkt(k, VERSCHLEISS_PLANSTOPP) == pytest.approx(1.5, abs=0.01)
+    assert wirkt(k, VERSCHLEISS_MILD) == pytest.approx(0.8, abs=0.01)

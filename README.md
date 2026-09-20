@@ -582,6 +582,49 @@ zufaelliges Delta von +/- 3 Prozent der Renndistanz auf jede Stopprunde,
 mindestens aber eine Runde, so dass immer drei Runden moeglich bleiben.
 Es entzerrt die Boxengasse, ohne den Plan zu veraendern.
 
+**Gezogen wird gewichtet, nicht gleich verteilt.** Naturgemaess gibt es
+mehr Varianten mit mehr Stopps: Bei drei Trockenmischungen hat eine
+Ein-Stopp-Folge 3^2 = 9 Reihenfolgen, eine Zwei-Stopp-Folge 27 und eine
+Drei-Stopp-Folge 81. Wer gleich verteilt zieht, laesst das Feld schon
+deshalb oefter dreimal stoppen - gemessen planten in Zandvoort 86 und am
+Nuerburgring 97 Prozent der Autos drei Stopps, ohne dass das jemand
+entschieden haette. Die Gewichte gleichen das aus: Ein-Stopp-Varianten
+**achtmal**, Zwei-Stopp-Varianten **zweimal** so wahrscheinlich wie
+Drei-Stopp-Varianten. Gezogen wird weiterhin nur aus dem, was die
+Vorausberechnung zugelassen hat - das Gewicht aendert die Auswahl nicht,
+nur ihre Haeufigkeit.
+
+**Das Strategieblatt.** Ein Klick auf die Zahl oben im Rennen oeffnet
+eine Uebersicht: je vertretener Strategie die Mischungsfolge, die
+geplanten Stopprunden, wie viele Autos sie fahren - und zwei Zeiten
+nebeneinander. *Ohne Verkehr* ist die Rennzeit, die der Planer vor dem
+Start gerechnet hat (Medianfahrer, allein auf der Strecke); *im Rennen*
+ist der mittlere Rueckstand der Autos, die sie fahren, zum gerade
+gezeigten Zeitpunkt. Der Unterschied zwischen beiden Spalten ist genau
+das, was die Rechnung nicht kennt: Verkehr, Fahrer, Fehler, Zwangsstopps.
+**Wer welche Strategie faehrt, bleibt geheim** - die Autonummern stecken
+in den Daten, damit sich der Mittelwert bilden laesst, auf den
+Bildschirm kommen sie nicht.
+
+**Der Exponent auf den Streckenfaktor.** Der rohe Faktor aus GDD 3
+spannt ueber die zwanzig Strecken von 1,263 (Zandvoort) bis 0,537
+(Monza) - das 2,35fache. So weit auseinander lassen sich die Stoppzahlen
+nicht mehr einfangen: Monza kaeme mit einem Stopp aus und braeuchte nie
+einen zweiten, Zandvoort schaffte keinen Zwei-Stopp mehr. Auf den
+**Verschleiss** wirkt deshalb `streckenfaktor ^ 0,5`:
+
+| Exponent | Zandvoort | Monza | Spanne | Zandvoort | Monza |
+| ---: | ---: | ---: | ---: | --- | --- |
+| 1,0 | 1,263 | 0,537 | 2,35 | 2-4 Stopps | 0-1 |
+| 0,7 | 1,178 | 0,647 | 1,82 | 2-4 | 1-2 |
+| **0,5** | **1,124** | **0,733** | **1,53** | **2-3** | **1-2** |
+| 0,4 | 1,098 | 0,780 | 1,41 | 1-4 | 1-2 |
+
+Der Exponent wirkt **nur auf den Verschleiss**, nicht auf den Faktor
+selbst: Die Anzeige und `weich_hoechstens_streckenfaktor` vergleichen
+weiter gegen den rohen Wert - sonst faellt die Weich-Regel auf allen
+zwanzig Strecken weg, weil keine mehr ueber 1,15 kaeme.
+
 **Zwei Grenzen fuer die weichste Trockenmischung.** Sie faellt weg, wo
 sie ohnehin nicht traegt: bei einer Strategie mit **mehr als drei
 Stopps** - wer so oft herein muss, hat auf dem weichsten Gummi nichts

@@ -1398,13 +1398,18 @@ planstopp_ab_restprofil = 0.55
 # 25 Sekunden fuer denselben Reifenwechsel.
 planstopp_nach_notstopp_restprofil = 0.50
 # Wie weit eine Variante hinter der besten liegen darf, bevor sie
-# ausscheidet: ein Sockel plus ein Anteil je 100 km Renndistanz. Bei
-# 100 km sind das 30 s, bei 200 km 45 s, bei 300 km 60 s - so hat es der
-# Auftraggeber vorgegeben. Liegen die Varianten dicht beieinander,
-# bleiben alle drei Stoppzahlen moeglich; liegen sie weit auseinander,
-# bleibt nur die beste.
-variantenschwelle_sockel_s = 15.0
-variantenschwelle_je_100km_s = 15.0
+# ausscheidet: ein Sockel plus ein Anteil je 100 km Renndistanz. Liegen
+# die Varianten dicht beieinander, bleiben alle drei Stoppzahlen
+# moeglich; liegen sie weit auseinander, bleibt nur die beste.
+#
+# Punkt 92: beide Werte mal 1,2 (Entscheidung des Auftraggebers). Seit
+# jede Mischungsreihenfolge einzeln gerechnet wird, ist die Liste
+# laenger und feiner gestuft; zwanzig Prozent mehr Luft lassen mehr
+# Stoppzahlen nebeneinander bestehen, ohne die Laengenabhaengigkeit
+# aufzugeben. Bei 100 km sind das jetzt 36 s, bei 200 km 54 s, bei
+# 300 km 72 s.
+variantenschwelle_sockel_s = 18.0
+variantenschwelle_je_100km_s = 18.0
 # Zwangsstopp bei abgefahrenem Reifen (Entscheidung des Auftraggebers).
 # Frueher zwang nur das Wetter herein. Ein Auto, dessen Satz lange vor
 # der geplanten Stopprunde durch war, kam nie zu seinem Stopp: Es schlich
@@ -1458,6 +1463,27 @@ ohne_pflicht_bei = ["regen", "starkregen", "wechselhaft"]
 # Ohne die Grenze kamen gemessen Folgen wie Hart-Inter-Weich-Inter im
 # Trockenen heraus - ein Intermediate kostet dort 6 % Tempo.
 eignungsgrenze = 0.30
+
+# Punkt 92: Mit welchem Gewicht eine Variante gezogen wird, nach ihrer
+# **Stoppzahl**. Naturgemaess gibt es mehr Varianten mit mehr Stopps:
+# Bei drei Trockenmischungen hat eine Ein-Stopp-Folge 3^2 = 9
+# Reihenfolgen, eine Zwei-Stopp-Folge 27 und eine Drei-Stopp-Folge 81.
+# Wer gleich verteilt zieht, laesst das Feld schon deshalb oefter
+# dreimal stoppen - gemessen planten in Zandvoort 86 und am
+# Nuerburgring 97 Prozent der Autos drei Stopps, ohne dass das jemand
+# entschieden haette.
+#
+# Die Gewichte gleichen das aus (Entscheidung des Auftraggebers):
+# Ein-Stopp-Varianten achtmal, Zwei-Stopp-Varianten zweimal so
+# wahrscheinlich wie Drei-Stopp-Varianten. Gezogen wird weiterhin nur
+# aus den Varianten, die die Vorausberechnung zugelassen hat - das
+# Gewicht aendert die Auswahl nicht, nur ihre Haeufigkeit.
+#
+# Eine Stoppzahl, die hier nicht steht, gilt mit 1,0.
+[boxenstopp.strategie.variantengewicht]
+1 = 8.0
+2 = 2.0
+3 = 1.0
 
 # ---------------------------------------------------------------------------
 # Punkt 7 - Fahrer holen: Vertraege, Gehalt und Abloese
@@ -2277,6 +2303,28 @@ nachlauf_anteil_ueberholter = 0.5
 # Kurvenanteil nicht leistet.
 grundlage = "querbeschleunigung"
 normieren_auf_mittelwert = true
+
+# Punkt 92: Wie stark der Charakter der Strecke auf den **Verschleiss**
+# durchschlaegt. Der rohe Faktor spannt von 1,263 (Zandvoort) bis 0,537
+# (Monza) - das 2,35fache. So weit auseinander lassen sich die
+# Stoppzahlen nicht mehr einfangen: Monza kommt mit einem Stopp aus und
+# braucht nie einen zweiten, Zandvoort schafft keinen Zwei-Stopp mehr.
+# Der Auftraggeber will 2 bis 3 Stopps in Zandvoort und 1 bis 2 in
+# Monza; dafuer duerfen sich die Stintlaengen hoechstens um das
+# 1,5fache unterscheiden.
+#
+#   wirksam = roh ^ verschleiss_exponent
+#
+# | Exponent | Zandvoort | Monza | Spanne | Stopps Zandvoort | Monza |
+# |      1,0 |     1,263 | 0,537 |   2,35 |              2-4 |   0-1 |
+# |      0,7 |     1,178 | 0,647 |   1,82 |              2-4 |   1-2 |
+# |      0,5 |     1,124 | 0,733 |   1,53 |              2-3 |   1-2 |
+# |      0,4 |     1,098 | 0,780 |   1,41 |              1-4 |   1-2 |
+#
+# Der Exponent wirkt **nur auf den Verschleiss**, nicht auf den Faktor
+# selbst: ``weich_hoechstens_streckenfaktor`` vergleicht weiter gegen
+# den rohen Wert, sonst faellt die Regel auf allen zwanzig Strecken weg.
+verschleiss_exponent = 0.5
 
 # --- Punkt 11: Ermuedung (GDD 8) ------------------------------------------
 [ermuedung]

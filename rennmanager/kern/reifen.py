@@ -59,6 +59,29 @@ def streckenfaktor(konfiguration: Konfiguration, strecke: Strecke, mittelwert: f
     return querbeschleunigung(strecke) / max(mittelwert, 1e-9)
 
 
+def wirksamer_streckenfaktor(konfiguration: Konfiguration, wert: float) -> float:
+    """Was vom Streckenfaktor beim **Verschleiss** ankommt (Punkt 92).
+
+    Der rohe Faktor spannt ueber die zwanzig Strecken von 1,263
+    (Zandvoort) bis 0,537 (Monza) - das 2,35fache. So weit auseinander
+    lassen sich die Stoppzahlen nicht mehr einfangen: Monza kommt mit
+    einem Stopp aus und braucht nie einen zweiten, Zandvoort schafft
+    keinen Zwei-Stopp mehr. Der Exponent zieht die Spanne zusammen, ohne
+    die Reihenfolge der Strecken anzutasten.
+
+    Er wirkt **nur hier**, nicht auf den Faktor selbst: Die Anzeige und
+    ``weich_hoechstens_streckenfaktor`` vergleichen weiter gegen den
+    rohen Wert - sonst faellt die Weich-Regel auf allen zwanzig Strecken
+    weg, weil keine mehr ueber 1,15 kaeme.
+    """
+    exponent = float(
+        konfiguration.wert("reifen", "streckenfaktor").get("verschleiss_exponent", 1.0)
+    )
+    if exponent == 1.0 or wert <= 0.0:
+        return wert
+    return float(wert**exponent)
+
+
 def querbeschleunigung(strecke: Strecke) -> float:
     """Mittlere Kruemmung der Runde, 1/m."""
     radius = np.clip(strecke.radius_m, 1.0, None)
@@ -173,7 +196,8 @@ def stintweite_m(
     strafe = 1.0 + einstellung["naesse_strafe_verschleiss"] * _fehlgriff(
         konfiguration, misch, naesse
     )
-    teiler = misch.verschleiss * streckenfaktor_wert * wetterfaktor * strafe
+    wirksam = wirksamer_streckenfaktor(konfiguration, streckenfaktor_wert)
+    teiler = misch.verschleiss * wirksam * wetterfaktor * strafe
     return (
         einstellung["stint_basis_m"]
         * haltbarkeit(konfiguration, auto)

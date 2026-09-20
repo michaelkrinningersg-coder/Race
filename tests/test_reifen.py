@@ -212,14 +212,44 @@ def test_die_naesse_kommt_aus_der_wetterlage(k) -> None:
     assert rf.naesse_von(k, ("trocken", "regen")) == rf.naesse_von(k, "regen")
 
 
-def test_wetter_und_strecke_skalieren_den_verschleiss(k) -> None:
+def test_das_wetter_skaliert_den_verschleiss_eins_zu_eins(k) -> None:
     auto = ka.gleichverteilt(k, 50_000)
     m = rf.standardmischung(k)
     normal = rf.verschleiss_je_meter(k, auto, m)
-    hart = rf.verschleiss_je_meter(k, auto, m, streckenfaktor_wert=1.3)
     heiss = rf.verschleiss_je_meter(k, auto, m, wetterfaktor=1.4)
-    assert hart == pytest.approx(normal * 1.3)
     assert heiss == pytest.approx(normal * 1.4)
+
+
+def test_die_strecke_wirkt_gedaempft_auf_den_verschleiss(k) -> None:
+    """Punkt 92: Der Streckenfaktor geht mit einem Exponenten ein.
+
+    Eins zu eins waere die Spanne der zwanzig Strecken zu gross, um die
+    Stoppzahlen noch einzufangen: 1,263 in Zandvoort gegen 0,537 in
+    Monza, das 2,35fache. Der Exponent zieht sie zusammen, ohne die
+    Reihenfolge der Strecken anzutasten.
+    """
+    auto = ka.gleichverteilt(k, 50_000)
+    m = rf.standardmischung(k)
+    exponent = k.wert("reifen", "streckenfaktor", "verschleiss_exponent")
+    normal = rf.verschleiss_je_meter(k, auto, m)
+    hart = rf.verschleiss_je_meter(k, auto, m, streckenfaktor_wert=1.3)
+    assert hart == pytest.approx(normal * 1.3**exponent)
+    # Gedaempft heisst: schwaecher als eins zu eins, aber in dieselbe
+    # Richtung - eine harte Strecke frisst mehr, eine milde weniger.
+    assert normal < hart < normal * 1.3
+    mild = rf.verschleiss_je_meter(k, auto, m, streckenfaktor_wert=0.7)
+    assert normal * 0.7 < mild < normal
+
+
+def test_der_wirksame_streckenfaktor_zieht_die_spanne_zusammen(k) -> None:
+    hoch = rf.wirksamer_streckenfaktor(k, 1.263)
+    tief = rf.wirksamer_streckenfaktor(k, 0.537)
+    assert 1.263 / 0.537 > 2.3, "Die rohe Spanne"
+    assert hoch / tief < 1.6, "Die wirksame Spanne"
+    # Eins bleibt eins: Eine durchschnittliche Strecke aendert nichts.
+    assert rf.wirksamer_streckenfaktor(k, 1.0) == pytest.approx(1.0)
+    # Und die Reihenfolge der Strecken bleibt, wie sie war.
+    assert hoch > tief
 
 
 # -- Reifenfluesterer -------------------------------------------------------

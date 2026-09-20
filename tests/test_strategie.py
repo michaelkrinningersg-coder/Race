@@ -8,6 +8,7 @@ nach dem Zufallsfenster.
 """
 
 import math
+from collections import Counter
 
 import numpy as np
 import pytest
@@ -367,6 +368,47 @@ def test_alle_autos_fahren_den_plan_des_medianfahrers(k, zandvoort, strecken):
             assert abs(gefahren - geplant) <= fenster
 
 
+def test_wenige_stopps_werden_beim_ziehen_beguenstigt(k):
+    """Punkt 92: Sonst entscheidet die Kombinatorik ueber die Stoppzahl.
+
+    Bei drei Trockenmischungen hat eine Ein-Stopp-Folge 3^2 = 9
+    Reihenfolgen, eine Zwei-Stopp-Folge 27 und eine Drei-Stopp-Folge 81.
+    Wer gleich verteilt zieht, laesst das Feld schon deshalb oefter
+    dreimal stoppen. Die Gewichte gleichen das aus.
+    """
+    weich = kern_reifen.mischung(k, "weich")
+    hart = kern_reifen.mischung(k, "hart")
+    moeglich = [
+        sg.Variante((weich, hart), (20,), 5_000_000.0),
+        sg.Variante((weich, hart, weich), (15, 30), 5_000_000.0),
+        sg.Variante((weich, hart, weich, hart), (12, 24, 36), 5_000_000.0),
+    ]
+    gewicht = [sg.variantengewicht(k, v.anzahl_stopps) for v in moeglich]
+    assert gewicht == [8.0, 2.0, 1.0]
+
+    gezogen = Counter(
+        sg._ziehe(k, moeglich, Seedquelle(seed).generator()) for seed in range(2000)
+    )
+    anteile = [gezogen[n] / 2000 for n in range(3)]
+    # Erwartet 8:2:1 von 11, also 73 / 18 / 9 Prozent.
+    assert anteile[0] == pytest.approx(8 / 11, abs=0.03)
+    assert anteile[1] == pytest.approx(2 / 11, abs=0.03)
+    assert anteile[2] == pytest.approx(1 / 11, abs=0.03)
+
+
+def test_das_gewicht_zieht_nur_aus_den_zugelassenen(k, zandvoort, strecken):
+    """Das Gewicht aendert die Haeufigkeit, nicht die Auswahl."""
+    feld = kern_rennen.starterfeld(k, LIGA, seedquelle=Seedquelle(1))
+    runden = kern_rennen.rundenzahl(k, zandvoort, LIGA)
+    faktor = kern_reifen.streckenfaktor(
+        k, zandvoort, kern_reifen.mittlere_querbeschleunigung(strecken)
+    )
+    ergebnis = sg.feldstrategien(
+        k, [t.auto for t in feld], zandvoort, runden, faktor, None, Seedquelle(5)
+    )
+    assert all(0 <= n < len(ergebnis.varianten) for n in ergebnis.gewaehlt)
+
+
 def test_die_zahl_der_strategien_zaehlt_die_varianten(k, zandvoort, strecken):
     """Punkt 91: Was oben im Rennen steht."""
     feld = kern_rennen.starterfeld(k, LIGA, seedquelle=Seedquelle(1))
@@ -571,6 +613,15 @@ def test_ein_passender_reifen_bleibt_draussen(k):
 
 
 # -- Die Anzeige (Punkt 91) -------------------------------------------------
+def _blaetter(anzahl: int = 3) -> tuple[kern_rennen.Strategieblatt, ...]:
+    """Drei Strategien, wie sie ein Rennen hervorbringt."""
+    return (
+        kern_rennen.Strategieblatt("M-H", (20,), (0, 1, 2), 5_000_000.0),
+        kern_rennen.Strategieblatt("H-M", (25,), (3, 4), 5_000_400.0),
+        kern_rennen.Strategieblatt("M-H-M", (14, 30), (5,), 5_012_000.0),
+    )[:anzahl]
+
+
 def test_die_rennseite_zeigt_die_zahl_der_strategien(qtbot, k, zandvoort) -> None:
     """Oben im Rennen steht, wie viele Strategien unterwegs sind."""
     pytest.importorskip("PySide6")
@@ -579,18 +630,60 @@ def test_die_rennseite_zeigt_die_zahl_der_strategien(qtbot, k, zandvoort) -> Non
     feld = kern_rennen.starterfeld(k, LIGA, seedquelle=Seedquelle(1))
     mittel = kern_rennen.mittlerer_ueberholzonenanteil(k, (zandvoort,))
     verlauf = kern_rennen.simuliere(
-        k, zandvoort, feld, 3, Seedquelle(4711), mittel, strategiezahl=4
+        k, zandvoort, feld, 3, Seedquelle(4711), mittel,
+        strategieblaetter=_blaetter(),
     )
     seite = Rennseite(k, None, None)
     qtbot.addWidget(seite)
     seite.zeige_verlauf(verlauf, zandvoort, None, tabelle=None)
     seite._halte_an()
-    assert seite._strategiezahl.text() == "4"
+    assert seite._strategiezahl.text() == "3"
+    assert seite._strategiezahl.isEnabled()
 
-    # Ohne Angabe - der Laborfall - steht dort ein Strich, keine Null.
+    # Ohne Angabe - der Laborfall - steht dort ein Strich, keine Null,
+    # und der Knopf ist tot.
     ohne = kern_rennen.simuliere(
         k, zandvoort, feld, 3, Seedquelle(4711), mittel
     )
     seite.zeige_verlauf(ohne, zandvoort, None, tabelle=None)
     seite._halte_an()
     assert seite._strategiezahl.text() == "-"
+    assert not seite._strategiezahl.isEnabled()
+
+
+def test_das_strategieblatt_zeigt_beide_zeiten_und_keine_namen(qtbot, k, zandvoort):
+    """Punkt 92: Folge, Stopprunden, Autozahl - aber kein Name.
+
+    Zwei Zeiten stehen nebeneinander: die gerechnete ohne Verkehr und
+    der gefahrene Rueckstand. Wer welche Strategie faehrt, darf nirgends
+    ablesbar sein.
+    """
+    pytest.importorskip("PySide6")
+    from rennmanager.ui.strategieblatt import Strategieblattfenster
+
+    feld = kern_rennen.starterfeld(k, LIGA, seedquelle=Seedquelle(1))
+    mittel = kern_rennen.mittlerer_ueberholzonenanteil(k, (zandvoort,))
+    verlauf = kern_rennen.simuliere(
+        k, zandvoort, feld, 3, Seedquelle(4711), mittel,
+        strategieblaetter=_blaetter(),
+    )
+    fenster = Strategieblattfenster(verlauf, verlauf.dauer_ms / 2)
+    qtbot.addWidget(fenster)
+    baum = fenster._baum
+    assert baum.topLevelItemCount() == 3
+
+    erste = baum.topLevelItem(0)
+    assert erste.text(0) == "M-H"
+    assert erste.text(1) == "20"
+    assert erste.text(2) == "3"
+    # Die beste Planzeit ist der Bezug, also steht dort null.
+    assert erste.text(3) == "+0,0 s"
+    # Die zweite liegt 0,4 s dahinter - gerechnet, ohne Verkehr.
+    assert baum.topLevelItem(1).text(3) == "+0,4 s"
+    # Und im Rennen steht etwas anderes: Verkehr, Fahrer, Fehler.
+    assert baum.topLevelItem(1).text(4) != "-"
+
+    namen = {t.kuerzel for t in verlauf.teilnehmer}
+    for zeile in range(baum.topLevelItemCount()):
+        for spalte in range(baum.columnCount()):
+            assert baum.topLevelItem(zeile).text(spalte) not in namen

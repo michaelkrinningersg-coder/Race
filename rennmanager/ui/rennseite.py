@@ -270,12 +270,19 @@ class Rennseite(QWidget):
         # Punkt 91: Wie viele verschiedene Strategien das Feld faehrt.
         # Der Planer laesst eine Handvoll Varianten zu und verteilt sie
         # zufaellig; hier steht, wie viele davon wirklich unterwegs sind.
-        self._strategiezahl = QLabel("-")
+        # Punkt 92: Ein Klick darauf oeffnet das Strategieblatt. Deshalb
+        # ein Knopf und kein Etikett - ein Etikett sieht nicht aus, als
+        # koennte man es anklicken.
+        self._strategiezahl = QPushButton("-")
+        self._strategiezahl.setFlat(True)
+        self._strategiezahl.setCursor(Qt.CursorShape.PointingHandCursor)
         self._strategiezahl.setToolTip(
             "Wie viele verschiedene Reifenstrategien im Feld gefahren werden. "
             "Zwei Autos auf derselben Variante zaehlen einmal, auch wenn "
-            "ihre Stopprunden um eine Runde auseinanderliegen."
+            "ihre Stopprunden um eine Runde auseinanderliegen.\n"
+            "Anklicken zeigt, welche Strategien vertreten sind."
         )
+        self._strategiezahl.clicked.connect(self._zeige_strategien)
         zeile.addWidget(self._uhrzeit)
         zeile.addWidget(self._rundenstand)
         zeile.addWidget(self._fortschritt, stretch=1)
@@ -288,6 +295,20 @@ class Rennseite(QWidget):
         zeile.addWidget(QLabel("Takt:"))
         zeile.addWidget(self._takteingabe)
         return zeile
+
+    def _zeige_strategien(self) -> None:
+        """Punkt 92: Welche Strategien im Feld vertreten sind.
+
+        Gezeigt wird der Stand zum gerade gespielten Zeitpunkt - der
+        mittlere Rueckstand je Strategie wandert mit dem Rennen. Wer
+        welche faehrt, bleibt geheim.
+        """
+        if self._verlauf is None or not self._verlauf.strategieblaetter:
+            return
+        from rennmanager.ui.strategieblatt import Strategieblattfenster
+
+        fenster = Strategieblattfenster(self._verlauf, self._zeit_ms, self)
+        fenster.exec()
 
     def _tabellen_faellig(self, zeit: float) -> bool:
         """Ob Rangliste und das sichtbare Blatt jetzt nachgezogen werden.
@@ -471,6 +492,7 @@ class Rennseite(QWidget):
         self._strategiezahl.setText(
             str(verlauf.strategiezahl) if verlauf.strategiezahl else "-"
         )
+        self._strategiezahl.setEnabled(bool(verlauf.strategieblaetter))
         for knopf in (self._abspielen, self._zurueck, self._sofort):
             knopf.setEnabled(True)
         self._waehle_zeitraffer()

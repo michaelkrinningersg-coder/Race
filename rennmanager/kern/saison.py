@@ -316,6 +316,47 @@ def vor_dem_rennen(
     )
 
 
+def _strategieblaetter(
+    strategien: kern_strategie.Rennstrategien,
+    je_auto: list[kern_strategie.Strategie],
+    kennungen: list,
+) -> tuple[kern_rennen.Strategieblatt, ...]:
+    """Fasst das Feld zu Strategien zusammen - ohne zu verraten, wer welche faehrt.
+
+    Eine Zeile je vertretener Variante, geordnet nach der Rennzeit, die
+    der Planer **ohne Verkehr** fuer sie gerechnet hat. Die Autonummern
+    stehen darin, damit die Anzeige den Rueckstand der Gruppe mitteln
+    kann; angezeigt werden sie nicht (Entscheidung des Auftraggebers).
+
+    Die Stopprunden kommen aus der **Variante**, nicht aus dem gefahrenen
+    Plan: Das Boxenstoppfenster zieht zwei Autos derselben Strategie um
+    bis zu drei Runden auseinander, und das sind trotzdem nicht zwei
+    Strategien.
+    """
+    gruppen: dict[object, list[int]] = {}
+    for stelle, kennung in enumerate(kennungen):
+        gruppen.setdefault(kennung, []).append(stelle)
+
+    blaetter: list[kern_rennen.Strategieblatt] = []
+    for kennung, autos in gruppen.items():
+        if isinstance(kennung, int) and 0 <= kennung < len(strategien.varianten):
+            variante = strategien.varianten[kennung]
+            folge, stopps, zeit = variante.folge, variante.stopps, variante.zeit_ms
+        else:
+            # Der Notfallplan oder eine vom Spieler selbst gebaute Folge:
+            # Fuer sie hat der Planer keine Zeit gerechnet.
+            eigen = je_auto[autos[0]]
+            folge = "-".join(m.kuerzel for m in eigen.mischungen)
+            stopps, zeit = eigen.stopps, None
+        blaetter.append(
+            kern_rennen.Strategieblatt(
+                folge=folge, stopps=tuple(stopps), autos=tuple(autos), zeit_ms=zeit
+            )
+        )
+    blaetter.sort(key=lambda b: (b.zeit_ms is None, b.zeit_ms or 0.0, b.folge))
+    return tuple(blaetter)
+
+
 def _fahre_rennen(
     konfiguration: Konfiguration,
     welt: Welt,
@@ -372,6 +413,7 @@ def _fahre_rennen(
                 tuple(m.schluessel for m in gewaehlt.mischungen),
                 tuple(gewaehlt.stopps),
             )
+    blaetter = _strategieblaetter(strategien, je_auto, kennungen)
     verlauf = kern_rennen.simuliere(
         konfiguration,
         strecke,
@@ -382,7 +424,7 @@ def _fahre_rennen(
         wetter=wetter,
         streckenverschleiss=streckenverschleiss,
         strategien=tuple(je_auto),
-        strategiezahl=len(set(kennungen)),
+        strategieblaetter=blaetter,
         mischungspflicht=strategien.pflicht_zwei,
         liga=liga,
         # Die Startaufstellung ordnet das Feld um; Kenntnisfaktor und
