@@ -218,6 +218,10 @@ class Rennseite(QWidget):
         # und zerlegt - je 9000 Mal auf 150 Bilder.
         self._namen: list[str] = []
         self._teams: list[str] = []
+        # Punkt 95: Dasselbe fuer die Fahrer, die **nicht** mitfahren -
+        # in der Weltsicht der Meisterschaft stehen alle 400. Je Fahrer
+        # einmal aus der Welt geholt, danach gemerkt.
+        self._weltnamen: dict[int, tuple[str, str, str, str]] = {}
         # D7 und D10: je ein Puffer fuer das laufende Bild. Beide Werte
         # gelten fuer das ganze Feld, wurden aber je Zeile neu gerechnet.
         self._plaetze_puffer: tuple[object, dict[int, int]] = (None, {})
@@ -582,6 +586,10 @@ class Rennseite(QWidget):
         # D6: Namen und Teams einmal aufloesen, nicht je Zeile je Bild.
         self._namen = [self._nachname(t) for t in verlauf.teilnehmer]
         self._teams = [self._teamname(t) for t in verlauf.teilnehmer]
+        # Nach einem Auf- oder Abstieg steht derselbe Fahrer in einem
+        # anderen Team; das Gedaechtnis der Weltsicht faengt deshalb mit
+        # jedem Rennen neu an.
+        self._weltnamen.clear()
         # D1: Die Spalten werden **einmal** je Rennen ausgemessen. Bisher
         # rief jede Fuellung ``resizeColumnToContents`` fuer jede Spalte
         # jeder Tabelle auf - 37 Aufrufe je Bild.
@@ -1330,22 +1338,34 @@ class Rennseite(QWidget):
         nummern = {t.nummer: i for i, t in enumerate(verlauf.teilnehmer)}
         for zeile in zeilen:
             stelle = nummern.get(zeile.fahrer)
-            teilnehmer = verlauf.teilnehmer[stelle] if stelle is not None else None
+            if stelle is not None:
+                teilnehmer = verlauf.teilnehmer[stelle]
+                kuerzel, name, team = (
+                    teilnehmer.kuerzel, self._namen[stelle], self._teams[stelle]
+                )
+                farbe = teilnehmer.farbe
+            else:
+                # Punkt 95: In der Weltsicht stehen 400 Fahrer, im Rennen
+                # sind 40. Die anderen 360 holen Name, Team und Farbe aus
+                # der Welt - sonst fuehrte die Weltmeisterschaft jemand
+                # ohne Namen an.
+                kuerzel, name, team, farbe = self._aus_der_welt(zeile.fahrer)
             eintrag = QTreeWidgetItem(
                 self._meisterschaft,
                 [
                     str(zeile.platz),
                     str(zeile.liga),
-                    teilnehmer.kuerzel if teilnehmer else "",
-                    self._namen[stelle] if stelle is not None else "",
-                    self._teams[stelle] if stelle is not None else "",
+                    kuerzel,
+                    name,
+                    team,
                     self._wechseltext(zeile.veraenderung),
                     str(zeile.punkte),
                     f"+{zeile.zuwachs}" if zeile.zuwachs else "",
                 ],
             )
-            if teilnehmer is not None:
-                eintrag.setForeground(2, QColor(teilnehmer.farbe))
+            if farbe:
+                eintrag.setForeground(2, QColor(farbe))
+            if stelle is not None:
                 eintrag.setData(0, Qt.UserRole, stelle)
             if zeile.veraenderung:
                 eintrag.setForeground(
@@ -1355,6 +1375,25 @@ class Rennseite(QWidget):
                     ),
                 )
         self._stelle_auswahl_wieder_her(self._meisterschaft)
+
+    def _aus_der_welt(self, nummer: int) -> tuple[str, str, str, str]:
+        """Kuerzel, Nachname, Team und Farbe eines Fahrers ausserhalb des Rennens.
+
+        Gemerkt wird das Ergebnis: Die Weltsicht wird in jedem Anzeigetakt
+        neu gefuellt, die Namen aendern sich dabei nicht (wie ``_namen``
+        und ``_teams`` fuer das Feld, D6).
+        """
+        bekannt = self._weltnamen.get(nummer)
+        if bekannt is not None:
+            return bekannt
+        if self._welt is None or not 0 < nummer < len(self._welt.fahrer):
+            return ("", "", "", "")
+        fahrer = self._welt.fahrer[nummer]
+        team = self._welt.team_von(fahrer)
+        # Die Farbe gehoert dem Team, nicht dem Auto (GDD 4 und 12).
+        bekannt = (fahrer.kuerzel, fahrer.nachname, team.name, team.farbe)
+        self._weltnamen[nummer] = bekannt
+        return bekannt
 
     def _zeige_meisterschaft_neu(self) -> None:
         """Zeichnet nur das Meisterschaftsblatt neu (Punkt 95).
@@ -1396,11 +1435,17 @@ class Rennseite(QWidget):
     def _rennlage(
         self, verlauf: Rennverlauf, reihenfolge: list[int], zeit: float
     ) -> list:
-        """Die derzeitige Lage im Rennen als Rennergebnisse (Punkt 73)."""
-        quali = {}
-        if self._qualifying is not None:
-            for platz, stelle in enumerate(self._qualifying.aufstellung, start=1):
-                quali[stelle] = platz
+        """Die derzeitige Lage im Rennen als Rennergebnisse (Punkt 73).
+
+        Der Qualifyingplatz ist der **Startplatz**: ``saison.startfeld``
+        stellt das Rennfeld in der Reihenfolge des Qualifyings auf, Platz
+        1 ist die Pole. Frueher stand hier eine Umrechnung ueber
+        ``qualifying.aufstellung`` - deren Zahlen zaehlen aber im Feld der
+        Session (nach Weltreihenfolge) und nicht im Starterfeld. Die
+        Qualifyingpunkte des Livestands landeten dadurch bei den falschen
+        Fahrern: Auf dem Standbild vor dem Start bekam der Pilot auf der
+        Pole keinen Polepunkt, dafuer irgendwer im Mittelfeld.
+        """
         schnellster = self._schnellste_runde_bis(verlauf, zeit)
         bild = verlauf.bild_zu(zeit)
         raus = verlauf.ausgefallen[bild]
@@ -1408,7 +1453,7 @@ class Rennseite(QWidget):
             kern_wertung.Rennergebnis(
                 fahrer=verlauf.teilnehmer[i].nummer,
                 rennplatz=platz,
-                qualifyingplatz=quali.get(i, verlauf.teilnehmer[i].startplatz),
+                qualifyingplatz=verlauf.teilnehmer[i].startplatz,
                 schnellste_runde=i == schnellster,
                 ausgefallen=bool(raus[i]),
             )

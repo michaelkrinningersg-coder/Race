@@ -465,6 +465,31 @@ def test_die_meisterschaft_zaehlt_die_punkte_der_lage_dazu(gefahren, konfig) -> 
     assert punkte == sorted(punkte, reverse=True)
 
 
+def test_der_livestand_nimmt_den_startplatz_als_qualifyingplatz(gefahren) -> None:
+    """Punkt 95: Die Qualifyingpunkte gehoeren dem, der vorn steht.
+
+    ``qualifying.aufstellung`` zaehlt im Feld der **Session** (nach
+    Weltreihenfolge), das Rennfeld steht dagegen in der Reihenfolge des
+    Qualifyings. Wer beides gleichsetzt, gibt den Polepunkt irgendwem aus
+    dem Mittelfeld. Die Aufstellung steht hier absichtlich verdreht: Ein
+    Rueckfall auf die alte Umrechnung faellt damit sofort auf.
+    """
+    from types import SimpleNamespace
+
+    _fenster, seite = gefahren
+    verlauf = seite.verlauf
+    anzahl = len(verlauf.teilnehmer)
+    seite._qualifying = SimpleNamespace(
+        aufstellung=tuple(reversed(range(anzahl)))
+    )
+    lage = seite._rennlage(verlauf, verlauf.reihenfolge_zu(0.0), 0.0)
+    erwartet = {t.nummer: t.startplatz for t in verlauf.teilnehmer}
+    assert {e.fahrer: e.qualifyingplatz for e in lage} == erwartet
+    # Und die Pole gehoert dem, der sie gefahren hat.
+    pole = next(e for e in lage if e.qualifyingplatz == 1)
+    assert pole.fahrer == verlauf.teilnehmer[0].nummer
+
+
 def test_die_meisterschaft_laesst_sich_auf_alle_ligen_umschalten(
     gefahren, konfig
 ) -> None:
@@ -522,6 +547,55 @@ def test_die_meisterschaft_laesst_sich_auf_alle_ligen_umschalten(
 
     seite._alle_ligen.setChecked(False)
     assert liste.topLevelItemCount() == nur_liga
+
+
+def test_die_weltsicht_nennt_auch_fahrer_ausserhalb_des_rennens(
+    gefahren, konfig
+) -> None:
+    """Punkt 95: In der Weltsicht stehen 400 Fahrer, im Rennen sind 40.
+
+    Name, Team und Kuerzel kommen fuer das Feld aus dem Rennverlauf, fuer
+    alle anderen aus der Welt. Ohne diesen Rueckgriff fuehrte die
+    Weltmeisterschaft jemand ohne Namen an - Platz und Punkte standen da,
+    die drei Spalten dazwischen blieben leer.
+    """
+    from rennmanager.kern import wertung as wt
+
+    fenster, seite = gefahren
+    tabelle = _mit_tabelle(seite, konfig)
+    welt = fenster.welt
+    im_rennen = {t.nummer for t in seite.verlauf.teilnehmer}
+    fremde = [f for f in welt.fahrer[1:] if f.nummer not in im_rennen][:5]
+    assert fremde, "Die Welt hat mehr Fahrer als ein Rennen Starter"
+
+    # Liga 2, drei Rennen gefahren - damit sie vor dem Feld dieses einen
+    # Rennens stehen und im Ausschnitt oben auftauchen.
+    andere = wt.Tabelle(2)
+    for _ in range(3):
+        andere.verbuche(
+            konfig,
+            [
+                wt.Rennergebnis(fahrer=f.nummer, rennplatz=platz, qualifyingplatz=platz)
+                for platz, f in enumerate(fremde, start=1)
+            ],
+        )
+    seite.zeige_verlauf(
+        seite.verlauf,
+        seite._ansicht.strecke,
+        tabelle=tabelle,
+        tabellen={tabelle.liga: tabelle, 2: andere},
+    )
+    seite._halte_an()
+    seite._springe(seite.verlauf.dauer_ms * 0.7)
+    schlage_blatt_auf(seite, "meisterschaft")
+    seite._alle_ligen.setChecked(True)
+
+    erster = seite._meisterschaft.topLevelItem(0)
+    fuehrender = fremde[0]
+    assert erster.text(1) == "2"
+    assert erster.text(2) == fuehrender.kuerzel
+    assert erster.text(3) == fuehrender.nachname
+    assert erster.text(4) == welt.team_von(fuehrender).name
 
 
 def test_die_meisterschaft_zeigt_den_zuwachs(gefahren, konfig) -> None:

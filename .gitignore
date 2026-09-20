@@ -17,3 +17,6 @@ venv/
 *.sqlite
 *.sqlite3
 spielstand/
+
+# Messlaeufe (werkzeuge/*)
+messungen/
