@@ -45,6 +45,7 @@ from rennmanager.ui.rueckstandsansicht import Rueckstandsansicht
 from rennmanager.ui.streckenansicht import Streckenansicht
 from rennmanager.ui.tabellen import (
     Balkenzeichner,
+    kurzname,
     schriftfarbe,
     setze_breiten,
     verbinde_fahrerkarte,
@@ -801,17 +802,19 @@ class Rennseite(QWidget):
         return self._welt.team_von(self._welt.fahrer[nummer]).name
 
     def _nachname(self, teilnehmer) -> str:
-        """Der Nachname des Fahrers hinter einem Auto (Punkt 60).
+        """Der Name des Fahrers hinter einem Auto (Punkte 60 und 98).
 
-        Ein Kuerzel wie "MKR" sagt niemandem etwas; der Nachname schon.
-        Ein Feld aus ``rennen.starterfeld`` hat keinen Fahrer dahinter -
-        dann bleibt die Spalte leer.
+        Ein Kuerzel wie "MKR" sagt niemandem etwas; der Name schon.
+        Nachname voll, Vorname als Anfangsbuchstabe - "M. Krinninger":
+        In vierzig Zeilen kostet ein ausgeschriebener Vorname eine halbe
+        Spaltenbreite und trennt nichts, was der erste Buchstabe nicht
+        auch trennt. Ein Feld aus ``rennen.starterfeld`` hat keinen
+        Fahrer dahinter - dann bleibt die Spalte leer.
         """
         nummer = getattr(teilnehmer, "nummer", 0)
         if not nummer or self._welt is None or nummer >= len(self._welt.fahrer):
             return ""
-        name = self._welt.fahrer[nummer].name
-        return name.rsplit(" ", 1)[-1] if name else ""
+        return kurzname(self._welt.fahrer[nummer].name)
 
     def _tempotext(self, verlauf: Rennverlauf, i: int, zeit: float) -> str:
         """Das Momentantempo in km/h (Punkt 60)."""
@@ -1402,7 +1405,7 @@ class Rennseite(QWidget):
         fahrer = self._welt.fahrer[nummer]
         team = self._welt.team_von(fahrer)
         # Die Farbe gehoert dem Team, nicht dem Auto (GDD 4 und 12).
-        bekannt = (fahrer.kuerzel, fahrer.nachname, team.name, team.farbe)
+        bekannt = (fahrer.kuerzel, kurzname(fahrer.name), team.name, team.farbe)
         self._weltnamen[nummer] = bekannt
         return bekannt
 

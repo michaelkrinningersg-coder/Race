@@ -213,3 +213,21 @@ def schriftfarbe(farbe) -> QColor:
     zurueck - zwei Drittel der Teams merken nichts davon.
     """
     return QColor(_abgedunkelt(QColor(farbe).name()))
+
+
+def kurzname(name: str) -> str:
+    """"Michael Krinninger" wird zu "M. Krinninger" (Punkt 98).
+
+    Der Nachname steht voll da - er ist das, was man sucht -, der
+    Vorname nur als Anfangsbuchstabe: In einer Liste mit vierzig Zeilen
+    kosten ausgeschriebene Vornamen eine halbe Spaltenbreite und tragen
+    nichts zur Unterscheidung bei. Zwei Meier trennt der Vorname, und
+    dafuer reicht sein erster Buchstabe.
+
+    Ein Name ohne Leerzeichen bleibt, wie er ist; ein leerer bleibt leer.
+    """
+    name = (name or "").strip()
+    if " " not in name:
+        return name
+    vorname, nachname = name.split(" ", 1)
+    return f"{vorname[0]}. {nachname}" if vorname else nachname

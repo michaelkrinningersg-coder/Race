@@ -16,6 +16,7 @@ from rennmanager import konfiguration as kf
 
 pytest.importorskip("PySide6")
 
+from rennmanager.ui import qualifyingseite as qs  # noqa: E402
 from rennmanager.ui.hauptfenster import Hauptfenster  # noqa: E402
 from tests.oberflaeche import (  # noqa: E402
     gefahrenes_qualifying,
@@ -266,8 +267,8 @@ def test_qualifying_rueckstand_nur_ab_platz_zwei(qtbot, konfig: kf.Konfiguration
     seite._sofort.click()
 
     liste = seite._rangliste
-    assert liste.topLevelItem(0).text(3) == ""
-    assert liste.topLevelItem(1).text(3).startswith("+")
+    assert liste.topLevelItem(0).text(qs.SPALTE_RUECKSTAND) == ""
+    assert liste.topLevelItem(1).text(qs.SPALTE_RUECKSTAND).startswith("+")
 
 
 def test_die_aufstellung_kommt_aus_dem_qualifying(

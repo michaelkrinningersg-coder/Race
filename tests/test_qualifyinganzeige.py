@@ -21,6 +21,9 @@ from rennmanager.kern import rennen as rn  # noqa: E402
 from rennmanager.kern import strecke as st  # noqa: E402
 from rennmanager.kern.zufall import Seedquelle  # noqa: E402
 from rennmanager.ui import qualifyingseite as qs  # noqa: E402
+from rennmanager.ui.hauptfenster import Hauptfenster  # noqa: E402
+from rennmanager.ui.tabellen import kurzname  # noqa: E402
+from tests.oberflaeche import gefahrenes_qualifying  # noqa: E402
 
 LIGA = 10
 
@@ -606,3 +609,43 @@ def test_der_qualirekord_wird_getrennt_vom_rennrekord_gefuehrt(konfig) -> None:
     assert zahlen.qualirekord("Monza", 1).fahrer == 4
     # Und eine Zeit von null ist keine Zeit.
     assert not zahlen.melde_qualirunde("Monza", 1, 0, 5, 2026, 3)
+
+
+# --- Punkt 98: Name in der Zeitentafel, Unterlegung am Sessionende --------
+def test_die_zeitentafel_nennt_den_fahrernamen(qtbot, konfig) -> None:
+    """Punkt 98: "JOR" sagt niemandem etwas - der Name steht daneben."""
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = gefahrenes_qualifying(fenster)
+    seite._sofort.click()
+
+    assert seite._rangliste.headerItem().text(qs.SPALTE_NAME) == "Fahrer"
+    namen = {f.nummer: f.name for f in fenster.welt.fahrer}
+    zeile = seite._rangliste.topLevelItem(0)
+    nummer = zeile.data(qs.SPALTE_POS, Qt.UserRole)
+    assert zeile.text(qs.SPALTE_NAME) == kurzname(namen[nummer])
+    # Und der Nachname steht wirklich voll da.
+    assert fenster.welt.fahrer[nummer].nachname in zeile.text(qs.SPALTE_NAME)
+
+
+def test_am_sessionende_bleibt_keine_zeile_unterlegt(qtbot, konfig) -> None:
+    """Punkt 98: Am Ende ist nichts mehr "gerade passiert".
+
+    Die Wiedergabe haelt beim letzten Zielankunft an - ohne diese Regel
+    laege sie fuer immer im Hervorhebungsfenster, und die Zeile des
+    Letzten blieb dauerhaft unterlegt.
+    """
+    from PySide6.QtGui import QBrush
+
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = gefahrenes_qualifying(fenster)
+    seite._sofort.click()
+
+    liste = seite._rangliste
+    leer = QBrush()
+    for stelle in range(liste.topLevelItemCount()):
+        zeile = liste.topLevelItem(stelle)
+        assert zeile.background(qs.SPALTE_POS) == leer, (
+            f"Zeile {stelle} ist am Sessionende noch unterlegt"
+        )

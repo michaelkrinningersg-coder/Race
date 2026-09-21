@@ -102,6 +102,9 @@ class Rennwochenendeseite(QWidget):
         self._blaetter.addWidget(self._baue_vorschau())
         self._quali = Qualifyingseite(konfiguration)
         self._quali.fahrerkarte_gewuenscht.connect(self.fahrerkarte_gewuenscht.emit)
+        # Punkt 98: Die Zeitentafel zeigt den Namen neben dem Kuerzel.
+        # Der Kern kennt nur Nummern; die Welt hat die Namen.
+        self._quali.zeige_namen({f.nummer: f.name for f in self._lauf.welt.fahrer})
         self._reifenwahl = Reifenwahl(konfiguration)
         self._reifenwahl.gewaehlt.connect(self._reifen_gewaehlt)
         self._blaetter.addWidget(self._baue_qualifyingblatt())
@@ -351,8 +354,19 @@ class Rennwochenendeseite(QWidget):
             else:
                 self._rueste_zu()
                 return
-        except kern_saison.SaisonFehler as fehler:  # pragma: no cover - Notfall
-            QMessageBox.warning(self, "Rennwochenende", str(fehler))
+        except Exception as fehler:  # noqa: BLE001 - siehe unten
+            # Punkt 98: **Jede** Ausnahme, nicht nur ``SaisonFehler``.
+            # Qt verschluckt, was aus einem Slot herausfaellt: Der Knopf
+            # sah dann aus, als taete er nichts, und der Grund stand
+            # bestenfalls auf einer Konsole, die in der .exe niemand
+            # sieht. Ein stummer Knopf ist der schlimmste Fehlerbericht,
+            # den eine Oberflaeche geben kann.
+            QMessageBox.warning(
+                self,
+                "Rennwochenende",
+                f"Der Schritt \"{WEITER[self._schritt]}\" ist fehlgeschlagen:\n\n"
+                f"{type(fehler).__name__}: {fehler}",
+            )
             return
         finally:
             QApplication.restoreOverrideCursor()

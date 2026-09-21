@@ -592,6 +592,7 @@ def test_die_weltsicht_nennt_auch_fahrer_ausserhalb_des_rennens(
     die drei Spalten dazwischen blieben leer.
     """
     from rennmanager.kern import wertung as wt
+    from rennmanager.ui.tabellen import kurzname
 
     fenster, seite = gefahren
     tabelle = _mit_tabelle(seite, konfig)
@@ -626,7 +627,7 @@ def test_die_weltsicht_nennt_auch_fahrer_ausserhalb_des_rennens(
     fuehrender = fremde[0]
     assert erster.text(1) == "2"
     assert erster.text(2) == fuehrender.kuerzel
-    assert erster.text(3) == fuehrender.nachname
+    assert erster.text(3) == kurzname(fuehrender.name)
     assert erster.text(4) == welt.team_von(fuehrender).name
 
 

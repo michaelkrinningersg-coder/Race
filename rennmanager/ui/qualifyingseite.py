@@ -46,7 +46,7 @@ from rennmanager.kern.qualifying import Lage, Qualifying
 from rennmanager.kern.zeit import formatiere_dauer, formatiere_rueckstand
 from rennmanager.konfiguration import Konfiguration
 from rennmanager.ui.streckenansicht import Streckenansicht
-from rennmanager.ui.tabellen import schriftfarbe, verbinde_fahrerkarte
+from rennmanager.ui.tabellen import kurzname, schriftfarbe, verbinde_fahrerkarte
 from rennmanager.ui.wetterband import Wetterband
 
 FARBE_SCHNELLER = QColor("#2e7d32")
@@ -65,14 +65,17 @@ FARBE_NEUE_POLE = QColor("#fff2c9")
 
 SPALTE_POS = 0
 SPALTE_AUTO = 1
-SPALTE_ZEIT = 2
-SPALTE_RUECKSTAND = 3
+# Punkt 98: Der Name neben dem Kuerzel. "JOR" sagt niemandem etwas -
+# dieselbe Ueberlegung wie in der Rangliste des Rennens (Punkt 60).
+SPALTE_NAME = 2
+SPALTE_ZEIT = 3
+SPALTE_RUECKSTAND = 4
 # Punkt 93 (A2): Der Abstand zum Vordermann steht neben dem Rueckstand
 # auf die Spitze. Zwei verschiedene Fragen - "wie weit bin ich hinten"
 # und "wen habe ich direkt vor mir" -, und die Tafel beantwortete bisher
 # nur die erste.
-SPALTE_INTERVALL = 4
-SPALTE_SEKTOR_AB = 5
+SPALTE_INTERVALL = 5
+SPALTE_SEKTOR_AB = 6
 
 
 class Qualifyingseite(QWidget):
@@ -89,6 +92,11 @@ class Qualifyingseite(QWidget):
         super().__init__(parent)
         self._konfiguration = konfiguration
         self._session: Qualifying | None = None
+        # Punkt 98: Nachname je Fahrernummer. Der Kern kennt nur Nummern,
+        # die Namen stehen in der Welt - das gefuehrte Wochenende reicht
+        # sie herein. Ohne sie bleibt die Spalte leer, und ein Testlauf
+        # ohne Welt laeuft trotzdem durch.
+        self._namen: dict[int, str] = {}
         self._zeit_ms = 0.0
         self._laeuft = False
         # Punkt 62: Die Tabelle wird seltener nachgezogen als die Uhr -
@@ -184,7 +192,7 @@ class Qualifyingseite(QWidget):
 
     @staticmethod
     def _kopfzeilen(sektoren: int) -> list[str]:
-        kopf = ["Pos", "Auto", "Zeit", "Rueckstand", "Intervall"]
+        kopf = ["Pos", "Auto", "Fahrer", "Zeit", "Rueckstand", "Intervall"]
         kopf += [f"S{nummer + 1}" for nummer in range(sektoren)]
         return kopf + ["Lage", "Wetter", "Form"]
 
@@ -247,6 +255,18 @@ class Qualifyingseite(QWidget):
         self._bestmarke.setText(
             f"{formatiere_dauer(rekord.zeit_ms)}   {wer}   {rekord.saison}"
         )
+
+    def zeige_namen(self, namen: dict[int, str]) -> None:
+        """Gibt der Seite die Fahrernamen je Nummer (Punkt 98).
+
+        Wie in der Karriereseite: Der Kern kennt nur Nummern, die Namen
+        stehen in der Welt. Abgekuerzt wird hier, nicht beim Aufrufer -
+        so steht die Regel an einer Stelle.
+        """
+        self._namen = {nummer: kurzname(name) for nummer, name in namen.items()}
+        if self._session is not None:
+            self._letzte_tabelle_ms = None
+            self._zeichne()
 
     def zeige_session(self, session: Qualifying) -> None:
         """Uebernimmt ein gefahrenes Qualifying und stellt es auf Anfang."""
@@ -357,6 +377,15 @@ class Qualifyingseite(QWidget):
         ankunft = session.letzte_zielankunft(
             zeit, self._konfiguration.wert("qualifying", "hervorhebung_ms")
         )
+        # Punkt 98: Am Ende der Session haelt die Wiedergabe an. Die
+        # letzte Ankunft laege damit **fuer immer** im Hervorhebungs-
+        # fenster, und die Zeile des Letzten blieb dauerhaft unterlegt -
+        # so lange, bis der Spieler zurueckspulte. Ist jeder durch, ist
+        # auch nichts mehr "gerade passiert". Die Regel steht hier und
+        # nicht im Kern: ``letzte_zielankunft`` beantwortet weiter genau
+        # die Frage, die sie verspricht.
+        if len(fertig) == len(session.fahrten) and zeit >= session.dauer_ms:
+            ankunft = None
         self._zeige_verdraengung(ankunft)
         frische_pole = (
             ankunft.fahrt.teilnehmer if ankunft is not None and ankunft.neue_pole else None
@@ -468,6 +497,7 @@ class Qualifyingseite(QWidget):
         spalten = [
             str(platz) if platz is not None else "",
             teilnehmer.kuerzel,
+            self._namen.get(teilnehmer.nummer, ""),
             formatiere_dauer(stand.zeit_ms) if stand.zeit_ms is not None else "",
             (
                 formatiere_rueckstand(stand.zeit_ms - bestzeit)

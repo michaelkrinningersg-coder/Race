@@ -229,3 +229,17 @@ def test_jede_teamfarbe_ist_in_der_tabelle_lesbar(grosse_konfiguration) -> None:
     assert len(welt.teams) == konfig.wert("teams", "anzahl")
     schlechteste = min(kontrast(schriftfarbe(t.farbe)) for t in welt.teams)
     assert schlechteste >= MINDESTKONTRAST
+
+
+# --- Punkt 98: Vorname abgekuerzt, Nachname voll --------------------------
+def test_der_kurzname_kuerzt_nur_den_vornamen() -> None:
+    """"Michael Krinninger" wird zu "M. Krinninger"."""
+    from rennmanager.ui.tabellen import kurzname
+
+    assert kurzname("Michael Krinninger") == "M. Krinninger"
+    # Mehrteilige Nachnamen bleiben ganz - gekuerzt wird nur das Erste.
+    assert kurzname("Jean-Luc de la Vega") == "J. de la Vega"
+    # Wer nur einen Namen hat, behaelt ihn; leer bleibt leer.
+    assert kurzname("Meier") == "Meier"
+    assert kurzname("") == ""
+    assert kurzname(None) == ""
