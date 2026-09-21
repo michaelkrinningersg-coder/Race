@@ -265,7 +265,39 @@ def test_der_ticker_zeigt_nur_geschehenes(gefahren) -> None:
     zeit = seite.zeit_ms
     bisher = [z for z in seite.verlauf.zwischenfaelle if z.zeit_ms <= zeit]
     assert str(len(bisher)) in seite._tickerkasten.title()
-    assert seite.ticker.topLevelItemCount() == min(len(bisher), 12)
+    assert seite.ticker.topLevelItemCount() == min(len(bisher), rs.TICKER_ZEILEN)
+
+
+def test_der_ticker_zeigt_fuenfzig_zeilen(gefahren, konfig) -> None:
+    """Punkt 97: Zwoelf Zeilen waren bei 40 Autos das letzte Prozent.
+
+    Gezaehlt wird gegen die Zwischenfaelle, die bis hierher gefallen
+    sind - ueber ein ganzes Rennen sind es mehrere hundert.
+    """
+    _fenster, seite = gefahren
+    assert rs.TICKER_ZEILEN == 50
+    seite._springe(seite.verlauf.dauer_ms)
+    schlage_blatt_auf(seite, "ticker")
+    bisher = len(seite.verlauf.zwischenfaelle)
+    assert seite.ticker.topLevelItemCount() == min(bisher, rs.TICKER_ZEILEN)
+
+
+def test_der_ticker_fuehrt_fuenfzig_zeilen(gefahren) -> None:
+    """Punkt 97: zwoelf Zeilen waren bei 40 Autos das letzte Prozent.
+
+    Ueber die volle Distanz fallen mehrere hundert Zwischenfaelle; wer
+    zwei Bilder wegsah, hatte den Ausfall verpasst. Die Zahl steht hier
+    fest, damit sie nicht unbemerkt zurueckwandert - den Rollbalken setzt
+    Qt von selbst, sobald mehr Zeilen anfallen als ins Blatt passen
+    (gemessen: 47 Zeilen in einem 460 px hohen Blatt ergeben einen
+    Rollbereich von 17).
+    """
+    _fenster, seite = gefahren
+    assert rs.TICKER_ZEILEN == 50
+    seite._springe(seite.verlauf.dauer_ms)
+    schlage_blatt_auf(seite, "ticker")
+    gefallen = len(seite.verlauf.zwischenfaelle)
+    assert seite.ticker.topLevelItemCount() == min(gefallen, rs.TICKER_ZEILEN)
 
 
 def test_der_ticker_zeigt_das_neueste_oben(gefahren) -> None:

@@ -114,8 +114,14 @@ PFEIL_HOCH = "\u25b2"
 PFEIL_RUNTER = "\u25bc"
 FARBE_GEWONNEN = "#2e7d32"
 FARBE_VERLOREN = "#c62828"
-# So viele Zwischenfaelle stehen im Ticker; aeltere rollen heraus.
-TICKER_ZEILEN = 12
+# So viele Zwischenfaelle stehen im Ticker; aeltere rollen heraus. Bei
+# 40 Autos ueber die volle Distanz fallen mehrere hundert - zwoelf Zeilen
+# waren davon das letzte Prozent, und wer zwei Bilder wegsah, hatte den
+# Ausfall verpasst. Fuenfzig passen nicht ins Blatt; den Rollbalken setzt
+# Qt dann von selbst, und gemessen bleibt der Rollstand ueber die
+# Neuaufbauten hinweg stehen - anders als bei den Tabellen mit Auswahl
+# braucht es dafuer hier nichts.
+TICKER_ZEILEN = 50
 # Punkt 95: Die Weltmeisterschaft hat 400 Zeilen. Gezeigt werden die
 # Spitze und ein Fenster um jeden eigenen Fahrer - alles andere kostet
 # beim Zeichnen mehr, als es sagt.

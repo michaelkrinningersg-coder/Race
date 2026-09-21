@@ -219,9 +219,14 @@ Vier Dinge stehen neben der Streckenansicht, alle aus dem fertigen
   kritisch), nicht aus einer Serienpalette: Der Balken sagt "kritisch",
   nicht "Auto Nummer drei".
 * **Zwischenfall-Ticker**: Fehler, Unfaelle und Defekte bis zur laufenden
-  Rennzeit, neueste zuerst. Er steht als Blatt **Meldungen** rechts bei
-  den Tabellen; bis Punkt 82 war er eine Fussleiste unter der ganzen
-  Seite und nahm ihnen Hoehe weg.
+  Rennzeit, neueste zuerst, **fuenfzig Zeilen tief** (Punkt 97). Zwoelf
+  waren es bis dahin - bei 40 Autos ueber die volle Distanz fallen
+  mehrere hundert Zwischenfaelle, und wer zwei Bilder wegsah, hatte den
+  Ausfall verpasst. Passen die Zeilen nicht ins Blatt, rollt es; den
+  Rollbalken setzt Qt von selbst (gemessen: 47 Zeilen in einem 460 px
+  hohen Blatt ergeben einen Rollbereich von 17). Der Ticker steht als
+  Blatt **Meldungen** rechts bei den Tabellen; bis Punkt 82 war er eine
+  Fussleiste unter der ganzen Seite und nahm ihnen Hoehe weg.
 * **Zeitenmonitor** mit letzter Runde, bester Runde und den vier
   Sektorzeiten - alles **zum Abspielzeitpunkt**, sortiert nach der besten
   Runde. Die letzte Runde leuchtet gruen auf, wenn sie zugleich die beste
