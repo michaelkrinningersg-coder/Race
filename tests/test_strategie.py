@@ -24,8 +24,6 @@ from rennmanager.kern.auto import gleichverteilt
 from rennmanager.kern.zufall import Seedquelle
 from rennmanager.konfiguration import lade
 
-LIGA = 1
-
 
 @pytest.fixture(scope="module")
 def k():
@@ -52,7 +50,7 @@ def umgebung(k, strecken, zandvoort, auto):
     """Runden, Rundenzeit, Streckenfaktor und Stoppverlust an einem Ort."""
     grenzen = kern_tempo.grenzen_aus(k, auto)
     return {
-        "runden": kern_rennen.rundenzahl(k, zandvoort, LIGA),
+        "runden": kern_rennen.rundenzahl(k, zandvoort),
         "rundenzeit": float(
             kern_tempo.rundenzeit_ms(
                 zandvoort, kern_tempo.geschwindigkeitsprofil(zandvoort, grenzen)
@@ -312,7 +310,7 @@ def test_eine_wechselnde_vorhersage_macht_die_tabelle_startabhaengig(
 # -- Das ganze Feld ---------------------------------------------------------
 def test_feldstrategien_geben_jedem_auto_eine_strategie(k, zandvoort, strecken):
     feld = kern_rennen.starterfeld(k, seedquelle=Seedquelle(1))
-    runden = kern_rennen.rundenzahl(k, zandvoort, LIGA)
+    runden = kern_rennen.rundenzahl(k, zandvoort)
     faktor = kern_reifen.streckenfaktor(
         k, zandvoort, kern_reifen.mittlere_querbeschleunigung(strecken)
     )
@@ -327,7 +325,7 @@ def test_feldstrategien_geben_jedem_auto_eine_strategie(k, zandvoort, strecken):
 
 def test_das_feld_faehrt_nicht_alles_dasselbe(k, zandvoort, strecken):
     feld = kern_rennen.starterfeld(k, seedquelle=Seedquelle(1))
-    runden = kern_rennen.rundenzahl(k, zandvoort, LIGA)
+    runden = kern_rennen.rundenzahl(k, zandvoort)
     faktor = kern_reifen.streckenfaktor(
         k, zandvoort, kern_reifen.mittlere_querbeschleunigung(strecken)
     )
@@ -350,7 +348,7 @@ def test_alle_autos_fahren_den_plan_des_medianfahrers(k, zandvoort, strecken):
     Boxenstoppfenster.
     """
     feld = kern_rennen.starterfeld(k, seedquelle=Seedquelle(1))
-    runden = kern_rennen.rundenzahl(k, zandvoort, LIGA)
+    runden = kern_rennen.rundenzahl(k, zandvoort)
     faktor = kern_reifen.streckenfaktor(
         k, zandvoort, kern_reifen.mittlere_querbeschleunigung(strecken)
     )
@@ -398,7 +396,7 @@ def test_wenige_stopps_werden_beim_ziehen_beguenstigt(k):
 def test_das_gewicht_zieht_nur_aus_den_zugelassenen(k, zandvoort, strecken):
     """Das Gewicht aendert die Haeufigkeit, nicht die Auswahl."""
     feld = kern_rennen.starterfeld(k, seedquelle=Seedquelle(1))
-    runden = kern_rennen.rundenzahl(k, zandvoort, LIGA)
+    runden = kern_rennen.rundenzahl(k, zandvoort)
     faktor = kern_reifen.streckenfaktor(
         k, zandvoort, kern_reifen.mittlere_querbeschleunigung(strecken)
     )
@@ -411,7 +409,7 @@ def test_das_gewicht_zieht_nur_aus_den_zugelassenen(k, zandvoort, strecken):
 def test_die_zahl_der_strategien_zaehlt_die_varianten(k, zandvoort, strecken):
     """Punkt 91: Was oben im Rennen steht."""
     feld = kern_rennen.starterfeld(k, seedquelle=Seedquelle(1))
-    runden = kern_rennen.rundenzahl(k, zandvoort, LIGA)
+    runden = kern_rennen.rundenzahl(k, zandvoort)
     faktor = kern_reifen.streckenfaktor(
         k, zandvoort, kern_reifen.mittlere_querbeschleunigung(strecken)
     )
@@ -450,7 +448,7 @@ def test_die_reihenfolge_ist_teil_der_variante(k, zandvoort, strecken):
 
 def test_gleicher_seed_gleiche_strategien(k, zandvoort, strecken):
     feld = kern_rennen.starterfeld(k, seedquelle=Seedquelle(1))
-    runden = kern_rennen.rundenzahl(k, zandvoort, LIGA)
+    runden = kern_rennen.rundenzahl(k, zandvoort)
     faktor = kern_reifen.streckenfaktor(
         k, zandvoort, kern_reifen.mittlere_querbeschleunigung(strecken)
     )
@@ -521,7 +519,7 @@ def test_ab_dem_streckenfaktor_bleiben_nur_die_haerteren(k, strecken):
     feld = kern_rennen.starterfeld(k, seedquelle=Seedquelle(1))
     for name, erwartet_weich in ((hart_zu, False), (sanft, True)):
         strecke = next(s for s in strecken if s.name == name)
-        runden = kern_rennen.rundenzahl(k, strecke, LIGA)
+        runden = kern_rennen.rundenzahl(k, strecke)
         ergebnis = sg.feldstrategien(
             k, [t.auto for t in feld], strecke, runden, faktoren[name], None,
             Seedquelle(5),
@@ -548,7 +546,7 @@ def test_wer_oft_stoppt_faehrt_nicht_auf_weich(k, strecken):
     viele = 0
     for strecke in strecken:
         faktor = kern_reifen.streckenfaktor(k, strecke, mittlere)
-        runden = kern_rennen.rundenzahl(k, strecke, LIGA)
+        runden = kern_rennen.rundenzahl(k, strecke)
         ergebnis = sg.feldstrategien(
             k, autos, strecke, runden, faktor, None, Seedquelle(5)
         )
@@ -688,13 +686,13 @@ def test_das_strategieblatt_zeigt_beide_zeiten_und_keine_namen(qtbot, k, zandvoo
             assert baum.topLevelItem(zeile).text(spalte) not in namen
 
 
-def test_auch_die_unterste_liga_kommt_im_nassen_unter_den_deckel(grosse_konfiguration):
+def test_auch_das_schwaechste_auto_kommt_im_nassen_unter_den_deckel(grosse_konfiguration):
     """Punkt 100: Kein Feld darf mehr Stopps brauchen, als es planen darf.
 
-    Vor der Anpassung der Nassreifen brauchte Liga 10 auf der vollen
-    Distanz bis zu fuenf Stopps, wo ``stopps_max`` drei erlaubt - der
-    Rest kam als Zwangsstopp. Geprueft wird ueber **alle** Strecken, weil
-    genau die schlimmste den Ausschlag gibt.
+    Vor der Anpassung der Nassreifen brauchte das schwaechste Feld auf
+    der vollen Distanz bis zu fuenf Stopps, wo ``stopps_max`` drei
+    erlaubt - der Rest kam als Zwangsstopp. Geprueft wird ueber **alle**
+    Strecken, weil genau die schlimmste den Ausschlag gibt.
     """
     from rennmanager.kern import reifen as kern_reifen
     from rennmanager.kern import rennen as kern_rennen
@@ -705,21 +703,14 @@ def test_auch_die_unterste_liga_kommt_im_nassen_unter_den_deckel(grosse_konfigur
 
     k = grosse_konfiguration
     alle = kern_strecke.lade_alle(k)
-    welt = kern_welt.erzeuge(
-        k, Seedquelle(0).zweig("welt"), spielerliga=k.wert("ligen", "startliga")
-    )
+    welt = kern_welt.erzeuge(k, Seedquelle(0).zweig("welt"))
     quer = kern_reifen.mittlere_querbeschleunigung(alle)
     deckel = k.wert("boxenstopp", "strategie")["stopps_max"]
-    unterste = k.wert("ligen", "anzahl")
-    fahrer = sorted(
-        (f for f in welt.fahrer if f.liga == unterste and not f.ist_spieler),
-        key=lambda f: gesamtwert(k, f.auto),
-    )
-    # Das schwaechste Auto der untersten Liga - es setzt die Grenze.
-    auto = fahrer[0].auto
+    # Das schwaechste Auto des Feldes - es setzt die Grenze.
+    auto = min(welt.fahrer, key=lambda f: gesamtwert(k, f.auto)).auto
     for strecke in alle:
         faktor = kern_reifen.streckenfaktor(k, strecke, quer)
-        runden = kern_rennen.rundenzahl(k, strecke, unterste)
+        runden = kern_rennen.rundenzahl(k, strecke)
         for schluessel, naesse in (("intermediate", 0.35), ("regen", 1.0)):
             weite = sg.reichweite_runden(
                 k, auto, kern_reifen.mischung(k, schluessel),

@@ -19,8 +19,6 @@ from rennmanager.kern import tempo as tp
 from rennmanager.kern import wetter as kern_wetter
 from rennmanager.kern.zufall import Seedquelle
 
-LIGA = 10
-
 
 @pytest.fixture(scope="module")
 def k() -> kf.Konfiguration:
@@ -158,8 +156,10 @@ def test_wer_spaeter_faehrt_findet_mehr_gummi(k, zandvoort) -> None:
     gummi = [f.gummi for f in session.fahrten]
     assert gummi == sorted(gummi), "Der Stand muss ueber die Session wachsen"
     assert gummi[0] < gummi[-1]
-    # Die Entscheidung war: spuerbar, aber nicht entscheidend.
-    assert 0.0005 < gummi[-1] - gummi[0] < 0.004
+    # Die Entscheidung war: spuerbar, aber nicht entscheidend. Punkt 101:
+    # Fuenfzig Autos legen mehr Gummi als vierzig - gemessen 0,45 % ueber
+    # die Session statt 0,36 %.
+    assert 0.0005 < gummi[-1] - gummi[0] < 0.006
 
 
 def test_das_qualifying_faengt_gruen_an(k, zandvoort) -> None:

@@ -1716,20 +1716,15 @@ waehrung = ["G", "E"]
 
 # --- Punkt 5: Popularitaet -------------------------------------------------
 [popularitaet]
-# Wie bekannt ein Fahrer ist. Sie bewegt den Grundbetrag der
-# Sponsorenangebote aus GDD 10 um bis zu 25 Prozent.
+# Wie bekannt ein Fahrer ist. Seit Punkt 101 eine reine Angabe: Die
+# Sponsoren, deren Grundbetrag sie bewegte, sind mit dem Geld
+# weggefallen.
 #
-# Der Anfangswert ist gestreut, aber ausdruecklich *nicht* nach
-# Ligastaerke - so mit dem Auftraggeber abgestimmt: Bekanntheit ist nicht
-# dasselbe wie Schnelligkeit. Ein Liga-20-Fahrer kann bekannter sein als
-# ein Liga-1-Fahrer.
-# ``mittelwert`` ist zweierlei: der Mittelwert der Anfangsverteilung und
-# der Punkt, an dem der Sponsorenfaktor genau 1,0 ist. Ohne diesen Bezug
-# laege das ganze Feld unter 1,0, und die Sponsorenbetraege aus GDD 10
-# fielen auf einen Schlag.
+# Der Anfangswert ist gestreut, aber ausdruecklich *nicht* nach Staerke -
+# so mit dem Auftraggeber abgestimmt: Bekanntheit ist nicht dasselbe wie
+# Schnelligkeit. Der Letzte des Feldes kann bekannter sein als der Erste.
 mittelwert = 30000
 anfang_streuung = 0.80
-max_anteil_sponsor = 0.25
 # Was ein Rennwochenende einbringt. Sieg, Podium und Pole zaehlen
 # nebeneinander: Ein Sieg von der Pole bringt alle drei.
 je_sieg = 1200

@@ -37,14 +37,13 @@ def zieltempo(k, s: float) -> float:
 
 # -- Kalibrierung gegen GDD 9 ----------------------------------------------
 def test_kalibrierung_trifft_gdd_9(k, referenz) -> None:
-    """Alle zehn Kontrollwerte aus der Ligatabelle in GDD 9."""
-    for zeile in k.wert("ligen", "kontrolle"):
-        for rolle in ("bester", "letzter"):
-            s = zeile[f"s_{rolle}"]
-            ergebnis = tp.fahre_runde(k, referenz, ka.gleichverteilt(k, s))
-            assert ergebnis.schnitt_kmh == pytest.approx(zieltempo(k, s), abs=0.05), (
-                f"Liga {zeile['liga']}, {rolle}, S={s}"
-            )
+    """Beide Enden des Feldes aus [feld] (Punkt 101)."""
+    for rolle in ("s_bester", "s_letzter"):
+        s = k.wert("feld", rolle)
+        ergebnis = tp.fahre_runde(k, referenz, ka.gleichverteilt(k, s))
+        assert ergebnis.schnitt_kmh == pytest.approx(zieltempo(k, s), abs=0.05), (
+            f"{rolle}, S={s}"
+        )
 
 
 @pytest.mark.parametrize("s", [0, 1_000, 12_000, 37_000, 71_000, 95_000, 100_000])
@@ -54,8 +53,8 @@ def test_kalibrierung_haelt_auch_zwischen_den_stuetzstellen(k, referenz, s: int)
     assert ergebnis.schnitt_kmh == pytest.approx(zieltempo(k, s), abs=0.05)
 
 
-def test_endgeschwindigkeit_erreicht_400_in_liga_1(k, referenz) -> None:
-    """GDD 4: hoechstens 400 km/h in Liga 1."""
+def test_endgeschwindigkeit_erreicht_400_beim_referenzwert(k, referenz) -> None:
+    """GDD 4: hoechstens 400 km/h beim Referenzwert der Skala."""
     grenzwert = k.wert("kalibrierung", "endgeschwindigkeit_max_kmh")
     bei_referenz = tp.grenzen_aus(k, ka.gleichverteilt(k, k.wert("skala", "referenz")))
     assert bei_referenz.hoechst_kmh == pytest.approx(grenzwert, abs=0.5)

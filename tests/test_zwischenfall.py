@@ -14,8 +14,6 @@ from rennmanager.kern import strecke as st
 from rennmanager.kern import zwischenfall as zf
 from rennmanager.kern.zufall import Seedquelle
 
-LIGA = 10
-
 
 @pytest.fixture(scope="module")
 def k() -> kf.Konfiguration:

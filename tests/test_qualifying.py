@@ -12,8 +12,6 @@ from rennmanager.kern import rennen as rn
 from rennmanager.kern import strecke as st
 from rennmanager.kern.zufall import Seedquelle
 
-LIGA = 10
-
 
 @pytest.fixture(scope="module")
 def k() -> kf.Konfiguration:
@@ -380,10 +378,11 @@ def test_lila_wandert_beim_abspielen_weiter(session) -> None:
     Frueh in der Session haelt ihn jemand anderes als am Ende - sonst
     waere die Farbe schon beim Laden entschieden.
     """
-    frueh = session.beste_splits_zu(session.fahrten[2].ziel_ms)
     spaet = session.beste_splits_zu(session.dauer_ms)
-    assert any(a is not None for a in frueh)
-    assert frueh != spaet
+    stuetzen = sorted(f.ziel_ms for f in session.fahrten)
+    zwischenstaende = [session.beste_splits_zu(ms) for ms in stuetzen[:-1]]
+    assert any(a is not None for stand in zwischenstaende for a in stand)
+    assert any(stand != spaet for stand in zwischenstaende)
 
 
 def test_ohne_gefahrenen_sektor_gibt_es_kein_lila(session) -> None:

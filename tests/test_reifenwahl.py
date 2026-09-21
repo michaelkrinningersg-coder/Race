@@ -1,6 +1,6 @@
 """Die Reifenwahl vor dem Rennen (Punkt 39).
 
-Der Spieler fuehrt vier Fahrer; welche Mischungsfolge jeder von ihnen
+Der Spieler fuehrt zwei Fahrer; welche Mischungsfolge jeder von ihnen
 faehrt, darf er waehlen - aber nur aus dem, was die Vorausberechnung als
 tragfaehig ermittelt hat, und nur **vor** dem Start. Der Rennverlauf wird
 in einem Stueck gerechnet und danach nur noch abgespielt; ein Eingriff
@@ -21,11 +21,7 @@ SEED = 99
 
 @pytest.fixture(scope="module")
 def k(kleine_konfiguration):
-    """Punkt 77: laeuft auf der kleinen Welt aus ``conftest``.
-
-    Drei Ligen zu je vier Autos statt zwanzig zu je dreissig. Geprueft
-    wird, *ob* die Logik stimmt - dafuer genuegt das kleine Feld.
-    """
+    """Punkt 77: laeuft auf der kleinen Welt aus ``conftest``."""
     return kleine_konfiguration
 
 
@@ -36,20 +32,17 @@ def strecken(k):
 
 @pytest.fixture(scope="module")
 def welt(k):
-    return kern_welt.erzeuge(
-        k, Seedquelle(SEED).zweig("welt"), spielerliga=k.wert("ligen", "anzahl")
-    )
+    return kern_welt.erzeuge(k, Seedquelle(SEED).zweig("welt"))
 
 
 def frischer_lauf(k, welt, strecken):
-    spieler = welt.spieler
-    werte = dict.fromkeys([f.schluessel for f in k.faehigkeiten], 20_000)
-    werte.update(dict.fromkeys(k.zusatzfaehigkeiten, 20_000))
-    karriere = kk.beginne(k, 2026, spieler.liga, werte, fahrernummer=spieler.nummer)
+    karriere = kk.beginne(
+        k, 2026, fahrer=tuple(f.nummer for f in welt.spielerfahrer)
+    )
     lauf = ks.Saisonlauf(
         k, welt, Seedquelle(SEED), jahr=2026, strecken=strecken, karriere=karriere
     )
-    return ks.Wochenendlauf(lauf, spieler.liga)
+    return ks.Wochenendlauf(lauf)
 
 
 @pytest.fixture(scope="module")

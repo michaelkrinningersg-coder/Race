@@ -194,15 +194,19 @@ def test_wo_die_strecke_schon_langsam_ist_gilt_ihr_tempo_minus_abzug(k, strecken
     assert getroffen == 0
 
 
-def test_in_der_untersten_liga_greift_der_abzug(k, strecken):
-    """Dort ist das Auto stellenweise langsamer als 80 km/h."""
+def test_der_abzug_greift_bei_einem_schwachen_auto(k, strecken):
+    """Wo die Strecke ohnehin langsamer ist als das Limit, gilt ihr Tempo.
+
+    Punkt 101 hat das Feld auf 87.445 bis 98.000 zusammengezogen; dort
+    liegt jede Boxengasse ueber dem Limit. Geprueft wird die Regel
+    deshalb an einem Auto weit unterhalb des Feldes - der Editor darf
+    eines bauen (GDD 15), und die Regel muss dann greifen.
+    """
     import numpy as np
 
-    from rennmanager.kern import rennen as kern_rennen
+    from rennmanager.kern import auto as kern_auto
 
-    feld = kern_rennen.starterfeld(k)
-    schwaechstes = min((t.auto for t in feld), key=lambda a: sum(a.werte.values()))
-    grenzen = kern_tempo.grenzen_aus(k, schwaechstes)
+    grenzen = kern_tempo.grenzen_aus(k, kern_auto.gleichverteilt(k, 5_000))
     deckel = k.wert("boxenstopp", "limit_kmh") / 3.6
     getroffen = 0
     for strecke in strecken:
@@ -211,10 +215,10 @@ def test_in_der_untersten_liga_greift_der_abzug(k, strecken):
         anzahl = len(strecke.art_je_punkt)
         stellen = np.r_[np.arange(von, anzahl), np.arange(0, bis)]
         getroffen += int((frei[stellen] < deckel).sum())
-    assert getroffen > 0, "In der untersten Liga muss es Stellen unter dem Limit geben"
+    assert getroffen > 0, "Ein schwaches Auto muss Stellen unter dem Limit haben"
 
 
-def test_auch_in_der_untersten_liga_kostet_die_durchfahrt(k, strecken):
+def test_auch_beim_schwaechsten_auto_kostet_die_durchfahrt(k, strecken):
     """Ohne den Abzug waere ein Stopp dort an manchen Stellen umsonst."""
     from rennmanager.kern import rennen as kern_rennen
 

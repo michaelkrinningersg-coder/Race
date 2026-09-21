@@ -23,9 +23,7 @@ from rennmanager.kern import wetter as kwet
 from rennmanager.kern import zwischenfall as zw
 from rennmanager.kern.tempo import fahre_runde
 from rennmanager.kern.zufall import Seedquelle
-from tests.conftest import KLEINE_LIGEN
 
-LIGA = KLEINE_LIGEN
 RUNDEN = 6
 
 
@@ -52,7 +50,7 @@ def zandvoort(strecken) -> st.Strecke:
 
 @pytest.fixture(scope="module")
 def welt(k) -> kw.Welt:
-    return kw.erzeuge(k, Seedquelle(3).zweig("welt"), spielerliga=LIGA)
+    return kw.erzeuge(k, Seedquelle(3).zweig("welt"))
 
 
 @pytest.fixture(scope="module")
@@ -71,7 +69,7 @@ def umgebung(k, strecken, zandvoort) -> tuple[float, float]:
 def fahre(k, zandvoort, feld, umgebung, seed: int, runden: int = RUNDEN):
     mittel, verschleiss = umgebung
     return sn.fahre_wochenende(
-        k, LIGA, zandvoort, feld, runden, Seedquelle(seed), mittel, verschleiss
+        k, zandvoort, feld, runden, Seedquelle(seed), mittel, verschleiss
     )
 
 
@@ -155,7 +153,7 @@ def test_das_wetter_wird_gewuerfelt(wochenende, k):
 def test_ohne_teilnehmer_gibt_es_kein_wochenende(k, zandvoort, umgebung):
     mittel, verschleiss = umgebung
     with pytest.raises(ValueError):
-        sn.fahre_wochenende(k, LIGA, zandvoort, (), RUNDEN, Seedquelle(0), mittel, verschleiss)
+        sn.fahre_wochenende(k, zandvoort, (), RUNDEN, Seedquelle(0), mittel, verschleiss)
 
 
 def test_starke_autos_gewinnen_haeufiger(k, zandvoort, umgebung):
@@ -187,7 +185,7 @@ def test_starke_autos_gewinnen_haeufiger(k, zandvoort, umgebung):
         1
         for seed in range(versuche)
         if sn.fahre_wochenende(
-            k, LIGA, zandvoort, feld, RUNDEN, Seedquelle(seed), mittel, verschleiss
+            k, zandvoort, feld, RUNDEN, Seedquelle(seed), mittel, verschleiss
         ).ergebnisse[0].fahrer
         < haelfte
     )
@@ -198,7 +196,7 @@ def test_starke_autos_gewinnen_haeufiger(k, zandvoort, umgebung):
 def test_schnellmodus_trifft_die_volle_simulation(k, zandvoort, feld, umgebung):
     """Der Schnellmodus darf nicht systematisch schneller oder langsamer sein.
 
-    Sonst waeren Rundenrekorde und Siegerzeiten der Spielerliga - die
+    Sonst waeren Rundenrekorde und Siegerzeiten des Feldes - die
     ausfuehrlich faehrt - nicht mit denen der uebrigen 9 Ligen
     vergleichbar. Verglichen wird bei gleichem Wetter: Es kommt in beiden
     Modellen aus demselben Zweig der Seedquelle.

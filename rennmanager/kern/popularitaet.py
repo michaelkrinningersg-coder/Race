@@ -1,23 +1,22 @@
 """Popularitaet: wie bekannt ein Fahrer ist (Punkt 5).
 
-GDD 10 laesst die Hoehe der Sponsorenangebote allein an der Liga haengen.
-Das ist grob: Zwei Fahrer derselben Liga bekommen dieselben Angebote, egal
-ob der eine Titel gesammelt hat und der andere nie vorn war. Die
-Popularitaet ist die Groesse, die das trennt.
-
 Sie ist aufgebaut wie die Streckenkenntnis aus GDD 6: ein Wert je Fahrer
 neben der Welt, der die Saison ueberdauert und im Spielstand liegt. Zwei
 Regeln, beide mit dem Auftraggeber abgestimmt:
 
 * Der **Anfangswert** ist gestreut, aber ausdruecklich *nicht* nach
-  Ligastaerke. Bekanntheit ist nicht dasselbe wie Schnelligkeit - ein
-  Fahrer aus Liga 10 kann bekannter sein als einer aus Liga 1.
+  Staerke. Bekanntheit ist nicht dasselbe wie Schnelligkeit - der
+  Letzte des Feldes kann bekannter sein als der Erste.
 * Sie **waechst aus Siegen, Podien und Poles**, also aus dem, was die
   Karrierezahlen aus GDD 13 ohnehin fuehren.
 
 Sie sinkt nicht wieder: Was ein Fahrer erreicht hat, bleibt. Wer eine
 Karriere lang dominiert, erreicht deshalb irgendwann die Obergrenze der
 Skala - bei durchgehend 20 Siegen je Saison nach gut vier Jahren.
+
+Seit Punkt 101 bewegt sie nichts mehr: Die Sponsoren aus GDD 10, deren
+Grundbetrag sie hob und senkte, sind mit dem Geld weggefallen. Sie
+bleibt als Angabe im Steckbrief und im Editor.
 """
 
 from __future__ import annotations
@@ -89,23 +88,3 @@ class Popularitaet:
             zuwachs = self.zuwachs(ergebnis)
             if zuwachs:
                 self.setze(ergebnis.fahrer, self.stand(ergebnis.fahrer) + zuwachs)
-
-    # -- Wirkung -----------------------------------------------------------
-    def faktor(self, fahrer: int) -> float:
-        """Faktor auf den Grundbetrag der Sponsorenangebote (GDD 10).
-
-        Bezugspunkt ist der Mittelwert, nicht das Skalenende: Wer genau
-        durchschnittlich bekannt ist, bekommt die Betraege, die GDD 10 fuer
-        seine Liga vorsieht. Von dort geht es linear bis +/- 25 Prozent.
-
-        Anders als sonst wird hier *nicht* ueber den Leistungsanteil
-        gerechnet - Bekanntheit ist keine Fahrleistung, sondern eine Zahl
-        fuer sich.
-        """
-        einstellung = self.konfiguration.wert("popularitaet")
-        max_anteil = einstellung["max_anteil_sponsor"]
-        mittel = einstellung["mittelwert"]
-        if mittel <= 0:
-            return 1.0
-        abstand = min(max((self.stand(fahrer) - mittel) / mittel, -1.0), 1.0)
-        return 1.0 + max_anteil * abstand

@@ -10,7 +10,6 @@ from rennmanager.kern import strategie as sg
 from rennmanager.kern import tempo as kern_tempo
 from rennmanager.kern.zufall import Seedquelle
 
-LIGA = 1
 # Ein kurzes Rennen: die Stopps interessieren, nicht die Renndistanz.
 RUNDEN = 24
 # Ein Seed, dessen Rennwetter auf dieser Strecke durchgehend trocken ist.

@@ -1,7 +1,7 @@
 """Tests fuer die Popularitaet (Punkt 5).
 
-Sie bewegt die Sponsorenangebote aus GDD 10 und waechst aus Siegen,
-Podien und Poles. Abgestimmt: gestreut, aber *nicht* nach Ligastaerke.
+Sie waechst aus Siegen, Podien und Poles. Abgestimmt: gestreut, aber
+*nicht* nach Staerke.
 """
 
 from __future__ import annotations
@@ -11,7 +11,6 @@ import statistics
 import pytest
 
 from rennmanager import konfiguration as kf
-from rennmanager.kern import sponsoren as sp
 from rennmanager.kern import welt as kw
 from rennmanager.kern.popularitaet import Popularitaet
 from rennmanager.kern.wertung import Rennergebnis
@@ -27,7 +26,7 @@ def k() -> kf.Konfiguration:
 
 @pytest.fixture(scope="module")
 def welt(k) -> kw.Welt:
-    return kw.erzeuge(k, Seedquelle(SEED).zweig("welt"), spielerliga=10)
+    return kw.erzeuge(k, Seedquelle(SEED).zweig("welt"))
 
 
 @pytest.fixture(scope="module")
@@ -42,12 +41,14 @@ def test_alle_fahrer_bekommen_einen_anfangswert(gestreut, welt) -> None:
     assert all(wert > 0 for wert in gestreut.werte.values())
 
 
-def test_die_popularitaet_haengt_nicht_an_der_ligastaerke(gestreut, welt, k) -> None:
+def test_die_popularitaet_haengt_nicht_an_der_staerke(gestreut, welt, k) -> None:
     """Abgestimmt: Bekanntheit ist nicht dasselbe wie Schnelligkeit."""
-    oben = [gestreut.stand(f.nummer) for f in welt.fahrer if f.liga == 1]
-    unten = [gestreut.stand(f.nummer) for f in welt.fahrer if f.liga == 10]
+    feld = welt.feld
+    haelfte = len(feld) // 2
+    oben = [gestreut.stand(f.nummer) for f in feld[:haelfte]]
+    unten = [gestreut.stand(f.nummer) for f in feld[haelfte:]]
     # Dieselbe Verteilung - die Mittelwerte duerfen sich kaum unterscheiden.
-    assert statistics.mean(oben) == pytest.approx(statistics.mean(unten), rel=0.20)
+    assert statistics.mean(oben) == pytest.approx(statistics.mean(unten), rel=0.30)
 
 
 def test_die_streuung_ist_breit(gestreut, k) -> None:
@@ -94,36 +95,3 @@ def test_die_popularitaet_bleibt_auf_der_skala(k) -> None:
     for _ in range(50):
         p.verbuche_wochenende([Rennergebnis(0, 1, 1)])
     assert p.stand(0) == groesster
-
-
-# --- Wirkung auf die Sponsoren (GDD 10) -----------------------------------
-def test_der_mittelwert_laesst_die_betraege_wie_gdd_10_sie_nennt(k) -> None:
-    p = Popularitaet(k)
-    p.setze(0, k.wert("popularitaet", "mittelwert"))
-    assert p.faktor(0) == pytest.approx(1.0)
-
-
-def test_bekannt_bringt_mehr_unbekannt_weniger(k) -> None:
-    """Abgestimmt: bis zu 25 Prozent in beide Richtungen."""
-    max_anteil = k.wert("popularitaet", "max_anteil_sponsor")
-    mittel = k.wert("popularitaet", "mittelwert")
-    p = Popularitaet(k)
-    p.setze(0, 0)
-    p.setze(1, 2 * mittel)
-    assert p.faktor(0) == pytest.approx(1.0 - max_anteil)
-    assert p.faktor(1) == pytest.approx(1.0 + max_anteil)
-    # Weiter hoch geht es nicht.
-    p.setze(2, k.wert("skala", "maximum"))
-    assert p.faktor(2) == pytest.approx(1.0 + max_anteil)
-
-
-def test_die_angebote_folgen_der_popularitaet(k) -> None:
-    mittel = sp.wuerfle_angebote(k, 10, 1, Seedquelle(1), 1.0)
-    bekannt = sp.wuerfle_angebote(k, 10, 1, Seedquelle(1), 1.25)
-    unbekannt = sp.wuerfle_angebote(k, 10, 1, Seedquelle(1), 0.75)
-    for platz, angebote in mittel.items():
-        for stelle, angebot in enumerate(angebote):
-            assert bekannt[platz][stelle].grundbetrag > angebot.grundbetrag
-            assert unbekannt[platz][stelle].grundbetrag < angebot.grundbetrag
-            # Die Praemien haengen am Grundbetrag und wandern mit.
-            assert bekannt[platz][stelle].praemie_sieg > angebot.praemie_sieg

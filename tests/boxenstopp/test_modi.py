@@ -14,7 +14,6 @@ from rennmanager.kern import schnellsimulation as schnell
 from rennmanager.kern import strategie as sg
 from rennmanager.kern.zufall import Seedquelle
 from tests.boxenstopp.hilfen import (
-    LIGA,
     RUNDEN,
     TROCKEN,
     VERSCHLEISS_PLANSTOPP,
@@ -41,7 +40,7 @@ def test_beide_modi_fahren_dieselbe_strategie(ohne_verschiebung, monza, feld, um
         streckenverschleiss=verschleiss, strategien=strategien,
     )
     flott = schnell.fahre_wochenende(
-        k, LIGA, monza, feld, RUNDEN, Seedquelle(TROCKEN), mittel, verschleiss,
+        k, monza, feld, RUNDEN, Seedquelle(TROCKEN), mittel, verschleiss,
         strategien=strategien,
     )
     for i in range(len(feld)):
@@ -95,7 +94,7 @@ def test_beide_modi_kosten_die_stopps_gleich_viel(ohne_verschiebung, monza, feld
             strategien=tuple(strategie for _ in schmal),
         )
         flott = schnell.fahre_wochenende(
-            k, LIGA, monza, schmal, RUNDEN, Seedquelle(TROCKEN), mittel, verschleiss,
+            k, monza, schmal, RUNDEN, Seedquelle(TROCKEN), mittel, verschleiss,
             strategien=tuple(strategie for _ in schmal),
         )
         return voll.ergebnisse[0].zeit_ms, flott.siegerzeit_ms

@@ -2,9 +2,9 @@
 
 "Spielstand lokal speichern und laden", als SQLite-Datei. Ein Spielstand
 muss alles zurueckbringen, was sich nicht aus der Konfiguration neu bilden
-laesst - vor allem die Welt, denn nach dem ersten Auf- und Abstieg stimmt
-eine aus dem Seed neu gewuerfelte Welt nicht mehr mit der gespielten
-ueberein.
+laesst - vor allem die Welt, denn der Editor darf sie aendern (GDD 15),
+und dann stimmt eine aus dem Seed neu gewuerfelte Welt nicht mehr mit der
+gespielten ueberein.
 """
 
 from __future__ import annotations
@@ -15,27 +15,20 @@ import pytest
 
 from rennmanager import konfiguration as kf
 from rennmanager.kern import karriere as kk
+from rennmanager.kern import popularitaet as kp
 from rennmanager.kern import saison as sa
 from rennmanager.kern import spielstand as sp
-from rennmanager.kern import sponsoren as ks
 from rennmanager.kern import strecke as st
 from rennmanager.kern import welt as kw
 from rennmanager.kern import wertung as wt
 from rennmanager.kern.zufall import Seedquelle
-from tests.conftest import KLEINE_LIGEN
 
 SEED = 4711
-LIGA = KLEINE_LIGEN
 
 
 @pytest.fixture(scope="module")
 def k(kleine_konfiguration) -> kf.Konfiguration:
-    """Punkt 77: laeuft auf der kleinen Welt aus ``conftest``.
-
-    Drei Ligen zu je vier Autos statt zwanzig zu je dreissig. Geprueft
-    wird, *ob* die Logik stimmt - dafuer genuegt das kleine Feld, und ein
-    Rennwochenende kostet 1,5 statt 54 Sekunden.
-    """
+    """Punkt 77: laeuft auf der kleinen Welt aus ``conftest``."""
     return kleine_konfiguration
 
 
@@ -48,39 +41,33 @@ def strecken(k):
 def gespielt(k, strecken) -> sp.Spielstand:
     """Eine Karriere, in der schon etwas passiert ist."""
     haupt = Seedquelle(SEED)
-    welt = kw.erzeuge(k, haupt.zweig("welt"), spielerliga=LIGA)
-    spieler = welt.spieler
-    werte = dict(spieler.auto.werte)
-    werte.update(spieler.auto.wetterwerte)
-
+    welt = kw.erzeuge(k, haupt.zweig("welt"))
     karriere = kk.beginne(
-        k, 2026, LIGA, werte, seedquelle=haupt.zweig("karriere"), fahrernummer=spieler.nummer
+        k, 2026, fahrer=tuple(f.nummer for f in welt.spielerfahrer)
     )
     for _ in range(70):
         karriere.tag_weiter()
-    karriere.uebernimm_defekte(("X5", "X13"))
-    karriere.kaufe("F1")
-    # Ein Platz, den es im Feld auch gibt: In der kleinen Welt stehen
-    # vier Autos am Start, und das Preisgeld kennt keinen zwoelften.
-    karriere.verbuche_rennen(
-        platz=min(12, k.wert("rennen", "autos")), ueberholmanoever=3
-    )
 
-    lauf = sa.Saisonlauf(k, welt, haupt, jahr=2026, strecken=strecken)
+    beliebtheit = kp.Popularitaet(k)
+    beliebtheit.anfang(
+        tuple(f.nummer for f in welt.fahrer), haupt.zweig("popularitaet")
+    )
+    lauf = sa.Saisonlauf(
+        k, welt, haupt, jahr=2026, strecken=strecken, popularitaet=beliebtheit
+    )
     lauf.fahre_rennen()
     karriere.kenntnis = lauf.kenntnis
 
     return sp.aus_teilen(
         seed=SEED,
         saisonjahr=2026,
-        # Punkt 95: nach dem Rennen kann schon gewechselt worden sein -
-        # die Welt des Laufs, nicht die von vorhin.
         welt=lauf.welt,
         karriere=karriere,
-        tabellen=lauf.tabellen,
+        tabelle=lauf.tabelle,
         statistik=lauf.statistik,
         kenntnis=lauf.kenntnis,
         gefahrene_rennen=lauf.gefahren,
+        popularitaet=beliebtheit,
     )
 
 
@@ -120,7 +107,7 @@ def test_speichern_ueberschreibt_eine_alte_datei(k, gespielt, tmp_path):
 def test_beschreibung_ohne_vollen_ladevorgang(k, gespielt, tmp_path):
     pfad = sp.speichere(gespielt, tmp_path / "stand.sqlite")
     text = sp.beschreibe(pfad)
-    assert "2026" in text and str(SEED) in text and f"Liga {LIGA}" in text
+    assert "2026" in text and str(SEED) in text
 
 
 def test_fehlende_datei_faellt_auf(k, tmp_path):
@@ -146,114 +133,71 @@ def test_neuere_version_faellt_auf(k, gespielt, tmp_path):
         sp.lade(k, pfad)
 
 
-def test_stand_vor_dem_ligenumbau_wird_abgewiesen(k, gespielt, tmp_path):
-    """Punkt 95: Alte Staende werden abgewiesen, nichts wird portiert."""
+def test_ein_stand_vor_dem_umbau_wird_abgewiesen(k, gespielt, tmp_path):
+    """Punkt 101: Alte Staende werden abgewiesen, nichts wird portiert."""
     pfad = sp.speichere(gespielt, tmp_path / "stand.sqlite")
     with sqlite3.connect(pfad) as verbindung:
         verbindung.execute("UPDATE kopf SET version = ?", (sp.MINDESTVERSION - 1,))
-    with pytest.raises(sp.SpielstandFehler, match="Ligenumbau"):
+    with pytest.raises(sp.SpielstandFehler, match="neue Karriere"):
         sp.lade(k, pfad)
 
 
 # --- Welt -----------------------------------------------------------------
 def test_die_welt_kommt_unveraendert_zurueck(gespielt, geladen):
-    """Nach dem ersten Auf- und Abstieg laesst sie sich nicht mehr aus dem
-    Seed neu wuerfeln - sie muss also vollstaendig in der Datei stehen."""
     assert geladen.welt == gespielt.welt
     assert geladen.welt.spieler.nummer == gespielt.welt.spieler.nummer
     assert geladen.seed == gespielt.seed
 
 
-def test_eine_verschobene_liga_ueberlebt_das_speichern(k, gespielt, tmp_path):
-    """Genau der Fall, in dem der Seed allein nicht mehr genuegt."""
-    # Die beiden untersten Ligen der Welt - in der kleinen Testwelt gibt
-    # es Liga 10 nicht.
-    unten = k.wert("ligen", "anzahl")
-    verschoben = sa.wende_wechsel_an(
+def test_eine_im_editor_geaenderte_welt_ueberlebt_das_speichern(k, gespielt, tmp_path):
+    """Genau der Fall, in dem der Seed allein nicht mehr genuegt (GDD 15)."""
+    erster = gespielt.welt.feld[0]
+    geaendert = kw.mit_fahrerwerten(
         gespielt.welt,
-        (
-            wt.Wechsel(gespielt.welt.liga(unten)[0].nummer, unten, unten - 1),
-            wt.Wechsel(gespielt.welt.liga(unten - 1)[-1].nummer, unten - 1, unten),
-        ),
+        {erster.nummer: ({s: 1234 for s in erster.auto.werte}, dict(erster.auto.wetterwerte))},
     )
     stand = sp.aus_teilen(
         gespielt.seed,
         gespielt.saisonjahr,
-        verschoben,
+        geaendert,
         gespielt.karriere,
-        gespielt.tabellen,
+        gespielt.tabelle,
         gespielt.statistik,
         gespielt.kenntnis,
     )
-    pfad = sp.speichere(stand, tmp_path / "verschoben.sqlite")
-    zurueck = sp.lade(k, pfad)
+    zurueck = sp.lade(k, sp.speichere(stand, tmp_path / "geaendert.sqlite"))
 
-    frisch = kw.erzeuge(k, Seedquelle(SEED).zweig("welt"), spielerliga=LIGA)
-    assert zurueck.welt == verschoben
+    frisch = kw.erzeuge(k, Seedquelle(SEED).zweig("welt"))
+    assert zurueck.welt == geaendert
     assert zurueck.welt != frisch
+    assert set(zurueck.welt.fahrer[erster.nummer].auto.werte.values()) == {1234}
 
 
 # --- Karriere -------------------------------------------------------------
 def test_der_karrierestand_kommt_zurueck(gespielt, geladen):
     alt, neu = gespielt.karriere, geladen.karriere
     assert neu.heute == alt.heute
-    assert neu.liga == alt.liga
+    assert neu.fahrer == alt.fahrer
     assert neu.fahrernummer == alt.fahrernummer
-    assert neu.konto == alt.konto
-    assert neu.werte == alt.werte
-    assert neu.buchungen == alt.buchungen
-    assert neu.ereignisplan == alt.ereignisplan
-
-
-def test_laufende_ereignisse_kommen_zurueck(gespielt, geladen):
-    alt = {(a.schluessel, a.rest, a.ausgeloest_am) for a in gespielt.karriere.lage.aktive}
-    neu = {(a.schluessel, a.rest, a.ausgeloest_am) for a in geladen.karriere.lage.aktive}
-    assert neu == alt
-    # Und sie wirken auch wieder.
-    assert geladen.karriere.faktoren() == gespielt.karriere.faktoren()
-
-
-def test_offene_defekte_kommen_zurueck(gespielt, geladen):
-    assert geladen.karriere.defekte == gespielt.karriere.defekte
-    assert geladen.karriere.offene_reparaturen == gespielt.karriere.offene_reparaturen
-
-
-def test_verlorene_tage_und_meldungen_kommen_zurueck(gespielt, geladen):
-    assert geladen.karriere.verlorene_tage == gespielt.karriere.verlorene_tage
-    assert geladen.karriere.meldungen == gespielt.karriere.meldungen
-
-
-def test_vertraege_kommen_zurueck(k, gespielt, tmp_path):
-    karriere = kk.kopiere(gespielt.karriere)
-    angebote = ks.wuerfle_angebote(k, LIGA, 10, Seedquelle(1))
-    erstes = next(iter(angebote.values()))[0]
-    karriere.unterschreibe(erstes)
-
-    stand = sp.aus_teilen(
-        gespielt.seed,
-        gespielt.saisonjahr,
-        gespielt.welt,
-        karriere,
-        gespielt.tabellen,
-        gespielt.statistik,
-        gespielt.kenntnis,
-    )
-    zurueck = sp.lade(k, sp.speichere(stand, tmp_path / "vertrag.sqlite"))
-    assert zurueck.karriere.vertraege == karriere.vertraege
+    assert neu.saison.jahr == alt.saison.jahr
 
 
 # --- Wertung, Statistik, Kenntnis -----------------------------------------
-def test_die_tabellen_kommen_zurueck(gespielt, geladen):
-    for liga, tabelle in gespielt.tabellen.items():
-        assert geladen.tabellen[liga].eintraege == tabelle.eintraege
-        assert geladen.tabellen[liga].stand() == tabelle.stand()
+def test_die_tabelle_kommt_zurueck(gespielt, geladen):
+    assert geladen.tabelle.eintraege == gespielt.tabelle.eintraege
+    assert geladen.tabelle.stand() == gespielt.tabelle.stand()
 
 
 def test_die_statistik_kommt_zurueck(gespielt, geladen):
     assert geladen.statistik.rekorde == gespielt.statistik.rekorde
+    assert geladen.statistik.qualirekorde == gespielt.statistik.qualirekorde
     assert geladen.statistik.karriere == gespielt.statistik.karriere
     assert geladen.statistik.saisonpunkte == gespielt.statistik.saisonpunkte
     assert geladen.statistik.historie == gespielt.statistik.historie
+
+
+def test_die_popularitaet_kommt_zurueck(gespielt, geladen):
+    assert geladen.popularitaet.werte == pytest.approx(gespielt.popularitaet.werte)
 
 
 def test_die_streckenkenntnis_kommt_zurueck(gespielt, geladen):
@@ -277,7 +221,7 @@ def test_ein_geladener_stand_laesst_sich_weiterspielen(k, datei, strecken):
         strecken=strecken,
         statistik=geladen.statistik,
         kenntnis=geladen.kenntnis,
-        tabellen=geladen.tabellen,
+        tabelle=geladen.tabelle,
         vorgefahren=geladen.gefahrene_rennen,
     )
     assert lauf.gefahren == geladen.gefahrene_rennen
@@ -285,43 +229,14 @@ def test_ein_geladener_stand_laesst_sich_weiterspielen(k, datei, strecken):
     lauf.fahre_rennen()
     assert lauf.gefahren == geladen.gefahrene_rennen + 1
     # Die Punkte aus dem geladenen Stand sind noch da und es kam etwas dazu.
-    for eintrag in lauf.tabelle(LIGA).stand():
+    for eintrag in lauf.tabelle.stand():
         assert eintrag.rennen == 2
 
 
 # --- Saisonwechsel (GDD 13) -----------------------------------------------
-def mit_historie(k, welt, strecken, jahre: int = 2) -> sp.Spielstand:
-    """Ein Stand, in dem schon Saisons abgeschlossen sind."""
-    haupt = Seedquelle(SEED)
-    spieler = welt.spieler
-    werte = dict(spieler.auto.werte)
-    werte.update(spieler.auto.wetterwerte)
-    karriere = kk.beginne(
-        k, 2026, spieler.liga, werte, fahrernummer=spieler.nummer
-    )
-    lauf = sa.Saisonlauf(k, welt, haupt, jahr=2026, strecken=strecken, karriere=karriere)
-    for _ in range(jahre):
-        lauf.tabellen = {
-            liga: gefuellte_tabelle(k, lauf.welt, liga)
-            for liga in range(1, k.wert("ligen", "anzahl") + 1)
-        }
-        lauf.vorgefahren = k.wert("kalender", "rennen_je_saison")
-        lauf = lauf.naechste_saison()
-
-    return sp.aus_teilen(
-        seed=SEED,
-        saisonjahr=lauf.jahr,
-        welt=lauf.welt,
-        karriere=karriere,
-        tabellen=lauf.tabellen,
-        statistik=lauf.statistik,
-        kenntnis=lauf.kenntnis,
-        gefahrene_rennen=lauf.gefahren,
-    )
-
-
-def gefuellte_tabelle(k, welt, liga: int) -> wt.Tabelle:
-    tabelle = wt.Tabelle(liga)
+def gefuellte_tabelle(k, welt) -> wt.Tabelle:
+    tabelle = wt.Tabelle()
+    letzter = len(welt.fahrer)
     tabelle.verbuche(
         k,
         [
@@ -330,9 +245,9 @@ def gefuellte_tabelle(k, welt, liga: int) -> wt.Tabelle:
                 rennplatz=platz,
                 qualifyingplatz=platz,
                 schnellste_runde=(platz == 2),
-                ausgefallen=(platz > 28),
+                ausgefallen=(platz == letzter),
             )
-            for platz, f in enumerate(welt.liga(liga), start=1)
+            for platz, f in enumerate(welt.feld, start=1)
         ],
     )
     return tabelle
@@ -340,43 +255,49 @@ def gefuellte_tabelle(k, welt, liga: int) -> wt.Tabelle:
 
 @pytest.fixture(scope="module")
 def nach_zwei_saisons(k, strecken) -> sp.Spielstand:
-    welt = kw.erzeuge(k, Seedquelle(SEED).zweig("welt"), spielerliga=LIGA)
-    return mit_historie(k, welt, strecken)
+    """Ein Stand, in dem schon Saisons abgeschlossen sind."""
+    welt = kw.erzeuge(k, Seedquelle(SEED).zweig("welt"))
+    karriere = kk.beginne(
+        k, 2026, fahrer=tuple(f.nummer for f in welt.spielerfahrer)
+    )
+    lauf = sa.Saisonlauf(
+        k, welt, Seedquelle(SEED), jahr=2026, strecken=strecken, karriere=karriere
+    )
+    for _ in range(2):
+        lauf.tabelle = gefuellte_tabelle(k, lauf.welt)
+        lauf.vorgefahren = k.wert("kalender", "rennen_je_saison")
+        lauf = lauf.naechste_saison()
+
+    return sp.aus_teilen(
+        seed=SEED,
+        saisonjahr=lauf.jahr,
+        welt=lauf.welt,
+        karriere=karriere,
+        tabelle=lauf.tabelle,
+        statistik=lauf.statistik,
+        kenntnis=lauf.kenntnis,
+        gefahrene_rennen=lauf.gefahren,
+    )
 
 
-@pytest.mark.skip(
-    reason="Punkt 77: Saisonwechsel wird erst geprueft, wenn eine "
-    "einzelne Saison sauber steht. Entscheidung des Auftraggebers."
-)
 def test_die_historie_kommt_vollstaendig_zurueck(k, nach_zwei_saisons, tmp_path):
-    """Version 2: je Saison und Liga die ganze Abschlusstabelle."""
+    """Je Saison die ganze Abschlusstabelle."""
     geladen = sp.lade(k, sp.speichere(nach_zwei_saisons, tmp_path / "saisons.sqlite"))
     assert geladen.saisonjahr == 2028
     assert geladen.statistik.saisons == (2026, 2027)
     assert geladen.statistik.historie == nach_zwei_saisons.statistik.historie
 
-    abschluss = geladen.statistik.abschluss(2026, LIGA)
-    assert len(abschluss.zeilen) == k.wert("ligen", "autos_je_liga")
+    abschluss = geladen.statistik.abschluss(2026)
+    assert len(abschluss.zeilen) == k.wert("rennen", "autos")
     assert abschluss.zeilen[0].siege == 1
     assert abschluss.zeilen[1].schnellste_runden == 1
     assert abschluss.zeilen[-1].ausfaelle == 1
 
 
-@pytest.mark.skip(
-    reason="Punkt 77: Saisonwechsel wird erst geprueft, wenn eine "
-    "einzelne Saison sauber steht. Entscheidung des Auftraggebers."
-)
 def test_der_kalender_des_dritten_jahres_kommt_zurueck(k, nach_zwei_saisons, tmp_path):
     geladen = sp.lade(k, sp.speichere(nach_zwei_saisons, tmp_path / "jahr.sqlite"))
     assert geladen.karriere.saison.jahr == 2028
     assert geladen.karriere.heute.year == 2028
-
-
-# Die Tests, die Staende der Versionen 1 und 4 zurueckbauten und wieder
-# lasen, sind mit Punkt 95 entfallen: Seit dem Ligenumbau weist
-# ``lade`` alles unterhalb von ``MINDESTVERSION`` ab (Entscheidung des
-# Auftraggebers: nichts portieren). Dass es abgewiesen wird, prueft
-# ``test_stand_vor_dem_ligenumbau_wird_abgewiesen`` weiter oben.
 
 
 def test_die_bilanzen_ueberstehen_speichern_und_laden(k, gespielt, tmp_path):
