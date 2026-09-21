@@ -70,15 +70,71 @@ def test_fehlerrate_bleibt_eine_wahrscheinlichkeit(k) -> None:
     assert zf.fehlerrate_je_runde(k, auto, wetterfaktor=100.0, reifenfaktor=100.0) <= 1.0
 
 
-def test_der_zeitverlust_ist_fest(k) -> None:
-    """Punkt 61: eine feste Zeit, keine Spanne - und zwar im Stand."""
-    fest = k.wert("fehler", "zeitverlust_ms")
+def test_der_zeitverlust_haelt_seinen_mittelwert(k) -> None:
+    """Punkt 96: Die Tabelle wird auf ``mittelwert_ms`` normiert.
+
+    Das ist der Grund, warum die Streuung das Balancing nicht bewegt: Ein
+    Rennen verliert insgesamt so viel Zeit an Fehler wie mit der frueheren
+    festen Zahl, nur ungleich verteilt.
+    """
+    soll = k.wert("fehler", "zeitverlust")["mittelwert_ms"]
     wuerfel = np.random.default_rng(1)
-    assert fest > 0
-    for _ in range(20):
-        assert zf.zeitverlust_ms(k, wuerfel) == fest
-    # Auch ohne Wuerfel; der Parameter ist nur noch Altlast.
-    assert zf.zeitverlust_ms(k) == fest
+    gezogen = [zf.zeitverlust_ms(k, wuerfel) for _ in range(200_000)]
+    assert np.mean(gezogen) == pytest.approx(soll, rel=0.01)
+    # Ohne Wuerfel kommt der Erwartungswert zurueck - fuer alles, was
+    # ohne Zufall rechnen soll (GDD 9).
+    assert zf.zeitverlust_ms(k) == soll
+
+
+def test_der_zeitverlust_streut_zwischen_den_grenzen(k) -> None:
+    """Punkt 96: kein Fehler faellt aus der Tabelle heraus."""
+    unten = zf.zeitverlust_bei(k, 0.0)
+    oben = zf.zeitverlust_bei(k, 1.0)
+    assert 0 < unten < oben
+    wuerfel = np.random.default_rng(2)
+    gezogen = [zf.zeitverlust_ms(k, wuerfel) for _ in range(20_000)]
+    assert min(gezogen) >= unten
+    assert max(gezogen) <= oben
+    # Und es ist wirklich eine Spanne, keine Zahl mit Rauschen: Der
+    # laengste Fehler kostet ein Mehrfaches des kuerzesten.
+    assert oben > 4 * unten
+
+
+def test_die_verteilung_steigt_monoton(k) -> None:
+    """Wer weiter rechts zieht, steht laenger - sonst waere es keine Verteilung."""
+    stellen = [i / 20 for i in range(21)]
+    zeiten = [zf.zeitverlust_bei(k, a) for a in stellen]
+    assert zeiten == sorted(zeiten)
+
+
+def test_die_sigmabaender_stehen_wie_vorgegeben(k) -> None:
+    """Punkt 96: die Eckwerte des Auftraggebers, um 0,9113 gestaucht.
+
+    Vorgegeben waren Gipfel 1,20 s und die Baender 0,80/1,80 (1 Sigma),
+    0,60/3,00 (2 Sigma) und 0,32/4,60 (4 Sigma). Weil die Tabelle auf
+    ihren Erwartungswert normiert wird, stehen sie um denselben Faktor
+    gestaucht da - das Verhaeltnis untereinander bleibt.
+    """
+    faktor = zf.zeitverlust_bei(k, 0.5) / 1200.0
+    erwartet = {
+        0.158655: 800, 0.841345: 1800,      # 1 Sigma
+        0.022750: 600, 0.977250: 3000,      # 2 Sigma
+        0.000032: 320, 0.999968: 4600,      # 4 Sigma
+        0.0: 300, 1.0: 5000,                # harte Grenzen
+    }
+    for anteil, roh in erwartet.items():
+        assert zf.zeitverlust_bei(k, anteil) == pytest.approx(roh * faktor, abs=2)
+
+
+def test_eine_kaputte_verteilung_faellt_auf(k) -> None:
+    """Ungleich lange Listen sind ein Konfigurationsfehler, kein stiller Zufall."""
+    import copy
+    from dataclasses import replace
+
+    roh = copy.deepcopy(k.roh)
+    roh["fehler"]["zeitverlust"]["sekunden"] = roh["fehler"]["zeitverlust"]["sekunden"][:-1]
+    with pytest.raises(ValueError, match="Anteile"):
+        zf.zeitverlustverteilung(replace(k, roh=roh))
 
 
 # -- Defekte ----------------------------------------------------------------

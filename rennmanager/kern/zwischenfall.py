@@ -17,6 +17,7 @@ OFFENE_PUNKTE.md begruendet.
 
 from __future__ import annotations
 
+import bisect
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -91,19 +92,95 @@ def fehlerrate_je_runde(
     return min(grundrate * wetterfaktor * reifenfaktor, 1.0)
 
 
-def zeitverlust_ms(konfiguration: Konfiguration, wuerfel=None) -> int:
-    """Wie lange ein Auto nach einem Fehler steht (GDD 4, Punkt 61).
+# Punkt 96: Die normierten Stuetzstellen der Standzeit, je Konfiguration
+# einmal gebildet. Der Skalierungsfaktor kostet eine Summe ueber die
+# ganze Tabelle; gezogen wird in jedem Rennen einige hundert Mal.
+_ZEITVERLUST: dict[int, tuple[tuple[float, ...], tuple[float, ...]]] = {}
 
-    Eine **feste** Zeit, keine Spanne - so hat es der Auftraggeber
-    entschieden. Sie wird im Rennen nicht als Zeitabzug verrechnet,
-    sondern als Stillstand: Das Auto geht auf 0 km/h, steht diese Zeit und
-    faehrt danach mit seiner eigenen Beschleunigungskurve wieder an. Was
-    ein Fehler wirklich kostet, ist deshalb mehr als diese Zahl.
 
-    :param wuerfel: wird nicht mehr gebraucht; das Feld bleibt, damit
-        bestehende Aufrufe unveraendert durchlaufen.
+def zeitverlustverteilung(
+    konfiguration: Konfiguration,
+) -> tuple[tuple[float, ...], tuple[float, ...]]:
+    """Die Verteilung der Standzeit als (Anteile, Millisekunden).
+
+    Die Tabelle in der Konfiguration beschreibt die Form - je
+    Stuetzstelle den Anteil der Fehler darunter und die Sekunden dazu.
+    Hier wird sie auf ``mittelwert_ms`` normiert: Der Erwartungswert der
+    stueckweise linearen Umkehrfunktion wird ausgerechnet und die ganze
+    Tabelle so gestaucht oder gestreckt, dass er passt.
+
+    Das haelt die Streuung vom Balancing fern. Wer die Form aendert,
+    aendert, **wie** sich die verlorene Zeit auf die Fehler verteilt -
+    nicht, wie viel davon insgesamt anfaellt.
     """
-    return int(konfiguration.wert("fehler", "zeitverlust_ms"))
+    gemerkt = _ZEITVERLUST.get(id(konfiguration))
+    if gemerkt is not None:
+        return gemerkt
+
+    einstellung = konfiguration.wert("fehler", "zeitverlust")
+    anteile = tuple(float(a) for a in einstellung["anteil"])
+    sekunden = tuple(float(s) for s in einstellung["sekunden"])
+    if len(anteile) != len(sekunden):
+        raise ValueError(
+            f"Die Verteilung hat {len(anteile)} Anteile, aber "
+            f"{len(sekunden)} Zeiten"
+        )
+    if len(anteile) < 2:
+        raise ValueError("Die Verteilung braucht mindestens zwei Stuetzstellen")
+    if list(anteile) != sorted(anteile) or anteile[0] != 0.0 or anteile[-1] != 1.0:
+        raise ValueError("Die Anteile muessen von 0.0 bis 1.0 aufsteigen")
+
+    # Erwartungswert der stueckweise linearen Umkehrfunktion: je Abschnitt
+    # seine Breite im Anteil mal der mittleren Zeit darin.
+    roh = sum(
+        (anteile[i + 1] - anteile[i]) * (sekunden[i] + sekunden[i + 1]) / 2.0
+        for i in range(len(anteile) - 1)
+    )
+    if roh <= 0.0:
+        raise ValueError("Die Verteilung muss eine Zeit groesser null ergeben")
+    faktor = float(einstellung["mittelwert_ms"]) / (roh * 1000.0)
+
+    gemerkt = (anteile, tuple(s * 1000.0 * faktor for s in sekunden))
+    _ZEITVERLUST[id(konfiguration)] = gemerkt
+    return gemerkt
+
+
+def zeitverlust_bei(konfiguration: Konfiguration, anteil: float) -> int:
+    """Die Standzeit an einer Stelle der Verteilung, in Millisekunden.
+
+    ``anteil`` ist der Anteil der Fehler, die kuerzer ausfallen: 0.0 ist
+    die kuerzeste moegliche Standzeit, 0.5 der Gipfel, 1.0 die laengste.
+    """
+    anteile, werte = zeitverlustverteilung(konfiguration)
+    stelle = bisect.bisect_right(anteile, anteil)
+    if stelle <= 0:
+        return int(round(werte[0]))
+    if stelle >= len(anteile):
+        return int(round(werte[-1]))
+    links, rechts = anteile[stelle - 1], anteile[stelle]
+    if rechts <= links:  # pragma: no cover - zwei gleiche Anteile
+        return int(round(werte[stelle]))
+    weg = (anteil - links) / (rechts - links)
+    return int(round(werte[stelle - 1] + weg * (werte[stelle] - werte[stelle - 1])))
+
+
+def zeitverlust_ms(konfiguration: Konfiguration, wuerfel=None) -> int:
+    """Wie lange ein Auto nach einem Fehler steht (GDD 4, Punkte 61 und 96).
+
+    Gezogen aus der Verteilung in ``[fehler.zeitverlust]``: Die meisten
+    Fehler kosten rund eine Sekunde, ein paar wenige das Vierfache. Im
+    Rennen wird das nicht als Zeitabzug verrechnet, sondern als
+    Stillstand - das Auto geht auf 0 km/h, steht diese Zeit und faehrt
+    danach mit seiner eigenen Beschleunigungskurve wieder an. Was ein
+    Fehler wirklich kostet, ist deshalb mehr als diese Zahl.
+
+    :param wuerfel: der Zufallsstrom des Rennens. Ohne ihn kommt der
+        Erwartungswert zurueck - fuer Rechnungen, die ohne Zufall
+        auskommen sollen (GDD 9).
+    """
+    if wuerfel is None:
+        return int(round(konfiguration.wert("fehler", "zeitverlust")["mittelwert_ms"]))
+    return zeitverlust_bei(konfiguration, float(wuerfel.random()))
 
 
 # ---------------------------------------------------------------------------

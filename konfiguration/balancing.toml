@@ -2162,13 +2162,39 @@ max_anteil = 0.01
 # Der Wetter-Multiplikator aus [wetter.zustand] kommt obendrauf.
 rate_bei_null = 0.10
 rate_bei_maximum = 0.01
-# Punkt 61: Ein Fehler kostet eine **feste** Zeit, und zwar im Stand:
-# Das Auto geht auf 0 km/h, steht diese Zeit und beschleunigt danach mit
-# seiner eigenen Beschleunigungskurve wieder an. Der wirkliche Verlust ist
-# deshalb groesser als die Zahl hier - das Wiederanfahren kommt obendrauf.
-# 1250 ms ist der Mittelwert der frueheren Spanne von 500 bis 2000 ms;
-# damit bleibt der Erwartungswert des Stillstands, wo er war.
-zeitverlust_ms = 1250
+
+# Punkt 61: Ein Fehler kostet Zeit im **Stand**, nicht als Abzug: Das Auto
+# geht auf 0 km/h, steht diese Zeit und beschleunigt danach mit seiner
+# eigenen Beschleunigungskurve wieder an. Der wirkliche Verlust ist
+# deshalb groesser als die Zahlen hier - das Wiederanfahren kommt obendrauf.
+#
+# Punkt 96: Die Zeit ist nicht mehr fuer jeden dieselbe. Der Auftraggeber
+# hat die Verteilung ueber ihre Streuungsbaender beschrieben - der Gipfel
+# bei 1,2 s, und um ihn herum:
+#
+#     1 Sigma  (68,3 %)     0,80 bis 1,80 s
+#     2 Sigma  (95,4 %)     0,60 bis 3,00 s
+#     4 Sigma  (99,99 %)    0,32 bis 4,60 s
+#     harte Grenzen         0,30 bis 5,00 s
+#
+# Genau das steht in der Tabelle: je Stuetzstelle der Anteil der Fehler
+# darunter und die Sekunden dazu, dazwischen linear. Nach rechts laeuft
+# sie weit aus - ein Dreher kostet eben ein Vielfaches eines Verbremsers -,
+# nach links laeuft sie in eine Grenze, unter die kein Fehler faellt.
+[fehler.zeitverlust]
+# Der Erwartungswert, auf den die Tabelle beim Laden skaliert wird. Damit
+# aendert die Streuung das Balancing **nicht**: Ein Rennen verliert
+# insgesamt so viel Zeit an Fehler wie mit der frueheren festen Zahl, nur
+# ungleich verteilt. Die Tabelle kommt von sich aus auf 1,3716 s und wird
+# deshalb mit 0,9113 gestaucht; danach liegt der Gipfel bei 1,09 s, die
+# Baender bei 0,73/1,64, 0,55/2,73 und 0,29/4,19 und die Grenzen bei 0,27
+# und 4,56 s. Wer die Eckwerte unveraendert sehen will, setzt hier 1372.
+mittelwert_ms = 1250
+# Anteil der Fehler unterhalb der Stuetzstelle. Die krummen Zahlen sind die
+# Quantile der Sigma-Baender: 0,158655 ist (1 - 68,27 %) / 2 und so fort.
+anteil = [0.0, 0.000032, 0.022750, 0.158655, 0.5, 0.841345, 0.977250, 0.999968, 1.0]
+# Die Standzeit dazu, in Sekunden.
+sekunden = [0.30, 0.32, 0.60, 0.80, 1.20, 1.80, 3.00, 4.60, 5.00]
 
 [unfaelle.rate]
 # Entscheidung A: sehr selten, wie im GDD ausdruecklich verlangt. Die

@@ -596,11 +596,49 @@ Monza bei 62 bis 66 %.
 ### Was ein Fehler kostet
 
 Kein Zeitabzug, sondern **Stillstand**: Das Auto geht auf 0 km/h, steht
-eine **feste** Zeit (``fehler.zeitverlust_ms``, 1250 ms) und faehrt
-danach mit seiner eigenen Beschleunigungskurve wieder an. Gemessen laeuft
-es nach der Pause ueber 1,3 → 2,6 → 3,9 km/h an, nicht sprunghaft zurueck
-aufs alte Tempo. Der wirkliche Verlust ist deshalb groesser als die
-1250 ms - das Anfahren kommt obendrauf.
+eine gewuerfelte Zeit und faehrt danach mit seiner eigenen
+Beschleunigungskurve wieder an. Gemessen laeuft es nach der Pause ueber
+1,3 → 2,6 → 3,9 km/h an, nicht sprunghaft zurueck aufs alte Tempo. Der
+wirkliche Verlust ist deshalb groesser als die Standzeit - das Anfahren
+kommt obendrauf.
+
+**Die Standzeit ist eine Verteilung, keine Zahl** (Punkt 96). Frueher
+kostete jeder Fehler dieselben 1250 ms; ein Verbremser und ein Dreher
+waren damit dasselbe. Der Auftraggeber hat die Verteilung ueber ihre
+Streuungsbaender beschrieben - Gipfel bei 1,2 s, und um ihn herum:
+
+| Band | | |
+| --- | ---: | ---: |
+| 1 Sigma (68,3 %) | 0,80 s | 1,80 s |
+| 2 Sigma (95,4 %) | 0,60 s | 3,00 s |
+| 4 Sigma (99,99 %) | 0,32 s | 4,60 s |
+| harte Grenzen | 0,30 s | 5,00 s |
+
+Genau das steht in ``[fehler.zeitverlust]``: je Stuetzstelle der Anteil
+der Fehler darunter und die Sekunden dazu, dazwischen linear. Gezogen
+wird daraus mit dem Zufallsstrom des Rennens; ohne ihn - fuer alles, was
+nach GDD 9 ohne Zufall rechnen soll - kommt der Erwartungswert zurueck.
+
+**Der Erwartungswert bleibt, wo er war.** ``mittelwert_ms = 1250`` haelt
+ihn fest: Die Tabelle kommt von sich aus auf 1,3716 s und wird beim Laden
+mit **0,9113** gestaucht. Damit verliert ein Rennen insgesamt so viel
+Zeit an Fehler wie vorher, nur ungleich verteilt - die Streuung ist eine
+Frage der Dramaturgie, nicht des Balancings. Nach der Stauchung liegt der
+Gipfel bei 1,09 s, die Grenzen bei 0,27 und 4,56 s, und 11 % der Fehler
+kosten mehr als zwei Sekunden. Wer die Eckwerte unveraendert sehen will,
+setzt ``mittelwert_ms = 1372``.
+
+``python -m rennmanager --pruefe`` zeigt die Zahlen, mit denen wirklich
+gefahren wird:
+
+```
+Fehler:        Standzeit 0.27 bis 4.56 s, Gipfel 1.09 s, im Mittel 1.25 s
+```
+
+Gemessen an einem ganzen Rennen (Zandvoort, Liga 10, 69 Runden, 40 Autos)
+fallen 371 Fehler: Standzeiten von 0,34 bis 4,05 s, 44 davon ueber zwei
+und 9 ueber drei Sekunden. Zusammen 464 Sekunden Stillstand - auf die
+Sekunde dasselbe, was die frueheren 1250 ms ergeben haetten.
 
 ### Ereignisse treffen einzelne Fahrer
 

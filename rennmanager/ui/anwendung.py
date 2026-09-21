@@ -17,6 +17,7 @@ from rennmanager.kern import strecke as kern_strecke
 from rennmanager.kern import streckenkenntnis as kern_kenntnis
 from rennmanager.kern import tempo as kern_tempo
 from rennmanager.kern import wertung as kern_wertung
+from rennmanager.kern import zwischenfall as kern_zwischenfall
 from rennmanager.kern.zeit import formatiere_dauer
 from rennmanager.kern.zufall import Seedquelle
 from rennmanager.konfiguration import KonfigurationsFehler, lade
@@ -151,6 +152,16 @@ def pruefe() -> int:
         f"{konfiguration.wert('kaltreifen', 'tempoverlust_bei_null') * 100:.1f} %, "
         "Bremse bis "
         f"{konfiguration.wert('bremskuehlung', 'verlust_am_ende_bei_null') * 100:.1f} %"
+    )
+    # Punkt 96: Die Standzeit nach einem Fehler wird gezogen und die
+    # Tabelle dabei auf ihren Erwartungswert normiert. Ohne diese Zeile
+    # saehe man die Zahlen, mit denen wirklich gefahren wird, nirgends.
+    print(
+        "Fehler:        Standzeit "
+        f"{kern_zwischenfall.zeitverlust_bei(konfiguration, 0.0) / 1000:.2f} bis "
+        f"{kern_zwischenfall.zeitverlust_bei(konfiguration, 1.0) / 1000:.2f} s, "
+        f"Gipfel {kern_zwischenfall.zeitverlust_bei(konfiguration, 0.5) / 1000:.2f} s, "
+        f"im Mittel {kern_zwischenfall.zeitverlust_ms(konfiguration) / 1000:.2f} s"
     )
     print(
         "Verkehr:       Windschatten bis "
