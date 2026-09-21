@@ -802,12 +802,24 @@ trocken:
 
 ```
                       Monza (0,54)   Nuerburgring (1,07)   Zandvoort (1,26)
-  Weich              8/ 20/ 29/ 41       4/ 11/ 16/ 23       4/ 12/ 16/ 24
-  Mittel            12/ 30/ 42/ 60       6/ 17/ 24/ 34       6/ 17/ 24/ 34
-  Hart              16/ 41/ 58/ 83       9/ 23/ 33/ 47       9/ 24/ 33/ 48
-  Intermediate       5/ 14/ 20/ 29       3/  8/ 11/ 16       3/  8/ 11/ 17
-  Regen              5/ 12/ 17/ 25       2/  7/  9/ 14       2/  7/ 10/ 14
+  Weich               7/ 18/ 25/ 36       5/ 14/ 20/ 29       6/ 15/ 22/ 31
+  Mittel             10/ 25/ 36/ 51       8/ 20/ 29/ 41       9/ 22/ 32/ 45
+  Hart               14/ 35/ 50/ 71      11/ 28/ 40/ 57      12/ 31/ 44/ 63
+  Intermediate        9/ 23/ 33/ 47       7/ 18/ 26/ 37       8/ 20/ 29/ 41
+  Regen              11/ 27/ 38/ 54       8/ 21/ 29/ 42       9/ 23/ 33/ 47
 ```
+
+**Die Nassreifen halten seit Punkt 100 wie ein Mittel** (Intermediate
+0,73, Regen 0,64). Davor standen sie bei 1,10 und 0,90 - der
+Intermediate war damit der **kurzlebigste Reifen im ganzen Satz**,
+kurzlebiger noch als Weich. Das fiel unten auf: Liga 10 holte aus einem
+Satz Mittel 20 Runden, aus einem Intermediate nur 12 - bei derselben
+vollen Distanz, die seit Punkt 95 auch die unterste Liga faehrt. Im
+Nassen brauchte sie dadurch bis zu **fuenf** Stopps, wo der Planer nur
+drei vergeben darf; der Rest kam als Zwangsstopp. Gemessen ueber alle 20
+Strecken kommt Liga 10 jetzt auf hoechstens drei. Der Preis steht
+daneben und war eine Entscheidung des Auftraggebers: Liga 1 faehrt ein
+nasses Rennen jetzt mit einem Stopp statt mit zweien.
 
 **Kein Stint faellt unter 30 Prozent Restprofil**, auch der letzte nicht -
 und auch nicht, nachdem das Zufallsfenster die Stopprunden verschoben hat.

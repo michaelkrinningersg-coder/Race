@@ -1324,7 +1324,17 @@ name = "Intermediate"
 kuerzel = "I"
 farbe = "#2E9E4F"
 tempo = 0.985
-verschleiss = 1.10
+# Punkt 100: Frueher 1,10 - damit war der Intermediate der kurzlebigste
+# Reifen im ganzen Satz, kurzlebiger noch als Weich (1,05). Im Nassen
+# brauchte Liga 10 dadurch bis zu **fuenf** Stopps, wo der Planer nur
+# drei vergeben darf; der Rest kam als Zwangsstopp. Gemessen ueber alle
+# 20 Strecken: Liga 10 holte aus einem Satz Mittel 20 Runden, aus einem
+# Intermediate nur 12 - bei derselben vollen Distanz, die seit Punkt 95
+# auch die unterste Liga faehrt. Auf Mittel-Niveau gesetzt kommt Liga 10
+# auf drei Stopps und damit unter den Deckel. Der Auftraggeber hat es so
+# entschieden; der Preis steht daneben: Liga 1 faehrt ein nasses Rennen
+# jetzt mit einem Stopp statt mit zweien.
+verschleiss = 0.73
 # Auf "wechselhaft" (0,35) gebaut, nicht auf die Mitte der Skala - sonst
 # passt zu keiner wirklichen Wetterlage ein Reifen genau.
 naesse = 0.4
@@ -1335,7 +1345,10 @@ name = "Regen"
 kuerzel = "R"
 farbe = "#2B6CB0"
 tempo = 0.965
-verschleiss = 0.90
+# Punkt 100, siehe Intermediate: frueher 0,90. Der Regenreifen haelt
+# etwas laenger als der Intermediate - er faehrt langsamer und traegt
+# damit weniger ab.
+verschleiss = 0.64
 # Zwischen "regen" (0,7) und "starkregen" (1,0) - er deckt beide ab.
 naesse = 0.85
 

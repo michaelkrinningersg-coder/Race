@@ -686,3 +686,47 @@ def test_das_strategieblatt_zeigt_beide_zeiten_und_keine_namen(qtbot, k, zandvoo
     for zeile in range(baum.topLevelItemCount()):
         for spalte in range(baum.columnCount()):
             assert baum.topLevelItem(zeile).text(spalte) not in namen
+
+
+def test_auch_die_unterste_liga_kommt_im_nassen_unter_den_deckel(grosse_konfiguration):
+    """Punkt 100: Kein Feld darf mehr Stopps brauchen, als es planen darf.
+
+    Vor der Anpassung der Nassreifen brauchte Liga 10 auf der vollen
+    Distanz bis zu fuenf Stopps, wo ``stopps_max`` drei erlaubt - der
+    Rest kam als Zwangsstopp. Geprueft wird ueber **alle** Strecken, weil
+    genau die schlimmste den Ausschlag gibt.
+    """
+    from rennmanager.kern import reifen as kern_reifen
+    from rennmanager.kern import rennen as kern_rennen
+    from rennmanager.kern import strecke as kern_strecke
+    from rennmanager.kern import welt as kern_welt
+    from rennmanager.kern.auto import gesamtwert
+    from rennmanager.kern.zufall import Seedquelle
+
+    k = grosse_konfiguration
+    alle = kern_strecke.lade_alle(k)
+    welt = kern_welt.erzeuge(
+        k, Seedquelle(0).zweig("welt"), spielerliga=k.wert("ligen", "startliga")
+    )
+    quer = kern_reifen.mittlere_querbeschleunigung(alle)
+    deckel = k.wert("boxenstopp", "strategie")["stopps_max"]
+    unterste = k.wert("ligen", "anzahl")
+    fahrer = sorted(
+        (f for f in welt.fahrer if f.liga == unterste and not f.ist_spieler),
+        key=lambda f: gesamtwert(k, f.auto),
+    )
+    # Das schwaechste Auto der untersten Liga - es setzt die Grenze.
+    auto = fahrer[0].auto
+    for strecke in alle:
+        faktor = kern_reifen.streckenfaktor(k, strecke, quer)
+        runden = kern_rennen.rundenzahl(k, strecke, unterste)
+        for schluessel, naesse in (("intermediate", 0.35), ("regen", 1.0)):
+            weite = sg.reichweite_runden(
+                k, auto, kern_reifen.mischung(k, schluessel),
+                strecke.laenge_m, faktor, 1.0, naesse,
+            )
+            noetig = max(-(-runden // weite) - 1, 0)
+            assert noetig <= deckel, (
+                f"{strecke.name}, {schluessel}: {noetig} Stopps noetig, "
+                f"erlaubt sind {deckel}"
+            )
