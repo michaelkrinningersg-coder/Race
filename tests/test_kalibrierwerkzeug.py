@@ -28,11 +28,13 @@ def test_zieltempo_entspricht_gdd_9(k: kf.Konfiguration) -> None:
     assert kalibriere.zieltempo(k, 100_000) == pytest.approx(181.3, abs=0.05)
 
 
-def test_stuetzstellen_enthalten_die_kontrolltabelle(k: kf.Konfiguration) -> None:
+def test_stuetzstellen_enthalten_die_enden_des_feldes(k: kf.Konfiguration) -> None:
+    """Punkt 101: Das Feld hat nur noch zwei Eckwerte - beide zaehlen."""
     stellen = set(kalibriere.stuetzstellen(k))
-    for zeile in k.wert("ligen", "kontrolle"):
-        assert zeile["s_bester"] in stellen
-        assert zeile["s_letzter"] in stellen
+    assert k.wert("feld", "s_bester") in stellen
+    assert k.wert("feld", "s_letzter") in stellen
+    # Dazwischen und darueber traegt das Raster ueber die ganze Skala.
+    assert len(stellen) >= 13
 
 
 def test_hinterlegte_werte_sind_das_optimum(k: kf.Konfiguration) -> None:

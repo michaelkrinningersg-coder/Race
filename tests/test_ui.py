@@ -66,7 +66,9 @@ def test_pruefmodus_laedt_die_konfiguration(capsys) -> None:
     assert starte(["rennmanager", PRUEFMODUS]) == 0
     ausgabe = capsys.readouterr().out
     assert "GDD-Version" in ausgabe
-    assert "10 Ligen" in ausgabe
+    assert "50 Autos" in ausgabe
+    # Punkt 101: Der Pruefmodus nennt die Spanne des einen Feldes.
+    assert "Rundenzeitspanne" in ausgabe
 
 
 def test_streckenseite_zeigt_die_erste_strecke(qtbot, konfig: kf.Konfiguration) -> None:
@@ -210,22 +212,21 @@ def test_helle_teamfarben_werden_fuer_die_schrift_abgedunkelt(konfig) -> None:
 
 
 def test_jede_teamfarbe_ist_in_der_tabelle_lesbar(grosse_konfiguration) -> None:
-    """Keine der hundert Teamfarben darf in einer Tabelle untergehen.
+    """Keine der Teamfarben darf in einer Tabelle untergehen.
 
     Hier geht es um die Farben selbst, also um die **echte** Welt mit
-    ihren hundert Teams - die kleine Testwelt hat zu wenige, um etwas zu
-    beweisen (gemessen waren 32 der 100 zu hell).
+    ihren 25 Teams - die kleine Testwelt hat zu wenige, um etwas zu
+    beweisen.
+
+    Seit Punkt 101 traegt jedes Team die Farbe seines Herstellers; geprueft
+    werden damit genau die 25 Farben aus ``hersteller.toml``.
     """
     from rennmanager.kern import welt as kern_welt
     from rennmanager.kern.zufall import Seedquelle
     from rennmanager.ui.tabellen import MINDESTKONTRAST, kontrast, schriftfarbe
 
     konfig = grosse_konfiguration
-    welt = kern_welt.erzeuge(
-        konfig,
-        Seedquelle(0).zweig("welt"),
-        spielerliga=konfig.wert("ligen", "startliga"),
-    )
+    welt = kern_welt.erzeuge(konfig, Seedquelle(0).zweig("welt"))
     assert len(welt.teams) == konfig.wert("teams", "anzahl")
     schlechteste = min(kontrast(schriftfarbe(t.farbe)) for t in welt.teams)
     assert schlechteste >= MINDESTKONTRAST

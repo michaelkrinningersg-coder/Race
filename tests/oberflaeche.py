@@ -19,18 +19,6 @@ from rennmanager.kern import wertung as wt
 pytest.importorskip("PySide6")
 
 
-def waehle_liga(auswahl, liga: int) -> None:
-    """Waehlt eine Liga ueber ihre **Nummer**, nicht ueber den Listenplatz.
-
-    Feste Indizes trafen in der kleinen Welt ins Leere: ``setCurrentIndex(10)``
-    liess die Liste einfach leer, und der Test fiel weit spaeter mit einem
-    ``NoneType`` um die Ohren.
-    """
-    index = auswahl.findData(liga)
-    assert index >= 0, f"Liga {liga} steht nicht in der Auswahl"
-    auswahl.setCurrentIndex(index)
-
-
 def ein_fahrer(fenster, anteil: float = 0.5):
     """Irgendein Fahrer aus dem Feld - anteilig statt an fester Stelle."""
     fahrer = fenster.welt.fahrer
@@ -105,9 +93,8 @@ def rennverlauf(fenster, runden: int = 2, umgedreht: bool = False):
     from rennmanager.kern import wetter as kern_wetter
     from rennmanager.kern.zufall import Seedquelle
 
-    liga = fenster.welt.spieler.liga
     strecke = kern_strecke.lade(fenster._konfiguration, fenster._konfiguration.strecken[0]["name"])
-    feld = kern_welt.starterfeld(fenster.welt, liga)
+    feld = kern_welt.starterfeld(fenster.welt)
     if umgedreht:
         anzahl = len(feld)
         feld = tuple(
@@ -155,22 +142,15 @@ def gefahrenes_qualifying(fenster):
 
 
 def fahre_saison_zu_ende(konfig, seite) -> None:
-    """Setzt die Saison auf beendet, ohne 400 Rennen zu fahren."""
+    """Setzt die Saison auf beendet, ohne alle Rennen zu fahren."""
     lauf = seite.lauf
-    lauf.tabellen = {
-        liga: wt.Tabelle(liga) for liga in range(1, konfig.wert("ligen", "anzahl") + 1)
-    }
-    for liga, tabelle in lauf.tabellen.items():
-        tabelle.verbuche(
-            konfig,
-            [
-                wt.Rennergebnis(fahrer=f.nummer, rennplatz=platz, qualifyingplatz=platz)
-                for platz, f in enumerate(lauf.welt.liga(liga), start=1)
-            ],
-        )
+    lauf.tabelle = wt.Tabelle()
+    lauf.tabelle.verbuche(
+        konfig,
+        [
+            wt.Rennergebnis(fahrer=f.nummer, rennplatz=platz, qualifyingplatz=platz)
+            for platz, f in enumerate(lauf.welt.feld, start=1)
+        ],
+    )
     lauf.vorgefahren = konfig.wert("kalender", "rennen_je_saison")
-    # Punkt 95: Nach dem letzten Rennen wird gewechselt. Das gefakte
-    # Saisonende muss das mitmachen, sonst steht der Lauf am Ende mit
-    # Tabellen da, die nie in eine Wechselrunde gelaufen sind.
-    lauf.wechselrunde(lauf.vorgefahren)
     seite._aktualisiere()

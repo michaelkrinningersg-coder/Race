@@ -146,7 +146,7 @@ def _stopprennen(konfig, pflicht: bool):
 
     fenster = Hauptfenster(konfig)
     strecke = kern_strecke.lade(konfig, konfig.strecken[0]["name"])
-    feld = kern_welt.starterfeld(fenster.welt, fenster.welt.spieler.liga)[:6]
+    feld = kern_welt.starterfeld(fenster.welt)[:6]
     fenster.close()
     weich = kern_reifen.mischung(konfig, "weich")
     hart = kern_reifen.mischung(konfig, "hart")
@@ -460,15 +460,16 @@ def test_der_ticker_ist_ein_blatt_neben_den_tabellen(gefahren) -> None:
 # --- Punkt 73: Live-Meisterschaftsstand -----------------------------------
 # Spalten des Meisterschaftsblattes. Seit Punkt 82 steht "Team" dazwischen;
 # die Zahlen stehen hier einmal, statt in jedem Test zu stecken.
-# Punkt 95: Seit der Weltsicht steht zwischen Platz und Auto eine
-# Ligaspalte; alles danach ist um eins gerueckt.
-MEISTER_PUNKTE = 6
-MEISTER_ZUWACHS = 7
+# Punkt 101: Die Ligaspalte ist weg, alles danach ist um eins zurueck.
+MEISTER_PUNKTE = 5
+MEISTER_ZUWACHS = 6
+
+
 def _mit_tabelle(seite, konfig):
     """Gibt der Seite einen Meisterschaftsstand vor dem Rennen."""
     from rennmanager.kern import wertung as wt
 
-    tabelle = wt.Tabelle(1)
+    tabelle = wt.Tabelle()
     tabelle.verbuche(
         konfig,
         [
@@ -522,113 +523,46 @@ def test_der_livestand_nimmt_den_startplatz_als_qualifyingplatz(gefahren) -> Non
     assert pole.fahrer == verlauf.teilnehmer[0].nummer
 
 
-def test_die_meisterschaft_laesst_sich_auf_alle_ligen_umschalten(
-    gefahren, konfig
+def test_die_meisterschaft_nennt_auch_fahrer_ausserhalb_des_rennens(
+    qtbot, konfig, stopprennen
 ) -> None:
-    """Punkt 95: Die Meisterschaft laeuft ueber alle Ligen.
+    """Ein Testrennen kann ein Feld fahren, das nicht der Welt entspricht.
 
-    In der Weltsicht steht in jeder Zeile die Liga, und gezeigt wird ein
-    Ausschnitt - die Spitze und das Umfeld der eigenen Fahrer, nicht alle
-    vierhundert Zeilen.
-    """
-    from rennmanager.kern import wertung as wt
-    from rennmanager.ui.rennseite import WELT_SPITZE
-
-    _fenster, seite = gefahren
-    tabelle = _mit_tabelle(seite, konfig)
-    tabellen = {tabelle.liga: tabelle}
-    for liga in range(2, konfig.wert("ligen", "anzahl") + 1):
-        weitere = wt.Tabelle(liga)
-        weitere.verbuche(
-            konfig,
-            [
-                wt.Rennergebnis(fahrer=liga * 1000 + n, rennplatz=n + 1, qualifyingplatz=n + 1)
-                for n in range(konfig.wert("ligen", "autos_je_liga"))
-            ],
-        )
-        tabellen[liga] = weitere
-
-    seite.zeige_verlauf(
-        seite.verlauf, seite._ansicht.strecke, tabelle=tabelle, tabellen=tabellen
-    )
-    seite._halte_an()
-    seite._springe(seite.verlauf.dauer_ms * 0.7)
-    schlage_blatt_auf(seite, "meisterschaft")
-    liste = seite._meisterschaft
-
-    nur_liga = liste.topLevelItemCount()
-    seite._alle_ligen.setChecked(True)
-    welt = liste.topLevelItemCount()
-
-    # Ein Ausschnitt: mehr als die Spitze, aber nicht alle Fahrer.
-    gesamt = sum(len(t.eintraege) for t in tabellen.values())
-    assert WELT_SPITZE <= welt < gesamt
-    # Jede Zeile nennt ihre Liga, und die Plaetze sind Weltplaetze -
-    # lueckenhaft, weil dazwischen Fahrer stehen, die nicht gezeigt werden.
-    plaetze = [int(liste.topLevelItem(i).text(0)) for i in range(welt)]
-    assert plaetze == sorted(plaetze)
-    assert plaetze[-1] > welt, "Die Plaetze muessen Weltplaetze sein"
-    assert all(liste.topLevelItem(i).text(1) for i in range(welt))
-
-    # Dass der Stand wirklich ueber alle Ligen geht, zeigt der Kern: Die
-    # Anzeige sieht davon nur die Spitze, und die gehoert Liga 1.
-    alle = wt.weltlivewertung(konfig, tabellen, 1, seite._rennlage(
-        seite.verlauf, seite.verlauf.reihenfolge_zu(seite._zeit_ms), seite._zeit_ms
-    ))
-    assert {zeile.liga for zeile in alle} == set(tabellen)
-
-    seite._alle_ligen.setChecked(False)
-    assert liste.topLevelItemCount() == nur_liga
-
-
-def test_die_weltsicht_nennt_auch_fahrer_ausserhalb_des_rennens(
-    gefahren, konfig
-) -> None:
-    """Punkt 95: In der Weltsicht stehen 400 Fahrer, im Rennen sind 40.
-
-    Name, Team und Kuerzel kommen fuer das Feld aus dem Rennverlauf, fuer
-    alle anderen aus der Welt. Ohne diesen Rueckgriff fuehrte die
-    Weltmeisterschaft jemand ohne Namen an - Platz und Punkte standen da,
+    Name, Team und Kuerzel kommen fuer die Starter aus dem Rennverlauf,
+    fuer alle anderen aus der Welt. Ohne diesen Rueckgriff fuehrte die
+    Meisterschaft jemand ohne Namen an - Platz und Punkte standen da,
     die drei Spalten dazwischen blieben leer.
     """
     from rennmanager.kern import wertung as wt
     from rennmanager.ui.tabellen import kurzname
 
-    fenster, seite = gefahren
-    tabelle = _mit_tabelle(seite, konfig)
+    fenster, seite, verlauf = _mit_stopps(qtbot, konfig, stopprennen)
     welt = fenster.welt
-    im_rennen = {t.nummer for t in seite.verlauf.teilnehmer}
+    im_rennen = {t.nummer for t in verlauf.teilnehmer}
     fremde = [f for f in welt.fahrer[1:] if f.nummer not in im_rennen][:5]
-    assert fremde, "Die Welt hat mehr Fahrer als ein Rennen Starter"
+    assert fremde, "Die Welt hat mehr Fahrer als dieses Testrennen Starter"
 
-    # Liga 2, drei Rennen gefahren - damit sie vor dem Feld dieses einen
-    # Rennens stehen und im Ausschnitt oben auftauchen.
-    andere = wt.Tabelle(2)
+    # Drei Rennen fuer die Fremden, keines fuer die Starter: So stehen
+    # sie mit Abstand vorn und fuehren die Tabelle an.
+    tabelle = wt.Tabelle()
     for _ in range(3):
-        andere.verbuche(
+        tabelle.verbuche(
             konfig,
             [
                 wt.Rennergebnis(fahrer=f.nummer, rennplatz=platz, qualifyingplatz=platz)
                 for platz, f in enumerate(fremde, start=1)
             ],
         )
-    seite.zeige_verlauf(
-        seite.verlauf,
-        seite._ansicht.strecke,
-        tabelle=tabelle,
-        tabellen={tabelle.liga: tabelle, 2: andere},
-    )
+    seite.zeige_verlauf(verlauf, seite._ansicht.strecke, tabelle=tabelle)
     seite._halte_an()
-    seite._springe(seite.verlauf.dauer_ms * 0.7)
+    seite._springe(verlauf.dauer_ms * 0.7)
     schlage_blatt_auf(seite, "meisterschaft")
-    seite._alle_ligen.setChecked(True)
 
     erster = seite._meisterschaft.topLevelItem(0)
     fuehrender = fremde[0]
-    assert erster.text(1) == "2"
-    assert erster.text(2) == fuehrender.kuerzel
-    assert erster.text(3) == kurzname(fuehrender.name)
-    assert erster.text(4) == welt.team_von(fuehrender).name
+    assert erster.text(1) == fuehrender.kuerzel
+    assert erster.text(2) == kurzname(fuehrender.name)
+    assert erster.text(3) == welt.team_von(fuehrender).name
 
 
 def test_die_meisterschaft_zeigt_den_zuwachs(gefahren, konfig) -> None:

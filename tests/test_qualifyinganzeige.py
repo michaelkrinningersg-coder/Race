@@ -581,9 +581,7 @@ def test_die_bestmarke_nennt_zeit_fahrer_und_jahr(seite, konfig) -> None:
     """A17: die schnellste je gefahrene Qualirunde hier."""
     from rennmanager.kern.statistik import Rekord
 
-    rekord = Rekord(
-        strecke="Catalunya", liga=1, zeit_ms=78_432, fahrer=7, saison=2029, rennen=4
-    )
+    rekord = Rekord(strecke="Catalunya", zeit_ms=78_432, fahrer=7, saison=2029, rennen=4)
     seite.zeige_bestmarke(rekord, "Lena Moser")
     text = seite._bestmarke.text()
     assert "Lena Moser" in text
@@ -599,16 +597,16 @@ def test_der_qualirekord_wird_getrennt_vom_rennrekord_gefuehrt(konfig) -> None:
     from rennmanager.kern import statistik as st
 
     zahlen = st.Statistik(konfig)
-    assert zahlen.melde_qualirunde("Monza", 1, 80_000, fahrer=3, saison=2026, rennen=1)
-    assert zahlen.qualirekord("Monza", 1).zeit_ms == 80_000
-    assert zahlen.rekord("Monza", 1) is None, "Der Rennrekord bleibt unberuehrt"
+    assert zahlen.melde_qualirunde("Monza", 80_000, fahrer=3, saison=2026, rennen=1)
+    assert zahlen.qualirekord("Monza").zeit_ms == 80_000
+    assert zahlen.rekord("Monza") is None, "Der Rennrekord bleibt unberuehrt"
 
     # Langsamer faellt durch, schneller setzt neu.
-    assert not zahlen.melde_qualirunde("Monza", 1, 80_001, 4, 2026, 2)
-    assert zahlen.melde_qualirunde("Monza", 1, 79_500, 4, 2026, 2)
-    assert zahlen.qualirekord("Monza", 1).fahrer == 4
+    assert not zahlen.melde_qualirunde("Monza", 80_001, 4, 2026, 2)
+    assert zahlen.melde_qualirunde("Monza", 79_500, 4, 2026, 2)
+    assert zahlen.qualirekord("Monza").fahrer == 4
     # Und eine Zeit von null ist keine Zeit.
-    assert not zahlen.melde_qualirunde("Monza", 1, 0, 5, 2026, 3)
+    assert not zahlen.melde_qualirunde("Monza", 0, 5, 2026, 3)
 
 
 # --- Punkt 98: Name in der Zeitentafel, Unterlegung am Sessionende --------

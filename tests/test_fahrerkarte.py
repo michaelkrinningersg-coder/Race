@@ -29,12 +29,11 @@ from rennmanager.ui.laufbahnansicht import Laufbahnansicht  # noqa: E402
 def konfig() -> kf.Konfiguration:
     """Punkt 77: kleine Welt, aber vier Rennen je Saison.
 
-    Drei Ligen zu je vier Autos statt zwanzig zu je dreissig - geprueft
-    wird, *ob* die Karte das Richtige liest, und dafuer genuegt das
-    kleine Feld. Beim Kalender geht es hier aber nicht: Der Punkteverlauf
-    gehoert der **laufenden** Saison, und mit zwei Rennen waere sie nach
-    dem zweiten schon zu Ende - der Verlauf steht dann in der Historie
-    und das Diagramm ist leer.
+    Acht Autos statt fuenfzig - geprueft wird, *ob* die Karte das
+    Richtige liest, und dafuer genuegt das kleine Feld. Beim Kalender
+    geht es hier aber nicht: Der Punkteverlauf gehoert der **laufenden**
+    Saison, und mit zwei Rennen waere sie nach dem zweiten schon zu Ende
+    - der Verlauf steht dann in der Historie und das Diagramm ist leer.
     """
     from tests.conftest import verkleinert
 
@@ -102,7 +101,6 @@ def test_karte_misst_das_alter_wie_die_weltseite(fenster, konfig) -> None:
     assert karte._alter() == fahrer.alter_am(stichtag)
 
     seite = fenster.weltseite
-    seite.liga_auswahl.setCurrentIndex(fahrer.liga)
     kopf = [
         seite.liste.headerItem().text(s) for s in range(seite.liste.columnCount())
     ]
@@ -111,13 +109,13 @@ def test_karte_misst_das_alter_wie_die_weltseite(fenster, konfig) -> None:
         if zeile.data(0, Qt.UserRole) == fahrer.nummer:
             assert zeile.text(kopf.index("Alter")) == str(karte._alter())
             break
-    else:  # pragma: no cover - der Fahrer muss in seiner Liga stehen
-        raise AssertionError("Fahrer nicht in der Liste seiner Liga")
+    else:  # pragma: no cover - der Fahrer muss im Feld stehen
+        raise AssertionError("Fahrer nicht in der Feldliste")
 
 
 # --- Werte ----------------------------------------------------------------
 def test_werte_zeigen_alle_eigenschaften(fenster, konfig) -> None:
-    karte = fenster.oeffne_fahrerkarte(11)
+    karte = fenster.oeffne_fahrerkarte(6)
     liste = karte.werteliste
     aeste = {
         liste.topLevelItem(i).text(0): liste.topLevelItem(i)
@@ -138,7 +136,7 @@ def test_balken_messen_gegen_den_groessten_des_astes(fenster) -> None:
     """Gegen die Skala (0 bis 100.000) waere jeder Balken unsichtbar."""
     from rennmanager.ui.tabellen import Balkenzeichner
 
-    karte = fenster.oeffne_fahrerkarte(11)
+    karte = fenster.oeffne_fahrerkarte(6)
     ast = karte.werteliste.topLevelItem(0)
     anteile = [
         ast.child(i).data(2, Balkenzeichner.ANTEILSROLLE)
@@ -155,8 +153,7 @@ def test_saison_und_verlauf_fuellen_sich_nach_dem_rennen(fenster, konfig) -> Non
     fenster.saisonseite.lauf.fahre_rennen()
     fenster.saisonseite._aktualisiere()
 
-    liga = fenster.welt.spieler.liga
-    erster = fenster.saisonseite.lauf.tabelle(liga).stand()[0]
+    erster = fenster.saisonseite.lauf.tabelle.stand()[0]
     karte = fenster.oeffne_fahrerkarte(erster.fahrer)
 
     werte = formularwerte(karte.blaetter.widget(2).findChild(QFormLayout))
@@ -164,10 +161,10 @@ def test_saison_und_verlauf_fuellen_sich_nach_dem_rennen(fenster, konfig) -> Non
     assert werte["Rennen:"] == "2"
     assert werte["Platz:"].startswith("1 von")
 
-    # Das Diagramm zeigt die ganze Liga, hervorgehoben ist genau einer.
+    # Das Diagramm zeigt das ganze Feld, hervorgehoben ist genau einer.
     verlauf = karte.punkteverlauf
     assert verlauf.rennen == 2
-    assert len(verlauf._reihen) == konfig.wert("ligen", "autos_je_liga")
+    assert len(verlauf._reihen) == konfig.wert("rennen", "autos")
     assert len(verlauf._hervorgehoben) == 1
     stelle = verlauf._hervorgehoben[0]
     assert verlauf._reihen[stelle][2][-1] == erster.punkte
@@ -279,8 +276,8 @@ def test_doppelklick_im_rennen_findet_den_fahrer(qtbot, konfig) -> None:
 
 
 def test_zweiter_doppelklick_oeffnet_kein_zweites_fenster(fenster) -> None:
-    erste = fenster.oeffne_fahrerkarte(9)
-    assert fenster.oeffne_fahrerkarte(9) is erste
+    erste = fenster.oeffne_fahrerkarte(6)
+    assert fenster.oeffne_fahrerkarte(6) is erste
 
 
 def test_saisonwechsel_schliesst_offene_karten(fenster, konfig) -> None:
@@ -316,11 +313,12 @@ def test_karte_ohne_statistik_und_kenntnis_stuerzt_nicht_ab(qtbot, konfig) -> No
 
 
 # --- Laufbahndiagramm ------------------------------------------------------
-def test_laufbahn_stellt_liga_1_nach_oben(qtbot) -> None:
+def test_laufbahn_stellt_platz_1_nach_oben(qtbot) -> None:
+    """Punkt 101: aufgetragen wird der Platz im Feld, nicht die Liga."""
     ansicht = Laufbahnansicht(20)
     qtbot.addWidget(ansicht)
     ansicht.resize(400, 200)
-    ansicht.zeige([(2026, 20, 3), (2027, 18, 1), (2028, 15, 7)])
+    ansicht.zeige([(2026, 20), (2027, 18), (2028, 15)])
     assert ansicht.saisons == 3
 
     from rennmanager.ui.diagramm import flaeche_in
@@ -342,6 +340,6 @@ def test_laufbahn_mit_einer_saison_steht_mittig(qtbot) -> None:
     ansicht = Laufbahnansicht(20)
     qtbot.addWidget(ansicht)
     ansicht.resize(400, 200)
-    ansicht.zeige([(2026, 20, 5)])
+    ansicht.zeige([(2026, 20)])
     zeichne(ansicht)
     assert ansicht.saisons == 1

@@ -189,6 +189,15 @@ def test_nach_einem_zwangsstopp_wird_es_nicht_wieder_weicher(k, monza, feld, umg
     assert all(b.nach == "H" for b in danach), [b.nach for b in danach]
 
 
+# Punkt 101: Der Zwangsstopp auf Hart faellt in Runde 14 mit 21 %
+# Restprofil - das Feld streut seit dem Umbau nur noch um drei Prozent,
+# und der Reifenschoner steht damit bei jedem Auto dicht am Maximum. Auf
+# den 24 Runden der uebrigen Tests kaeme danach kein zweiter Stopp mehr
+# zustande, und die Pflicht liesse sich gar nicht mehr pruefen. Deshalb
+# hier 36 Runden: Der Zwangsstopp liegt in Runde 14, der naechste in 23.
+RUNDEN_MISCHUNGSPFLICHT = 36
+
+
 def test_die_mischungspflicht_geht_der_haerteregel_vor(k, monza, feld, umgebung):
     """Sonst liesse sich die Pflicht nach einem Zwangsstopp nicht erfuellen.
 
@@ -199,9 +208,9 @@ def test_die_mischungspflicht_geht_der_haerteregel_vor(k, monza, feld, umgebung)
     mittel, verschleiss = umgebung
     hart = kern_reifen.mischung(k, "hart")
     mittelhart = kern_reifen.mischung(k, "mittel")
-    plan = sg.Strategie(mischungen=(hart, mittelhart, mittelhart), stopps=(12, 18))
+    plan = sg.Strategie(mischungen=(hart, mittelhart, mittelhart), stopps=(20, 28))
     verlauf = rn.simuliere(
-        k, monza, feld[:1], RUNDEN, Seedquelle(2), mittel,
+        k, monza, feld[:1], RUNDEN_MISCHUNGSPFLICHT, Seedquelle(2), mittel,
         streckenverschleiss=verschleiss,
         strategien=(plan,),
         mischungspflicht=True,

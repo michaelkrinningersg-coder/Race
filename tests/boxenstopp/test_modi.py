@@ -82,10 +82,16 @@ def test_beide_modi_kosten_die_stopps_gleich_viel(ohne_verschiebung, monza, feld
 
     # Nur die Spitze des Feldes: Verglichen wird, was zwei Stopps kosten.
     # Der Schnellmodus kennt keinen Verkehr, der volle schon - wer nach
-    # dem Stopp in ein Feld von vierzig Autos zurueckkommt, verliert dort
-    # zusaetzlich Zeit, und die stuende hier als Unterschied der Modelle
-    # da. Mit sechs Autos ist die Boxengasse die einzige Quelle.
-    schmal = feld[:6]
+    # dem Stopp in ein Feld zurueckkommt, verliert dort zusaetzlich Zeit,
+    # und die stuende hier als Unterschied der Modelle da.
+    #
+    # Punkt 101: Frueher standen hier sechs Autos. Seit das Feld nur noch
+    # vier Prozent Rundenzeit auseinanderliegt, faehrt es viel dichter,
+    # und schon sechs Autos machen Verkehr: gemessen 12,1 s Unterschied
+    # bei sechs, 7,4 s bei dreien und 8,0 s bei einem einzigen Auto. Die
+    # rund acht Sekunden sind der Abstand der Modelle selbst, alles
+    # darueber ist Verkehr - also drei Autos.
+    schmal = feld[:3]
 
     def zeiten(strategie):
         voll = rn.simuliere(
@@ -103,8 +109,9 @@ def test_beide_modi_kosten_die_stopps_gleich_viel(ohne_verschiebung, monza, feld
     voll_mit, flott_mit = zeiten(mit)
     zuwachs_voll = voll_mit - voll_ohne
     zuwachs_flott = flott_mit - flott_ohne
-    # Zwei Stopps kosten rund eine Minute; fuenf Sekunden Unterschied
-    # zwischen den Modellen sind die Koernung beider Rechnungen.
+    # Zwei Stopps kosten rund eine Minute; zehn Sekunden Unterschied
+    # zwischen den Modellen sind die Koernung beider Rechnungen
+    # (gemessen 7,4 s).
     assert zuwachs_voll == pytest.approx(zuwachs_flott, abs=10_000)
 
 

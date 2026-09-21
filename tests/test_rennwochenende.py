@@ -22,7 +22,6 @@ from PySide6.QtCore import Qt  # noqa: E402
 
 from rennmanager.ui.hauptfenster import Hauptfenster  # noqa: E402
 from rennmanager.ui.rennwochenendeseite import SCHRITTE, WEITER  # noqa: E402
-from tests.oberflaeche import waehle_liga
 
 # Punkt 77: Diese Datei ist auf Wunsch des Auftraggebers stillgelegt.
 # Geprueft wird erst wieder, wenn ein einzelnes Rennwochenende sauber
@@ -110,7 +109,7 @@ def test_vor_dem_ersten_rennen_steht_das_feld_nach_staerke(fenster, konfig) -> N
     """Es gibt noch keine Tabelle - leer bleiben darf der Kasten nicht."""
     seite = fenster.wochenendeseite
     liste = seite.vorschauliste
-    assert liste.topLevelItemCount() == konfig.wert("ligen", "autos_je_liga")
+    assert liste.topLevelItemCount() == konfig.wert("rennen", "autos")
     assert liste.topLevelItem(0).text(3) == "-"
     assert "Staerke" in seite._standkasten.title()
 
@@ -120,7 +119,7 @@ def test_vor_dem_ersten_rennen_steht_das_feld_nach_staerke(fenster, konfig) -> N
         for i in range(liste.topLevelItemCount())
     ]
     assert spieler.nummer in nummern
-    erwartet = [f.nummer for f in fenster.welt.liga(spieler.liga)]
+    erwartet = [f.nummer for f in fenster.welt.feld]
     assert nummern == erwartet
 
 
@@ -138,7 +137,7 @@ def test_das_qualifying_fuellt_die_qualifyingseite(gefahren, konfig) -> None:
     _fenster, seite, _vorher = gefahren
     session = seite.qualifyingseite.session
     assert session is not None
-    autos = konfig.wert("ligen", "autos_je_liga")
+    autos = konfig.wert("rennen", "autos")
     assert len(session.fahrten) == autos
     assert len(session.aufstellung) == autos
 
@@ -147,7 +146,7 @@ def test_das_rennen_fuellt_die_rennseite(gefahren, konfig) -> None:
     _fenster, seite, _vorher = gefahren
     verlauf = seite.rennseite.verlauf
     assert verlauf is not None
-    assert len(verlauf.teilnehmer) == konfig.wert("ligen", "autos_je_liga")
+    assert len(verlauf.teilnehmer) == konfig.wert("rennen", "autos")
     assert verlauf.strecke.name == seite.wochenende.strecke.name
     # Die Aufstellung kommt aus dem Qualifying (GDD 4).
     pole = seite.wochenende.qualifying.aufstellung[0]
@@ -165,7 +164,7 @@ def test_erst_der_abschluss_bewegt_die_saison(gefahren) -> None:
 
 def test_das_ergebnis_zeigt_rennen_und_tabelle(gefahren, konfig) -> None:
     fenster, seite, _vorher = gefahren
-    autos = konfig.wert("ligen", "autos_je_liga")
+    autos = konfig.wert("rennen", "autos")
     assert seite.ergebnisliste.topLevelItemCount() == autos
     assert seite.tabellenliste.topLevelItemCount() == autos
 
@@ -185,8 +184,7 @@ def test_das_ergebnis_zeigt_rennen_und_tabelle(gefahren, konfig) -> None:
 
 def test_das_ergebnis_passt_zur_saisontabelle(gefahren) -> None:
     fenster, seite, _vorher = gefahren
-    liga = fenster.welt.spieler.liga
-    stand = fenster.saisonseite.lauf.tabelle(liga).stand()
+    stand = fenster.saisonseite.lauf.tabelle.stand()
     gezeigt = [
         seite.tabellenliste.topLevelItem(i).data(0, Qt.UserRole)
         for i in range(seite.tabellenliste.topLevelItemCount())
@@ -197,8 +195,6 @@ def test_das_ergebnis_passt_zur_saisontabelle(gefahren) -> None:
 def test_die_saisonseite_zieht_nach(gefahren) -> None:
     """Das gefuehrte Wochenende meldet sich; die Saisonseite liest neu."""
     fenster, _seite, _vorher = gefahren
-    liga = fenster.welt.spieler.liga
-    waehle_liga(fenster.saisonseite.liga_auswahl, liga)
     tabelle = fenster.saisonseite.tabelle
     assert tabelle.topLevelItemCount() > 0
     assert fenster.saisonseite.rennliste.topLevelItemCount() > 0

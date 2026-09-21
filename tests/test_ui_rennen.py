@@ -323,7 +323,7 @@ def test_die_meldungen_sind_ein_blatt_und_keine_fussleiste(
 
 @pytest.mark.parametrize(
     ("blatt", "spalte"),
-    [("rangliste", 3), ("monitor", 2), ("ideal", 2), ("meisterschaft", 4)],
+    [("rangliste", 3), ("monitor", 2), ("ideal", 2), ("meisterschaft", 3)],
 )
 def test_jedes_blatt_hat_eine_teamspalte(
     qtbot, konfig: kf.Konfiguration, blatt: str, spalte: int

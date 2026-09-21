@@ -6,7 +6,7 @@ Liga 1 180 km/h bei rund 98.000", nach der Funktion
 
 (Das Zitat stammt aus dem GDD und nennt noch die zwanzig Ligen von damals.
 Kalibriert wird gegen die **Funktion**, nicht gegen eine Ligazahl; seit
-Punkt 95 hat die unterste Liga die Nummer 10.)
+Punkt 101 gibt es ueberhaupt nur noch ein Feld.)
 
     v(S) = 55 + 125 * sqrt(S / 98.000)   [km/h]
 
@@ -41,18 +41,25 @@ from rennmanager.kern import tempo as kern_tempo
 from rennmanager.konfiguration import BALANCING_DATEI, Konfiguration, lade
 
 
-# Stuetzstellen der Anpassung: die Kontrollwerte aus GDD 9 plus ein Raster
-# dazwischen, damit die Kurve auf ganzer Laenge passt und nicht nur an
-# fuenf Punkten.
-def stuetzstellen(konfiguration: Konfiguration) -> list[int]:
-    aus_tabelle = [
-        zeile[schluessel]
-        for zeile in konfiguration.wert("ligen", "kontrolle")
-        for schluessel in ("s_bester", "s_letzter")
+# Stuetzstellen der Anpassung: die beiden Enden des Feldes plus ein Raster
+# ueber die ganze Skala, damit die Kurve auf ganzer Laenge passt und nicht
+# nur an zwei Punkten.
+#
+# Punkt 101: Frueher standen hier die zehn Ligapaare aus
+# ``ligen.kontrolle``. Das Feld hat jetzt nur noch zwei Eckwerte - das
+# Raster traegt die Anpassung, wie schon vorher zwischen den Ligen.
+def feldstellen(konfiguration: Konfiguration) -> list[int]:
+    """Die beiden Enden des Feldes (GDD 9, Punkt 101)."""
+    return [
+        konfiguration.wert("feld", "s_letzter"),
+        konfiguration.wert("feld", "s_bester"),
     ]
+
+
+def stuetzstellen(konfiguration: Konfiguration) -> list[int]:
     maximum = konfiguration.wert("skala", "maximum")
     raster = [round(maximum * (n / 12) ** 2) for n in range(13)]
-    return sorted(set(aus_tabelle + raster))
+    return sorted(set(feldstellen(konfiguration) + raster))
 
 
 def zieltempo(konfiguration: Konfiguration, s: float) -> float:
@@ -165,23 +172,22 @@ def bericht(konfiguration: Konfiguration) -> None:
     print(f"\nReferenzstrecke: {name}, {strecke.laenge_m:.0f} m\n")
     print(f"{'S':>8}{'Ist km/h':>10}{'Soll km/h':>11}{'Abw.':>8}{'Rundenzeit':>13}{'vmax':>8}")
 
-    groesste = 0.0
-    for zeile in konfiguration.wert("ligen", "kontrolle"):
-        for rolle in ("bester", "letzter"):
-            s = zeile[f"s_{rolle}"]
-            ergebnis = kern_tempo.fahre_runde(
-                konfiguration, strecke, kern_auto.gleichverteilt(konfiguration, s)
-            )
-            soll = zieltempo(konfiguration, s)
-            abweichung = ergebnis.schnitt_kmh - soll
-            groesste = max(groesste, abs(abweichung))
-            from rennmanager.kern.zeit import formatiere_dauer
+    from rennmanager.kern.zeit import formatiere_dauer
 
-            print(
-                f"{s:>8}{ergebnis.schnitt_kmh:>10.2f}{soll:>11.2f}{abweichung:>+8.2f}"
-                f"{formatiere_dauer(ergebnis.zeit_ms):>13}"
-                f"{ergebnis.hoechstgeschwindigkeit_kmh:>8.0f}"
-            )
+    groesste = 0.0
+    for s in stuetzstellen(konfiguration):
+        ergebnis = kern_tempo.fahre_runde(
+            konfiguration, strecke, kern_auto.gleichverteilt(konfiguration, s)
+        )
+        soll = zieltempo(konfiguration, s)
+        abweichung = ergebnis.schnitt_kmh - soll
+        groesste = max(groesste, abs(abweichung))
+        marke = " <- Feld" if s in feldstellen(konfiguration) else ""
+        print(
+            f"{s:>8}{ergebnis.schnitt_kmh:>10.2f}{soll:>11.2f}{abweichung:>+8.2f}"
+            f"{formatiere_dauer(ergebnis.zeit_ms):>13}"
+            f"{ergebnis.hoechstgeschwindigkeit_kmh:>8.0f}{marke}"
+        )
     print(f"\nGroesste Abweichung: {groesste:.2f} km/h")
 
 
