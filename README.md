@@ -1343,7 +1343,10 @@ c.bis_zum_rennen()          # bis zum naechsten Renntag
 
 Die Saisonseite zeigt das Jahr als Band aus Tagesstreifen, eine Spalte je
 Woche: Renntag, Qualifying, Reise, freier Tag. Ein Mouseover nennt Datum
-und Zustand.
+und Zustand. Darueber steht eine Zeile mit dem heutigen Datum, dem
+naechsten Renntag und den Tagen dazwischen - seit Punkt 101 nur noch als
+Standortbestimmung, nicht mehr als Warnung: Die Tage kosten nichts und
+bringen nichts.
 
 ## Die Saison
 

@@ -9,7 +9,6 @@ Rennwochenende.
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QApplication,
     QGroupBox,
@@ -40,8 +39,6 @@ from rennmanager.ui.tabellen import schriftfarbe, verbinde_fahrerkarte
 # So viele Linien zeigt das Punktediagramm; 50 waeren kein Diagramm mehr.
 # Die eigenen Fahrer kommen dazu, wo immer sie stehen.
 LINIEN = 20
-
-FARBE_HINWEIS = QColor("#c62828")
 
 
 class Saisonseite(QWidget):
@@ -307,10 +304,11 @@ class Saisonseite(QWidget):
         self._abschluss.setText("<br>".join(zeilen))
 
     def _zeige_kalender(self) -> None:
-        """Kalenderstand und die Tage, die ein Rennen jetzt kosten wuerde.
+        """Kalenderstand und die Tage bis zum naechsten Renntag.
 
-        GDD 2: Das Rennen findet an seinem Renntag statt; wer vorher
-        faehrt, laesst die nutzbaren Tage bis dahin verfallen.
+        GDD 2: Das Rennen findet an seinem Renntag statt. Seit Punkt 101
+        kosten die Tage dazwischen nichts und bringen nichts - sie werden
+        genannt, damit man sieht, wo im Jahr man steht, nicht als Warnung.
         """
         karriere = self._lauf.karriere
         self._band.zeige(karriere)
@@ -333,14 +331,11 @@ class Saisonseite(QWidget):
             f"{renntag:%d.%m.%Y}"
         )
         offen = self._lauf.offene_tage_vor_dem_rennen
+        self._kalender.setStyleSheet("")
         if offen:
-            self._kalender.setStyleSheet(f"color: {FARBE_HINWEIS.name()};")
-            self._kalender.setText(
-                f"{stand} · Noch {offen} nutzbare Tage - wer jetzt faehrt, "
-                "laesst sie verfallen (GDD 2)."
-            )
+            tage = "ein Tag" if offen == 1 else f"{offen} Tage"
+            self._kalender.setText(f"{stand} · Noch {tage} bis dahin.")
         else:
-            self._kalender.setStyleSheet("")
             self._kalender.setText(f"{stand} · Heute ist Renntag.")
 
     def _zeige_tabelle(self) -> None:

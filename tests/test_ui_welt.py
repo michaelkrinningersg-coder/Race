@@ -204,7 +204,8 @@ def test_saisonseite_zeigt_den_kalenderstand(qtbot, konfig: kf.Konfiguration) ->
     renntag = seite.lauf.renntag(1)
     text = seite.kalenderzeile.text()
     assert f"{renntag:%d.%m.%Y}" in text
-    assert "verfallen" in text
+    # Punkt 101: Die Tage kosten nichts mehr - die Zeile zaehlt sie nur.
+    assert "bis dahin" in text
 
     seite.lauf.fahre_rennen()
     seite._aktualisiere()
