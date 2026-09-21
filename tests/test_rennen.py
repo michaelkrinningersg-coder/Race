@@ -17,7 +17,6 @@ from rennmanager.kern import strecke as st
 from rennmanager.kern import tempo as tp
 from rennmanager.kern.zufall import Seedquelle
 
-LIGA = 10
 # Feldgroesse aus der Konfiguration (Punkt 95: 40 statt 30 Autos).
 FELD = kf.lade().wert("rennen", "autos")
 
@@ -45,14 +44,14 @@ def zandvoort(strecken) -> st.Strecke:
 @pytest.fixture(scope="module")
 def rennen(k, zandvoort, mittel) -> rn.Rennverlauf:
     """Kurzes Rennen mit regulaerer Aufstellung."""
-    feld = rn.starterfeld(k, LIGA, spielerplatz=FELD)
+    feld = rn.starterfeld(k, spielerplatz=FELD)
     return rn.simuliere(k, zandvoort, feld, 3, Seedquelle(4711), mittel)
 
 
 @pytest.fixture(scope="module")
 def umgedreht(k, zandvoort, mittel) -> rn.Rennverlauf:
     """Staerkstes Auto startet hinten - erzwingt Ueberholmanoever."""
-    feld = rn.starterfeld(k, LIGA, umgedreht=True)
+    feld = rn.starterfeld(k, umgedreht=True)
     return rn.simuliere(k, zandvoort, feld, 3, Seedquelle(4711), mittel)
 
 
@@ -88,14 +87,25 @@ def test_autos_stehen_bis_zur_reaktionszeit(rennen, k) -> None:
     erwartet = [rn.startdistanz_m(k, t.startplatz) for t in rennen.teilnehmer]
     assert np.allclose(am_anfang, erwartet)
 
-    # Die schnellste Reaktion betraegt 100 ms, nach 50 ms steht alles still.
-    # ``distanzen_zu`` liegt zwischen den Messpunkten - die stehen 200 ms
-    # auseinander -, also interpoliert es 50 ms in den ersten Schritt
-    # hinein. Was dabei herauskommt, sind Bruchteile eines Millimeters;
-    # ein anfahrendes Auto legt in 50 ms mehrere Meter zurueck.
-    assert np.allclose(rennen.distanzen_zu(50), am_anfang, atol=0.01)
-    # Nach einer Sekunde hat sich jedes Auto bewegt.
-    assert (rennen.distanzen_zu(1_000) > am_anfang).all()
+    # Die schnellste Reaktion betraegt 100 ms. Gemessen wird am ersten
+    # Messpunkt nach dem Start - die stehen 200 ms auseinander. Bis
+    # dahin hat ein Auto im Schnitt 6,5 cm zurueckgelegt; eines, das von
+    # Anfang an rollte, schaffte in derselben Zeit mehrere Meter.
+    #
+    # Gemessen wird die **Summe** ueber das Feld, nicht jedes Auto fuer
+    # sich: Seit Punkt 101 faehrt das ganze Feld auf Liga-1-Niveau, und
+    # die Ueberholpruefung misst den Abstand gegen das *Zieltempo* des
+    # Hintermanns statt gegen sein gefahrenes. Auf der Start-Ziel-Geraden
+    # von Zandvoort liegt dieses Ziel bei ueber 100 m/s, womit die 5 m
+    # Startabstand gerade als "dicht auf" gelten - in der ersten Sekunde
+    # tauschen deshalb Autos die Plaetze, die kaum rollen. Ein Tausch
+    # laesst die Summe unberuehrt, ein gefahrener Meter nicht.
+    gefahren = rennen.distanzen_zu(200).sum() - am_anfang.sum()
+    assert abs(gefahren) / len(am_anfang) < 0.15
+    # Nach einer Sekunde ist das Feld unterwegs - gemessen 3,85 m je
+    # Auto, also das Fuenfundzwanzigfache der ersten 200 ms.
+    nach_einer_sekunde = rennen.distanzen_zu(1_000).sum() - am_anfang.sum()
+    assert nach_einer_sekunde / len(am_anfang) > 3.0
 
 
 def test_start_erfolgt_aus_dem_stand(rennen) -> None:
@@ -113,14 +123,7 @@ def test_rundenzahl_folgt_der_distanz(k, zandvoort) -> None:
 
     km = k.wert("rennen", "distanz_km")
     erwartet = math.ceil(km * 1000 / zandvoort.laenge_m)
-    assert rn.rundenzahl(k, zandvoort, 1) == erwartet
-
-
-def test_jede_liga_faehrt_dieselbe_distanz(k, zandvoort) -> None:
-    """Punkt 95: Die Distanz haengt nicht mehr an der Liga."""
-    anzahl = k.wert("ligen", "anzahl")
-    runden = {rn.rundenzahl(k, zandvoort, liga) for liga in range(1, anzahl + 1)}
-    assert len(runden) == 1
+    assert rn.rundenzahl(k, zandvoort) == erwartet
 
 
 # -- Verlauf ----------------------------------------------------------------
@@ -150,7 +153,7 @@ def test_ausgefallene_stehen_nach_runden_und_zeit(k, zandvoort, mittel) -> None:
     Test sucht sich deshalb den ersten passenden, statt sich an eine Zahl
     zu binden, die die naechste Balancing-Aenderung umwirft.
     """
-    feld = rn.starterfeld(k, LIGA, seedquelle=Seedquelle(1))
+    feld = rn.starterfeld(k, seedquelle=Seedquelle(1))
 
     def paare_von(verlauf):
         ausfaelle = [e for e in verlauf.ergebnisse if e.zeit_ms is None]
@@ -191,7 +194,7 @@ def test_die_form_faellt_je_sektor_nicht_je_runde(k, zandvoort, mittel) -> None:
     waeren die vier Verhaeltnisse einer Runde bis auf Reifenverschleiss
     und Verkehr gleich; mit einem Wurf je Sektor gehen sie auseinander.
     """
-    feld = rn.starterfeld(k, LIGA, seedquelle=Seedquelle(1))[:6]
+    feld = rn.starterfeld(k, seedquelle=Seedquelle(1))[:6]
     mit = rn.simuliere(k, zandvoort, feld, 4, Seedquelle(3), mittel)
     ohne = rn.simuliere(k, zandvoort, feld, 4, Seedquelle(3), mittel, ohne_zufall=True)
 
@@ -419,7 +422,7 @@ def test_abfrage_ausserhalb_des_verlaufs_ist_gueltig(rennen) -> None:
 
 # -- Reproduzierbarkeit -----------------------------------------------------
 def test_gleicher_seed_gleiches_rennen(k, zandvoort, mittel) -> None:
-    feld = rn.starterfeld(k, LIGA, umgedreht=True)
+    feld = rn.starterfeld(k, umgedreht=True)
     erste = rn.simuliere(k, zandvoort, feld, 2, Seedquelle(123), mittel)
     zweite = rn.simuliere(k, zandvoort, feld, 2, Seedquelle(123), mittel)
     assert np.array_equal(erste.distanz_m, zweite.distanz_m)
@@ -428,7 +431,7 @@ def test_gleicher_seed_gleiches_rennen(k, zandvoort, mittel) -> None:
 
 
 def test_anderer_seed_anderes_rennen(k, zandvoort, mittel) -> None:
-    feld = rn.starterfeld(k, LIGA, umgedreht=True)
+    feld = rn.starterfeld(k, umgedreht=True)
     erste = rn.simuliere(k, zandvoort, feld, 2, Seedquelle(123), mittel)
     zweite = rn.simuliere(k, zandvoort, feld, 2, Seedquelle(456), mittel)
     assert erste.manoever != zweite.manoever
@@ -436,32 +439,27 @@ def test_anderer_seed_anderes_rennen(k, zandvoort, mittel) -> None:
 
 # -- Startfeld --------------------------------------------------------------
 def test_starterfeld_hat_die_feldgroesse_der_konfiguration(k) -> None:
-    feld = rn.starterfeld(k, LIGA)
+    feld = rn.starterfeld(k)
     assert len(feld) == k.wert("rennen", "autos")
     assert sorted(t.startplatz for t in feld) == list(range(1, FELD + 1))
 
 
-def test_starterfeld_spannt_die_liga_auf(k) -> None:
-    """GDD 9: von Letztem bis Bestem der Liga."""
-    from rennmanager.kern.welt import ligagrenzen
+def test_starterfeld_spannt_das_feld_auf(k) -> None:
+    """Punkt 101: von Letztem bis Bestem des Feldes."""
+    from rennmanager.kern.welt import feldgrenzen
 
-    bester, letzter = ligagrenzen(k, LIGA)
-    feld = rn.starterfeld(k, LIGA)
+    bester, letzter = feldgrenzen(k)
+    feld = rn.starterfeld(k)
     werte = [t.auto.wert("F1") for t in feld]
     assert max(werte) == bester
     assert min(werte) == letzter
 
 
 def test_starterfeld_kennzeichnet_den_spieler(k) -> None:
-    feld = rn.starterfeld(k, LIGA, spielerplatz=7)
+    feld = rn.starterfeld(k, spielerplatz=7)
     spieler = [t for t in feld if t.ist_spieler]
     assert len(spieler) == 1
     assert spieler[0].startplatz == 7
-
-
-def test_starterfeld_ausserhalb_der_ligen_meldet_fehler(k) -> None:
-    with pytest.raises(ValueError, match="ausserhalb"):
-        rn.starterfeld(k, k.wert("ligen", "anzahl") + 1)
 
 
 def test_simulation_ohne_teilnehmer_meldet_fehler(k, zandvoort, mittel) -> None:
@@ -471,7 +469,7 @@ def test_simulation_ohne_teilnehmer_meldet_fehler(k, zandvoort, mittel) -> None:
 
 def test_simulation_ohne_runden_meldet_fehler(k, zandvoort, mittel) -> None:
     with pytest.raises(ValueError, match="Runde"):
-        rn.simuliere(k, zandvoort, rn.starterfeld(k, LIGA), 0, Seedquelle(1), mittel)
+        rn.simuliere(k, zandvoort, rn.starterfeld(k), 0, Seedquelle(1), mittel)
 
 
 # --- Positionsgewinne je Runde (Punkt 1 der Manoeverzaehlung) --------------
@@ -757,7 +755,7 @@ def test_der_reifenzustand_reicht_einfach_genau(rennen) -> None:
 
 def test_der_fortschritt_aendert_das_rennen_nicht(k, zandvoort, mittel) -> None:
     """E10: Der Rueckruf liest nur mit, er greift nicht ein."""
-    feld = rn.starterfeld(k, LIGA, spielerplatz=FELD)
+    feld = rn.starterfeld(k, spielerplatz=FELD)
     gemeldet: list[tuple[int, int]] = []
     ohne = rn.simuliere(k, zandvoort, feld, 3, Seedquelle(4711), mittel)
     mit = rn.simuliere(

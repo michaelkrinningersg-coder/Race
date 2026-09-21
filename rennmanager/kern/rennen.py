@@ -1812,10 +1812,20 @@ class _Lauf:
         tempo_hinten = ziel[hinten]
         # Nur Paare betrachten, bei denen beide fahren und der Abstand
         # unter der Schwelle aus GDD 4 liegt.
+        #
+        # ``ziel`` ist das Tempo, das der Hintermann an dieser Stelle
+        # fahren **koennte**. Wer steht, faehrt es nicht: Vor seiner
+        # Reaktionszeit und nach einem Fehler steht ein Auto still, und
+        # GDD 4 verlangt fuers Ueberholen einen Tempovorteil. Ohne diese
+        # Bedingung galten auf der Start-Ziel-Geraden von Zandvoort die
+        # 5 m Startabstand als "dicht auf" - das Zieltempo liegt dort
+        # ueber 100 m/s -, und im allerersten Schritt tauschten Autos die
+        # Plaetze, bevor sich eines bewegt hatte.
         nah = (
             faehrt[hinten]
             & faehrt[vorne]
             & (tempo_hinten > 0.0)
+            & (self.tempo[hinten] > 0.0)
             & (abstand_m < tempo_hinten * self.max_abstand_s)
         )
         if not nah.any():

@@ -27,7 +27,7 @@ def strecke(k) -> st.Strecke:
 
 @pytest.fixture(scope="module")
 def feld(k) -> tuple[rn.Teilnehmer, ...]:
-    return rn.starterfeld(k, LIGA)
+    return rn.starterfeld(k)
 
 
 @pytest.fixture(scope="module")
@@ -392,7 +392,7 @@ def test_ohne_gefahrenen_sektor_gibt_es_kein_lila(session) -> None:
 
 # -- Was gerade passiert ist (Punkt 93) -------------------------------------
 def test_die_letzte_zielankunft_nennt_platz_und_verdraengten(k, strecke) -> None:
-    session = ql.fahre(k, strecke, rn.starterfeld(k, LIGA), Seedquelle(0))
+    session = ql.fahre(k, strecke, rn.starterfeld(k), Seedquelle(0))
     fenster = k.wert("qualifying", "hervorhebung_ms")
     for fahrt in sorted(session.fahrten, key=lambda f: f.ziel_ms):
         ankunft = session.letzte_zielankunft(fahrt.ziel_ms, fenster)
@@ -415,7 +415,7 @@ def test_die_letzte_zielankunft_nennt_platz_und_verdraengten(k, strecke) -> None
 
 def test_ausserhalb_des_fensters_gibt_es_keine_ankunft(k, strecke) -> None:
     """Sonst stuende der letzte Wechsel bis zum Sessionende da."""
-    session = ql.fahre(k, strecke, rn.starterfeld(k, LIGA), Seedquelle(0))
+    session = ql.fahre(k, strecke, rn.starterfeld(k), Seedquelle(0))
     fenster = k.wert("qualifying", "hervorhebung_ms")
     letzte = max(f.ziel_ms for f in session.fahrten)
     assert session.letzte_zielankunft(letzte, fenster) is not None
@@ -426,7 +426,7 @@ def test_ausserhalb_des_fensters_gibt_es_keine_ankunft(k, strecke) -> None:
 
 
 def test_der_erste_eroeffnet_die_pole_statt_sie_zu_uebernehmen(k, strecke) -> None:
-    session = ql.fahre(k, strecke, rn.starterfeld(k, LIGA), Seedquelle(0))
+    session = ql.fahre(k, strecke, rn.starterfeld(k), Seedquelle(0))
     fenster = k.wert("qualifying", "hervorhebung_ms")
     erste = min(session.fahrten, key=lambda f: f.ziel_ms)
     ankunft = session.letzte_zielankunft(erste.ziel_ms, fenster)

@@ -100,7 +100,7 @@ def test_ein_prozent_grip_ist_rund_eine_sekunde(k, zandvoort) -> None:
     Der Grip geht quadratisch ins Kurvenlimit (GDD 3), ein Prozent Grip
     bringt also mehr als ein Prozent Rundenzeit.
     """
-    auto = rn.starterfeld(k, 1)[0].auto
+    auto = rn.starterfeld(k)[0].auto
     gruen = tp.fahre_runde(k, zandvoort, auto, grip=1.0).zeit_ms
     ein_prozent = tp.fahre_runde(k, zandvoort, auto, grip=1.01).zeit_ms
     assert 700 < gruen - ein_prozent < 1000
@@ -108,7 +108,7 @@ def test_ein_prozent_grip_ist_rund_eine_sekunde(k, zandvoort) -> None:
 
 # -- Im Rennen --------------------------------------------------------------
 def test_ein_trockenes_rennen_gummiert_ein(k, zandvoort, mittel) -> None:
-    feld = rn.starterfeld(k, LIGA)
+    feld = rn.starterfeld(k)
     wetter = _trockenes_wetter(k, zandvoort, 12 * 130_000)
     verlauf = rn.simuliere(
         k, zandvoort, feld, 12, Seedquelle(4711), mittel, wetter=wetter
@@ -121,7 +121,7 @@ def test_ein_trockenes_rennen_gummiert_ein(k, zandvoort, mittel) -> None:
 
 
 def test_ein_regenrennen_gummiert_nicht(k, zandvoort, mittel) -> None:
-    feld = rn.starterfeld(k, LIGA)
+    feld = rn.starterfeld(k)
     nass = kern_wetter.wuerfle(
         k, zandvoort.name, 8 * 130_000, 130_000, Seedquelle(11)
     )
@@ -138,7 +138,7 @@ def test_ohne_wetter_bleibt_die_strecke_gruen(k, zandvoort, mittel) -> None:
 
     Im Spiel hat jedes Rennen eines - dort greift die Gummierung immer.
     """
-    verlauf = rn.simuliere(k, zandvoort, rn.starterfeld(k, LIGA), 3,
+    verlauf = rn.simuliere(k, zandvoort, rn.starterfeld(k), 3,
                            Seedquelle(4711), mittel)
     assert verlauf.gummierung is None
     assert verlauf.gummierung_zu(0.0) == 0.0
@@ -147,7 +147,7 @@ def test_ohne_wetter_bleibt_die_strecke_gruen(k, zandvoort, mittel) -> None:
 # -- Im Qualifying ----------------------------------------------------------
 def test_wer_spaeter_faehrt_findet_mehr_gummi(k, zandvoort) -> None:
     """GDD 4: Die Startreihenfolge ist der umgekehrte Meisterschaftsstand."""
-    feld = rn.starterfeld(k, LIGA)
+    feld = rn.starterfeld(k)
     for seed in range(60):
         session = ql.fahre(k, zandvoort, feld, Seedquelle(seed))
         if set(session.wetter.zustaende) <= {"trocken", "heiss"}:
@@ -164,7 +164,7 @@ def test_wer_spaeter_faehrt_findet_mehr_gummi(k, zandvoort) -> None:
 
 def test_das_qualifying_faengt_gruen_an(k, zandvoort) -> None:
     """Entscheidung des Auftraggebers: nichts ueberlebt von vorher."""
-    session = ql.fahre(k, zandvoort, rn.starterfeld(k, LIGA), Seedquelle(0))
+    session = ql.fahre(k, zandvoort, rn.starterfeld(k), Seedquelle(0))
     assert session.fahrten[0].gummi < 0.0001
 
 
@@ -246,7 +246,7 @@ def test_ein_weiches_feld_gummiert_schneller_ein(k, zandvoort, mittel) -> None:
     from rennmanager.kern import strategie as kern_strategie
 
     m = {x.kuerzel: x for x in kern_reifen.mischungen(k)}
-    feld = rn.starterfeld(k, LIGA)
+    feld = rn.starterfeld(k)
     wetter = _trockenes_wetter(k, zandvoort, 10 * 130_000)
 
     def stand(kuerzel: str) -> float:
@@ -268,7 +268,7 @@ def test_die_anzeige_zeigt_den_gummistand(qtbot, k, zandvoort, mittel) -> None:
     pytest.importorskip("PySide6")
     from rennmanager.ui.rennseite import Rennseite
 
-    feld = rn.starterfeld(k, LIGA)
+    feld = rn.starterfeld(k)
     wetter = _trockenes_wetter(k, zandvoort, 12 * 130_000)
     verlauf = rn.simuliere(
         k, zandvoort, feld, 12, Seedquelle(4711), mittel, wetter=wetter
@@ -289,7 +289,7 @@ def test_das_qualifying_zeigt_den_gummistand(qtbot, k, zandvoort) -> None:
     pytest.importorskip("PySide6")
     from rennmanager.ui.qualifyingseite import Qualifyingseite
 
-    session = ql.fahre(k, zandvoort, rn.starterfeld(k, LIGA), Seedquelle(0))
+    session = ql.fahre(k, zandvoort, rn.starterfeld(k), Seedquelle(0))
     seite = Qualifyingseite(k)
     qtbot.addWidget(seite)
     seite.zeige_session(session)
@@ -364,7 +364,7 @@ def test_ein_rennen_frisst_am_anfang_mehr_als_am_ende(k, zandvoort, mittel) -> N
         pytest.skip("Kein durchgehend trockener Wetterverlauf gefunden")
 
     verlauf = rn.simuliere(
-        k, zandvoort, rn.starterfeld(k, LIGA), 20, Seedquelle(4711), mittel,
+        k, zandvoort, rn.starterfeld(k), 20, Seedquelle(4711), mittel,
         wetter=wetter,
     )
     marken = verlauf.protokolle[0].rundenende_ms

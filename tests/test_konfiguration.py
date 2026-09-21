@@ -62,16 +62,12 @@ def test_jeder_bereich_hat_wirkende_faehigkeiten(k: kf.Konfiguration) -> None:
         assert wirkend, f"Bereich {bereich} ohne wirkende Faehigkeit"
 
 
-def test_ligennamen(k: kf.Konfiguration) -> None:
-    """Punkt 95: fuenf Stufen zu je zwei Ligen, Startliga Eisen 2."""
-    assert k.ligenname(1) == "Platin 1"
-    assert k.ligenname(2) == "Platin 2"
-    assert k.ligenname(3) == "Gold 1"
-    assert k.ligenname(5) == "Silber 1"
-    assert k.ligenname(7) == "Bronze 1"
-    assert k.ligenname(9) == "Eisen 1"
-    assert k.ligenname(10) == "Eisen 2"
-    assert k.ligenname(k.wert("ligen", "startliga")) == "Eisen 2"
+def test_das_feld(k: kf.Konfiguration) -> None:
+    """Punkt 101: 50 Autos, 25 Teams zu je zwei."""
+    assert k.wert("rennen", "autos") == 50
+    assert k.wert("teams", "anzahl") == 25
+    assert k.wert("teams", "autos_je_team") == 2
+    assert k.wert("hersteller", "anzahl") == 25
 
 
 def test_strecken(k: kf.Konfiguration) -> None:
@@ -101,24 +97,21 @@ def test_ueberholbedingungen(k: kf.Konfiguration) -> None:
 
 
 def test_punkte(k: kf.Konfiguration) -> None:
-    """Punkt 95: die Leiter ueber alle Ligen, 1000 Punkte fuer Liga 1."""
-    assert k.wert("wertung", "sieger_liga1") == 1000
-    assert k.wert("wertung", "abstand_erster_zweiter") == 10
-    assert k.wert("wertung", "abstand_zweiter_dritter") == 6
-    assert k.wert("wertung", "schritt") == 3
-    assert k.wert("wertung", "ankerplatz") == 25
+    """Punkt 101: eine feste Tabelle, je Platz ein Wert."""
+    punkte = k.wert("wertung", "punkte_je_platz")
+    assert len(punkte) == k.wert("rennen", "autos")
+    assert punkte[:5] == [100, 90, 80, 76, 72]
+    assert punkte[-1] == 1
     assert k.wert("wertung", "anteil_schnellste_runde") == 0.01
     assert k.wert("wertung", "anteil_qualifying") == [0.015, 0.005, 0.0025]
 
 
-def test_die_leiter_bleibt_bis_zur_untersten_liga_positiv(k: kf.Konfiguration) -> None:
+def test_die_tabelle_bleibt_bis_zum_letzten_platz_positiv(k: kf.Konfiguration) -> None:
     """Sonst faellt es erst mitten in einer Saison auf."""
     from rennmanager.kern import wertung as wt
 
-    unterste = k.wert("ligen", "anzahl")
-    letzter = wt.rennpunkte(k, unterste, k.wert("rennen", "autos"))
-    assert letzter >= 1
-    assert wt.rennpunkte(k, 1, 1) == 1000
+    assert wt.rennpunkte(k, k.wert("rennen", "autos")) >= 1
+    assert wt.rennpunkte(k, 1) == 100
 
 
 def test_wetterzustaende(k: kf.Konfiguration) -> None:
@@ -157,8 +150,7 @@ def test_zufallsebenen(k: kf.Konfiguration) -> None:
     assert k.wert("zufall", "rundenform", "kopplung", "bei_einem_platz") == 0.75
 
 
-def test_ereignisse_und_defekte(k: kf.Konfiguration) -> None:
-    assert len(k.wert("ereignisse", "liste")) == kf.ANZAHL_EREIGNISSE
+def test_defekte(k: kf.Konfiguration) -> None:
     assert len(k.wert("defekte", "liste")) == kf.ANZAHL_DEFEKTE
     assert k.wert("defekte", "max_gesamtmalus") == 0.50
 
@@ -169,25 +161,6 @@ def test_defekte_verweisen_auf_bekannte_upgrades(k: kf.Konfiguration) -> None:
         for wirkung in defekt["wirkung"]:
             assert wirkung["ziel"] in bekannt, f"{defekt['schluessel']}: {wirkung['ziel']}"
             assert wirkung["faktor"] < 0, f"{defekt['schluessel']} muss ein Malus sein"
-
-
-def test_ereignisse_verweisen_auf_bekannte_ziele(k: kf.Konfiguration) -> None:
-    faehigkeiten = {f.schluessel for f in k.faehigkeiten}
-    wetterfaehigkeiten = {
-        eintrag["schluessel"] for eintrag in k.wert("wetter", "faehigkeit", "liste")
-    }
-    sonstige = {
-        "fahrertraining",
-        "tagesform_mittelwert",
-        "geld",
-        "erfahrung",
-        "streckenkenntnis_naechste",
-        "kalendertage",
-    }
-    erlaubt = faehigkeiten | wetterfaehigkeiten | sonstige
-    for ereignis in k.wert("ereignisse", "liste"):
-        for wirkung in ereignis["wirkung"]:
-            assert wirkung["ziel"] in erlaubt, f"{ereignis['schluessel']}: {wirkung['ziel']}"
 
 
 def test_hersteller(k: kf.Konfiguration) -> None:
@@ -219,15 +192,8 @@ def test_entscheidungen_stehen_in_der_konfiguration(k: kf.Konfiguration) -> None
         ("reifen", "fluesterer", "max_daempfung"),
         ("reifen", "streckenfaktor", "grundlage"),
         ("ermuedung", "beginn_anteil_distanz"),
-        ("preisgeld", "interpolation", "verfahren"),
-        ("preisgeld", "anteil_kurve", "verfahren"),
-        ("preisgeld", "startgeld", "anteil_siegpraemie"),
-        ("erfahrung", "betraege", "grundbetrag_je_session"),
-        ("erfahrung", "wetter", "betrag", "je_km_anteil_sieg_ep"),
-        ("kosten", "k0_faktor", "verfahren"),
-        ("defekte", "reparatur", "anteil_siegpraemie_je_stufe"),
-        ("sponsoren", "betraege", "grundbetrag_alle_plaetze"),
-        ("ereignisse", "betraege", "E7"),
+        ("streckenkenntnis", "anfang", "anteil"),
+        ("feld", "spanne_rundenzeit"),
     ):
         assert k.wert(*pfad) is not None, " -> ".join(pfad)
 
@@ -263,13 +229,6 @@ def _tempo(k: kf.Konfiguration, s: float) -> float:
     return basis + spanne * math.sqrt(s / referenz)
 
 
-def _kosten(k: kf.Konfiguration, s: float) -> float:
-    """K(S) = k0 * (1 + S / teiler) ^ exponent."""
-    return k.wert("kosten", "k0_geld") * (
-        1 + s / k.wert("kosten", "teiler")
-    ) ** k.wert("kosten", "exponent")
-
-
 def test_kalibrierung_stuetzpunkte(k: kf.Konfiguration) -> None:
     """GDD 9: v(0) = 55, v(98.000) = 180, v(100.000) ~ 181,3 km/h."""
     assert _tempo(k, 0) == pytest.approx(k.wert("kalibrierung", "v_bei_0_kmh"))
@@ -281,75 +240,30 @@ def test_kalibrierung_stuetzpunkte(k: kf.Konfiguration) -> None:
     )
 
 
-def test_der_korridor_spannt_zwanzigtausend_bis_hunderttausend(k: kf.Konfiguration) -> None:
-    """Punkt 95: Liga 10 beginnt bei 20.000, Liga 1 endet bei 100.000."""
-    from rennmanager.kern.welt import ligagrenzen
+def test_die_feldgrenzen_stehen_auf_der_skala(k: kf.Konfiguration) -> None:
+    """Punkt 101: Der Beste faehrt den Anker, der Letzte 4 % langsamer."""
+    from rennmanager.kern.welt import feldgrenzen
 
-    anzahl = k.wert("ligen", "anzahl")
-    assert ligagrenzen(k, 1)[0] == k.wert("ligen", "oberste_s")
-    assert ligagrenzen(k, anzahl)[1] == k.wert("ligen", "unterste_s")
-
-
-def test_alle_ligen_sind_gleich_breit_und_ueberlappen_zu_einem_viertel(
-    k: kf.Konfiguration,
-) -> None:
-    """Punkt 95: gleiche Breite auf der Skala, 25 % Ueberlappung nach oben."""
-    from rennmanager.kern.welt import ligagrenzen
-
-    anzahl = k.wert("ligen", "anzahl")
-    anteil = k.wert("ligen", "ueberlappung_anteil")
-    grenzen = [ligagrenzen(k, liga) for liga in range(1, anzahl + 1)]
-
-    breiten = [bester - letzter for bester, letzter in grenzen]
-    assert max(breiten) - min(breiten) <= 1  # nur Rundung
-
-    for oben, unten in zip(grenzen, grenzen[1:], strict=False):
-        # Der Beste der tieferen Liga liegt um den Ueberlappungsanteil
-        # im Bereich der hoeheren.
-        hineinragend = unten[0] - oben[1]
-        assert hineinragend / breiten[0] == pytest.approx(anteil, abs=0.001)
+    bester, letzter = feldgrenzen(k)
+    assert bester == k.wert("skala", "referenz")
+    assert letzter == 87_445
+    spanne = _tempo(k, bester) / _tempo(k, letzter) - 1.0
+    assert spanne == pytest.approx(k.wert("feld", "spanne_rundenzeit"), abs=0.0005)
 
 
-def test_die_kontrollwerte_passen_zum_korridor(k: kf.Konfiguration) -> None:
-    """Die Pruefwerte in der Konfiguration stammen aus derselben Formel."""
-    from rennmanager.kern.welt import ligagrenzen
+def test_ein_falsches_s_letzter_faellt_auf(k: kf.Konfiguration) -> None:
+    """Die Pruefung rechnet die Spanne aus der Kalibrierung nach."""
+    import copy
+    from dataclasses import replace
 
-    for zeile in k.wert("ligen", "kontrolle"):
-        assert ligagrenzen(k, zeile["liga"]) == (zeile["s_bester"], zeile["s_letzter"])
-
-
-def test_liga_eins_bleibt_so_breit_wie_bisher(k: kf.Konfiguration) -> None:
-    """Punkt 95: Liga 1 orientiert sich am alten Korridor, unten wird es breiter."""
-    from rennmanager.kern.welt import ligagrenzen
-
-    def breite_prozent(liga: int) -> float:
-        bester, letzter = ligagrenzen(k, liga)
-        return (_tempo(k, bester) / _tempo(k, letzter) - 1.0) * 100.0
-
-    assert breite_prozent(1) == pytest.approx(3.83, abs=0.05)
-    assert breite_prozent(10) == pytest.approx(11.72, abs=0.05)
-
-
-def test_kosten_reproduzieren_die_tabelle(k: kf.Konfiguration) -> None:
-    """GDD 9: naechster Schritt 55 EUR bei S = 157 bis 790 EUR bei S = 98.130."""
-    for zeile in k.wert("kosten", "kontrolle"):
-        assert _kosten(k, zeile["s"]) == pytest.approx(
-            zeile["naechster_schritt_euro"], rel=0.02
-        ), zeile["bezeichnung"]
-
-
-def test_kostensumme_reproduziert_die_tabelle(k: kf.Konfiguration) -> None:
-    """Die Summe aller +10-Schritte ab 0 trifft die Werte aus GDD 9."""
-    schritt = k.wert("zeitmodell", "kaufschritt")
-    for zeile in k.wert("kosten", "kontrolle"):
-        summe = sum(_kosten(k, s) for s in range(0, zeile["s"], schritt))
-        assert summe == pytest.approx(zeile["summe_ab_0_euro"], rel=0.03), zeile[
-            "bezeichnung"
-        ]
+    roh = copy.deepcopy(k.roh)
+    roh["feld"]["s_letzter"] = 80_000
+    with pytest.raises(kf.KonfigurationsFehler, match="s_letzter"):
+        kf._pruefe(replace(k, roh=roh))
 
 
 def test_renndistanz(k: kf.Konfiguration) -> None:
-    """Punkt 95: Jede Liga faehrt dieselbe volle Distanz von 290 km."""
+    """Das Feld faehrt 290 km."""
     assert k.wert("rennen", "distanz_km") == 290
 
 

@@ -57,7 +57,7 @@ def welt(k) -> kw.Welt:
 
 @pytest.fixture(scope="module")
 def feld(welt):
-    return kw.starterfeld(welt, LIGA)
+    return kw.starterfeld(welt)
 
 
 @pytest.fixture(scope="module")

@@ -311,7 +311,7 @@ def test_eine_wechselnde_vorhersage_macht_die_tabelle_startabhaengig(
 
 # -- Das ganze Feld ---------------------------------------------------------
 def test_feldstrategien_geben_jedem_auto_eine_strategie(k, zandvoort, strecken):
-    feld = kern_rennen.starterfeld(k, LIGA, seedquelle=Seedquelle(1))
+    feld = kern_rennen.starterfeld(k, seedquelle=Seedquelle(1))
     runden = kern_rennen.rundenzahl(k, zandvoort, LIGA)
     faktor = kern_reifen.streckenfaktor(
         k, zandvoort, kern_reifen.mittlere_querbeschleunigung(strecken)
@@ -326,7 +326,7 @@ def test_feldstrategien_geben_jedem_auto_eine_strategie(k, zandvoort, strecken):
 
 
 def test_das_feld_faehrt_nicht_alles_dasselbe(k, zandvoort, strecken):
-    feld = kern_rennen.starterfeld(k, LIGA, seedquelle=Seedquelle(1))
+    feld = kern_rennen.starterfeld(k, seedquelle=Seedquelle(1))
     runden = kern_rennen.rundenzahl(k, zandvoort, LIGA)
     faktor = kern_reifen.streckenfaktor(
         k, zandvoort, kern_reifen.mittlere_querbeschleunigung(strecken)
@@ -349,7 +349,7 @@ def test_alle_autos_fahren_den_plan_des_medianfahrers(k, zandvoort, strecken):
     zwei Autos auf derselben Variante unterscheiden sich nur noch um das
     Boxenstoppfenster.
     """
-    feld = kern_rennen.starterfeld(k, LIGA, seedquelle=Seedquelle(1))
+    feld = kern_rennen.starterfeld(k, seedquelle=Seedquelle(1))
     runden = kern_rennen.rundenzahl(k, zandvoort, LIGA)
     faktor = kern_reifen.streckenfaktor(
         k, zandvoort, kern_reifen.mittlere_querbeschleunigung(strecken)
@@ -397,7 +397,7 @@ def test_wenige_stopps_werden_beim_ziehen_beguenstigt(k):
 
 def test_das_gewicht_zieht_nur_aus_den_zugelassenen(k, zandvoort, strecken):
     """Das Gewicht aendert die Haeufigkeit, nicht die Auswahl."""
-    feld = kern_rennen.starterfeld(k, LIGA, seedquelle=Seedquelle(1))
+    feld = kern_rennen.starterfeld(k, seedquelle=Seedquelle(1))
     runden = kern_rennen.rundenzahl(k, zandvoort, LIGA)
     faktor = kern_reifen.streckenfaktor(
         k, zandvoort, kern_reifen.mittlere_querbeschleunigung(strecken)
@@ -410,7 +410,7 @@ def test_das_gewicht_zieht_nur_aus_den_zugelassenen(k, zandvoort, strecken):
 
 def test_die_zahl_der_strategien_zaehlt_die_varianten(k, zandvoort, strecken):
     """Punkt 91: Was oben im Rennen steht."""
-    feld = kern_rennen.starterfeld(k, LIGA, seedquelle=Seedquelle(1))
+    feld = kern_rennen.starterfeld(k, seedquelle=Seedquelle(1))
     runden = kern_rennen.rundenzahl(k, zandvoort, LIGA)
     faktor = kern_reifen.streckenfaktor(
         k, zandvoort, kern_reifen.mittlere_querbeschleunigung(strecken)
@@ -449,7 +449,7 @@ def test_die_reihenfolge_ist_teil_der_variante(k, zandvoort, strecken):
 
 
 def test_gleicher_seed_gleiche_strategien(k, zandvoort, strecken):
-    feld = kern_rennen.starterfeld(k, LIGA, seedquelle=Seedquelle(1))
+    feld = kern_rennen.starterfeld(k, seedquelle=Seedquelle(1))
     runden = kern_rennen.rundenzahl(k, zandvoort, LIGA)
     faktor = kern_reifen.streckenfaktor(
         k, zandvoort, kern_reifen.mittlere_querbeschleunigung(strecken)
@@ -518,7 +518,7 @@ def test_ab_dem_streckenfaktor_bleiben_nur_die_haerteren(k, strecken):
     sanft = min(faktoren, key=lambda n: faktoren[n])
     assert faktoren[hart_zu] > grenze >= faktoren[sanft]
 
-    feld = kern_rennen.starterfeld(k, LIGA, seedquelle=Seedquelle(1))
+    feld = kern_rennen.starterfeld(k, seedquelle=Seedquelle(1))
     for name, erwartet_weich in ((hart_zu, False), (sanft, True)):
         strecke = next(s for s in strecken if s.name == name)
         runden = kern_rennen.rundenzahl(k, strecke, LIGA)
@@ -543,7 +543,7 @@ def test_wer_oft_stoppt_faehrt_nicht_auf_weich(k, strecken):
     grenze = k.wert("boxenstopp", "strategie", "weich_hoechstens_stopps")
     weich = sg.weichste_trockene(k)
     mittlere = kern_reifen.mittlere_querbeschleunigung(strecken)
-    feld = kern_rennen.starterfeld(k, LIGA, seedquelle=Seedquelle(1))
+    feld = kern_rennen.starterfeld(k, seedquelle=Seedquelle(1))
     autos = [t.auto for t in feld]
     viele = 0
     for strecke in strecken:
@@ -626,7 +626,7 @@ def test_die_rennseite_zeigt_die_zahl_der_strategien(qtbot, k, zandvoort) -> Non
     pytest.importorskip("PySide6")
     from rennmanager.ui.rennseite import Rennseite
 
-    feld = kern_rennen.starterfeld(k, LIGA, seedquelle=Seedquelle(1))
+    feld = kern_rennen.starterfeld(k, seedquelle=Seedquelle(1))
     mittel = kern_rennen.mittlerer_ueberholzonenanteil(k, (zandvoort,))
     verlauf = kern_rennen.simuliere(
         k, zandvoort, feld, 3, Seedquelle(4711), mittel,
@@ -660,7 +660,7 @@ def test_das_strategieblatt_zeigt_beide_zeiten_und_keine_namen(qtbot, k, zandvoo
     pytest.importorskip("PySide6")
     from rennmanager.ui.strategieblatt import Strategieblattfenster
 
-    feld = kern_rennen.starterfeld(k, LIGA, seedquelle=Seedquelle(1))
+    feld = kern_rennen.starterfeld(k, seedquelle=Seedquelle(1))
     mittel = kern_rennen.mittlerer_ueberholzonenanteil(k, (zandvoort,))
     verlauf = kern_rennen.simuliere(
         k, zandvoort, feld, 3, Seedquelle(4711), mittel,

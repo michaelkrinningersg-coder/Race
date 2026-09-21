@@ -11,7 +11,7 @@ import pytest
 from rennmanager.kern import rennen as rn
 from rennmanager.kern import strecke as kern_strecke
 from rennmanager.kern.zufall import Seedquelle
-from tests.boxenstopp.hilfen import LIGA, VERSCHLEISS
+from tests.boxenstopp.hilfen import VERSCHLEISS
 
 
 @pytest.fixture(scope="module")
@@ -68,4 +68,4 @@ def umgebung(k, strecken, monza):
 
 @pytest.fixture(scope="module")
 def feld(k):
-    return rn.starterfeld(k, LIGA, seedquelle=Seedquelle(1))
+    return rn.starterfeld(k, seedquelle=Seedquelle(1))

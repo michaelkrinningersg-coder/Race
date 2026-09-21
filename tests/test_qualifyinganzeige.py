@@ -36,7 +36,7 @@ def konfig() -> kf.Konfiguration:
 @pytest.fixture(scope="module")
 def session(konfig) -> ql.Qualifying:
     strecke = st.lade(konfig, "Catalunya")
-    feld = rn.starterfeld(konfig, LIGA)
+    feld = rn.starterfeld(konfig)
     return ql.fahre(konfig, strecke, feld, Seedquelle(4711))
 
 

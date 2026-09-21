@@ -34,7 +34,7 @@ def rennen(k, strecken) -> rn.Rennverlauf:
 
     zandvoort = next(s for s in strecken if s.name == "Zandvoort")
     haupt = Seedquelle(4711)
-    feld = rn.starterfeld(k, LIGA, seedquelle=haupt.zweig("feld"))
+    feld = rn.starterfeld(k, seedquelle=haupt.zweig("feld"))
     verschleiss = rf.streckenfaktor(
         k, zandvoort, rf.mittlere_querbeschleunigung(strecken)
     )
@@ -248,7 +248,7 @@ def test_zwischenfaelle_lassen_sich_je_auto_abfragen(rennen) -> None:
 def test_ohne_zufall_gibt_es_keine_zwischenfaelle(k, strecken) -> None:
     """GDD 9 kalibriert ohne Zufall - dann auch ohne Pannen und Verschleiss."""
     zandvoort = next(s for s in strecken if s.name == "Zandvoort")
-    feld = rn.starterfeld(k, LIGA)
+    feld = rn.starterfeld(k)
     verlauf = rn.simuliere(
         k, zandvoort, feld, 4, Seedquelle(1),
         rn.mittlerer_ueberholzonenanteil(k, strecken), ohne_zufall=True,

@@ -63,7 +63,7 @@ def mittel(k) -> float:
 
 
 def _rennen(k, zandvoort, mittel, seed: int = SEED, wetter=None) -> rn.Rennverlauf:
-    feld = rn.starterfeld(k, LIGA)
+    feld = rn.starterfeld(k)
     return rn.simuliere(
         k, zandvoort, feld, RUNDEN, Seedquelle(seed), mittel, wetter=wetter
     )
