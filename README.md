@@ -4,17 +4,24 @@ Motorsport-Manager mit sichtbarer Rennsimulation. Grundlage ist das
 [Game Design Dokument v1.0](Rennmanager%20%E2%80%93%20Game%20Design%20Dokument%20%28v1.0%29.md);
 die Arbeitsregeln stehen in [CLAUDE.md](CLAUDE.md).
 
-**Stand: alle zehn Schritte der Umsetzungsreihenfolge sind durch, dazu der
-Ligenumbau aus Punkt 95.** Eine Karriere laeuft vom 1. Januar bis zum Auf-
-und Abstieg, mit Ereignissen, Rundenrekorden, Historie und Spielstand auf
-der Platte. Dazu der Editor aus GDD 15 (Debug-Ansicht), mit dem sich jeder
+**Stand: alle zehn Schritte der Umsetzungsreihenfolge sind durch, dazu
+der Umbau aus Punkt 101.** Eine Saison laeuft vom 1. Januar bis zum
+Saisonabschluss, mit Rundenrekorden, Historie und Spielstand auf der
+Platte. Dazu der Editor aus GDD 15 (Debug-Ansicht), mit dem sich jeder
 Fahrer aendern laesst.
 
-Die Welt besteht aus **10 Ligen zu je 40 Autos** - 400 Fahrer in 100 Teams.
-Ueber alle zehn laeuft **eine** Meisterschaft: Die Punkte einer Liga
-ueberlappen mit denen der Liga darueber, alle fuenf Rennen wechseln die
-besten und die schwaechsten drei jeder Liga, und jede Liga faehrt die volle
-Distanz von 290 km.
+Die Welt besteht seit Punkt 101 aus **einem Feld von 50 Autos** - 25
+Hersteller mit je zwei Autos, der Spieler hat also selbst zwei. Es gibt
+keine Ligen mehr, keinen Auf- und Abstieg, keinen Transfermarkt, kein
+Geld und keine Fahrerentwicklung: Die Staerken stehen fest, und wer wie
+schnell ist, entscheidet sich auf der Strecke.
+
+Das ganze Feld liegt **vier Prozent Rundenzeit** auseinander: Der Beste
+faehrt auf Zandvoort 180 km/h Schnitt (S = 98.000, 1:24.887), der Letzte
+1:28.282. Alle 50 Staerken liegen gleichmaessig dazwischen; das Rauschen
+der Einzelwerte macht daraus gemessene 4,5 bis 4,7 Prozent. Jedes Rennen
+geht ueber die volle Distanz von 290 km, und **jeder Platz bekommt
+Punkte** - von 100 fuer den Sieg bis 1 fuer Platz 50.
 
 ## Aufbau
 
@@ -33,6 +40,10 @@ Distanz von 290 km.
 
 Die Trennung zwischen Kern und Oberflaeche wird von `tests/test_aufbau.py`
 geprueft: Kein Modul unter `rennmanager/kern/` darf Qt importieren.
+
+Das Hauptfenster hat seit Punkt 101 **acht** Reiter: Uebersicht, Strecke,
+Runde, Welt, Rennwochenende, Saison, Statistik, Editor. Karriere,
+Finanzen, Sponsoren und Transfermarkt sind mit dem Umbau weggefallen.
 
 ## Starten
 
@@ -144,9 +155,10 @@ linear in `p` herauskommt, muss die *Haftung* quadratisch in `p` wachsen:
 
     a(S) = haftung_referenz * (anteil_bei_null + (1 - anteil_bei_null) * p)^2
 
-Mit dieser Form trifft das Modell alle zehn Kontrollwerte der Ligatabelle
-aus GDD 9 auf 0,01 km/h genau - und ebenso Werte, die bei der Anpassung
-gar nicht vorkamen.
+Mit dieser Form trifft das Modell den Anker aus GDD 9 - 180 km/h bei
+S = 98.000 auf Zandvoort - auf 0,01 km/h genau und ebenso Werte, die bei
+der Anpassung gar nicht vorkamen. Angepasst wird gegen ein Raster ueber
+die ganze Skala plus die beiden Enden des Feldes (`werkzeuge/kalibriere.py`).
 
 ### Warum nur zwei freie Konstanten
 
@@ -177,9 +189,9 @@ from rennmanager.konfiguration import lade
 k = lade()
 alle = strecke.lade_alle(k)
 monza = next(s for s in alle if s.name == "Monza")
-feld = rennen.starterfeld(k, liga=10, spielerplatz=30)
+feld = rennen.starterfeld(k, spielerplatz=30)
 verlauf = rennen.simuliere(
-    k, monza, feld, rennen.rundenzahl(k, monza, 10), Seedquelle(4711),
+    k, monza, feld, rennen.rundenzahl(k, monza), Seedquelle(4711),
     rennen.mittlerer_ueberholzonenanteil(k, alle),
 )
 verlauf.reihenfolge_zu(90_000)   # Positionen nach anderthalb Minuten
@@ -220,7 +232,7 @@ Vier Dinge stehen neben der Streckenansicht, alle aus dem fertigen
   nicht "Auto Nummer drei".
 * **Zwischenfall-Ticker**: Fehler, Unfaelle und Defekte bis zur laufenden
   Rennzeit, neueste zuerst, **fuenfzig Zeilen tief** (Punkt 97). Zwoelf
-  waren es bis dahin - bei 40 Autos ueber die volle Distanz fallen
+  waren es bis dahin - bei 50 Autos ueber die volle Distanz fallen
   mehrere hundert Zwischenfaelle, und wer zwei Bilder wegsah, hatte den
   Ausfall verpasst. Passen die Zeilen nicht ins Blatt, rollt es; den
   Rollbalken setzt Qt von selbst (gemessen: 47 Zeilen in einem 460 px
@@ -309,10 +321,10 @@ in die .exe.
 
 Die Achse skaliert nicht nach Ausgefallenen und Ueberrundeten: GDD 4 kennt
 fuer sie keinen Zeitrueckstand, sondern "+n Rd.", und ihre Kurve bleibt
-beim letzten gueltigen Wert stehen. Dass ein Feld weit auseinanderliegt,
-bleibt dagegen sichtbar - in Liga 10 reicht die Ligastaerke von 12.000 bis
-19.285, und der letzte Ankommende liegt dort gemessen 216 s hinter dem
-Sieger (Zandvoort, 69 Runden).
+beim letzten gueltigen Wert stehen. Dass ein Feld auseinanderliegt,
+bleibt dagegen sichtbar - seit Punkt 101 sind das die vier Prozent
+Rundenzeit zwischen dem Besten und dem Letzten, ueber 69 Runden also rund
+eine Minute.
 
 ## Wetter und Zufall
 
@@ -356,7 +368,7 @@ from rennmanager.konfiguration import lade
 
 k = lade()
 spa = strecke.lade(k, "Spa")
-feld = rennen.starterfeld(k, liga=10, spielerplatz=30)
+feld = rennen.starterfeld(k, spielerplatz=30)
 haupt = Seedquelle(4711)
 
 # Samstag: jedes Auto allein, Aufwaermrunde plus gezeitete Runde
@@ -377,13 +389,12 @@ Land und Geburtstag** - mehr nicht. `Datei -> Neue Karriere` (Strg+N)
 fragt spaeter noch einmal und setzt alles auf Anfang: Welt, Karriere,
 Statistik, Streckenkenntnis und Popularitaet.
 
-Die Startliga steht **nicht** zur Wahl; sie ist immer die aus der
-Konfiguration (Liga 10, die unterste). Freie Wahl waere der
-Schwierigkeitsgrad durch die Hintertuer - wer in Liga 5 anfinge, liesse die
-halbe Karriere aus GDD 13 einfach aus. Die Laender kommen aus derselben
-Liste wie die der 399 KI-Fahrer, damit der Spieler kein Land traegt, das es in dieser Welt
-sonst nicht gibt; an zweien haengt mehr als Farbe, denn wer im Land einer
-der 20 Strecken wohnt, hat dort seine Heimstrecke (Punkt 49).
+Wo der Spieler im Feld steht, ist **nicht** zur Wahl: Sein Team wird
+wie jedes andere auf die Leiter gewuerfelt (Punkt 101). Die Laender
+kommen aus derselben Liste wie die der KI-Fahrer, damit der Spieler kein
+Land traegt, das es in dieser Welt sonst nicht gibt; an zweien haengt
+mehr als Farbe, denn wer im Land einer der 20 Strecken wohnt, hat dort
+seine Heimstrecke (Punkt 49).
 
 ### Das gefuehrte Rennwochenende
 
@@ -393,7 +404,7 @@ einem Reiter:
 1. **Vorschau** - Renntag, Strecke, Charakter, Laenge, Rundenzahl und der
    Tabellenstand vor dem Rennen. Vor Rennen 1 gibt es noch keine Tabelle;
    dann steht dort das Feld nach Staerke.
-2. **Qualifying** - die Session der eigenen Liga als Zeitenmonitor,
+2. **Qualifying** - die Session des ganzen Feldes als Zeitenmonitor,
    abspielbar wie das Rennen (GDD 4)
 3. **Rennen** - auf die gefahrene Aufstellung, abspielbar im Zeitraffer.
    Es startet in **Echtzeit** (1x) und laeuft von selbst los, sobald man
@@ -404,7 +415,7 @@ einem Reiter:
 
 Gefahren wird, was der Kalender vorgibt (GDD 2): Strecke, Rundenzahl,
 Aufstellung und Seed kommen aus der Saison. Frueher liessen sich hier
-Strecke, Liga, Rundenzahl, Seed und Startaufstellung frei einstellen -
+Strecke, Rundenzahl, Seed und Startaufstellung frei einstellen -
 das war ein Werkzeug, kein Spiel. Zum Kalibrieren dienen
 `python -m rennmanager --pruefe` und die Werkzeuge unter `werkzeuge/`,
 die ohne Oberflaeche laufen.
@@ -412,11 +423,11 @@ die ohne Oberflaeche laufen.
 ```python
 from rennmanager.kern.saison import Wochenendlauf
 
-wochenende = Wochenendlauf(lauf, liga=10)
+wochenende = Wochenendlauf(lauf)
 wochenende.nummer, wochenende.strecke.name, wochenende.runden   # Vorschau
 wochenende.fahre_qualifying()   # ab hier springt der Kalender auf den Renntag
 wochenende.fahre_rennen()       # auf die Aufstellung des Qualifyings
-wochenende.schliesse_ab()       # die 9 anderen Ligen, dann verbuchen
+wochenende.schliesse_ab()       # verbuchen: Tabelle, Statistik, Kenntnis
 ```
 
 #### Das Qualifying als Uebertragung
@@ -536,8 +547,8 @@ stuende dort das Ergebnis, auf das die Uebertragung gerade zulaeuft.
 
 #### Warum das Rennen im Hintergrund rechnet
 
-Ein Rennen zu rechnen kostet gemessen 47 Sekunden (Zandvoort, 40 Autos,
-69 Runden ueber die volle Distanz). Bis Punkt 86 lief das im
+Ein Rennen zu rechnen kostet gemessen rund eine Minute (Zandvoort,
+50 Autos, 69 Runden ueber die volle Distanz). Bis Punkt 86 lief das im
 Oberflaechen-Thread: Der Knopf ging aus, der Mauszeiger wurde zur Sanduhr,
 und das Fenster reagierte eine Dreiviertelminute lang auf nichts. Ein Fenster, das nicht reagiert, sieht
 abgestuerzt aus - auch wenn es fleissig rechnet.
@@ -569,14 +580,13 @@ die Saison nicht.
 
 #### Warum gefuehrt und am Stueck dasselbe ergibt
 
-`fahre_rennen` geht von Liga 1 bis 10 durch, das gefuehrte Wochenende
-faengt mit der Liga des Spielers an. Dass beides dasselbe ergibt, haengt
-an zwei Dingen: Die Seedzweige heissen nach ihrer Sache (`qualifying`,
-`rennwetter`, `rennen`, `liga 7`) und nicht nach der Reihenfolge, und jede
-Liga bucht fuer sich. Ein Test haelt es fest - gemessen stimmen alle 400
-Ergebniszeilen ueberein, dazu Tabellen, Streckenkenntnis und Popularitaet
-aller 400 Fahrer. Gegenprobe mit einem anderen Seed: Dann weichen alle 10
-Ligen ab.
+`Saisonlauf.fahre_rennen` rechnet das Wochenende in einem Zug, das
+gefuehrte Wochenende in vier Schritten. Dass beides dasselbe ergibt,
+haengt daran, dass die Seedzweige nach ihrer **Sache** heissen
+(`qualifying`, `rennwetter`, `rennen`) und nicht nach der Reihenfolge, in
+der jemand sie zieht. Ein Test haelt es fest - gemessen stimmen alle 50
+Ergebniszeilen ueberein, dazu Tabelle, Streckenkenntnis und Popularitaet.
+Gegenprobe mit einem anderen Seed: Dann weicht alles ab.
 
 ## Reifen, Fehler, Unfaelle, Defekte
 
@@ -594,9 +604,8 @@ verheizt - die Linien im Rennverlauf kreuzen sich. Der Reifenfluesterer
 steht wie die Wetterfaehigkeiten aus GDD 7 neben der Wirkungsmatrix;
 die Begruendung dazu in OFFENE_PUNKTE.md.
 
-Die Streckenwirkung kommt aus der Querbeschleunigung der Runde: In
-Zandvoort enden die Reifen einer Liga-10-Session bei 11 bis 19 %, in
-Monza bei 62 bis 66 %.
+Die Streckenwirkung kommt aus der Querbeschleunigung der Runde:
+Zandvoort nimmt die Reifen deutlich mehr her als Monza.
 
 ### Was ein Fehler kostet
 
@@ -640,19 +649,10 @@ gefahren wird:
 Fehler:        Standzeit 0.27 bis 4.56 s, Gipfel 1.09 s, im Mittel 1.25 s
 ```
 
-Gemessen an einem ganzen Rennen (Zandvoort, Liga 10, 69 Runden, 40 Autos)
-fallen 371 Fehler: Standzeiten von 0,34 bis 4,05 s, 44 davon ueber zwei
+Gemessen an einem ganzen Rennen (Zandvoort, 69 Runden, 40 Autos, vor
+Punkt 101) fallen 371 Fehler: Standzeiten von 0,34 bis 4,05 s, 44 davon ueber zwei
 und 9 ueber drei Sekunden. Zusammen 464 Sekunden Stillstand - auf die
 Sekunde dasselbe, was die frueheren 1250 ms ergeben haetten.
-
-### Ereignisse treffen einzelne Fahrer
-
-GDD 14 laesst Ereignisse auf den Spieler wirken. Seit der Spieler ein
-Team mit vier Autos fuehrt, ist das nicht mehr eindeutig: Eine
-Erkaeltung hat **einer**, nicht alle vier. Jeder Fahrer fuehrt deshalb
-seine eigene Lage (``karriere.lage_je_fahrer``), und ein ausgeloestes
-Ereignis trifft einen, gewuerfelt aus der Seedquelle der Saison. Die
-Meldung nennt seinen Namen.
 
 ## Boxenstopps und Reifenstrategie (Punkt 39)
 
@@ -668,18 +668,19 @@ kosten. Diese Grenze trifft nur den Norisring (2260 m Runde, 515 m Gasse,
 49,6 Prozent); die uebrigen 19 Strecken bleiben unberuehrt.
 
 **Der 80er-Deckel gilt nur, wo die Strecke schneller waere.** Wo sie
-ohnehin langsamer ist, gilt ihr eigenes Tempo minus 5 Prozent. In Liga 1
-kommt das nie vor - die Gasse liegt auf der Geraden, dort werden 200 bis
-400 km/h gefahren (Zandvoort). In Liga 10 auf zwei der zwanzig Strecken:
-Das schwaechste Auto kommt in Spa auf 53 und in Yas Marina auf 52 km/h und
-damit unter das Limit von 70 km/h; ohne den Abzug waere die Boxengasse
-dort fuer es kostenlos.
+ohnehin langsamer ist, gilt ihr eigenes Tempo minus 5 Prozent. Beim Feld
+von heute kommt das nicht mehr vor - die Gasse liegt auf der Geraden,
+dort werden 200 bis 400 km/h gefahren. Die Regel steht trotzdem: Sie ist
+gebaut fuer den Fall, dass die Gasse schneller waere als die Strecke, und
+ohne sie kostete die Boxengasse dort gar nichts. Seit Punkt 101 gibt es
+nur noch **ein** Limit (`[boxenstopp] limit_kmh = 80`) statt einer
+Staffelung je Liga.
 
 Ein Stopp kostet vier Dinge: die langsame **Durchfahrt**, das **Bremsen**
 bis zum Stillstand, die **Standzeit** (6 bis 12 Sekunden, gewuerfelt) und
 das **Anfahren** aus dem Stand. Bremsen und Anfahren kommen aus den
-Grenzen dieses Autos: In Liga 1 zusammen 1,66 Sekunden, in Liga 10 4,86 -
-ein schwaches Auto kommt aus der Box eben langsamer heraus. Im Zeitraffer
+Grenzen dieses Autos: zusammen rund 1,7 Sekunden - ein schwaecheres Auto
+kommt aus der Box etwas langsamer heraus. Im Zeitraffer
 faehrt das Auto die Gasse wirklich langsam ab und steht wirklich, der
 Schnellmodus bucht dieselbe Summe.
 
@@ -763,12 +764,11 @@ Spanne: Sie kennt die einzelnen Wuerfe noch nicht, und die Mitte
 bevorzugt keine Strategie.
 
 Der teurere Stopp - im Mittel 31,5 statt 23,3 Sekunden - und die
-haerteren Mischungen haben die Stoppzahl sichtbar gesenkt: Zwei-Stopp-
-Strategien sind von 10 auf 23 von 100 Strecke-Liga-Kombinationen
-gestiegen. Ohne die Drei-Stopp-Grenze waeren frueher 4 bis 6 Stopps in
-76 Faellen optimal gewesen, jetzt 2 bis 3 in 79; fuenf oder mehr kommen
-gar nicht mehr vor. Die Grenze bindet damit nur noch in 19 statt in 76
-Faellen - die Reifenwahl steuert die Stoppzahl endlich selbst.
+haerteren Mischungen haben die Stoppzahl sichtbar gesenkt. Gemessen
+wurde das damals ueber 100 Strecke-Liga-Kombinationen: Zwei-Stopp-
+Strategien stiegen von 10 auf 23, und ohne die Drei-Stopp-Grenze waeren
+vorher 4 bis 6 Stopps in 76 Faellen optimal gewesen, danach 2 bis 3 in
+79. Fuenf oder mehr kommen gar nicht mehr vor.
 
 ### Die Gripkurve
 
@@ -797,7 +797,7 @@ nach jedem Stopp.
 **Der Gipfel wird frueh passiert.** In Zandvoort steht ein weicher Satz
 nach zwei Runden bei 80 Prozent, ein harter nach neun; der Reifen ist
 also in der ersten Runde auf dem Punkt und verbringt den Rest des Stints
-im Abstieg. Runden bis 80 / 50 / 30 / 0 Prozent, bestes Auto der Liga 1,
+im Abstieg. Runden bis 80 / 50 / 30 / 0 Prozent, bestes Auto des Feldes,
 trocken:
 
 ```
@@ -812,14 +812,14 @@ trocken:
 **Die Nassreifen halten seit Punkt 100 wie ein Mittel** (Intermediate
 0,73, Regen 0,64). Davor standen sie bei 1,10 und 0,90 - der
 Intermediate war damit der **kurzlebigste Reifen im ganzen Satz**,
-kurzlebiger noch als Weich. Das fiel unten auf: Liga 10 holte aus einem
-Satz Mittel 20 Runden, aus einem Intermediate nur 12 - bei derselben
-vollen Distanz, die seit Punkt 95 auch die unterste Liga faehrt. Im
-Nassen brauchte sie dadurch bis zu **fuenf** Stopps, wo der Planer nur
-drei vergeben darf; der Rest kam als Zwangsstopp. Gemessen ueber alle 20
-Strecken kommt Liga 10 jetzt auf hoechstens drei. Der Preis steht
-daneben und war eine Entscheidung des Auftraggebers: Liga 1 faehrt ein
-nasses Rennen jetzt mit einem Stopp statt mit zweien.
+kurzlebiger noch als Weich. Das fiel bei den schwachen Autos auf: Aus
+einem Satz Mittel kamen 20 Runden, aus einem Intermediate nur 12 - bei
+derselben vollen Distanz. Im Nassen brauchten sie dadurch bis zu
+**fuenf** Stopps, wo der Planer nur drei vergeben darf; der Rest kam als
+Zwangsstopp. Gemessen ueber alle 20 Strecken sind es jetzt hoechstens
+drei. Der Preis steht daneben und war eine Entscheidung des
+Auftraggebers: Die Spitze faehrt ein nasses Rennen jetzt mit einem Stopp
+statt mit zweien.
 
 **Kein Stint faellt unter 30 Prozent Restprofil**, auch der letzte nicht -
 und auch nicht, nachdem das Zufallsfenster die Stopprunden verschoben hat.
@@ -978,8 +978,8 @@ auf den Beschleunigungen ist gerade das, was die Geschwindigkeit linear
 macht). Ein Prozent Grip ist damit ein Prozent Tempo und
 `1 - 1/1,01 = 0,99 %` Rundenzeit.
 
-In Sekunden haengt das an der Rundenlaenge. Gemessen mit einem
-Liga-1-Auto sind +1,0 % Grip:
+In Sekunden haengt das an der Rundenlaenge. Gemessen mit dem besten Auto
+des Feldes sind +1,0 % Grip:
 
 | | Rundenzeit | −1 % |
 | --- | ---: | ---: |
@@ -1075,7 +1075,7 @@ Drei Dinge halten sich nicht an den Plan:
   mehr erfuellen, wenn der Notstopp schon die haerteste aufgelegt hat.
 
 **Nachsehen, was dabei herauskommt.** `python -m werkzeuge.boxenstopps`
-faehrt fuenf Rennen der Liga 1 und schreibt je Fahrer auf, auf welcher
+faehrt fuenf Rennen und schreibt je Fahrer auf, auf welcher
 Mischung er startet, in welcher Runde er stoppt und wieviel Profil dann
 noch drauf war. Die fuenf Strecken sind nicht ausgesucht, sondern nach
 dem Streckenfaktor gezogen - Maximum, 75er Perzentil, Median, 25er
@@ -1121,175 +1121,40 @@ Sekunde alle fuenf erlaubten Ausfaelle in der ersten Runde. Die Rate gilt
 deshalb je Sekunde in Reichweite - sonst haengt die Unfallhaeufigkeit an
 der Schrittweite der Simulation statt am Spiel.
 
-## Der Spieler ist Teamchef
+## Der Spieler fuehrt zwei Autos
 
-Das GDD kannte einen Spielerfahrer. Der Auftraggeber hat daraus etwas
-anderes gemacht: **Der Spieler fuehrt ein Team mit vier Fahrern**, alle
-vier in Liga 10 und alle vier mit dem Startwert S = 12.000 - derselben
-Mindeststaerke, die auch fuer jeden KI-Fahrer gilt. Live angesehen werden die Rennen
-der Ligen, in denen seine Fahrer stehen; alle uebrigen laufen im
-Schnellmodus, aber vollstaendig - Erfahrung, Streckenkenntnis und
-Statistik entstehen auch dort.
+Das GDD kannte einen Spielerfahrer, die Abstimmung machte daraus einen
+Teamchef mit vier Autos in zehn Ligen. **Punkt 101 hat das wieder
+eingedampft:** Der Spieler fuehrt ein Team wie jedes andere, also
+**zwei Autos** im einen Feld. Sie stehen dort, wo die Leiter sie hinstellt
+- kein Startplatz ganz unten, kein Aufstieg nach oben.
 
-Daraus folgen drei Dinge, die vorher nicht im Modell standen:
+Damit ist auch alles weg, was am Aufstieg hing:
 
-* **Jedes Auto wird einzeln entwickelt.** Es gibt keine
-  Teameigenschaft mehr; wer einen neuen Fahrer holt, bekommt ein
-  **leeres, nicht aufgeruestetes Auto** dazu. Die Karriere fuehrt
-  deshalb vier Autos statt einem (`karriere.autos`).
-* **Die Einnahmen gehoeren dem Team**: vier Preisgelder, vier
-  Sponsorensaetze, ein Konto.
-* **Der Spieler altert wie alle anderen.** Seine vier Fahrer haben ein
-  gewuerfeltes Ruecktrittsalter wie jeder Gegner.
+* **Kein Geld.** Kein Konto, kein Kassenbuch, keine Sponsoren, kein
+  Preisgeld, keine Werkstattkosten, keine Gehaelter.
+* **Keine Erfahrung und keine Entwicklung.** Die Werte eines Fahrers
+  stehen bei der Welterzeugung fest und bleiben. Es gibt keine
+  Potentiale mehr, weil es nichts gibt, worauf sie hinwachsen koennten.
+* **Kein Transfermarkt und keine Generationen.** Niemand wechselt das
+  Team, niemand altert, niemand tritt zurueck, niemand kommt nach.
+* **Kein Auf- und Abstieg.** Es gibt nur ein Feld.
 
-### Der Transfermarkt
+Was bleibt, ist die Saison: Kalender, Rennwochenende, Qualifying,
+Rennen, Tabelle, Statistik, Spielstand - und der Editor, mit dem sich
+jeder Fahrer aendern laesst.
 
-`rennmanager.kern.transfer` - nicht im GDD, komplett aus der Abstimmung.
-Das Fenster liegt im **Winter**. Ein Vertrag laeuft ein bis vier Saisons
-und wird nicht gespeichert, sondern aus dem Seed abgeleitet: So ist in
-jedem Winter ein Teil des Feldes frei, ohne dass irgendwo eine Liste
-gefuehrt wuerde.
+### Was von der Karriere uebrig ist
 
-Ein Wechsel kostet **Gehalt plus Abloese** - die Abloese nur, solange der
-Vertrag laeuft. Und der Fahrer **waegt ab**: Liga gegen Auto gegen Geld,
-gewichtet, gegen eine Schwelle, die mit seiner Bekanntheit steigt
-(Punkt 5). Weil ein neuer Fahrer sein leeres Auto mitbringt, ist der
-Autoteil beim Spieler fast immer ein Minus - Geld muss es ausgleichen.
-Sagt er ab, nennt die Antwort den schwaechsten der drei Punkte.
-
-### Geld: Kassenbuch und Finanzseite
-
-`rennmanager.kern.kassenbuch` schreibt **jede** Geldbewegung mit - Datum,
-Betrag, Haupt- und Unterkategorie, Fahrer. Das Konto kannte bisher nur
-einen Stand; woher er kam, stand nirgends, und eine Finanzseite haette
-nichts zu gruppieren gehabt.
-
-| Hauptkategorie | Unterkategorien |
-|---|---|
-| Rennen | Preisgeld, Startgeld |
-| Sponsoren | Sponsorenzahlung |
-| Team | Monatsbudget, Startkapital |
-| Ereignisse | Zuschuss, Strafe |
-| Entwicklung | Fahrzeug-Upgrade, Fahrertraining |
-| Werkstatt | Reparatur |
-| Personal | Gehalt |
-| Transfer | Abloese |
-
-#### Das Preisgeld je Liga
-
-Die Siegpraemie verdoppelt sich etwa alle zwei Ligen - Faktor 1,41 je
-Stufe, also die Wurzel aus zwei. Ein Aufstieg lohnt sich damit deutlich,
-ohne dass die Spitze unerreichbar weit wegliegt:
-
-```
-Liga        10       9       8       7       6       5      4      3      2      1
-Sieg    60.000  85.000 120.000 170.000 235.000 330.000 470k   660k   920k  1.300k
-```
-
-Punkte gibt es fuer jeden Platz, Geld auch: Der Zweite bekommt 80 Prozent
-der Siegpraemie, der Dritte 65, danach faellt die Kurve gleichmaessig bis
-auf 5 Prozent fuer den Vierzigsten. In Liga 10 sind das 60.000 EUR fuer
-den Sieg und 3.000 fuers Letzterwerden, in Liga 1 1.300.000 und 65.000.
-
-Das **Teambudget** des Spielers stand in der Welt und war reine Anzeige.
-Jetzt zahlt es sich in zwoelf Monatsraten aufs Konto aus, je eine am
-Monatsersten - auch in Vor- und Nachsaison. Die Budgets der KI-Teams
-bleiben Anzeige (`finanzen.ki_budget_wirksam = false`).
-
-Der Reiter **Finanzen** zeigt das Buch als Baum: Hauptkategorie,
-Unterkategorie, darunter die Einzelbuchungen; wahlweise die ganze
-Karriere oder eine Saison. Ein Test misst die Vollstaendigkeit statt
-einzelner Betraege - der Saldo aller Buchungen muss den Kontostand
-ergeben.
-
-### Was ein Tag kostet
-
-Zwei Entscheidungen des Auftraggebers weichen vom GDD ab:
-
-* **Mehrere Kaufschritte auf einmal** (Punkt 99): Neben "Sofort kaufen
-  (+10)" stehen **x5** und **x10**. Wer eine Faehigkeit um mehrere
-  hundert heben will, klickte bisher dreissigmal. Billiger wird es
-  dadurch nicht - jeder Schritt kostet, was er an **seiner** Stelle der
-  Leiter kostet, fuenf am Stueck sind also so teuer wie fuenf einzelne
-  nacheinander. Reicht das Konto nicht fuer die ganze Strecke, wird gar
-  nichts gebucht; ein halber Kauf waere nicht nachvollziehbar.
-* **Alles, was Zeit kostet, kostet auch etwas Erfahrung.** Die Zeit bleibt
-  ein Tag und skaliert nicht; die Erfahrung waechst ueber dieselbe Kurve
-  wie das Geld, also mit jedem Kauf. Wer schon Erfahrung zahlt, zahlt
-  nicht doppelt.
-* **Ein belegter Platz bleibt bis zum naechsten Rennen belegt.** GDD 2
-  gibt jedem Tag zwei Plaetze; gemeint ist jetzt der Abstand zwischen zwei
-  Rennen. Je Abstand gibt es also einen Trainings- und einen
-  Werkstattschritt, nicht einen je Tag.
-* **Ein Erfahrungssockel von 1.100 EP zum Start**
-  (`kosten.startkapital_erfahrung`). Er folgt aus der ersten
-  Entscheidung: Ohne ihn stuende der Spieler am 1. Januar mit null
-  Erfahrung da, jeder Zeitkauf kostet aber Erfahrung, und die gibt es
-  erst fuers Fahren - die Tage bis zum ersten Rennen waeren tot. Sockel
-  und Startkapital (55.000 EUR) sind so bemessen, dass beide fuer rund
-  zwanzig belegte Plaetze reichen. Danach faellt der Sockel nicht mehr
-  ins Gewicht: In Liga 10 bringt Platz 12 3.890 EP, ein Sieg 7.800.
-
-## Talente und Generationen
-
-`rennmanager.kern.talent` und `rennmanager.kern.generationen` (Punkt 35).
-
-**Jeder Fahrer hat sein eigenes Potential**, gewuerfelt auf jede einzelne
-Eigenschaft - auch auf die Wetterfaehigkeiten und die Streckenkenntnis.
-Dazu ein eigenes Entwicklungstempo, ein eigenes Gipfelalter und ein
-eigenes Alter, ab dem es wieder abwaerts geht. Das gilt fuer die KI wie
-fuer die Fahrer des Spielers; es gibt keinen Sonderweg mehr.
-
-Entwickelt wird ueber **Lueckenschluss**: Jedes Jahr holt ein Wert einen
-Anteil des Abstands zu seinem Potential auf. Das ist skalenfrei - ein
-Fahrer bei 5000 und einer bei 90000 machen denselben *relativen* Schritt.
-
-Das Talent haengt an **(Fahrernummer, Geburtstag)**, nicht an der Nummer
-allein. Sonst erbte ein Newgen das Talent seines Vorgaengers, denn er
-uebernimmt dessen Nummer und Teamplatz - so bleiben die Teams bei vier
-Autos.
-
-### Was das die Ligatabelle kostet
-
-Der Ligakorridor aus GDD 9 gilt seither **nur noch beim Weltstart**.
-Danach sortieren sich die Ligen ueber Auf- und Abstieg. Mit den zwanzig
-Ligen von frueher lief die Welt dabei auseinander: Gemessen ueber
-dreissig Saisons stand Liga 20 bei 5182 Prozent ihres Solls, weil jeder
-Newgen-Jahrgang geschlossen in einer Liga einstieg, deren Soll bei 82
-lag. Die unterste Liga war damit kein schwaches Feld mehr, sondern der
-Talentpool der ganzen Welt.
-
-**Mit zehn Ligen, dem Korridor 20.000 bis 100.000 und der Mindeststaerke
-von 12.000 passiert das nicht mehr.** Gemessen ueber zehn Saisons mit
-echtem Rennbetrieb, Ist gegen Soll (Soll ist die Mitte des Korridors):
-
-```
-Liga        1     3     5     8    10
-Start      90%   82%   77%   75%   60%
-Saison 5   90%   82%   77%   75%   60%
-Saison 10  90%   82%   77%   75%   60%
-```
-
-Kein Wert bewegt sich ueber zehn Saisons um mehr als einen Prozentpunkt.
-Der Einstieg der Newgens faellt nicht mehr ins Gewicht, weil die
-Mindeststaerke die unterste Liga von unten stuetzt und der Korridor breit
-genug ist, dass ein Jahrgang ihn nicht sprengt.
-
-**Dass das Ist durchgehend unter dem Soll liegt, ist kein Fehler.** Der
-Korridor beschreibt **Potentiale**; gefahren wird mit
-`gipfelstaerke * reifegrad(alter) * zielfaktor(alter)`, also mit dem
-Anteil davon, den ein Fahrer in seinem Alter gerade abruft. Ein Feld aus
-lauter Fahrern auf ihrem Gipfel gibt es nicht. Liga 10 liegt mit
-60 Prozent am weitesten darunter, weil dort die Mindeststaerke von 12.000
-greift, waehrend der Korridor erst bei 20.000 anfaengt.
-
-**Der Auftraggeber hat den Korridor so entschieden.** Die Ligen sind
-Leistungsklassen, nicht Altersklassen; die Kontrolltabelle in
-`[[ligen.kontrolle]]` beschreibt den Weltstart, nicht den Dauerzustand.
+`rennmanager.kern.karriere` fuehrt seit Punkt 101 nur noch den
+**Kalender**: welcher Tag heute ist, wann das naechste Rennen ist, wie
+viele Tage dazwischen liegen. Die Tage lassen sich weiterschalten, aber
+sie kosten nichts und bringen nichts - es gibt keine Trainingsprogramme,
+keine Upgrades und keine belegten Plaetze mehr.
 
 ## Die Welt
 
-`rennmanager.kern.welt` erzeugt aus einem Seed alles, was eine Karriere
+`rennmanager.kern.welt` erzeugt aus einem Seed alles, was eine Saison
 braucht (GDD 12):
 
 ```python
@@ -1298,16 +1163,45 @@ from rennmanager.kern.zufall import Seedquelle
 from rennmanager.konfiguration import lade
 
 k = lade()
-w = welt.erzeuge(k, Seedquelle(4711), spielerliga=10)
-len(w.fahrer)                 # 400 in 10 Ligen zu je 40
-len(w.teams)                  # 100 mit je 4 Autos eines Herstellers
-w.spieler.name                # der Spieler, alle Werte auf 0 (GDD 1)
-w.teamkollegen(w.spieler)     # seine 3 KI-Teamkollegen
-feld = welt.starterfeld(w, liga=10)
+w = welt.erzeuge(k, Seedquelle(4711))
+len(w.fahrer)                 # 50 in einem Feld
+len(w.teams)                  # 25 mit je 2 Autos eines Herstellers
+w.feld                        # dasselbe Feld, staerkster zuerst
+w.spielerfahrer               # die 2 Autos des Spielers
+w.teamkollegen(w.spieler)     # sein zweiter Fahrer
+feld = welt.starterfeld(w)
 ```
 
-Die 4 Autos eines Teams fahren meist in verschiedenen Ligen, wie GDD 12
-es erlaubt. Jedes Auto bekommt ein eigenes Profil.
+**Die Leiter.** `welt.feldstaerken(k)` legt die 50 Staerken gleichmaessig
+zwischen `feld.s_bester` (98.000) und `feld.s_letzter` (87.445). Die
+Teams werden dann **paarweise** auf die Leiter gewuerfelt: Die zwei Autos
+eines Teams stehen nebeneinander, das Team selbst irgendwo. Jedes Auto
+bekommt trotzdem sein eigenes Profil, zwei Teamkollegen sind also nicht
+gleich schnell - nur gleich gut ausgestattet.
+
+**Die Teamfarbe ist die Herstellerfarbe** (Punkt 101): 25 Teams, 25
+Hersteller, eine Farbe je Paar. Beide Autos eines Teams tragen dieselbe.
+
+### Warum der Letzte bei 87.445 steht
+
+Der Auftraggeber hat **vier Prozent Rundenzeit** als Spanne des ganzen
+Feldes vorgegeben, und den Tempoanker bei 180 km/h auf Zandvoort
+gelassen. Beides zusammen bestimmt `s_letzter` eindeutig.
+
+Jede Grenze des Geschwindigkeitsmodells ist linear in
+`p = sqrt(S / referenz)`, die Rundenzeit also genau umgekehrt
+proportional dazu. Vier Prozent mehr Zeit heissen damit vier Prozent
+weniger Tempo:
+
+```
+v_letzter  = 180 / 1,04            = 173,077 km/h
+p_letzter  = (173,077 - 55) / 125  = 0,944615
+s_letzter  = 0,944615^2 * 98.000   = 87.445
+```
+
+Nachgemessen: S = 87.445 faehrt auf Zandvoort 1:28.282 gegen 1:24.887,
+also +3,9994 Prozent. `--pruefe` rechnet das bei jedem Start nach und
+meldet `Rundenzeitspanne +4.00%`.
 
 ### Warum es zwei Streuungsebenen gibt
 
@@ -1318,23 +1212,36 @@ GDD 8, und ueber drei bis fuenf Einzelwerte mittelt sich die Streuung
 weg - zwischen dem staerksten und dem schwaechsten Bereich eines Fahrers
 lagen gemessen nur 20 %.
 
-Deshalb wird zusaetzlich je Fahrer ein Faktor pro Wirkungsbereich gezogen
-(+/- 30 %), den jede Faehigkeit nach ihrer Zeile der Wirkungsmatrix
-gewichtet erbt. Damit steigt die Profilspanne auf 41 % im Schnitt: Ein
-Fahrer ist in drei Bereichen Erster seiner Liga und in anderen Sechster.
-Die Wetterfaehigkeiten stehen neben der Matrix und streuen fuer sich.
+Deshalb wird zusaetzlich je Fahrer ein Faktor pro Wirkungsbereich
+gezogen, den jede Faehigkeit nach ihrer Zeile der Wirkungsmatrix
+gewichtet erbt. Die Wetterfaehigkeiten stehen neben der Matrix und
+streuen fuer sich.
 
-Die Faktoren sind auf den Mittelwert 1 normiert, und was das Kappen an der
-Skala wegnimmt, wird zurueckgeholt. Ein Spezialist verteilt seine
-Ligastaerke also um, statt mehr oder weniger davon zu haben: Jede Liga
-trifft ihre beiden Kontrollwerte aus GDD 9 auf den Punkt.
+Die Faktoren sind auf den Mittelwert 1 normiert, und was das Kappen an
+der Skala wegnimmt, wird zurueckgeholt. Ein Spezialist verteilt seine
+Staerke also um, statt mehr oder weniger davon zu haben.
 
-Ligen ohne Kontrollwert in GDD 9 werden ueber die Tempotabelle bestimmt -
-der Wert S ergibt sich durch Umkehren der Kalibrierfunktion. So liegen alle
-10 Ligen auf derselben Kurve: In der Mitte ihres Korridors faehrt Liga 1
-177,97 km/h und Liga 10 118,34; von Liga zu Liga sind das 5,13 bis
-9,09 km/h, im Schnitt 6,63. Die Schritte sind nach unten groesser, weil
-die Kalibrierfunktion mit der Wurzel waechst.
+**Punkt 101 hat beide Ebenen klein gemacht.** Mit +/- 25 % auf die
+Einzelwerte und +/- 30 % auf die Bereiche lag das Rauschen um ein
+Vielfaches ueber der Leiter selbst - die vier Prozent Feldspanne waeren
+darin untergegangen und die Reihenfolge waere reiner Zufall gewesen.
+Jetzt sind es 3 % und 3,5 % (`[ki] profil_streuung`,
+`bereichs_streuung`).
+
+Gemessen ueber ein volles Feld (Seed 2026):
+
+```
+reine Leiter, ohne Rauschen   Zandvoort 1:24.887 .. 1:28.282   Spanne 4,00 %
+mit Rauschen  Zandvoort       1:24.562 .. 1:28.509   Spanne 4,67 %
+              Monza           1:24.065 .. 1:28.030   Spanne 4,72 %
+              Norisring         0:41.527 .. 0:43.403   Spanne 4,52 %
+```
+
+Und die Leiter bleibt erkennbar: Von der Staerke zur trockenen
+Rundenzeit verschiebt sich ein Fahrer im Mittel um **2,1 Plaetze**,
+hoechstens um 8. Ueber eine ganze Saison (20 Rennen, Seed 2026) sind es
+im Mittel 2,5 Plaetze und hoechstens 6 - genug, dass das Rennen
+entscheidet, und wenig genug, dass Staerke sich auszahlt.
 
 ### Die Fahrerkarte
 
@@ -1348,36 +1255,35 @@ Linie im Punkteverlauf.
 
 Die Karte ist ein eigenes, nicht modales Fenster - zwei Fahrer lassen sich
 nebeneinanderlegen, und waehrend ein Rennen laeuft kann sie offen bleiben.
-Fuenf Reiter:
+Sechs Reiter:
 
 | Reiter | Was darin steht |
 | --- | --- |
-| Steckbrief | Person, Team, Teamkollegen, Staerke und Platz in der Liga, Popularitaet, der Charaktersatz mit Staerken und Schwaechen einzeln |
+| Steckbrief | Person, Team, Teamkollege, Staerke und Platz im Feld, Popularitaet, der Charaktersatz mit Staerken und Schwaechen einzeln |
 | Werte | die 11 Wirkungsbereiche aus GDD 8 als Balken, dann alle 32 Einzelwerte und die 11 Eigenschaften neben der Matrix |
-| Saison | die Zeile der laufenden Saison und der Punkteverlauf der Liga, in dem nur dieser Fahrer farbig ist |
-| Laufbahn | Karrierezahlen ueber alle Saisons, Meisterschaften, Liga je Jahr als Linie, gehaltene Rundenrekorde |
+| Saison | die Zeile der laufenden Saison und der Punkteverlauf des Feldes, in dem nur dieser Fahrer farbig ist |
+| Laufbahn | Karrierezahlen ueber alle Saisons, Meisterschaften, Platz je Jahr als Linie, gehaltene Rundenrekorde |
 | Strecken | Streckenkenntnis je Strecke mit Tempogewinn; Heimstrecken hervorgehoben (Punkt 49) |
+| Wetter | die Wetterbilanz und die Faehigkeit zu jeder Lage (Punkt 23) |
 
 Sie **rechnet nichts**: Gelesen wird nur, was Welt, Auto, Statistik,
 Streckenkenntnis und Popularitaet ohnehin fuehren, und sie ist rein
-lesend - Werte aendern geht weiter nur ueber den Editor. Fuer alle 600
-Fahrer zeigt sie dasselbe; Konto, Sponsoren und Werkstatt des Spielers
-bleiben auf ihren eigenen Seiten.
+lesend - Werte aendern geht weiter nur ueber den Editor. Fuer alle 50
+Fahrer zeigt sie dasselbe, den Spieler eingeschlossen.
 
 #### Die Fahrersuche
 
 Ueber allen Reitern steht ein Suchfeld (Punkt 18, **Strg+F**). Name
 tippen, Eingabetaste, die Fahrerkarte geht auf. Gesucht wird ueber die
-ganze Zeile - Name, Kuerzel, Liga und Team -, deshalb findet "Rosskamp"
-auch die vier Fahrer dieses Teams. **Fahrertreffer stehen vorn:** Auf
-"kamp" passen 18 Zeilen, aber nur 2 ueber den Fahrernamen, und wer einen
+ganze Zeile - Name, Kuerzel und Team -, deshalb findet "Rosskamp" auch
+die beiden Fahrer dieses Teams. **Fahrertreffer stehen vorn:** Wer einen
 Namen tippt, meint den Fahrer und nicht dessen Teamkollegen.
 
 #### Warum die Balken gegen den eigenen Hoechstwert messen
 
-Die Skala reicht von 0 bis 100.000, ein Fahrer aus Liga 10 steht zwischen
-12.000 und 19.285. Gegen die Skala waeren seine Balken kaum zu
-unterscheiden. Zu sehen ist hier
+Die Skala reicht von 0 bis 100.000, das Feld steht seit Punkt 101 dicht
+gedraengt zwischen 87.445 und 98.000. Gegen die Skala waeren die Balken
+kaum zu unterscheiden. Zu sehen ist hier
 ohnehin die **Form** seines Profils, nicht sein Platz auf der Skala -
 deshalb misst jeder Ast gegen seinen eigenen groessten Wert, und die Zahl
 steht daneben. Es ist dieselbe Ueberlegung wie beim Charaktersatz, der
@@ -1402,12 +1308,11 @@ charakter.profil(k, w.fahrer[401].auto)
 Gelesen wird nur, was schon da ist - die elf Wirkungsbereiche aus GDD 8
 und die Eigenschaften daneben; es entsteht kein Wert, der irgendwo wirkt.
 Gemessen wird gegen den **eigenen** Durchschnitt, nicht gegen die Skala:
-Ein Fahrer aus Liga 10 hat lauter niedrige Werte und trotzdem ein Profil.
-Genannt werden hoechstens zwei Staerken und zwei Schwaechen, und nur ab
-6 % Abweichung. Gemessen bekommen in Liga 1 33 von 40 Fahrern ein Profil,
-in den Ligen 5 und 10 jeder; die Spitze ist eben auch in sich
-ausgeglichener. Der Spieler faengt mit vier gleich starken Autos an und
-liest deshalb "Ausgeglichen, ohne ausgepraegte Staerken oder Schwaechen".
+Auch ein Fahrer am unteren Ende des Feldes hat ein Profil. Genannt werden
+hoechstens zwei Staerken und zwei Schwaechen, und nur ab 6 % Abweichung.
+Seit Punkt 101 streuen die Einzelwerte nur noch um drei Prozent - wer
+kein ausgepraegtes Profil hat, liest "Ausgeglichen, ohne ausgepraegte
+Staerken oder Schwaechen".
 
 ## Kalender und Zeitmodell
 
@@ -1416,127 +1321,34 @@ der erste Sonntag ab dem 1. Maerz, danach alle 14 Tage, das zwanzigste
 266 Tage spaeter. Jeder Zyklus hat genau 10 nutzbare Tage; die uebrigen
 vier sind zwei Reisetage, der Qualifying-Samstag und der Renn-Sonntag.
 
-Zeit ist eine Kapazitaet: Jeder nutzbare Tag hat zwei Plaetze, einen fuer
-den Fahrer und einen fuer die Werkstatt. Ein zugewiesener Tag hebt einen
-Wert um `max(+10, +1 %)`.
+Seit Punkt 101 ist der Kalender **nur noch Kalender**: Er sagt, welcher
+Tag heute ist und wann das naechste Rennen faellt. Belegte Tage,
+Trainingsprogramme, Upgrades und Kosten gibt es nicht mehr - die Werte
+eines Fahrers stehen fest.
 
 ```python
 from rennmanager.kern import karriere
 from rennmanager.konfiguration import lade
 
 k = lade()
-c = karriere.beginne(k, 2026, liga=10)
-c.belege_tag("D1")     # Konzentration, reine Zeit - kostenlos
-c.belege_tag("F10")    # Reifenhaltbarkeit, Geld und Zeit
-c.kaufe("F1")          # Motorleistung, nur Geld - ohne Tag
-c.bis_zum_rennen()
-c.verbuche_rennen(platz=12, ueberholmanoever=4)
+c = karriere.beginne(k, 2026)
+c.tag                       # heute
+c.naechstes_rennen          # Nummer des naechsten Rennens
+c.tage_bis_zum_rennen       # wie viele Tage noch
+c.tag_weiter()              # einen Tag vor
+c.bis_zum_rennen()          # bis zum naechsten Renntag
 ```
 
 ### Das Jahr als Band
 
-Zeit ist eine Kapazitaet - in einer Liste von 365 Zeilen sieht man das
-nicht. Die Karriereseite zeigt das Jahr deshalb als Band aus
-Tagesstreifen, eine Spalte je Woche: Renntag, Qualifying, Reise,
-verlorene Tage aus E29 Reisechaos, voll belegt, halb belegt, frei. Die
-Legende zaehlt mit, und ein Mouseover nennt Datum und Zustand. Wo Luecken
-im Band bleiben, ist Zeit liegen geblieben - das ist die ganze Aussage.
-
-### Trainingsprogramme ueber mehrere Tage
-
-Bis Punkt 84 standen die zehn nutzbaren Tage eines Zyklus nur in der
-Anzeige: `belege_tag()` belegt den Platz bis zum naechsten Rennen (Punkt
-69), egal ob noch neun Tage kommen oder einer. Zwei Buchungen je Fahrer
-und Rennabstand, mehr gab der Kalender nicht her - die Tage selbst waren
-keine Waehrung.
-
-Ein Programm macht sie dazu. Es laeuft ueber fuenf bis zehn nutzbare
-Tage, belegt solange denselben Platz und zahlt je Tag einen Anteil
-dessen, was eine Einzelbuchung braechte:
-
-    Zuwachs(n) = n * tag_anteil * Tageszuwachs
-
-```python
-c.freie_trainingstage()            # die noch offenen Tage bis zum Renntag
-c.programm_vorschau("D1", 10)      # was es braechte, ohne zu buchen
-c.starte_programm("D1", 10)        # Platz belegt, Tage vergeben
-c.tag_weiter()                     # zaehlt mit, rechnet am Ende ab
-```
-
-Bezahlt und gutgeschrieben wird erst am Ende. **Ein Abbruch zahlt
-anteilig**, was gelaufen ist: Sperrt ein Ereignis die Faehigkeit (GDD 14:
-E2, E6) oder frisst es einen der vergebenen Tage (E29 Reisechaos), endet
-das Programm vorzeitig, der Platz wird frei und die geleisteten Tage
-werden abgerechnet. Einen Bonus fuers Durchhalten gibt es nicht - das
-waere ein zweiter Anreiz neben dem Tagesanteil, und der Auftraggeber
-wollte nur einen.
-
-**Nie ueber ein Rennwochenende hinweg**: `freie_trainingstage()` schoepft
-nur aus den nutzbaren Tagen bis zum naechsten Renntag, und `max_tage`
-ist genau die zehn eines Zyklus. Ein Programm passt damit immer in einen
-Rennabstand; am Renntag ist ohnehin jedes beendet.
-
-#### Warum der Tagesanteil an der Rundung haengt
-
-`tag_anteil` allein sagt noch nichts. Jeder Zuwachs wird auf ganze
-Kaufschritte abgerundet (GDD 9, `kaufschritt = 10`), und der
-Tageszuwachs ist fuer jeden Wert unter 2000 genau diese 10. Der Anteil
-muss also erst einen vollen Schritt fuellen, bevor er ueberhaupt
-sichtbar wird:
-
-| Tage | bei 0,15 | bei 0,20 |
-| --- | --- | --- |
-| 5 | 7,5 -> **0** | 10,0 -> **10** |
-| 7 | 10,5 -> 10 | 14,0 -> 10 |
-| 10 | 15,0 -> **10** | 20,0 -> **20** |
-
-Eine Einzelbuchung bringt 10 und belegt den Platz ebenfalls bis zum
-Rennen. Unter 0,20 ist ein Programm damit nie besser als sie - bei 0,15
-braechten fuenf Tage gar nichts und zehn Tage genau dasselbe. Der Wert
-steht deshalb auf **0,20**: Ein Tag traegt ein Fuenftel einer Buchung,
-fuenf Tage sind eine, zehn sind zwei. Weil der Platz nach dem Programm
-frei wird, passen zwei Fuenftageprogramme in einen Zyklus.
-
-Drei Tests in `test_training.py` halten das fest - nicht die Zahl,
-sondern die Regel: Das laengste Programm muss die Einzelbuchung
-schlagen, das kuerzeste muss ueberhaupt etwas bringen, und
-`max_tage * tag_anteil` muss zwei Kaufschritte fuellen. Gemessen wird
-dabei **auch bei Wert 0**, wo der Spieler startet (GDD 1) und die
-Rundung am haertesten zuschlaegt. Ein frueherer Test mass nur bei
-50.000; dort betraegt der Tageszuwachs 500, die Rundung faellt nicht ins
-Gewicht, und 0,15 sah brauchbar aus.
-
-##### Die Treppe am Anfang
-
-Solange der Tageszuwachs genau ein Kaufschritt ist, zahlt nicht jeder
-zusaetzliche Tag:
-
-| Tage | bei Wert 0 | bei Wert 2.000 | bei Wert 50.000 |
-| --- | --- | --- | --- |
-| 5 | +10 | +20 | +500 |
-| 7 | +10 | +20 | +700 |
-| 9 | +10 | +30 | +900 |
-| 10 | +20 | +40 | +1.000 |
-
-Am Anfang lohnen sich deshalb nur die beiden Enden der Spanne - fuenf
-Tage oder zehn, alles dazwischen verschenkt Vorrat. Je hoeher der Wert,
-desto feiner wird die Treppe; ab etwa 5.000 zahlt jeder einzelne Tag.
-Das ist keine eigene Regel, sondern dieselbe +10-Granularitaet aus
-GDD 9, die auch den Kauf bestimmt.
-
-### Was ein Upgrade kostet
-
-`K(S) = K0 * faktor * (1 + S/1000)^0,6` je +10-Schritt. Der Faktor folgt
-der Wirkungsbreite einer Faehigkeit - der Summe ihrer Gewichte aus der
-Wirkungsmatrix, geteilt durch den Mittelwert. F9 Reifen-Grip wirkt auf
-fuenf Bereiche und kostet den Faktor 2,10; F16 Kuehlung wirkt auf einen
-und kostet 0,47. Im Mittel ueber alle Faehigkeiten ist der Faktor genau
-1,0, sodass die Kontrolltabelle aus GDD 9 weiterhin stimmt.
+Die Saisonseite zeigt das Jahr als Band aus Tagesstreifen, eine Spalte je
+Woche: Renntag, Qualifying, Reise, freier Tag. Ein Mouseover nennt Datum
+und Zustand.
 
 ## Die Saison
 
-`rennmanager.kern.saison` faehrt die 20 Rennwochenenden aus GDD 2 in allen
-10 Ligen und fuehrt je Liga eine Tabelle (GDD 13):
+`rennmanager.kern.saison` faehrt die 20 Rennwochenenden aus GDD 2 und
+fuehrt **eine** Tabelle (GDD 13):
 
 ```python
 from rennmanager.kern import saison, strecke, welt
@@ -1545,112 +1357,63 @@ from rennmanager.konfiguration import lade
 
 k = lade()
 haupt = Seedquelle(4711)
-w = welt.erzeuge(k, haupt.zweig("welt"), spielerliga=10)
+w = welt.erzeuge(k, haupt.zweig("welt"))
 lauf = saison.Saisonlauf(k, w, haupt, jahr=2026, strecken=strecke.lade_alle(k))
 
-wochenende = lauf.fahre_rennen(ausfuehrliche_liga=10)
-wochenende.verlauf               # abspielbares Rennen der Spielerliga
-wochenende.liga(7).ergebnisse    # Wertung einer der 9 Schnellmodus-Ligen
-wochenende.ist_wechselrunde      # True nach jedem fuenften Rennen
-lauf.tabelle(10).stand()[0]      # Tabellenfuehrer der Liga
+wochenende = lauf.fahre_rennen(ausfuehrlich=True)
+wochenende.verlauf               # abspielbares Rennen
+wochenende.ergebnisse            # die Wertung aller 50
+lauf.tabelle.stand()[0]          # Tabellenfuehrer
 
 lauf.fahre_saison()              # die restlichen 19 Wochenenden
-lauf.auf_und_abstieg()           # 54 Wechsel: 27 Auf-, 27 Abstiege
-neue_welt = lauf.naechste_welt() # Welt der Folgesaison
+naechste = lauf.naechste_saison()  # schliesst ab und beginnt das Folgejahr
 ```
 
-### Eine Meisterschaft ueber alle zehn Ligen
+### Die Punkteleiter
 
-Alle 400 Fahrer stehen in **einer** Tabelle. Die Ligatabellen sind nur der
-Ausschnitt daraus, der ueber Auf- und Abstieg entscheidet.
-
-Damit das eine Meisterschaft und nicht zehn nebeneinander ergibt,
-**ueberlappen die Ligen**: Der Sieger einer Liga bekommt genau so viele
-Punkte wie der **25.** der Liga darueber. Die Leiter steht in
-`konfiguration/balancing.toml` unter `[wertung]` und ist aus fuenf Zahlen
-gebaut:
-
-| Groesse | Wert | Was sie bestimmt |
-| --- | ---: | --- |
-| `sieger_liga1` | 1000 | Punkte fuer den Sieg in Liga 1 |
-| `abstand_erster_zweiter` | 10 | P1 zu P2 |
-| `abstand_zweiter_dritter` | 6 | P2 zu P3 |
-| `schritt` | 3 | jeder weitere Platz ab P3 |
-| `ankerplatz` | 25 | wo der Sieger der naechsten Liga einsteigt |
-
-Daraus ergibt sich ein Versatz von **82 Punkten je Liga** und eine
-Ligabreite von 127:
+Seit Punkt 101 steht die Tabelle fest in `[wertung] punkte_je_platz`,
+eine Zahl je Platz, vom Auftraggeber so vorgegeben:
 
 ```
-Liga      1     2     3     4     5     6     7     8     9    10
-Sieg   1000   918   836   754   672   590   508   426   344   262
-P40     873   791   709   627   545   463   381   299   217   135
+Platz     1   2   3   4   5   6   7  ...  30  31 | 32  33  ...  49  50
+Punkte  100  90  80  76  72  70  68  ...  22  20 | 19  18  ...   2   1
 ```
 
-Zwischen zwei benachbarten Ligen ueberlappen damit **12 Fahrer**: Die
-ersten zwoelf einer Liga stehen ueber dem Letzten der Liga darueber. Ein
-Ligasieg ist mehr wert als ein Mitfahren eine Klasse hoeher, ein Podium
-aber nicht.
+Also 100, 90, 80, dann 76 und 72, ab Platz 5 in Zweierschritten bis 20
+auf Platz 31, danach in Einerschritten bis 1 auf Platz 50.
 
-**Zusatzpunkte gehen als Anteil auf die Siegerpunkte derselben Liga** -
-so wiegen sie in jeder Liga gleich schwer, statt in der einen ein Podium
-und in der anderen nichts wert zu sein:
-
-| | Anteil | Liga 1 | Liga 10 |
-| --- | ---: | ---: | ---: |
-| schnellste Runde | 1,0 % | 10 | 3 |
-| Pole | 1,5 % | 15 | 4 |
-| Qualifying P2 | 0,5 % | 5 | 2 |
-| Qualifying P3 | 0,25 % | 3 | 1 |
-
-Gerundet wird **auf**, und es ist immer mindestens ein Punkt - in Liga 10
-soll die schnellste Runde nicht auf null fallen.
-
-**Jeder Platz bekommt Punkte**, auch der Vierzigste, und auch wer
+**Jeder Platz bekommt Punkte**, auch der Fuenfzigste und auch wer
 ausgefallen ist: Er wird nach absolvierten Runden und dann nach der Zeit
 einsortiert und bekommt die Punkte fuer diesen Platz. Bei Gleichstand
-liegt vorn, wer in der hoeheren Liga faehrt, danach entscheiden die
-besseren Platzierungen.
+entscheiden die besseren Platzierungen - mehr Siege, dann mehr zweite
+Plaetze und so weiter.
 
-### Auf- und Abstieg alle fuenf Rennen
+**Zusatzpunkte gehen als Anteil auf die Siegerpunkte:**
 
-Gewechselt wird nicht erst am Saisonende, sondern nach jedem **fuenften**
-Rennen - viermal je Saison. Es steigen die besten **drei** jeder Liga auf
-und die schwaechsten **drei** ab; Liga 1 kennt keinen Auf-, Liga 10 keinen
-Abstieg. Grundlage ist die **Gesamttabelle seit Saisonbeginn**, nicht das
-Fenster der letzten fuenf Rennen.
+| | Anteil | Punkte |
+| --- | ---: | ---: |
+| schnellste Runde | 1,0 % | 1 |
+| Pole | 1,5 % | 2 |
+| Qualifying P2 | 0,5 % | 1 |
+| Qualifying P3 | 0,25 % | 1 |
 
-```python
-wertung.wechselrennen(k)         # 5 - alle wie viele Rennen
-wertung.ist_wechselrunde(k, 10)  # True: Rennen 10 ist eine Wechselrunde
-lauf.letzter_wechsel             # die Wechsel der letzten Wechselrunde
-```
+Gerundet wird **auf**, und es ist immer mindestens ein Punkt. Ein
+perfektes Wochenende - Pole und Sieg mit schnellster Runde - bringt
+damit 103 Punkte.
 
-Je Wechselrunde sind das 54 Wechsel: 27 Auf- und 27 Abstiege. Der Wechsel
-gilt fuer Fahrer, nicht fuer Teams - ein Team hat danach seine vier Autos
-gegebenenfalls in anderen Ligen. Die Punkte bleiben beim Fahrer: Wer
-aufsteigt, nimmt seinen Stand mit und faehrt ab dem naechsten Rennen um
-die hoeheren Punkte der neuen Liga. Ein Aufsteiger traegt damit den
-Rueckstand aus den bereits gefahrenen Rennen in die neue Liga - 82 Punkte
-je Rennen, die er dort haette holen koennen.
+Gemessen ueber eine volle Saison (20 Rennen, Seed 2026): Der Meister kam
+auf 1709 Punkte mit 8 Siegen, der Letzte auf 133. In den 20 Rennen gab
+es **5 verschiedene Sieger**.
 
-Bekommt der Saisonlauf eine Karriere, verbucht er nach jedem
-Rennwochenende, was GDD 10 und 14 dem Spieler zusprechen: Preisgeld,
-Startgeld, Sponsorenauszahlung und Erfahrung - Letztere auch aus den
-gelungenen Ueberholmanoevern und, je Wetterlage getrennt, aus den
-gefahrenen Kilometern. Defekte aus dem Rennen bleiben offen, bis er sie
-bezahlt, und die gefahrenen Runden wachsen seiner Streckenkenntnis zu.
-Dafuer fuehrt jedes `Ligawochenende` drei Angaben je Fahrer mit:
+### Was am Saisonende passiert
 
-```python
-liga = wochenende.liga(10)
-liga.manoever_je_fahrer[401]     # gelungene Ueberholmanoever
-liga.defekte_je_fahrer[401]      # ("X20",) - offen bis zur Reparatur
-liga.kilometer_je_fahrer[401]    # {"trocken": 92.8, "heiss": 3.8}
-```
+Nichts ausser dem Abschluss: Die Tabelle wandert in die Historie, die
+Statistik behaelt Rekorde und Karrierezahlen, das Feld bleibt, wie es
+ist. Es gibt keinen Auf- und Abstieg mehr, keine Transferzeit und keinen
+Winterschritt - die Fahrer sind fest (Punkt 101).
 
-Sie stehen fuer alle 400 Fahrer bereit, gebucht wird davon nur der
-Spieler: Die KI hat weder Konto noch Werkstatt (GDD 12).
+Was die Saison ueberdauert, wandert unveraendert mit: Statistik,
+Streckenkenntnis und Popularitaet. Neu sind nur Tabelle und Kalender.
 
 ### Woraus die Erfolgschance beim Ueberholen kommt
 
@@ -1670,9 +1433,9 @@ ist damit *ein* Manoever - oder gar keins, wenn es am Ende steht wie am
 Anfang. Ausgefallene und schon im Ziel stehende Autos zaehlen nicht mit:
 An ihnen ist niemand vorbeigefahren, sie bleiben nur zurueck.
 
-Das ist noetig, weil die Erfahrung aus GDD 10 an dieser Zahl haengt und
-die beiden Rennmodelle sie sonst verschieden messen. Gemessen ueber ein
-Rennen in Zandvoort (Liga 10, 69 Runden ueber die volle Distanz, 40 Autos):
+Die Zaehlweise war noetig, weil die beiden Rennmodelle die Zahl sonst
+verschieden messen. Gemessen ueber ein Rennen in Zandvoort (69 Runden
+ueber die volle Distanz, 40 Autos, vor Punkt 101):
 
 | Zaehlweise | Manoever | je Auto |
 | --- | --- | --- |
@@ -1680,8 +1443,7 @@ Rennen in Zandvoort (Liga 10, 69 Runden ueber die volle Distanz, 40 Autos):
 | Positionsgewinne je Runde | 397 | 9,9 |
 | Schnellmodus | 122 | 3,0 |
 
-Fuer Liga 10, Platz 8 schrumpft der Unterschied in der Erfahrung damit von
-+21 % auf +13 %. Der Rest kommt daher, dass der Schnellmodus je Runde nur
+Der Rest des Unterschieds kommt daher, dass der Schnellmodus je Runde nur
 *einen* Ueberholversuch zulaesst, die volle Simulation dagegen an jeder
 Ueberholzone einen - das ist ein Unterschied in der Verkehrsdynamik, nicht
 in der Zaehlweise.
@@ -1691,49 +1453,38 @@ fuer die Anzeige des Rennens da, nicht fuer die Wertung.
 
 Kalender und Rennwochenende haengen dabei zusammen (GDD 2): Ein Rennen
 findet an seinem Renntag statt. `fahre_rennen()` schaltet den Kalender der
-Karriere bis dorthin vor - vor dem Rennen, damit die Ereignisse dieser
-Tage noch auf es wirken - und danach einen Tag darueber hinaus. Wer
-faehrt, ohne vorher geplant zu haben, laesst die nutzbaren Tage bis zum
-Renntag verfallen; die Saisonseite sagt vorher, wie viele das waeren.
+Karriere bis dorthin vor und danach einen Tag darueber hinaus.
 
-Wie die Punkte fallen und wann gewechselt wird, steht oben unter
-*Eine Meisterschaft ueber alle zehn Ligen*.
+Wie die Punkte fallen, steht oben unter *Die Punkteleiter*.
 
 ### Der Saisonwechsel
 
 `naechste_saison()` macht aus dem Saisonende den Anfang des naechsten
-Jahres. Die Karriere ist endlos; dieselben 400 Fahrer bleiben, es gibt
+Jahres. Die Karriere ist endlos; dieselben 50 Fahrer bleiben, es gibt
 keine Zu- und Abgaenge.
 
 ```python
-neu = lauf.naechste_saison()   # schliesst ab, wechselt die Ligen, zaehlt das Jahr hoch
+neu = lauf.naechste_saison()   # schliesst ab und zaehlt das Jahr hoch
 neu.jahr                       # 2027
-neu.welt.spieler.liga          # nach Auf- oder Abstieg eine andere
-neu.statistik.abschluss(2026, 10).zeilen[0]
-# Saisonzeile(fahrer=51, platz=1, punkte=809, siege=12, podien=19,
-#             poles=8, schnellste_runden=10, ausfaelle=0, rennen=20)
+neu.statistik.abschluss(2026).zeilen[0]
+# Saisonzeile(fahrer=7, platz=1, punkte=1709, siege=8, podien=15,
+#             poles=6, schnellste_runden=5, ausfaelle=1, rennen=20)
 ```
 
 | Wandert mit | Beginnt neu |
 | --- | --- |
-| Statistik: Rundenrekorde, Karrierezahlen, Historie | Saisontabellen aller 10 Ligen |
-| Streckenkenntnis aller 400 Fahrer (GDD 6) | Kalender und Ereignisplan (GDD 2 und 14) |
-| Konto, Werte, Sponsorenvertraege, offene Defekte, laufende Ereignisse (GDD 10 und 14) | Liga des Spielers nach Auf- oder Abstieg |
+| Statistik: Rundenrekorde, Karrierezahlen, Historie | die Saisontabelle |
+| Streckenkenntnis aller 50 Fahrer (GDD 6) | der Kalender (GDD 2) |
+| Popularitaet aller 50 Fahrer (Punkt 5) | |
 
 Die Historie traegt dabei jede Saison **vollstaendig**: Platz, Punkte,
 Siege, Podien, Poles, schnellste Runden, Ausfaelle und Rennen je Fahrer.
 Die Tabelle der Saison wird geleert - was dann nicht in der Historie
 steht, ist fort.
 
-Gemessen ueber drei voll gefahrene Saisons in Liga 10 (je rund 320
-Sekunden fuer 20 Rennen mal 10 Ligen): Konto 1,09 / 2,08 / 3,10 Mio. EUR
-nach der ersten, zweiten und dritten Saison, Erfahrung 228k / 437k / 649k;
-Streckenkenntnis in Sakhir 22,6 / 152,9 / 212,8 Runden. Nach jedem
-Wechsel stehen in jeder der 10 Ligen wieder genau 40 Fahrer - das prueft
-der Lauf nach jeder Saison selbst nach. Das Spielerteam blieb dabei alle
-drei Saisons in Liga 10: Vier Autos, die auf der Mindeststaerke
-anfangen, kommen in vier Wechselrunden je Saison nicht unter die besten
-drei.
+**Das Feld bleibt dasselbe.** Seit Punkt 101 altert niemand, entwickelt
+sich niemand und wechselt niemand das Team; die Reihenfolge der Leiter
+steht in Saison 30 wie in Saison 1.
 
 ### Der Punkteverlauf der laufenden Saison
 
@@ -1745,9 +1496,7 @@ lauf.statistik.gefahrene_rennen()       # (1, 2, 3)
 lauf.statistik.punktestand(401)         # (0, 262, 516) - aufsummiert
 ```
 
-Liga steht in keinem der beiden Aufrufe mehr: Der Verlauf gehoert seit dem
-Ligenumbau dem Fahrer, nicht der Liga - wer in einer Wechselrunde
-aufsteigt, nimmt seine Linie mit.
+Der Verlauf gehoert dem Fahrer.
 
 Die Saisonseite zeichnet daraus ein Liniendiagramm unter der Tabelle: Man
 sieht, wann eine Meisterschaft entschieden war und wann sie kippte. Es
@@ -1756,80 +1505,46 @@ Hintergrund, hervorgehoben und am Linienende beschriftet sind nur der
 Spieler und der in der Tabelle gewaehlte Fahrer.
 
 Beim Saisonwechsel wird der Verlauf geleert; der Endstand steht dann in
-der Historie. Er liegt im Spielstand (Version 11) in der Tabelle
-`saisonverlauf`.
+der Historie. Er liegt im Spielstand in der Tabelle `saisonverlauf`.
 
 ### Warum es zwei Rennmodelle gibt
 
-Ein volles Rennwochenende in allen 10 Ligen wuerde mit
-`rennmanager.kern.rennen` acht Minuten dauern - ein Rennen ueber die volle
-Distanz kostet dort allein 37 bis 47 Sekunden.
+Ein Rennen ueber die volle Distanz kostet mit `rennmanager.kern.rennen`
+37 bis 47 Sekunden - fuer eine Saison im Schnelldurchlauf zu viel.
 `rennmanager.kern.schnellsimulation` bildet je Runde eine Rundenzeit statt
-50-Millisekunden-Schritte: Ein Wochenende ueber alle 10 Ligen braucht
-gemessen 14,9 Sekunden, eine ganze Saison 282. Im gefuehrten Wochenende
-faehrt der Spieler sein eigenes Rennen voll (37 s) und die uebrigen neun
-Ligen laufen im Schnellmodus mit (14,8 s). Wetter, Fehler, Unfaelle, Defekte und Reifenverschleiss sind dabei
-dieselben Bausteine wie in der vollen Simulation.
+50-Millisekunden-Schritte: Gemessen braucht ein Rennen damit 1,4 Sekunden
+und eine ganze Saison aus 20 Rennen 29. Im gefuehrten Wochenende faehrt
+der Spieler sein Rennen voll und sieht zu; wer die Saison durchlaufen
+lassen will, nimmt den Schnellmodus. Wetter, Fehler, Unfaelle, Defekte und
+Reifenverschleiss sind dabei dieselben Bausteine wie in der vollen
+Simulation.
 
 Verkehr entsteht ueber die Reihenfolge: Wo sich die Reihenfolge gegenueber
 der Vorrunde geaendert hat, ist ueberholt worden - und das gelingt nur mit
 einem Wurf nach GDD 4. Bei gleichem Wetter in beiden Modellen weicht die
 Siegerzeit um weniger als 1,3 % ab, die schnellste Runde um weniger als
 1,4 %; ein Test haelt eine 2-%-Schranke fest. Ohne diesen Abgleich waeren
-die Rundenrekorde der ausfuehrlich gefahrenen Spielerliga nicht mit denen
-der uebrigen neun vergleichbar.
+die Rundenrekorde eines voll gefahrenen Rennens nicht mit denen eines
+schnell gefahrenen vergleichbar.
 
-Welche Liga ausfuehrlich faehrt, veraendert die uebrigen neun nicht: Jede
-Liga wuerfelt aus ihrem eigenen Zweig
-`saison/<jahr>/rennen/<nummer>/liga/<liga>`.
+Ob ein Rennen ausfuehrlich oder schnell faehrt, aendert an den uebrigen
+nichts: Jedes wuerfelt aus seinem eigenen Zweig
+`saison/<jahr>/rennen/<nummer>`.
 
-## Ereignisse, Defekte und Reparatur
+## Defekte
 
-`rennmanager.kern.ereignis` setzt GDD 14 um: 0 bis 2 Ereignisse je
-14-Tage-Zyklus, ausgeloest beim Tageswechsel in den ersten vier Tagen.
+`rennmanager.kern.zwischenfall` wuerfelt Fehler, Unfaelle und Defekte
+(GDD 6). Ein Defekt trifft eine einzelne Faehigkeit und kostet sie einen
+Anteil ihres Wertes - fuer **dieses eine Rennen**.
 
-```python
-from rennmanager.kern import karriere
-from rennmanager.kern.zufall import Seedquelle
-from rennmanager.konfiguration import lade
+Punkt 101 hat die Reparatur abgeschafft: Es gibt kein Geld mehr, mit dem
+sich ein Defekt bezahlen liesse, und ein dauerhafter Malus ohne Ausweg
+waere eine Einbahnstrasse. `[defekte] malus_bleibt = false` haelt das
+fest - nach dem Zielstrich ist der Wagen wieder heil.
 
-k = lade()
-c = karriere.beginne(k, 2026, liga=10, seedquelle=Seedquelle(4711))
-c.tag_weiter()
-c.meldungen[-1].zeile        # "E1 Erkaeltung - D2 -15 %, D1 -10 %"
-c.faktoren()                 # {"D2": 0.85, "D1": 0.90}
-c.fahrwerte()                # die Werte, mit denen gefahren wird
-c.gesperrt()                 # was gerade nicht entwickelt werden darf
-c.offene_reparaturen         # Defekte und Schaeden mit ihren Kosten
-```
-
-Die 35 Ereignisse kennen sechs Dauerarten und fuenf Wirkungsarten; ein
-einzelnes kann beides mischen - E23 Hitzetraining hebt die Hitzeresistenz
-dauerhaft und senkt D2 fuer ein Rennwochenende. Defekte bleiben nach dem
-Rennen offen, bis der Spieler die Reparatur zahlt (Kostenstufe mal
-Liga-Faktor).
-
-Drei Ereignisse wirken nicht auf eine Faehigkeit, sondern auf die
-Simulation selbst; der Saisonlauf reicht sie deshalb als eigene Groessen
-durch, jeweils nur fuer den Spieler:
-
-* **E3 Motivationsschub** hebt den *Mittelwert* der Tagesform um 3 %.
-  Streuung, Grenze und die Daempfung durch D16 bleiben, wie GDD 11 sie
-  nennt - der ganze Wurf verschiebt sich nach oben.
-* **E10 Testfahrt geglueckt** hebt den Kenntniszuwachs der naechsten
-  Strecke um 20 %. Deshalb bucht der Spieler seine Runden ueber die
-  Karriere, nicht ueber das Feld.
-* **E29 Reisechaos** nimmt nutzbare Kalendertage weg (GDD 2).
-
-### Warum das Jahr ein durchgehendes 14-Tage-Raster hat
-
-GDD 14 zaehlt Ereignisse je 14-Tage-Zyklus, GDD 2 kennt Zyklen aber nur
-zwischen zwei Rennen. Vor- und Nachsaison sind zusammen rund ein Viertel
-des Jahres und blieben sonst ereignislos - gerade die Vorsaison, in der
-der Spieler 56 nutzbare Tage entwickelt. Deshalb laeuft ueber das ganze
-Jahr dasselbe Raster, verankert am Tag nach dem ersten Rennen: Jeder
-Zyklus endet genau auf einem Renntag, das Ausloesefenster faellt in die
-freien Tage danach. Macht 27 Zyklen und 21 bis 33 Ereignisse je Saison.
+**Ereignisse (GDD 14) gibt es nicht mehr.** Jedes der 30 hing an Geld,
+Erfahrung, Kaufsperren oder dauerhafter Entwicklung; ohne diese vier
+bleibt nichts uebrig, worauf ein Ereignis wirken koennte.
 
 ## Neun Eigenschaften ueber das GDD hinaus
 
@@ -1845,7 +1560,7 @@ Alle Entscheidungen dazu stehen in OFFENE_PUNKTE.md (Punkte 48 bis 53).
 | **Rhythmus** | +/- 1,5 % Querbeschleunigung, je nach Kurvenanteil der Strecke | `kern.rhythmus` |
 | **Materialgefuehl** | Defektrate mal 1,0 bis 0,6 | `kern.zwischenfall` |
 | **Heimstrecke** | +0,5 bis +1,0 % auf fuenf je Wochenende gezogene Eigenschaften | `kern.heimstrecke` |
-| **Popularitaet** | +/- 25 % auf den Grundbetrag der Sponsorenangebote | `kern.popularitaet` |
+| **Popularitaet** | Bekanntheit eines Fahrers, waechst mit Siegen und Podien | `kern.popularitaet` |
 | **Ueberrunden** | war schon richtig - siehe unten | `kern.rennen` |
 
 Fuenf davon brauchen eine neue Eigenschaft. Sie stehen **neben der
@@ -1915,32 +1630,31 @@ mit seiner Alleinfahrt. Zwei Tests halten das jetzt fest.
 
 ## Streckenkenntnis
 
-`rennmanager.kern.streckenkenntnis` setzt GDD 6 um: Der Kenntniswert
-steigt mit jeder gefahrenen Runde und gibt bis zu 1,5 % Tempo, voll nach
-etwa 1.000 Runden. Er haengt am Paar aus Fahrer und Strecke; die
-Simulation bekommt ihn als fertigen Tempofaktor.
+`rennmanager.kern.streckenkenntnis` setzt GDD 6 um: Ein Kenntniswert je
+Paar aus Fahrer und Strecke gibt bis zu 1,5 % Tempo, voll nach etwa 1.000
+Runden. Die Simulation bekommt ihn als fertigen Tempofaktor.
 
-Zwei Entscheidungen stehen daneben, beide gemessen begruendet in
-OFFENE_PUNKTE.md:
+**Seit Punkt 101 waechst er nicht mehr.** Er wird einmal bei der
+Welterzeugung gewuerfelt - im Mittel 35 % der vollen Kenntnis, breit
+gestreut (`[streckenkenntnis.anfang]`) - und bleibt dann stehen. Das gilt
+fuer alle 50 Fahrer, den Spieler eingeschlossen: Er faengt nicht mehr bei
+null an und holt auch niemanden mehr ein. Liefe die Kenntnis weiter,
+liefe das Feld ueber die Saisons dem Anker aus GDD 9 davon.
 
-* **Lerntempo je Fahrer** (Punkt 38). Die beiden Streuungen aus GDD 6
-  sind Wuerfe je Session und mitteln sich weg - nach 20 Saisons blieben
-  nur 10 % Unterschied zwischen den Fahrern. Ein fester Faktor je Fahrer
-  haelt dagegen 35 %.
-* **Die KI lernt nicht** (Punkt 39). GDD 12 sagt "die KI verbessert sich
-  vorerst nicht"; ihr Stand wird einmal gesetzt und bleibt. Sonst liefen
-  alle 570 KI-Autos ueber die Saisons der Kalibriertabelle aus GDD 9
-  davon.
+Jeder Fahrer kennt sich dabei nicht ueberall gleich gut aus - gewuerfelt
+wird je Paar, nicht je Fahrer. Zwei Strecken derselben Saison trennen
+damit das Feld verschieden.
 
 ## Statistik und Spielstand
 
 `rennmanager.kern.statistik` fuehrt, was die Saison ueberdauert (GDD 13):
 
 ```python
-statistik.rekord("Monza", liga=10)      # schnellste Runde in Tausendsteln
+statistik.rekord("Monza")               # schnellste Runde in Tausendsteln
+statistik.qualirekord("Monza")          # und die schnellste Qualirunde
 statistik.bestenliste("siege")          # Karrierezahlen aller Fahrer
-statistik.laufbahn(fahrer)              # je Saison Liga und Platz
-statistik.punkte_in(2026, 10, fahrer)   # Gesamtpunkte je Liga und Saison
+statistik.laufbahn(fahrer)              # je Saison das Jahr und der Platz
+statistik.punkte_in(2026, fahrer)       # Gesamtpunkte einer Saison
 ```
 
 `rennmanager.kern.spielstand` schreibt alles in eine SQLite-Datei, wie
@@ -1951,16 +1665,17 @@ eine offene Datei laesst sich dort loeschen. Unter Windows nicht, und dann
 ueberschreibt der naechste Autosave den alten Stand nicht mehr. Ein Test
 zaehlt die Verbindungen selbst mit, statt sich aufs Betriebssystem zu
 verlassen. Die Welt wird dabei vollstaendig abgelegt statt aus dem Seed neu
-gewuerfelt: Nach dem ersten Auf- und Abstieg stimmt die gewuerfelte Welt
-nicht mehr mit der gespielten ueberein. Ein Test haelt genau das fest.
+gewuerfelt: Sobald jemand den Editor benutzt hat, stimmt die gewuerfelte
+Welt nicht mehr mit der gespielten ueberein. Ein Test haelt genau das
+fest.
 
-Der Stand traegt seine **Version**; die aktuelle ist **11** mit 31
-Tabellen. Sie ist zugleich die **aelteste lesbare**: Der Ligenumbau aus
-Punkt 95 hat Weltgroesse, Punktesystem und Wechselrhythmus so veraendert,
-dass ein alter Stand nicht mehr zu retten war. Ein Stand vor Version 11
-wird deshalb abgewiesen, mit einer Meldung, die den Grund nennt, statt
-still falsche Zahlen zu zeigen; ein Test haelt beides fest. Umgerechnet
-wird nichts - so hat es der Auftraggeber entschieden.
+Der Stand traegt seine **Version**; die aktuelle ist **12** mit 18
+Tabellen. Sie ist zugleich die **aelteste lesbare**: Punkt 101 hat
+Weltgroesse, Punktesystem, Karriere und Wertung so veraendert, dass ein
+alter Stand nicht mehr zu retten war. Ein Stand vor Version 12 wird
+deshalb abgewiesen, mit einer Meldung, die den Grund nennt, statt still
+falsche Zahlen zu zeigen; ein Test haelt beides fest. Umgerechnet wird
+nichts - so hat es der Auftraggeber entschieden.
 
 ### Streckenbilanz, Wetterbilanz und Bestmarken
 
@@ -1975,27 +1690,23 @@ statistik.bilanzen_bei("regen")
 ```
 
 Je Zeile stehen Starts, Siege, Podien, Poles, schnellste Runden,
-Ausfaelle, Punkte, das beste Ergebnis und die **beste Liga** - die
-staerkste Liga, in der dort ein Podium gelang. Zehn Siege in Liga 10 und
-einer in Liga 3 stuenden sonst gleichwertig nebeneinander.
+Ausfaelle, Punkte und das beste Ergebnis.
 
 Zu sehen ist beides an zwei Stellen: in der Fahrerkarte (die
 Streckenbilanz im Reiter *Strecken* neben der Streckenkenntnis, die
 Wetterbilanz als eigener Reiter neben der Faehigkeit zu jeder Lage) und
-auf der Statistikseite als Vergleich ueber alle 400 Fahrer.
+auf der Statistikseite als Vergleich ueber alle 50 Fahrer.
 
 #### Warum Summen und keine Rennliste
 
-400 Fahrer mal 20 Rennen mal zwanzig Saisons waeren 160.000 Zeilen, und
-der Spielstand wuechse endlos weiter. Als Summe bleiben es 8.000 Zeilen
-je Strecke und 2.000 je Wetterlage - gleich viele nach der ersten Saison
-wie nach der zwanzigsten. Ein Test haelt genau das fest: Vier Rennen auf
-vier Strecken ergeben vier Zeilen je Fahrer, nicht acht.
+50 Fahrer mal 20 Rennen mal zwanzig Saisons waeren 20.000 Zeilen, und der
+Spielstand wuechse endlos weiter. Als Summe bleiben es 1.000 Zeilen je
+Strecke und 250 je Wetterlage - gleich viele nach der ersten Saison wie
+nach der zwanzigsten. Ein Test haelt genau das fest: Vier Rennen auf vier
+Strecken ergeben vier Zeilen je Fahrer, nicht acht.
 
 Aufgehoben werden nur die Summen: Die einzelnen Rennen von damals stehen
-nirgends, eine Bilanz laesst sich also nicht nachtraeglich bilden. Fuer
-Staende ab Version 11 stellt sich die Frage nicht - sie fuehren die
-Bilanzen von Anfang an.
+nirgends, eine Bilanz laesst sich also nicht nachtraeglich bilden.
 
 #### Die vorherrschende Wetterlage
 
@@ -2015,18 +1726,9 @@ Siegquote ab 20 Rennen) und aus der Historie die beste einzelne Saison.
 Die Quote braucht die 20 Rennen, sonst gewaenne, wer einmal gefahren und
 einmal gewonnen hat.
 
-Wahlweise **insgesamt oder je Liga** - mit einer Auswahlliste und zwei
-Pfeilen zum Durchschalten. Insgesamt gewinnt fast immer Liga 1, dort
-faehrt das staerkste Feld; wer wissen will, wer in Liga 7 am meisten
-gewonnen hat, muss die Liga einzeln sehen koennen.
-
-In der Ligaansicht kommen die Karrierezahlen aus der **Historie**, nicht
-aus ``statistik.karriere``: Die Karrierezahlen rechnen alles zusammen und
-wissen nicht, in welcher Liga ein Sieg fiel. ``karriere_in_liga`` summiert
-stattdessen die Abschlusstabellen dieser Liga. Der Preis: Nur
-abgeschlossene Saisons zaehlen, die laufende steht noch in den Tabellen.
-Dafuer stimmen Karriere- und Saisonmarke einer Liga zusammen, statt zwei
-verschiedene Namen zu nennen.
+Seit Punkt 101 gibt es nur noch **eine** Ansicht: Es gibt nur ein Feld,
+also auch nur eine Bestenliste. Je Strecke stehen Renn- und Qualirekord
+nebeneinander, darunter die vollstaendige Liste aller Saisons.
 
 ### Autosave und Schnellspeicher
 
@@ -2063,13 +1765,13 @@ Qualifying-Bonus -, also genau das Modell, mit dem GDD 9 kalibriert. Die
 Streckenkenntnis aus GDD 6 ist drin: Sie ist kein Zufall, sondern eine
 Eigenschaft des Fahrers auf dieser Strecke.
 
-Daran sieht man, was die Streuung anrichtet: In Liga 10 weichen auf Monza
-31 von 36 Plaetzen von der reinen Staerkereihenfolge ab, und zwischen
-Monza und Zandvoort aendern sich 25 von 36 Plaetzen (die uebrigen vier
-Startplaetze der Liga gehoeren dem Spielerteam).
+Daran sieht man, was die Streuung anrichtet: Von der reinen
+Staerkereihenfolge zur Rundenzeit verschiebt sich ein Fahrer im Mittel um
+2,1 Plaetze, hoechstens um 8 - und zwischen zwei Strecken sieht die
+Reihenfolge wieder anders aus.
 
-Liga und Team bleiben aussen vor: Ein Wechsel dort spraenge die
-Ligastaerken aus GDD 9 und die Teamgroessen aus GDD 12.
+Das Team bleibt aussen vor: Ein Wechsel dort spraenge die Teamgroessen
+aus GDD 12.
 
 ```python
 from rennmanager.kern import welt
@@ -2080,17 +1782,14 @@ neu = welt.mit_fahrerdaten(neu, {17: {"vorname": "Ada", "nachname": "Lovelace"}}
 
 ### Wo die Werte des Spielers stehen
 
-Nicht in der Welt, sondern in der Karriere: GDD 1 laesst den Spieler unten
-anfangen und sich entwickeln - seit Punkt 95 bei S = 12.000 statt bei 0,
-damit seine Autos in Liga 10 ueberhaupt mitfahren koennen -, GDD 14 laesst
-Ereignisse und Defekte an den Werten ziehen. Beides fuehrt ``rennmanager.kern.karriere``. Ins Rennen
-kommen sie ueber ``starterfeld(..., autos=...)``, das einzelne Autos
-ersetzt, ohne die Reihenfolge des Feldes zu verschieben - die richtet sich
-weiter nach der Welt, sonst passten die Indizes aus dem Qualifying nicht
-mehr aufs Rennen.
+In der Welt, wie bei jedem anderen. Bis Punkt 101 fuehrte die Karriere
+eigene Werte fuer die Autos des Spielers, weil er sich entwickelte und
+Ereignisse an den Werten zogen. Beides gibt es nicht mehr, und damit auch
+keinen zweiten Ort fuer dieselbe Zahl: Der Editor aendert den Spieler
+genauso wie jeden KI-Fahrer.
 
-Qualifying und Rennen bekommen dabei ein eigenes Feld, weil E12 aus GDD 14
-nur im Qualifying wirkt.
+``starterfeld(..., autos=...)`` gibt es weiter - es ersetzt einzelne
+Autos, ohne die Reihenfolge des Feldes zu verschieben.
 
 ## Zwei Regeln, die den Code praegen
 
@@ -2117,7 +1816,7 @@ einmal fuer Qualifying und einmal fuer das Rennen.
 
 Das GDD nennt an vielen Stellen eine Mechanik, ohne sie zu beziffern. Zu
 jeder liegen in [OFFENE_PUNKTE.md](OFFENE_PUNKTE.md) Vorschlaege mit
-Begruendung; alle 39 sind am 2026-09-17 entschieden, der Abschnitt `[offen]`
+Begruendung; alle sind entschieden, der Abschnitt `[offen]`
 in der Konfiguration ist leer. Kommt spaeter eine Luecke hinzu, wird sie dort
 vermerkt und im Hauptfenster angezeigt, statt still gefuellt zu werden.
 
