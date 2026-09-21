@@ -4,6 +4,10 @@ GDD 9 verlangt: "Kalibriert wird ohne Zufall auf einer kurvigen
 Referenzstrecke: Der Beste in Liga 20 faehrt 60 km/h Schnitt, der Beste in
 Liga 1 180 km/h bei rund 98.000", nach der Funktion
 
+(Das Zitat stammt aus dem GDD und nennt noch die zwanzig Ligen von damals.
+Kalibriert wird gegen die **Funktion**, nicht gegen eine Ligazahl; seit
+Punkt 95 hat die unterste Liga die Nummer 10.)
+
     v(S) = 55 + 125 * sqrt(S / 98.000)   [km/h]
 
 Dieses Werkzeug sucht die drei freien Konstanten des Geschwindigkeitsmodells

@@ -40,7 +40,7 @@ def test_vierhundert_autos_in_zehn_ligen(welt, k) -> None:
 
 
 def test_hundertfuenfzig_teams_mit_je_vier_autos(welt, k) -> None:
-    """GDD 12: 150 Teams mit je 4 Autos eines Herstellers."""
+    """GDD 12: 100 Teams mit je 4 Autos eines Herstellers."""
     assert len(welt.teams) == k.wert("teams", "anzahl")
     for team in welt.teams:
         assert len(team.fahrer) == k.wert("teams", "autos_je_team")

@@ -1,6 +1,6 @@
 """Tests fuer Block 4: Streckenbilanz, Wetterbilanz und Bestmarken.
 
-Die Bilanzen sind **Summen**, keine Rennlisten: 600 Fahrer mal 20 Rennen
+Die Bilanzen sind **Summen**, keine Rennlisten: 400 Fahrer mal 20 Rennen
 mal beliebig vielen Saisons waere ein Spielstand, der endlos waechst.
 Getestet wird deshalb vor allem, dass die Summen stimmen und dass sie
 nicht mit der Zahl der Saisons wachsen.

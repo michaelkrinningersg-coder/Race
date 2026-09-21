@@ -1,12 +1,12 @@
-"""Welt: 600 Autos, 150 Teams, 20 Ligen (GDD 12).
+"""Welt: 400 Autos, 100 Teams, 10 Ligen (GDD 12, Punkt 95).
 
 Eine Welt wird einmal pro Karriere aus einem Seed erzeugt und bleibt dann
 bestehen. Sie enthaelt:
 
-* **600 Autos** - 20 Ligen zu je 30. Die Staerke eines Autos liegt
+* **400 Autos** - 10 Ligen zu je 40. Die Staerke eines Autos liegt
   zwischen dem Letzten und dem Besten seiner Liga, wie es die
   Kalibriertabelle in GDD 9 vorgibt, plus Rauschen.
-* **150 Teams** zu je 4 Autos eines Herstellers. Die vier Autos eines
+* **100 Teams** zu je 4 Autos eines Herstellers. Die vier Autos eines
   Teams koennen in verschiedenen Ligen fahren; Teams und Hersteller sind
   ueber alle Ligen verteilt, nicht zwingend gleichmaessig.
 * **Fahrer** mit fiktivem Namen, Herkunftsland und Geburtsdatum.
@@ -248,7 +248,7 @@ def kuerzel_fuer(nachname: str, vergeben: set[str]) -> str:
             vergeben.add(vorschlag)
             return vorschlag
     # Notnagel: durchnummerieren, bis etwas frei ist.
-    for zahl in range(100, 1000):  # pragma: no cover - bei 600 Fahrern unnoetig
+    for zahl in range(100, 1000):  # pragma: no cover - bei 400 Fahrern unnoetig
         vorschlag = f"{sauber[0]}{zahl % 100:02d}"
         if vorschlag not in vergeben:
             vergeben.add(vorschlag)
@@ -259,7 +259,7 @@ def kuerzel_fuer(nachname: str, vergeben: set[str]) -> str:
 def _teamfarbe(grundfarbe: str, nummer: int, anzahl: int) -> str:
     """Eigene Teamfarbe, aus der Herstellerfarbe abgewandelt (GDD 12).
 
-    Das GDD gibt Hersteller und Team je eine Farbe. Weil 150 Teams auf 20
+    Das GDD gibt Hersteller und Team je eine Farbe. Weil 100 Teams auf 20
     Hersteller kommen, wird die Herstellerfarbe je Team in der Helligkeit
     verschoben - die Marke bleibt erkennbar, die Teams unterscheidbar.
     """
@@ -418,10 +418,11 @@ def erzeuge(
     # Punkt 35: Jeder Fahrer steht auf einem Punkt **seiner eigenen**
     # Laufbahn - Talent und Alter ergeben seinen Wert, der Wert seine
     # Liga. Vorher bekam er einen Wert aus der Ligaleiter und ein Talent,
-    # das nichts damit zu tun hatte: Der Beste in Liga 1 hatte Wert 98130
-    # bei einem Potential von 70000 und wurde ab der ersten Saison
-    # schlechter, waehrend in Liga 20 Fahrer mit Wert 105 und Potential
-    # 18014 sassen. Die Welt raeumte sich in den ersten Saisons selbst um.
+    # das nichts damit zu tun hatte: Der Beste einer Liga bekam einen
+    # Wert vom oberen Rand des Korridors und ein Potential, das damit
+    # nichts zu tun hatte, und wurde ab der ersten Saison schlechter,
+    # waehrend unten Fahrer mit hohem Potential auf niedrigen Werten
+    # sassen. Die Welt raeumte sich in den ersten Saisons selbst um.
     #
     # Der Gewinn nebenbei: Ein Neunzehnjaehriger mit Liga-1-Potential hat
     # erst einen Bruchteil davon und landet dadurch von allein weit unten.
@@ -511,7 +512,7 @@ def _sortiere_in_ligen(
 ) -> dict[int, int]:
     """Verteilt die Fahrernummern nach ihrer Startstaerke auf die Ligen.
 
-    Der Staerkste kommt in Liga 1, der Schwaechste in Liga 20. Die vier
+    Der Staerkste kommt in Liga 1, der Schwaechste in Liga 10. Die vier
     Autos eines Teams landen dadurch meist in verschiedenen Ligen - genau
     wie GDD 12 es erlaubt, nur nicht mehr zufaellig, sondern verdient.
 

@@ -8,7 +8,7 @@ Vier Fahrer zu je vier Feldern waeren untereinander eine Wand aus
 Eingabezeilen. Sie liegen deshalb auf Reitern, einer je Auto; der
 Teamname steht darueber, weil er fuer alle vier gilt.
 
-**Die Startliga steht nicht zur Wahl.** Sie ist immer Liga 20, und alle
+**Die Startliga steht nicht zur Wahl.** Sie ist immer Liga 10, und alle
 vier starten dort. Freie Wahl waere der Schwierigkeitsgrad durch die
 Hintertuer: Wer in Liga 5 anfinge, liesse die halbe Karriere aus GDD 13
 einfach aus.

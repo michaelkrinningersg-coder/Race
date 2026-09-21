@@ -211,7 +211,7 @@ def test_in_der_untersten_liga_greift_der_abzug(k, strecken):
         anzahl = len(strecke.art_je_punkt)
         stellen = np.r_[np.arange(von, anzahl), np.arange(0, bis)]
         getroffen += int((frei[stellen] < deckel).sum())
-    assert getroffen > 0, "In Liga 20 muss es Stellen unter dem Limit geben"
+    assert getroffen > 0, "In der untersten Liga muss es Stellen unter dem Limit geben"
 
 
 def test_auch_in_der_untersten_liga_kostet_die_durchfahrt(k, strecken):

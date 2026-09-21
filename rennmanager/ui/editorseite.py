@@ -1,7 +1,7 @@
 """Editor fuer Fahrer und Autos (GDD 15: Balancing-Werkzeuge).
 
 GDD 15 nennt unter den Werkzeugen eine Debug-Ansicht. Diese Seite ist sie:
-Sie laesst jeden der 600 Fahrer aendern - alle 32 Einzelwerte aus GDD 5
+Sie laesst jeden der 400 Fahrer aendern - alle 32 Einzelwerte aus GDD 5
 und 6, die sechs Faehigkeiten neben der Wirkungsmatrix (GDD 7 und der
 Reifenfluesterer), die Streckenkenntnis je Strecke (GDD 6) und die
 Stammdaten.
@@ -83,7 +83,7 @@ class Editorseite(QWidget):
         self._felder: dict[str, QSpinBox] = {}
         self._kenntnisfelder: dict[str, QSpinBox] = {}
         self._probestrecke: kern_strecke.Strecke | None = None
-        # Rundenzeiten je (Strecke, Fahrer); 600 Fahrer kosten sonst bei
+        # Rundenzeiten je (Strecke, Fahrer); 400 Fahrer kosten sonst bei
         # jedem Streckenwechsel gut eine Sekunde.
         self._zeiten: dict[tuple[str, int], int] = {}
         # Solange nichts uebernommen wurde, muss das Fenster nichts neu
@@ -347,8 +347,8 @@ class Editorseite(QWidget):
         Streckenkenntnis aus GDD 6 ist drin - sie ist kein Zufall, sondern
         eine Eigenschaft des Fahrers auf dieser Strecke.
 
-        Gerechnet wird je Fahrer rund 2 Millisekunden; ueber alle 600 sind
-        das gut eine Sekunde, deshalb der Zwischenspeicher.
+        Gerechnet wird je Fahrer rund 2 Millisekunden; ueber alle 400 sind
+        das fast eine Sekunde, deshalb der Zwischenspeicher.
         """
         schluessel = (strecke.name, fahrer.nummer)
         if schluessel not in self._zeiten:

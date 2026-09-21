@@ -10,7 +10,7 @@ die Eigenschaften daneben. Das Profil ist eine Beschreibung, kein
 Spielelement.
 
 Gemessen wird gegen den eigenen Durchschnitt, nicht gegen die Skala: Ein
-Fahrer aus Liga 20 hat lauter niedrige Werte und trotzdem ein Profil.
+Fahrer aus Liga 10 hat lauter niedrige Werte und trotzdem ein Profil.
 """
 
 from __future__ import annotations

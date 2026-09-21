@@ -6,7 +6,7 @@ auf fuenf Seiten verstreut steht.
 
 **Die Karte rechnet nichts.** Sie liest nur, was Welt, Auto, Statistik,
 Streckenkenntnis und Popularitaet ohnehin fuehren, und ist rein lesend:
-Werte aendern geht weiter nur ueber den Editor. Fuer alle 600 Fahrer
+Werte aendern geht weiter nur ueber den Editor. Fuer alle 400 Fahrer
 zeigt sie dasselbe; Konto, Sponsoren und Werkstatt des Spielers bleiben
 auf ihren eigenen Seiten, sonst gaebe es sie zweimal.
 
@@ -21,8 +21,9 @@ Strecken     Streckenkenntnis je Strecke, Heimstrecken hervorgehoben
 ===========  =============================================================
 
 Die Balken messen gegen den **eigenen** Hoechstwert, nicht gegen die
-Skala: Ein Fahrer aus Liga 20 steht bei 150 von 100.000 - gegen die Skala
-waere jeder seiner Balken unsichtbar, und zu sehen ist hier ohnehin die
+Skala: Ein Fahrer aus Liga 10 steht zwischen 12.000 und 19.285 von
+100.000 - gegen die Skala waeren seine Balken kaum zu unterscheiden, und
+zu sehen ist hier ohnehin die
 Form seines Profils, nicht sein Platz auf der Skala. Die Zahl steht
 daneben.
 """

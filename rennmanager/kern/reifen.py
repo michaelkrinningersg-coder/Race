@@ -190,7 +190,8 @@ def stintweite_m(
     die Renndistanz geteilt, ein Satz hielt also per Konstruktion genau
     ein Rennen - Boxenstopps waeren sinnlos gewesen. Jetzt traegt ein
     Stint eine feste Strecke, und wie viele Stopps ein Rennen kostet,
-    ergibt sich daraus: Liga 1 faehrt 293 km, Liga 20 nur 100.
+    ergibt sich daraus. Seit Punkt 95 faehrt jede Liga dieselben 290 km;
+    ein schwaches Auto braucht dafuer nur mehr Runden und mehr Stopps.
     """
     einstellung = konfiguration.wert("reifen", "mischungen")
     strafe = 1.0 + einstellung["naesse_strafe_verschleiss"] * _fehlgriff(

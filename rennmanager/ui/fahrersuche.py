@@ -1,6 +1,6 @@
 """Fahrersuche im Fensterkopf (Punkt 18).
 
-600 Fahrer stehen in 20 Ligen. Wer einen bestimmten sucht, musste bisher
+400 Fahrer stehen in 10 Ligen. Wer einen bestimmten sucht, musste bisher
 wissen, in welcher Liga er faehrt, dort hinblaettern und die Liste
 durchsehen. Ein Suchfeld nimmt das ab: Name tippen, Eingabetaste, seine
 Fahrerkarte geht auf.

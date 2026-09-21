@@ -1,6 +1,6 @@
 """Tests fuer den Saisonlauf (GDD 13).
 
-Ein Rennwochenende umfasst alle 20 Ligen; im Schnellmodus dauert es
+Ein Rennwochenende umfasst alle 10 Ligen; im Schnellmodus dauert es
 wenige Sekunden, mit ausfuehrlich gefahrener Spielerliga deutlich
 laenger. Die teuren Laeufe stehen deshalb in Fixtures mit
 ``scope="module"`` und werden von mehreren Tests genutzt.
@@ -124,7 +124,7 @@ def test_jedes_wochenende_wertet_alle_ligen(k, lauf, wochenende):
 
 
 def test_die_ergebnisse_nennen_weltweite_fahrernummern(lauf, wochenende, welt):
-    """Ohne diese Uebersetzung stuenden 20 Ligen mit denselben Nummern
+    """Ohne diese Uebersetzung stuenden 10 Ligen mit denselben Nummern
     in derselben Tabelle."""
     for liga, ergebnis in wochenende.ligen.items():
         nummern = [e.fahrer for e in ergebnis.ergebnisse]
@@ -201,7 +201,7 @@ def test_startaufstellung_kommt_aus_dem_qualifying(ausfuehrlich, welt):
 
 def test_die_uebrigen_ligen_bleiben_unberuehrt(ausfuehrlich, wochenende):
     """Ob die Spielerliga schnell oder ausfuehrlich faehrt, darf die
-    anderen 19 Ligen nicht veraendern - sonst waere eine Saison nicht
+    anderen 9 Ligen nicht veraendern - sonst waere eine Saison nicht
     wiederholbar (GDD 15)."""
     for liga, ergebnis in wochenende.ligen.items():
         if liga == LIGA:
@@ -238,7 +238,7 @@ def volle_tabellen(k, welt) -> dict[int, wt.Tabelle]:
 
 
 def test_ligawechsel_lassen_jede_liga_voll_besetzt(grosse_konfiguration, grosse_welt):
-    # Braucht die echten 20 Ligen - rechnet aber kein Rennen.
+    # Braucht die echten 10 Ligen - rechnet aber kein Rennen.
     k, welt = grosse_konfiguration, grosse_welt
     wechsel = wt.auf_und_abstieg(k, volle_tabellen(k, welt))
     neu = sa.wende_wechsel_an(welt, wechsel)
@@ -255,7 +255,7 @@ def test_ligawechsel_lassen_teams_und_autos_unangetastet(
     grosse_konfiguration, grosse_welt
 ):
     """GDD 13: Auf- und Abstieg gelten fuer Fahrer, nicht fuer Teams."""
-    # Braucht die echten 20 Ligen - rechnet aber kein Rennen.
+    # Braucht die echten 10 Ligen - rechnet aber kein Rennen.
     k, welt = grosse_konfiguration, grosse_welt
     neu = sa.wende_wechsel_an(welt, wt.auf_und_abstieg(k, volle_tabellen(k, welt)))
     assert neu.teams == welt.teams
@@ -274,7 +274,7 @@ def test_doppelter_wechsel_faellt_auf(welt):
 
 def test_ungleicher_wechsel_faellt_auf(grosse_welt):
     """Ein Aufstieg ohne Gegenstueck wuerde eine Liga sprengen."""
-    # Braucht die echten 20 Ligen - rechnet aber kein Rennen.
+    # Braucht die echten 10 Ligen - rechnet aber kein Rennen.
     welt = grosse_welt
     einzeln = (wt.Wechsel(welt.liga(10)[0].nummer, 10, 9),)
     with pytest.raises(sa.SaisonFehler, match="Liga"):
@@ -789,7 +789,7 @@ def test_gefuehrt_und_am_stueck_ergeben_dasselbe(gefuehrt, ausfuehrlich, k):
     """Der Kern der Sache: Derselbe Seed, dasselbe Rennen (GDD 15).
 
     Das gefuehrte Wochenende faengt mit der Liga des Spielers an und
-    haengt die 19 anderen hinten dran; ``fahre_rennen`` geht von Liga 1
+    haengt die 9 anderen hinten dran; ``fahre_rennen`` geht von Liga 1
     bis 20 durch. Herauskommen muss beides Mal dasselbe - sonst haengt das
     Ergebnis an der Reihenfolge, und ein Seed sagt nichts mehr.
     """

@@ -22,10 +22,11 @@ zwar mit den Werten **dieses** Autos: Ein Auto mit starken Bremsen
 verliert in der Boxengasse weniger.
 
 Der Deckel gilt nur, wo die Strecke ueberhaupt schneller waere: Gerechnet
-wird mit dem Minimum aus Streckenlimit und 80 km/h. In Liga 1 liegt die
-Boxengasse deshalb durchgehend am Deckel, in Liga 20 sind 57 von 2581
-Punkten schon von sich aus langsamer - dort faehrt das Auto sein eigenes
-Tempo.
+wird mit dem Minimum aus Streckenlimit und dem Ligalimit. In Liga 1
+liegt die Boxengasse deshalb durchgehend am Deckel; in Liga 10 auf zwei
+der zwanzig Strecken nicht: In Spa sind 6 der 100 Gassenpunkte schon von
+sich aus langsamer als die 70 km/h dieser Liga - dort faehrt das Auto
+sein eigenes Tempo.
 
 Ein ganzer Stopp besteht aus vier Posten:
 
@@ -254,8 +255,8 @@ def limit_ms(konfiguration: Konfiguration, liga: int | None = None) -> float:
     """Das Boxenlimit dieser Liga, in m/s.
 
     Je tiefer die Liga, desto strenger - so hat es der Auftraggeber
-    gesetzt: Liga 1 bis 5 faehrt 80 km/h, 6 bis 10 siebzig, 11 bis 15
-    fuenfundsechzig, 16 bis 20 sechzig. Ohne Ligaangabe gilt der
+    gesetzt: Liga 1 bis 5 faehrt 80 km/h, Liga 6 bis 10 siebzig. Ohne
+    Ligaangabe gilt der
     Grundwert; daran haengen die Streckengeometrie und alles, was nicht
     an einem bestimmten Rennen haengt.
     """
@@ -282,9 +283,10 @@ def _decke_ab(
 
     * Wo die Strecke **schneller** waere als das Limit, gilt das Limit.
     * Wo sie ohnehin **langsamer** ist, gilt ihr eigenes Tempo minus
-      einem kleinen Abzug. Ohne ihn kostete die Boxengasse in den unteren
-      Ligen gar nichts: In Liga 20 faehrt das schwaechste Auto auf der
-      Start-Ziel-Geraden stellenweise nur 29 km/h.
+      einem kleinen Abzug. Ohne ihn kostete die Boxengasse dort gar
+      nichts, wo die Strecke ohnehin langsam ist: In Spa faehrt das
+      schwaechste Auto der Liga 10 auf der Start-Ziel-Geraden
+      stellenweise nur 53 km/h, in Yas Marina 52.
     """
     deckel = limit_ms(konfiguration, liga)
     abzug = 1.0 - konfiguration.wert("boxenstopp", "abzug_unter_limit")

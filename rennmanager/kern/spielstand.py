@@ -10,9 +10,9 @@ laesst:
 Tabelle                Inhalt
 =====================  ===================================================
 ``kopf``               Seed, Saisonjahr, Spielerliga, Version
-``fahrer``             die 600 Fahrer mit Stammdaten und Liga
+``fahrer``             die 400 Fahrer mit Stammdaten und Liga
 ``fahrerwerte``        ihre Einzelwerte (GDD 5, 6 und 7)
-``team``               die 150 Teams
+``team``               die 100 Teams
 ``karriere``           Tag, Konto, Vertraege des Spielers
 ``teamauto``           die Werte jedes eigenen Autos, je Fahrer
 ``buchung``            was der Spieler an welchem Tag getan hat

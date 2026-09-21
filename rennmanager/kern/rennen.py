@@ -83,7 +83,7 @@ class Rundenprotokoll:
     # sind - sie zeigte immer die Zeiten vom Rennende.
     rundenende_ms: list[int] = field(default_factory=list)
     # D4: Die besten Sektoren je Stand, einmal gerechnet. Die Anzeige
-    # fragt sie in jedem Bild fuer alle dreissig Autos ab, und die
+    # fragt sie in jedem Bild fuer alle vierzig Autos ab, und die
     # Funktion laeuft dabei ueber **alle** bisher gefahrenen Runden - in
     # Runde 40 also ueber vierzig. Der Schluessel ist die Zahl der
     # gefahrenen Runden; sie bestimmt den Ausschnitt vollstaendig, also
@@ -2328,7 +2328,7 @@ def simuliere(
         liga=liga,
     )
     # Punkt 39: Die Mischung wird als Index gefuehrt, nicht als Kuerzel -
-    # ein Bild je 200 Millisekunden mal 30 Autos waere sonst eine
+    # ein Bild je 200 Millisekunden mal 40 Autos waere sonst eine
     # Zeichenkettenwolke.
     kuerzel = tuple(m.kuerzel for m in kern_reifen.mischungen(konfiguration))
     stelle_von = {k: n for n, k in enumerate(kuerzel)}

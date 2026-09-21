@@ -119,9 +119,9 @@ class Rueckstandsansicht(QWidget):
         die Achse nicht bestimmen. Ihre Linien laufen am unteren Rand.
 
         Dass ein Feld weit auseinanderliegt, ist damit *nicht* behoben und
-        soll es auch nicht sein: In Liga 20 reicht die Ligastaerke von 0
-        bis 157, das letzte Auto liegt dort gemessen 328 s hinter dem
-        Sieger. Das ist die Liga, nicht das Diagramm.
+        soll es auch nicht sein: In Liga 10 reicht die Ligastaerke von
+        12.000 bis 19.285, der letzte Ankommende liegt dort gemessen
+        216 s hinter dem Sieger. Das ist die Liga, nicht das Diagramm.
         """
         runde = {
             e.teilnehmer: e.rundenrueckstand for e in self._verlauf.ergebnisse

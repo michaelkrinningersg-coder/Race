@@ -10,7 +10,7 @@ auf der Strecke. Hier wird je Runde eine Rundenzeit gebildet und
 aufsummiert; Verkehr und Ueberholen werden ueber die Reihenfolge geregelt,
 nicht ueber Positionen.
 
-Das genuegt fuer 19 Ligen zu je 30 Autos nach jedem Rennwochenende - die
+Das genuegt fuer 9 Ligen zu je 40 Autos nach jedem Rennwochenende - die
 volle Simulation braeuchte dafuer Minuten, diese Sekunden.
 """
 

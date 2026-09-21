@@ -162,12 +162,12 @@ def test_top_drei_steigen_auf_und_letzte_drei_ab(k, volle_tabellen):
     assert {w.nach_liga for w in mitte if not w.ist_aufstieg} == {6}
 
 
-def test_liga_eins_kennt_keinen_aufstieg_und_liga_zwanzig_keinen_abstieg(k, volle_tabellen):
+def test_liga_eins_kennt_keinen_aufstieg_und_die_unterste_keinen_abstieg(k, volle_tabellen):
     wechsel = wt.auf_und_abstieg(k, volle_tabellen)
     letzte = k.wert("ligen", "anzahl")
     assert not [w for w in wechsel if w.von_liga == 1 and w.ist_aufstieg]
     assert not [w for w in wechsel if w.von_liga == letzte and not w.ist_aufstieg]
-    # Aber Liga 1 steigt ab und Liga 20 steigt auf.
+    # Aber Liga 1 steigt ab und die unterste Liga steigt auf.
     assert len([w for w in wechsel if w.von_liga == 1]) == 3
     assert len([w for w in wechsel if w.von_liga == letzte]) == 3
 

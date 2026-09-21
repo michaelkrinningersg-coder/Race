@@ -132,7 +132,7 @@ def marktwert(
     """
     einstellung = konfiguration.wert("transfer")
     # Ein Fahrer kostet einen Anteil dessen, was er **verdienen** kann.
-    # Ein fester Grundbetrag taete es nicht: Ein Sieg in Liga 20 bringt
+    # Ein fester Grundbetrag taete es nicht: Ein Sieg in Liga 10 bringt
     # 4.000 EUR, einer in Liga 1 das Dreihundertfache. Gerechnet wird
     # deshalb ueber die Liga, in die sein Koennen gehoert - und ueber die,
     # in die sein Potential ihn noch bringen kann.

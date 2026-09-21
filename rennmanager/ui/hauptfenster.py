@@ -73,7 +73,7 @@ class Hauptfenster(QMainWindow):
         # denselben Namen holt die vorhandene nach vorn, ein Neuaufbau des
         # Fensters schliesst sie.
         self._karten: dict[int, Fahrerkarte] = {}
-        # Eine Welt je Fenster: 600 Autos, 150 Teams, 20 Ligen (GDD 12).
+        # Eine Welt je Fenster: 400 Autos, 100 Teams, 10 Ligen (GDD 12).
         self._welt = kern_welt.erzeuge(
             konfiguration,
             self._seedquelle.zweig("welt"),

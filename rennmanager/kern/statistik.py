@@ -88,13 +88,13 @@ class Bilanz:
 
     Dieselben Zahlen wie in ``Karrierezahlen``, aber je Strecke oder je
     Wetterlage. Gefuehrt wird die **Summe**, nicht die Liste der einzelnen
-    Rennen: 600 Fahrer mal 20 Rennen mal beliebig vielen Saisons waere ein
+    Rennen: 400 Fahrer mal 20 Rennen mal beliebig vielen Saisons waere ein
     Spielstand, der endlos waechst. Als Summe bleiben es 12.000 Zeilen je
     Strecke und 3.000 je Wetterlage - gleich viele nach der ersten Saison
     wie nach der zwanzigsten.
 
     ``beste_liga`` ist die staerkste Liga (also die kleinste Nummer), in
-    der hier ein Podium gelang. Zehn Siege in Liga 20 und einer in Liga 3
+    der hier ein Podium gelang. Zehn Siege in Liga 10 und einer in Liga 3
     stehen sonst gleichwertig nebeneinander. 0 heisst: noch kein Podium.
     """
 
@@ -451,7 +451,7 @@ class Statistik:
         """Loescht, was an einer Fahrernummer haengt (Punkt 35).
 
         Ein Newgen erbt die Nummer des Zurueckgetretenen - die Welt haelt
-        genau 600 Fahrer, und an 53 Stellen ist die Nummer zugleich der
+        genau 400 Fahrer, und an 53 Stellen ist die Nummer zugleich der
         Platz in der Liste. Ohne dieses Vergessen begaenne er seine
         Laufbahn mit dessen Siegen, Punkten und Bilanzen.
 

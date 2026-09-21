@@ -4,7 +4,7 @@ Ein Fahrer steigt auf und ab (GDD 13). Die Liste der Saisons sagt das
 auch, aber erst als Linie sieht man den Weg: ob jemand stetig nach oben
 geht, in einer Liga haengt oder wieder durchgereicht wird.
 
-Die Achse steht auf dem Kopf - **Liga 1 oben**, Liga 20 unten, weil "oben"
+Die Achse steht auf dem Kopf - **Liga 1 oben**, Liga 10 unten, weil "oben"
 im Ligensystem die starke Liga ist. Neben jedem Punkt steht der Platz, den
 er in dieser Liga belegt hat.
 
@@ -27,7 +27,7 @@ from rennmanager.ui.diagramm import (
     zeichne_linie,
 )
 
-# Links steht "Liga 20" an der Achse - schmaler geht es nicht, sonst
+# Links steht "Liga 10" an der Achse - schmaler geht es nicht, sonst
 # schneidet der Rand die Beschriftung an.
 RAND_LINKS = 62
 RAND_RECHTS = 16
@@ -110,7 +110,7 @@ class Laufbahnansicht(QWidget):
         return flaeche.left() + stelle / (len(self._bahn) - 1) * flaeche.width()
 
     def _y(self, flaeche, liga: int) -> float:
-        """Liga 1 oben, Liga 20 unten - im Ligensystem ist oben stark."""
+        """Liga 1 oben, Liga 10 unten - im Ligensystem ist oben stark."""
         if self._ligen <= 1:
             return flaeche.top() + flaeche.height() / 2
         anteil = (liga - 1) / (self._ligen - 1)

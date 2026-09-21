@@ -1,6 +1,6 @@
 """Was ein Fahrer werden kann - Potential, Tempo und Alterskurve (Punkt 35).
 
-Bis hierher fuhren alle 600 Fahrer **dieselbe** Alterskurve: Aufbau bis
+Bis hierher fuhren alle Fahrer **dieselbe** Alterskurve: Aufbau bis
 28, Plateau bis 33, danach Abbau. Innerhalb einer Liga entschied damit
 allein das Alter, wer vorne stand, und die Ligen wurden ueber die Saisons
 zu Altersklassen statt zu Leistungsklassen. Gemessen ueber dreissig
@@ -18,16 +18,16 @@ steht damit von Anfang an fest - derselbe Seed ergibt dieselbe Welt, und
 kein Spielstand muss eine Zeile mehr tragen (GDD 15).
 
 **Das Potential steht auf der absoluten Skala, nicht relativ zur Liga.**
-Die Ligaleiter aus GDD 9 ist extrem: Liga 1 reicht bis 98130, der Letzte
-in Liga 20 hat 6. Ein Potential als Prozentaufschlag auf das
+Die Ligaleiter aus GDD 9 ist weit: Liga 1 reicht bis 100000, der Letzte
+in Liga 10 auf 20000. Ein Potential als Prozentaufschlag auf das
 Einstiegsniveau koennte niemanden je nach oben bringen - ein Newgen in
-Liga 20 waere fuer immer ein Liga-20-Fahrer. Gezogen wird deshalb aus der
+Liga 10 waere fuer immer ein Liga-10-Fahrer. Gezogen wird deshalb aus der
 **Staerkeleiter der ganzen Welt**: Jeder Newgen wuerfelt einen Rang unter
-allen 600 Plaetzen. Damit bleibt die Zusammensetzung des Feldes ueber die
+allen 400 Plaetzen. Damit bleibt die Zusammensetzung des Feldes ueber die
 Generationen dieselbe, ohne dass irgendetwas normiert werden muss.
 
 **Gewachsen wird als Lueckenschluss.** Jedes Jahr holt ein Wert einen
-Anteil des Abstands zu seinem Ziel auf. Das traegt von 6 nach 98130
+Anteil des Abstands zu seinem Ziel auf. Das traegt von 20000 nach 100000
 genauso wie von 50000 nach 60000 - ein fester Prozentsatz je Jahr taete
 das nicht. Dasselbe Verfahren macht auch den Abbau: Ab dem Abbaualter
 sinkt das **Ziel**, und die Luecke schliesst sich nach unten. Ein
@@ -82,7 +82,7 @@ _LEITERN: dict[int, tuple[float, ...]] = {}
 def _leiter(konfiguration: Konfiguration) -> tuple[float, ...]:
     """Alle Ligastaerken aus GDD 9 als eine Leiter, absteigend.
 
-    600 Werte von 98130 (Bester in Liga 1) bis 6 (Letzter in Liga 20).
+    400 Werte von 100000 (Bester in Liga 1) bis 20000 (Letzter in Liga 10).
     Aus ihr wuerfelt ein Newgen sein Potential.
     """
     gemerkt = _LEITERN.get(id(konfiguration))
@@ -125,7 +125,7 @@ def talent(
     dasselbe Talent kommt heraus, egal wann danach gefragt wird.
 
     **Warum der Geburtstag dazugehoert:** Ein Newgen erbt die Nummer des
-    Zurueckgetretenen, damit die Welt bei 600 Fahrern bleibt. Haenge das
+    Zurueckgetretenen, damit die Welt bei 400 Fahrern bleibt. Haenge das
     Talent allein an der Nummer, erbte er auch dessen Talent - Platz 64
     waere auf ewig derselbe Fahrertyp. Der Geburtstag macht ihn zu einem
     eigenen Menschen, und er aendert sich ueber eine Laufbahn nie.
@@ -225,7 +225,7 @@ def stand_mit(
 ) -> float:
     """Der Gesamtwert, auf dem dieser Fahrer in diesem Alter steht.
 
-    Daraus baut die Welterzeugung ihre 600 Fahrer: Jeder steht auf einem
+    Daraus baut die Welterzeugung ihre 400 Fahrer: Jeder steht auf einem
     plausiblen Punkt **seiner eigenen** Laufbahn statt auf einem Wert, der
     nichts mit seinem Talent zu tun hat.
 

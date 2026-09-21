@@ -913,10 +913,10 @@ def geduld_falscher_reifen(konfiguration: Konfiguration, seedquelle: Seedquelle)
 
     Ausgewuerfelt von null bis ``falscher_reifen_max_runden``
     (Entscheidung des Auftraggebers). Ohne den Wurf kam das ganze Feld in
-    derselben Runde herein: Dreht das Wetter, werden alle dreissig Reifen
-    im selben Augenblick falsch, und jedes Auto nahm die fruehestmoegliche
-    Runde. Gemessen in Liga 20 auf Sakhir: 17 Autos in Runde 10, 12 in
-    Runde 11.
+    derselben Runde herein: Dreht das Wetter, werden alle Reifen des
+    Feldes im selben Augenblick falsch, und jedes Auto nahm die
+    fruehestmoegliche Runde. Gemessen damals in der untersten Liga auf
+    Sakhir: 17 Autos in Runde 10, 12 in Runde 11.
 
     Je Auto **ein** Wurf je Rennen - wer zweimal auf den falschen Reifen
     geraet, bleibt beide Male gleich geduldig.
@@ -1002,7 +1002,7 @@ def vorhersage(
 
     Das Wetter steht vor dem Rennen fest (GDD 7) - also kann die
     Strategie es kennen. Vorher wurde nur gegen die **Startlage** geplant;
-    das kostete in einem nassen Zandvoort-Lauf allen 30 Autos das
+    das kostete in einem nassen Zandvoort-Lauf allen 40 Autos das
     Mindestprofil, weil sie ein trockenes Rennen eingeplant hatten und in
     den Regen fuhren.
 
@@ -1050,7 +1050,7 @@ def gummivorhersage(
 
     Die gruene Strecke frisst Reifen, die eingegummierte schont sie. Der
     Stand zaehlt Auto-Runden, also steigt er mit der Feldgroesse: Ein
-    Rennen mit dreissig Autos gummiert dreissigmal so schnell ein wie
+    Rennen mit vierzig Autos gummiert vierzigmal so schnell ein wie
     eine einsame Runde. Gefragt wird zur **Mitte** jeder Runde, wie bei
     der Naesse - das ist der beste einzelne Wert fuer eine Runde, in der
     der Stand ja weiter steigt.

@@ -41,14 +41,13 @@ from rennmanager.kern import wetter as kern_wetter
 from rennmanager.kern.zufall import Seedquelle
 
 LIGA = 1
-# Die Liga, in der der Spieler faehrt - **nicht** die gemessene. Ohne
-# Karriere haben seine vier Fahrer alle Eigenschaften auf null, und ein
-# Auto mit Gesamtwert 0 dreht Monza in 280 statt 85 Sekunden. Es kam
-# damit nach 16 von 51 Runden ins Ziel, erreichte seine geplante
-# Stopprunde 34 nie und stand danach als "null Stopps" in der
-# Verteilung - vier von dreissig Autos, also 13 Prozent des Feldes, die
-# ueber Strategie nichts aussagen. Gemessen wird deshalb eine Liga ohne
-# Spielerteam: dreissig KI-Autos mit Gesamtwerten von 76.768 bis 94.632.
+# Die Liga, in der der Spieler faehrt - **nicht** die gemessene. Seine
+# vier Autos stehen am Weltstart auf der Mindeststaerke und damit am
+# unteren Rand ihrer Liga; frueher, als sie bei null anfingen, drehte so
+# ein Auto Monza in 280 statt 85 Sekunden, kam nach 16 von 51 Runden ins
+# Ziel und stand danach als "null Stopps" in der Verteilung. Gemessen
+# wird deshalb weiter eine Liga **ohne** Spielerteam: lauter KI-Autos,
+# die das Rennen auch zu Ende fahren.
 SPIELERLIGA = 10
 # Lagen, unter denen die Trockenmischungen ueberhaupt zur Wahl stehen.
 TROCKEN = {"trocken", "heiss"}

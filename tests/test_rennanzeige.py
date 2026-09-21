@@ -32,7 +32,7 @@ from tests.oberflaeche import schlage_blatt_auf  # noqa: E402
 def konfig() -> kf.Konfiguration:
     """Punkt 77: Diese Datei bleibt bei der **grossen** Welt.
 
-    Gemessen: Vier Runden mit dreissig Autos bringen 18 Zwischenfaelle und
+    Gemessen: Vier Runden mit vierzig Autos bringen 13 Zwischenfaelle und
     zwei Ueberrundete, dieselben vier Runden mit vier Autos nur zwei
     Zwischenfaelle und keinen Ueberrundeten. Der Ticker und die Achse des
     Rueckstandsdiagramms haetten dann nichts mehr zu zeigen - zwei Tests

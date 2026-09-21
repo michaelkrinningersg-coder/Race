@@ -1,6 +1,6 @@
 """Tests fuer die Schnellsimulation der uebrigen Ligen (GDD 13).
 
-Die Schnellsimulation ersetzt die volle Rennsimulation fuer die 19 Ligen,
+Die Schnellsimulation ersetzt die volle Rennsimulation fuer die 9 Ligen,
 in denen der Spieler nicht faehrt. Sie muss deshalb dasselbe liefern -
 eine vollstaendige Wertung mit Qualifying, Wetter, Ausfaellen und
 Ueberholmanoevern -, nur schneller und auf Rundenebene statt in
@@ -199,7 +199,7 @@ def test_schnellmodus_trifft_die_volle_simulation(k, zandvoort, feld, umgebung):
     """Der Schnellmodus darf nicht systematisch schneller oder langsamer sein.
 
     Sonst waeren Rundenrekorde und Siegerzeiten der Spielerliga - die
-    ausfuehrlich faehrt - nicht mit denen der uebrigen 19 Ligen
+    ausfuehrlich faehrt - nicht mit denen der uebrigen 9 Ligen
     vergleichbar. Verglichen wird bei gleichem Wetter: Es kommt in beiden
     Modellen aus demselben Zweig der Seedquelle.
     """

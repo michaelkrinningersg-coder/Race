@@ -179,7 +179,7 @@ class Konfiguration:
         return dict(self.wert("offen", standard={}))
 
     def ligenname(self, liga: int) -> str:
-        """Ligenname aus Stufe und Nummer, z. B. ``"Bronze 5"`` fuer Liga 20."""
+        """Ligenname aus Stufe und Nummer, z. B. ``"Eisen 2"`` fuer Liga 10."""
         for gruppe in self.wert("ligen", "namen"):
             if gruppe["von_liga"] <= liga <= gruppe["bis_liga"]:
                 return f"{gruppe['stufe']} {liga - gruppe['von_liga'] + 1}"

@@ -136,7 +136,7 @@ class Statistikseite(QWidget):
         self._lage.currentIndexChanged.connect(self.aktualisiere)
 
         # Bestmarken: erst insgesamt, dann Liga fuer Liga. Mit Pfeilen zum
-        # Durchschalten - 20 Ligen einzeln aus einer Liste zu klicken ist
+        # Durchschalten - 10 Ligen einzeln aus einer Liste zu klicken ist
         # umstaendlich, wenn man sie vergleichen will.
         self._bestliga = QComboBox()
         self._bestliga.addItem("Insgesamt", ALLE_LIGEN)

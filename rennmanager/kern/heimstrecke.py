@@ -11,9 +11,9 @@ Wirkungsmatrix aus GDD 8 und denen daneben (Wetterfaehigkeiten,
 Reifenfluesterer und die fuenf aus Punkt 48).
 
 **Nicht jeder hat eine Heimstrecke.** Die 20 Strecken liegen in 17
-Laendern, die 600 Fahrer kommen aus 32. Wer kein Land mit Strecke hat,
+Laendern, die 400 Fahrer kommen aus 32. Wer kein Land mit Strecke hat,
 geht leer aus - so mit dem Auftraggeber abgestimmt. Gemessen betrifft der
-Bonus 212 der 600 Fahrer.
+Bonus 150 der 400 Fahrer.
 
 Der Bonus greift wie die entwickelten Werte des Spielers: ueber
 ``welt.starterfeld(..., autos=...)``. Die Reihenfolge des Feldes bleibt

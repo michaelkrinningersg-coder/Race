@@ -30,7 +30,7 @@ from tests.oberflaeche import (  # noqa: E402
 
 # -- Weltseite --------------------------------------------------------------
 def test_fenster_erzeugt_eine_welt(qtbot, konfig: kf.Konfiguration) -> None:
-    """GDD 12: 600 Autos, 150 Teams, 20 Ligen."""
+    """GDD 12: 400 Autos, 100 Teams, 10 Ligen."""
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
     welt = fenster.welt
@@ -47,7 +47,7 @@ def test_weltseite_zeigt_eine_ganze_liga(qtbot, konfig: kf.Konfiguration) -> Non
     qtbot.addWidget(fenster)
     seite = fenster.weltseite
 
-    # 20 Ligen plus der Eintrag "Alle Ligen".
+    # 10 Ligen plus der Eintrag "Alle Ligen".
     assert seite.liga_auswahl.count() == konfig.wert("ligen", "anzahl") + 1
     assert seite.liste.topLevelItemCount() == konfig.wert("ligen", "autos_je_liga")
     # Die Liste beginnt beim staerksten Fahrer.
@@ -174,7 +174,7 @@ def test_saisonseite_startet_bei_der_liga_des_spielers(qtbot, konfig: kf.Konfigu
 
 
 def test_saisonseite_faehrt_ein_rennwochenende(qtbot, konfig: kf.Konfiguration) -> None:
-    """Ein Klick faehrt alle 20 Ligen und fuellt Tabelle und Ergebnis."""
+    """Ein Klick faehrt alle 10 Ligen und fuellt Tabelle und Ergebnis."""
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
     seite = fenster.saisonseite
@@ -285,7 +285,7 @@ def test_saisonseite_zeigt_den_abschluss(qtbot, konfig: kf.Konfiguration) -> Non
     text = seite.abschlusstext.text()
     assert fenster.welt.spieler.name in text
     assert f"Liga {fenster.welt.spieler.liga}" in text
-    # Alle 20 Ligen haben einen Meister.
+    # Alle 10 Ligen haben einen Meister.
     assert text.count("Punkte") >= konfig.wert("ligen", "anzahl")
     assert seite.wechselliste.topLevelItemCount() > 0
 
@@ -681,7 +681,7 @@ def test_fahrertreffer_stehen_vor_teamtreffern(qtbot, grosse_konfiguration) -> N
         if any(f.nachname in team.name for team in fenster.welt.teams)
     )
     gefunden = suche.treffer(fahrer.nachname)
-    # Denselben Nachnamen gibt es unter 600 Fahrern oefter - die Aussage
+    # Denselben Nachnamen gibt es unter 400 Fahrern oefter - die Aussage
     # ist die Reihenfolge: Wer ueber den Namen passt, steht vor jedem, der
     # nur ueber den Teamnamen hereinkommt.
     assert fahrer.nummer in gefunden

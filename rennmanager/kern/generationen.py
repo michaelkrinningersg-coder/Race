@@ -1,6 +1,6 @@
 """Ruecktritt, Newgens und die Entwicklung der KI (Punkt 35).
 
-Bis hierher waren die 600 Fahrer aus GDD 12 unveraenderlich: dieselben
+Bis hierher waren die 400 Fahrer aus GDD 12 unveraenderlich: dieselben
 Namen, dieselben Werte, dasselbe Alter, Saison fuer Saison. Dieses Modul
 macht aus ihnen Generationen.
 
@@ -8,7 +8,7 @@ Vier Regeln, alle vom Auftraggeber entschieden:
 
 * **Ruecktritt** zwischen 34 und 42, je Fahrer einmal gestreut.
 * **Ein Newgen je Ruecktritt.** Newgens steigen ganz unten ein, in
-  Liga 20; die vorhandenen Fahrer fuellen nach oben auf.
+  Liga 10; die vorhandenen Fahrer fuellen nach oben auf.
 * **Die frei gewordenen Plaetze werden nach der Platzierung besetzt.**
   Wer seine Liga gewonnen hat, rueckt zuerst nach.
 * **Jeder entwickelt sich nach seinem eigenen Talent** (siehe
@@ -173,7 +173,7 @@ def newgen(
         )
         if paar not in vergebene_namen:
             break
-    else:  # pragma: no cover - bei 600 Fahrern und langen Listen unnoetig
+    else:  # pragma: no cover - bei 400 Fahrern und langen Listen unnoetig
         raise GenerationenFehler("Keine freien Namen mehr fuer einen Newgen")
     vergebene_namen.add(paar)
 
@@ -324,7 +324,7 @@ def naechste_generation(
        zwar **nach der Platzierung** der abgelaufenen Saison: Wer seine
        Liga gewonnen hat, rueckt zuerst nach. Ohne Platzierungen - vor dem
        ersten Rennen - entscheidet die Staerke.
-    3. Die Newgens fuellen von unten auf: erst Liga 20, und wenn es mehr
+    3. Die Newgens fuellen von unten auf: erst Liga 10, und wenn es mehr
        sind, als dort Platz haben, auch Liga 19 und weiter.
     4. Alle altern um ein Jahr, und jede Liga wird auf ihre Staerke aus
        GDD 9 zurueckgeholt.
@@ -377,7 +377,7 @@ def naechste_generation(
 
     fahrer = [replace(f, liga=nach_liga[f.nummer]) for f in bleibend]
 
-    # Schritt 3: Die Newgens fuellen von unten auf - erst Liga 20, und
+    # Schritt 3: Die Newgens fuellen von unten auf - erst Liga 10, und
     # wenn es mehr sind, als dort Platz haben, auch Liga 19 und weiter.
     namen = {(f.vorname, f.nachname) for f in fahrer}
     kuerzel = {f.auto.kuerzel for f in fahrer}

@@ -1,6 +1,6 @@
 """Rechnen, ohne dass die Oberflaeche stehenbleibt (E10).
 
-Ein Rennen zu rechnen kostet gemessen elf Sekunden (Zandvoort, 30 Autos,
+Ein Rennen zu rechnen kostet gemessen 47 Sekunden (Zandvoort, 40 Autos,
 40 Runden). Bisher lief das im Oberflaechen-Thread: Der Knopf ging aus,
 der Mauszeiger wurde zur Sanduhr, und das Fenster reagierte elf Sekunden
 lang auf nichts. Ein Fenster, das nicht reagiert, sieht abgestuerzt aus -

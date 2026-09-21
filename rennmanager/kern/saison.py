@@ -1,6 +1,6 @@
 """Saisonlauf: 20 Rennwochenenden, Wertung, Auf- und Abstieg (GDD 13).
 
-Ein Saisonlauf haelt die Tabellen aller 20 Ligen und faehrt Wochenende
+Ein Saisonlauf haelt die Tabellen aller 10 Ligen und faehrt Wochenende
 fuer Wochenende. Die Liga des Spielers laeuft dabei ausfuehrlich ueber
 ``rennmanager.kern.rennen`` - mit Qualifying, sichtbarem Rennverlauf und
 Zeitraffer -, die uebrigen 19 im Schnellmodus aus
@@ -18,7 +18,7 @@ Kalender beginnen neu. Die Karriere ist damit endlos.
 Alle Wuerfe haengen am Hauptseed: Der Zweig eines Rennens heisst
 ``saison/<jahr>/rennen/<nummer>/liga/<liga>``. Dieselbe Saison mit
 demselben Seed laeuft deshalb genau gleich ab, gleich ob die Liga des
-Spielers ausfuehrlich oder schnell gefahren wird - die uebrigen 19 Ligen
+Spielers ausfuehrlich oder schnell gefahren wird - die uebrigen 9 Ligen
 bleiben davon unberuehrt (GDD 15).
 """
 
@@ -70,7 +70,7 @@ class SaisonFehler(Exception):
 
 @dataclass(frozen=True)
 class Wochenendrahmen:
-    """Was an einem Rennwochenende fuer alle 20 Ligen gleich ist."""
+    """Was an einem Rennwochenende fuer alle 10 Ligen gleich ist."""
 
     nummer: int
     strecke: Strecke
@@ -540,7 +540,7 @@ def _ausfuehrlich(
 ) -> tuple[Ligawochenende, Rennverlauf, Qualifying]:
     """Qualifying und Rennen einer Liga am Stueck (GDD 4).
 
-    Der Weg fuer die Saison, die 20 Ligen hintereinander faehrt. Das
+    Der Weg fuer die Saison, die 10 Ligen hintereinander faehrt. Das
     gefuehrte Rennwochenende ruft stattdessen die beiden Etappen einzeln
     auf und haelt dazwischen an (Punkt 12) - herauskommen muss dasselbe.
     """
@@ -1015,7 +1015,7 @@ class Saisonlauf:
 
         Tabelle, Popularitaet, Statistik, Streckenkenntnis und - nur in der
         Liga des Spielers - die Karriere. Jede Liga bucht fuer sich, mit
-        eigenem Seedzweig: Die Reihenfolge, in der die 20 Ligen gebucht
+        eigenem Seedzweig: Die Reihenfolge, in der die 10 Ligen gebucht
         werden, aendert am Ergebnis nichts. Nur deshalb darf das gefuehrte
         Wochenende (Punkt 12) mit der Liga des Spielers anfangen.
         """
@@ -1114,7 +1114,7 @@ class Saisonlauf:
             self.karriere.liga = eigener.liga
 
     def fahre_rennen(self, ausfuehrliche_liga: int | None = None) -> Wochenende:
-        """Faehrt das naechste Rennwochenende in allen 20 Ligen (GDD 13).
+        """Faehrt das naechste Rennwochenende in allen 10 Ligen (GDD 13).
 
         :param ausfuehrliche_liga: Liga, die voll simuliert wird - ueblich
             die des Spielers. Ohne Angabe laufen alle Ligen im
@@ -1203,7 +1203,7 @@ class Saisonlauf:
     def _teile_kenntnis(self) -> None:
         """Karriere und Welt teilen sich eine Streckenkenntnis (GDD 6).
 
-        Es gibt nur *eine* im Spiel - sie haelt alle 600 Fahrer. Die
+        Es gibt nur *eine* im Spiel - sie haelt alle 400 Fahrer. Die
         Karriere schreibt die Runden des Spielers hinein, das Rennen liest
         die Tempofaktoren daraus; zwei getrennte Staende kaemen nie
         zusammen. Der Spielstand verbindet beide beim Laden auf dieselbe
@@ -1311,7 +1311,7 @@ class Saisonlauf:
         Plaetze, die niemand mehr besetzt.
 
         Ein Newgen erbt die Nummer des Zurueckgetretenen - die Welt haelt
-        genau 600 Fahrer. Was an dieser Nummer hing, wird deshalb
+        genau 400 Fahrer. Was an dieser Nummer hing, wird deshalb
         vergessen: Karrierezahlen, Bilanzen, Streckenkenntnis und
         Popularitaet. Die Historie bleibt; sie gehoert der Saison, nicht
         dem Nachfolger.
@@ -1383,8 +1383,8 @@ class Saisonlauf:
 
         * **Statistik** - Rundenrekorde, Karrierezahlen und die
           vollstaendige Historie aller bisherigen Saisons,
-        * **Streckenkenntnis** aller 600 Fahrer (GDD 6),
-        * die **Popularitaet** aller 600 Fahrer (Punkt 5),
+        * **Streckenkenntnis** aller 400 Fahrer (GDD 6),
+        * die **Popularitaet** aller 400 Fahrer (Punkt 5),
         * aus der Karriere Konto, Werte, Sponsorenvertraege, offene
           Defekte und laufende Ereignisse (GDD 10 und 14).
 
@@ -1442,10 +1442,10 @@ class WochenendFehler(SaisonFehler):
 class Wochenendlauf:
     """Ein Rennwochenende in Etappen, fuer die Oberflaeche (Punkt 12).
 
-    ``Saisonlauf.fahre_rennen`` faehrt alle 20 Ligen am Stueck. Der
+    ``Saisonlauf.fahre_rennen`` faehrt alle 10 Ligen am Stueck. Der
     Spieler soll sein Wochenende dagegen Schritt fuer Schritt erleben:
     erst das Qualifying, dann - auf dessen Aufstellung - das Rennen, und
-    erst danach laufen die 19 anderen Ligen im Schnellmodus durch.
+    erst danach laufen die 9 anderen Ligen im Schnellmodus durch.
 
     Gefahren wird **dasselbe**: Die Seedzweige heissen nach ihrer Sache,
     nicht nach der Reihenfolge, und jede Liga bucht fuer sich. Ein Test
@@ -1616,7 +1616,7 @@ class Wochenendlauf:
         return self.verlauf
 
     def schliesse_ab(self) -> Wochenende:
-        """Dritte Etappe: die 19 anderen Ligen, dann alles verbuchen.
+        """Dritte Etappe: die 9 anderen Ligen, dann alles verbuchen.
 
         Die Liga des Spielers wird zuerst gebucht, die uebrigen danach in
         aufsteigender Reihenfolge. Das darf sie, weil jede Liga ihren

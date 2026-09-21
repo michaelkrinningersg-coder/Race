@@ -4,7 +4,7 @@ Links die Fahrerliste, rechts der Steckbrief des gewaehlten Fahrers mit
 seinen 32 Einzelwerten (F1 bis F16 aus GDD 5, D1 bis D16 aus GDD 6) und
 den Faehigkeiten ausserhalb der Wirkungsmatrix.
 
-Die Liste zeigt wahlweise eine Liga oder alle 600 Fahrer und wahlweise nur
+Die Liste zeigt wahlweise eine Liga oder alle 400 Fahrer und wahlweise nur
 die Stammdaten oder zusaetzlich jeden Einzelwert als eigene Spalte.
 """
 
@@ -44,7 +44,7 @@ def _zahl(wert: float) -> str:
 
 
 class Weltseite(QWidget):
-    """Zeigt die 20 Ligen mit ihren 30 Fahrern und die Teams."""
+    """Zeigt die 10 Ligen mit ihren 40 Fahrern und die Teams."""
 
     # Doppelklick auf einen Namen: Das Fenster oeffnet die Fahrerkarte.
     fahrerkarte_gewuenscht = Signal(int)

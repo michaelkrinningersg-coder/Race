@@ -11,7 +11,7 @@ Regeln, beide mit dem Auftraggeber abgestimmt:
 
 * Der **Anfangswert** ist gestreut, aber ausdruecklich *nicht* nach
   Ligastaerke. Bekanntheit ist nicht dasselbe wie Schnelligkeit - ein
-  Fahrer aus Liga 20 kann bekannter sein als einer aus Liga 1.
+  Fahrer aus Liga 10 kann bekannter sein als einer aus Liga 1.
 * Sie **waechst aus Siegen, Podien und Poles**, also aus dem, was die
   Karrierezahlen aus GDD 13 ohnehin fuehren.
 
