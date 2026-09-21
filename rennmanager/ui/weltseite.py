@@ -11,7 +11,6 @@ die Stammdaten oder zusaetzlich jeden Einzelwert als eigene Spalte.
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -32,7 +31,7 @@ from rennmanager.kern import karriere as kern_karriere
 from rennmanager.kern.auto import bereichswerte
 from rennmanager.kern.welt import Welt
 from rennmanager.konfiguration import Konfiguration
-from rennmanager.ui.tabellen import verbinde_fahrerkarte
+from rennmanager.ui.tabellen import schriftfarbe, verbinde_fahrerkarte
 
 # Spalten, die unabhaengig von der Eigenschaftsansicht immer stehen.
 STAMMSPALTEN = ("#", "Kuerzel", "Fahrer", "Land", "Alter", "Team", "Hersteller", "Staerke")
@@ -219,7 +218,7 @@ class Weltseite(QWidget):
 
             zeile = QTreeWidgetItem(self._liste, felder)
             zeile.setData(0, Qt.UserRole, fahrer.nummer)
-            zeile.setForeground(kopf.index("Kuerzel"), QColor(team.farbe))
+            zeile.setForeground(kopf.index("Kuerzel"), schriftfarbe(team.farbe))
             if fahrer.ist_spieler:
                 schrift = zeile.font(2)
                 schrift.setBold(True)

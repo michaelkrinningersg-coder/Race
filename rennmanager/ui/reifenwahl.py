@@ -18,7 +18,6 @@ feste Regel - immer weich, im Nassen der passende Satz.
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QComboBox,
     QGroupBox,
@@ -32,6 +31,7 @@ from PySide6.QtWidgets import (
 
 from rennmanager.kern import strategie as kern_strategie
 from rennmanager.konfiguration import Konfiguration
+from rennmanager.ui.tabellen import schriftfarbe
 
 # Der Eintrag, der die Wahl wieder ans Team abgibt.
 TEAM = "Team entscheidet"
@@ -131,7 +131,7 @@ class Reifenwahl(QGroupBox):
                     "",
                 ],
             )
-            zeile.setForeground(SPALTE_FAHRER, QColor(teilnehmer.farbe))
+            zeile.setForeground(SPALTE_FAHRER, schriftfarbe(teilnehmer.farbe))
             zeile.setData(SPALTE_FAHRER, Qt.UserRole, teilnehmer.nummer)
             self._liste.setItemWidget(
                 zeile,

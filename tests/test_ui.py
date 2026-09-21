@@ -182,3 +182,50 @@ def test_tempoprofil_muss_zur_strecke_passen(qtbot, konfig: kf.Konfiguration) ->
     strecke = kern_strecke.lade(konfig, "Monza")
     with pytest.raises(ValueError, match="passt nicht"):
         ansicht.zeige_tempo(strecke, np.zeros(5))
+
+
+# --- Punkt 95: Teamfarben als Schrift -------------------------------------
+def test_helle_teamfarben_werden_fuer_die_schrift_abgedunkelt(konfig) -> None:
+    """Gelb auf Weiss ist keine Schrift mehr.
+
+    Die Teamfarbe ist fuer die Punkte auf der Streckenkarte gemacht
+    (GDD 4 und 12). Als Kuerzel in einer Tabelle muss sie lesbar sein;
+    ``schriftfarbe`` dunkelt sie dafuer ab, ohne den Farbton zu drehen.
+    """
+    from PySide6.QtGui import QColor
+
+    from rennmanager.ui.tabellen import MINDESTKONTRAST, kontrast, schriftfarbe
+
+    gelb = "#fff82e"
+    assert kontrast(QColor(gelb)) < 2.0, "Testfarbe ist schon lesbar"
+    lesbar = schriftfarbe(gelb)
+    assert kontrast(lesbar) >= MINDESTKONTRAST
+    # Derselbe Farbton, nur dunkler.
+    assert lesbar.hslHue() == QColor(gelb).hslHue()
+    assert lesbar.lightness() < QColor(gelb).lightness()
+
+    # Was dunkel genug ist, bleibt unveraendert.
+    dunkel = "#0e294b"
+    assert schriftfarbe(dunkel).name() == dunkel
+
+
+def test_jede_teamfarbe_ist_in_der_tabelle_lesbar(grosse_konfiguration) -> None:
+    """Keine der hundert Teamfarben darf in einer Tabelle untergehen.
+
+    Hier geht es um die Farben selbst, also um die **echte** Welt mit
+    ihren hundert Teams - die kleine Testwelt hat zu wenige, um etwas zu
+    beweisen (gemessen waren 32 der 100 zu hell).
+    """
+    from rennmanager.kern import welt as kern_welt
+    from rennmanager.kern.zufall import Seedquelle
+    from rennmanager.ui.tabellen import MINDESTKONTRAST, kontrast, schriftfarbe
+
+    konfig = grosse_konfiguration
+    welt = kern_welt.erzeuge(
+        konfig,
+        Seedquelle(0).zweig("welt"),
+        spielerliga=konfig.wert("ligen", "startliga"),
+    )
+    assert len(welt.teams) == konfig.wert("teams", "anzahl")
+    schlechteste = min(kontrast(schriftfarbe(t.farbe)) for t in welt.teams)
+    assert schlechteste >= MINDESTKONTRAST

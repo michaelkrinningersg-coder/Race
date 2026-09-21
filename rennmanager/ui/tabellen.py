@@ -2,9 +2,26 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QFontMetrics
 from PySide6.QtWidgets import QMenu, QStyledItemDelegate, QTreeWidget, QTreeWidgetItem
+
+# Punkt 95: Teamfarben sind fuer die Punkte auf der Streckenkarte gemacht
+# (GDD 4 und 12). Als **Schrift** auf hellem Grund fallen die hellen
+# darunter aus: Reines Gelb auf Weiss bringt ein Kontrastverhaeltnis von
+# 1,12:1 - gemessen sind 32 der 100 Teams unter dem Wert, den man zum
+# Lesen braucht. Fuer Tabellen wird die Farbe deshalb so weit
+# abgedunkelt, bis sie 4,5:1 erreicht (WCAG AA fuer normalen Text).
+# Farbton und Saettigung bleiben, nur die Helligkeit sinkt - das Team
+# behaelt seine Farbe, sie wird nur dunkler. Auf der Karte, im
+# Rueckstandsdiagramm und im Punkteverlauf bleibt die Farbe unberuehrt:
+# Dort sind es Flaechen und Linien, keine Buchstaben.
+MINDESTKONTRAST = 4.5
+# Der helle Grund, gegen den gerechnet wird. Die Zeilen wechseln zwischen
+# Weiss und einem Hauch Grau; Weiss ist der schlechtere der beiden Faelle.
+GRUND = "#ffffff"
 
 
 def setze_breiten(tabelle: QTreeWidget, proben, rand: int = 16) -> None:
@@ -154,3 +171,45 @@ def verbinde_fahrerkarte(liste, oeffne, nummer_von=fahrernummer) -> None:
     liste.itemDoubleClicked.connect(doppelklick)
     liste.setContextMenuPolicy(Qt.CustomContextMenu)
     liste.customContextMenuRequested.connect(menue)
+
+
+def _leuchtdichte(farbe: QColor) -> float:
+    """Relative Leuchtdichte nach WCAG 2.1."""
+
+    def kanal(wert: float) -> float:
+        return wert / 12.92 if wert <= 0.03928 else ((wert + 0.055) / 1.055) ** 2.4
+
+    return (
+        0.2126 * kanal(farbe.redF())
+        + 0.7152 * kanal(farbe.greenF())
+        + 0.0722 * kanal(farbe.blueF())
+    )
+
+
+def kontrast(farbe: QColor, grund: str = GRUND) -> float:
+    """Kontrastverhaeltnis zweier Farben, zwischen 1 und 21."""
+    hell, dunkel = sorted(
+        (_leuchtdichte(farbe), _leuchtdichte(QColor(grund))), reverse=True
+    )
+    return (hell + 0.05) / (dunkel + 0.05)
+
+
+@lru_cache(maxsize=512)
+def _abgedunkelt(name: str) -> QColor:
+    farbe = QColor(name)
+    if not farbe.isValid():
+        return QColor("#0b0b0b")
+    farbton, saettigung, helligkeit, deckung = farbe.getHsl()
+    while helligkeit > 0 and kontrast(farbe) < MINDESTKONTRAST:
+        helligkeit = max(0, helligkeit - 2)
+        farbe = QColor.fromHsl(farbton, saettigung, helligkeit, deckung)
+    return farbe
+
+
+def schriftfarbe(farbe) -> QColor:
+    """Eine Teamfarbe, dunkel genug zum Lesen auf hellem Grund.
+
+    Farben, die von sich aus dunkel genug sind, kommen unveraendert
+    zurueck - zwei Drittel der Teams merken nichts davon.
+    """
+    return QColor(_abgedunkelt(QColor(farbe).name()))

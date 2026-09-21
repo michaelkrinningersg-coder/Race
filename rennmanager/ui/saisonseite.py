@@ -36,7 +36,7 @@ from rennmanager.kern.zeit import formatiere_dauer
 from rennmanager.kern.zufall import Seedquelle
 from rennmanager.konfiguration import Konfiguration
 from rennmanager.ui.punkteansicht import Punkteansicht
-from rennmanager.ui.tabellen import verbinde_fahrerkarte
+from rennmanager.ui.tabellen import schriftfarbe, verbinde_fahrerkarte
 
 # Punkt 95: Kennung der Weltansicht in der Ligaauswahl. Keine Liga hat die
 # Nummer 0, sie ist damit als Sonderfall eindeutig.
@@ -436,7 +436,7 @@ class Saisonseite(QWidget):
                     str(eintrag.ausfaelle),
                 ],
             )
-            zeile.setForeground(0, QColor(team.farbe))
+            zeile.setForeground(0, schriftfarbe(team.farbe))
             zeile.setData(0, Qt.UserRole, fahrer.nummer)
             # Wer bei der naechsten Wechselrunde auf- oder absteigt, ist
             # farbig markiert. In der Weltmeisterschaft sagt der Platz
@@ -538,7 +538,7 @@ class Saisonseite(QWidget):
                     str(punkte),
                 ],
             )
-            zeile.setForeground(0, QColor(self._welt.team_von(fahrer).farbe))
+            zeile.setForeground(0, schriftfarbe(self._welt.team_von(fahrer).farbe))
             zeile.setData(0, Qt.UserRole, fahrer.nummer)
             if fahrer.ist_spieler:
                 schrift = zeile.font(1)

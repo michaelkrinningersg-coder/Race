@@ -29,7 +29,6 @@ daneben.
 
 from __future__ import annotations
 
-from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QDialog,
     QFormLayout,
@@ -52,7 +51,7 @@ from rennmanager.kern.zeit import formatiere_dauer
 from rennmanager.konfiguration import Konfiguration
 from rennmanager.ui.laufbahnansicht import Laufbahnansicht
 from rennmanager.ui.punkteansicht import Punkteansicht
-from rennmanager.ui.tabellen import Balkenzeichner, SortierbareZeile
+from rennmanager.ui.tabellen import Balkenzeichner, SortierbareZeile, schriftfarbe
 
 # Der Balken der Wirkungsbereiche soll die Form zeigen, nicht warnen -
 # deshalb liegen beide Schwellen unter jedem vorkommenden Anteil.
@@ -561,7 +560,7 @@ class Fahrerkarte(QDialog):
                 schrift = zeile.font(0)
                 schrift.setBold(True)
                 zeile.setFont(0, schrift)
-                zeile.setForeground(0, QColor(self._team.farbe))
+                zeile.setForeground(0, schriftfarbe(self._team.farbe))
         for stelle in range(self._streckenliste.columnCount()):
             if stelle != 4:
                 self._streckenliste.resizeColumnToContents(stelle)

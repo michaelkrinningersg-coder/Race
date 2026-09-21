@@ -43,7 +43,12 @@ from rennmanager.kern.zeit import (
 from rennmanager.konfiguration import Konfiguration
 from rennmanager.ui.rueckstandsansicht import Rueckstandsansicht
 from rennmanager.ui.streckenansicht import Streckenansicht
-from rennmanager.ui.tabellen import Balkenzeichner, setze_breiten, verbinde_fahrerkarte
+from rennmanager.ui.tabellen import (
+    Balkenzeichner,
+    schriftfarbe,
+    setze_breiten,
+    verbinde_fahrerkarte,
+)
 from rennmanager.ui.wetterband import Wetterband
 
 # Der Zeitraffer vervielfacht die Rennzeit je Takt, nicht die Zahl der
@@ -993,7 +998,7 @@ class Rennseite(QWidget):
                     status,
                 ],
             )
-            zeile.setForeground(SPALTE_KUERZEL, QColor(teilnehmer.farbe))
+            zeile.setForeground(SPALTE_KUERZEL, schriftfarbe(teilnehmer.farbe))
             if gewinn:
                 zeile.setForeground(
                     SPALTE_WECHSEL,
@@ -1247,7 +1252,7 @@ class Rennseite(QWidget):
             for nummer, sektor in enumerate(sektoren):
                 if bestzeiten.get(nummer) == sektor:
                     self._faerbe_lila(zeile, MONITOR_SEKTOR + nummer)
-            zeile.setForeground(0, QColor(verlauf.teilnehmer[i].farbe))
+            zeile.setForeground(0, schriftfarbe(verlauf.teilnehmer[i].farbe))
             zeile.setData(0, Qt.UserRole, i)
             # Die letzte Runde leuchtet auf, wenn sie zugleich die beste
             # dieses Fahrers war - eine persoenliche Bestzeit sieht man
@@ -1301,7 +1306,7 @@ class Rennseite(QWidget):
             spalten += [formatiere_dauer(s) if s else "-" for s in sektoren]
             spalten += ["-"] * (IDEAL_SPALTEN - len(spalten))
             zeile = QTreeWidgetItem(self._ideal, spalten)
-            zeile.setForeground(0, QColor(verlauf.teilnehmer[i].farbe))
+            zeile.setForeground(0, schriftfarbe(verlauf.teilnehmer[i].farbe))
             zeile.setData(0, Qt.UserRole, i)
             for nummer, sektor in enumerate(sektoren):
                 if sektor is not None and bestzeiten.get(nummer) == sektor:
@@ -1364,7 +1369,7 @@ class Rennseite(QWidget):
                 ],
             )
             if farbe:
-                eintrag.setForeground(2, QColor(farbe))
+                eintrag.setForeground(2, schriftfarbe(farbe))
             if stelle is not None:
                 eintrag.setData(0, Qt.UserRole, stelle)
             if zeile.veraenderung:
@@ -1541,7 +1546,7 @@ class Rennseite(QWidget):
                     ),
                 ],
             )
-            zeile.setForeground(0, QColor(teilnehmer.farbe))
+            zeile.setForeground(0, schriftfarbe(teilnehmer.farbe))
             zeile.setData(0, Qt.UserRole, i)
             if anzahl and mittel:
                 zeile.setForeground(
@@ -1571,7 +1576,7 @@ class Rennseite(QWidget):
                     z.beschreibung + (" - Ausfall" if z.ausgefallen else ""),
                 ],
             )
-            zeile.setForeground(3, QColor(teilnehmer.farbe))
+            zeile.setForeground(3, schriftfarbe(teilnehmer.farbe))
             if z.ausgefallen:
                 # Der Ausfall ist keine vierte Art, sondern das Ende
                 # einer der drei - also dasselbe Zeichen, nur in Rot.

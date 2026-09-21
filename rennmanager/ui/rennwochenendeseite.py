@@ -55,7 +55,7 @@ from rennmanager.ui.hintergrund import Rechenlauf
 from rennmanager.ui.qualifyingseite import Qualifyingseite
 from rennmanager.ui.reifenwahl import Reifenwahl
 from rennmanager.ui.rennseite import Rennseite
-from rennmanager.ui.tabellen import verbinde_fahrerkarte
+from rennmanager.ui.tabellen import schriftfarbe, verbinde_fahrerkarte
 
 # Die vier Schritte. Der Text auf dem Knopf sagt, was als Naechstes
 # passiert - nicht, wo man gerade ist.
@@ -524,7 +524,7 @@ class Rennwochenendeseite(QWidget):
             zeile = QTreeWidgetItem(
                 self._vorher, [str(platz), fahrer.name, team.name, punkte]
             )
-            zeile.setForeground(0, QColor(team.farbe))
+            zeile.setForeground(0, schriftfarbe(team.farbe))
             zeile.setData(0, Qt.UserRole, fahrer.nummer)
             self._hebe_spieler_hervor(zeile, fahrer, self._vorher.columnCount())
         for spalte in range(self._vorher.columnCount()):
@@ -577,7 +577,7 @@ class Rennwochenendeseite(QWidget):
                     str(kern_wertung.punkte_fuer(self._konfiguration, ergebnis.liga, e)),
                 ],
             )
-            zeile.setForeground(0, QColor(self._lauf.welt.team_von(fahrer).farbe))
+            zeile.setForeground(0, schriftfarbe(self._lauf.welt.team_von(fahrer).farbe))
             zeile.setData(0, Qt.UserRole, fahrer.nummer)
             self._hebe_spieler_hervor(zeile, fahrer, self._ergebnisliste.columnCount())
         for spalte in range(self._ergebnisliste.columnCount()):
@@ -596,7 +596,7 @@ class Rennwochenendeseite(QWidget):
                 self._nachher,
                 [str(platz), fahrer.name, str(eintrag.punkte), sprung],
             )
-            zeile.setForeground(0, QColor(self._lauf.welt.team_von(fahrer).farbe))
+            zeile.setForeground(0, schriftfarbe(self._lauf.welt.team_von(fahrer).farbe))
             zeile.setData(0, Qt.UserRole, fahrer.nummer)
             if davor is not None and davor != platz:
                 zeile.setForeground(

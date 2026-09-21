@@ -15,7 +15,6 @@ Drei Ansichten in einer Seite, umschaltbar:
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QComboBox,
     QGroupBox,
@@ -32,7 +31,7 @@ from rennmanager.kern.statistik import Statistik
 from rennmanager.kern.welt import Welt
 from rennmanager.kern.zeit import formatiere_dauer, formatiere_rueckstand
 from rennmanager.konfiguration import Konfiguration
-from rennmanager.ui.tabellen import verbinde_fahrerkarte
+from rennmanager.ui.tabellen import schriftfarbe, verbinde_fahrerkarte
 
 # Die Bestmarken ueber alle Ligen hinweg.
 ALLE_LIGEN = 0
@@ -542,7 +541,7 @@ class Statistikseite(QWidget):
             In den Bestmarken steht dort ein ganzer Satz - eine helle
             Teamfarbe machte ihn unlesbar.
         """
-        zeile.setForeground(spalte, QColor(self._welt.team_von(fahrer).farbe))
+        zeile.setForeground(spalte, schriftfarbe(self._welt.team_von(fahrer).farbe))
         zeile.setData(0, Qt.UserRole, fahrer.nummer)
         if fahrer.ist_spieler:
             schrift = zeile.font(1)

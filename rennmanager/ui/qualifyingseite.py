@@ -46,7 +46,7 @@ from rennmanager.kern.qualifying import Lage, Qualifying
 from rennmanager.kern.zeit import formatiere_dauer, formatiere_rueckstand
 from rennmanager.konfiguration import Konfiguration
 from rennmanager.ui.streckenansicht import Streckenansicht
-from rennmanager.ui.tabellen import verbinde_fahrerkarte
+from rennmanager.ui.tabellen import schriftfarbe, verbinde_fahrerkarte
 from rennmanager.ui.wetterband import Wetterband
 
 FARBE_SCHNELLER = QColor("#2e7d32")
@@ -484,7 +484,7 @@ class Qualifyingseite(QWidget):
         ]
 
         zeile = QTreeWidgetItem(self._rangliste, spalten)
-        zeile.setForeground(SPALTE_AUTO, QColor(teilnehmer.farbe))
+        zeile.setForeground(SPALTE_AUTO, schriftfarbe(teilnehmer.farbe))
         zeile.setData(SPALTE_POS, Qt.UserRole, teilnehmer.nummer)
         self._faerbe_splits(zeile, stand, lila)
 
@@ -567,7 +567,7 @@ class Qualifyingseite(QWidget):
                 self._aufstellung,
                 [str(platz), teilnehmer.kuerzel, formatiere_dauer(fahrt.zeit_ms)],
             )
-            zeile.setForeground(1, QColor(teilnehmer.farbe))
+            zeile.setForeground(1, schriftfarbe(teilnehmer.farbe))
             zeile.setData(0, Qt.UserRole, teilnehmer.nummer)
         for spalte in range(3):
             self._aufstellung.resizeColumnToContents(spalte)
