@@ -3,6 +3,8 @@
 Das GDD nennt an vielen Stellen eine Mechanik, ohne sie zu beziffern.
 Dieses Dokument listet jede solche Lücke, drei Varianten und die getroffene
 Entscheidung. **Stand 2026-09-17: alle 41 Punkte entschieden.**
+Was danach dazukam, steht als Nachtrag am Ende — zuletzt **Punkt 101**,
+der Umbau auf ein Feld aus 50 Autos mit festen Fahrern.
 
 Die entschiedenen Werte stehen in `konfiguration/balancing.toml`; der
 Abschnitt `[offen]` dort ist leer. Jede Entscheidung lässt sich ändern,
@@ -2970,3 +2972,93 @@ mit Fahrer und Jahr. **Getrennt vom Rennrekord geführt** — eine
 Qualirunde fährt man auf leerer Strecke mit frischen Reifen; in einem
 Topf fiele der Rennrekord nie wieder. Spielstand auf Version 10;
 ältere Stände fangen bei null an.
+
+---
+
+## Punkt 101: Eine Liga, 50 Autos, feste Fahrer
+
+Vorgabe des Auftraggebers: „Ich würde gerne auf eine Liga à 50 Autos
+reduzieren, 25 Hersteller à zwei Autos, der Spieler hat also auch nur
+noch 2 Autos. Das Spreading zwischen bestem Fahrer und schlechtestem soll
+ca. 5 Prozent betragen. Lösche die Fahrerentwicklung, den Transfermarkt —
+wir spielen mit festen Fahrern, den Editor behalten wir. Geld und
+Erfahrungsgewinn auch. Es gibt auch keine Auf- und Abstiege mehr, wir
+entschlacken also richtig. Keine Potentiale, da wir feste Stärken haben.
+Tempoanker nach wie vor 180 km/h auf Zandvoort, daran die 4 % skalieren."
+
+Vier Nachfragen wurden dabei entschieden:
+
+| Frage | Entscheidung |
+| --- | --- |
+| Woran hängen die „ca. 5 Prozent"? | **4 % auf die Rundenzeit** |
+| Wie viele Plätze bekommen Punkte? | **alle 50**: 100, 90, 80, 76, 72, dann in Zweierschritten bis 20 auf Platz 31, danach 19 bis 1 |
+| Was bleibt von der Karriere? | **der Kalender**, der Rest weg |
+| Alte Spielstände? | **abweisen**, nichts portieren |
+
+### Die Spanne ergibt `s_letzter` eindeutig
+
+Jede Grenze des Geschwindigkeitsmodells ist linear in
+`p = sqrt(S / referenz)`, die Rundenzeit also genau umgekehrt
+proportional. 4 % mehr Zeit sind damit 4 % weniger Tempo:
+
+```
+v_letzter = 180 / 1,04            = 173,077 km/h
+p_letzter = (173,077 - 55) / 125  = 0,944615
+s_letzter = 0,944615^2 * 98.000   = 87.445
+```
+
+Nachgemessen: 1:28.282 gegen 1:24.887, also +3,9994 %.
+
+### Was bei der Umsetzung selbst entschieden wurde
+
+Diese acht Punkte standen nicht in der Vorgabe. Sie folgen aus ihr, sind
+aber Entscheidungen — jede lässt sich zurücknehmen.
+
+1. **Ereignisse (GDD 14) ganz gestrichen.** Alle 30 hingen an Geld,
+   Erfahrung, Kaufsperren oder dauerhafter Entwicklung. Ohne diese vier
+   bleibt nichts übrig, worauf ein Ereignis wirken könnte.
+2. **Defektreparatur gestrichen**, `[defekte] malus_bleibt = false`. Ein
+   Defekt gilt nur noch für das Rennen, in dem er fällt. Ohne Geld gäbe
+   es sonst keinen Weg, ihn je wieder loszuwerden. Defekte *im* Rennen
+   bleiben unverändert.
+3. **Streckenkenntnis eingefroren, für alle.** Sie wird einmal bei der
+   Welterzeugung je Fahrer und Strecke gewürfelt (im Mittel 35 % der
+   vollen Kenntnis, breit gestreut) und bleibt. Auch der Spieler fängt
+   nicht mehr bei null an. Wüchse sie weiter, liefe das Feld über die
+   Saisons dem Anker aus GDD 9 davon.
+4. **`Popularitaet.faktor()` entfernt.** Die Funktion bestimmte allein
+   die Höhe der Sponsorenangebote. Der Wert selbst bleibt — er wird
+   angezeigt und lässt sich im Editor ändern.
+5. **Teamfarbe = Herstellerfarbe.** 25 Teams, 25 Hersteller, eine Farbe
+   je Paar; die beiden Autos eines Teams tragen dieselbe. Vorher wurden
+   Teamfarben eigens gewürfelt, was bei 25 Teams zu nah beieinander
+   liegende Paare ergab.
+6. **Die Profilstreuung musste kleiner werden**: `profil_streuung` von
+   0,25 auf 0,03 und `bereichs_streuung` von 0,30 auf 0,035. Mit den
+   alten Werten lag das Rauschen um ein Vielfaches über der Leiter — die
+   4 % wären darin untergegangen und die Reihenfolge wäre reiner Zufall
+   gewesen. Gemessen verschiebt sich ein Fahrer von der Stärke zur
+   Rundenzeit jetzt um im Mittel 2,1 Plätze, höchstens 8.
+7. **Ein Fehler im Ueberholtest behoben** (`kern/rennen.py`): Ein
+   *stehendes* Auto konnte überholen. Geprüft wurde `tempo_hinten`, also
+   das *erreichbare* Tempo — ein Auto im Stand hat dort einen
+   Tempovorteil, den es nicht ausfahren kann. Jetzt muss auch das
+   gefahrene Tempo über null liegen.
+8. **`werkzeuge/meisterschaftslauf.py` gelöscht.** Es fotografierte die
+   Weltmeisterschaft über zehn Ligen, die es nicht mehr gibt.
+
+### Zwei Dinge für die Messphase
+
+* **`[ki] wetter_streuung` steht noch auf 0,45** und wurde nicht
+  angefasst. Das ist jetzt zu viel: Gemessen liegen **26 bis 37 von 50**
+  Fahrern bei jeder der elf Eigenschaften neben der Matrix exakt auf dem
+  Skalenmaximum von 100.000, weil ein Mittelwert um 92.000 plus 45 %
+  Streuung oben abgeschnitten wird. Regenfahren, Reifenflüsterer und die
+  anderen trennen das Feld dadurch nur noch nach unten. Zum Vergleich:
+  Bei den Matrixwerten sind es 2 bis 3 von 50. Ein Wert um 0,03 bis 0,08
+  entspräche dem, was oben noch Platz hat — das ist aber ein
+  Balancing-Wert und damit eine Entscheidung des Auftraggebers.
+* **Die schnellste Rennrunde liegt unter der Polezeit** (gemessen
+  Sakhir: 1:32.338 gegen 1:34.020). Das ist kein neuer Effekt — das
+  Qualifying fährt auf einer grüneren Strecke als das Rennen —, fällt im
+  dichten Feld aber deutlicher auf als vorher.
