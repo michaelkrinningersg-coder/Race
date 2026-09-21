@@ -1,10 +1,8 @@
 """Das Jahr als Band (Punkt 7).
 
-GDD 2 macht Zeit zur Kapazitaet: Jeder nutzbare Tag hat zwei Plaetze,
-einen fuer den Fahrer und einen fuer die Werkstatt, und ein Tag, der
-vorbei ist, ohne belegt zu sein, ist verloren. In einer Liste von 365
-Zeilen sieht man das nicht. Als Band schon: Wo Luecken bleiben, ist Zeit
-liegen geblieben.
+GDD 2 gibt der Saison einen Kalender: zwanzig Rennwochenenden, dazwischen
+die Tage bis zum naechsten. In einer Liste von 365 Zeilen sieht man den
+Rhythmus nicht. Als Band schon.
 
 Jeder Tag ist ein schmaler Streifen, jede Woche eine Spalte - Montag
 oben, Sonntag unten, sodass das Rennwochenende immer am gleichen Platz
@@ -14,10 +12,7 @@ steht. Die Farbe sagt, was der Tag ist:
 Renntag            der Sonntag, an dem gefahren wird
 Qualifying         der Samstag davor
 Reise              die Tage, die das Wochenende kostet
-Verloren           was E29 Reisechaos genommen hat (GDD 14)
-Voll belegt        beide Plaetze genutzt
-Halb belegt        ein Platz genutzt
-Frei               nutzbar und ungenutzt - das, was wehtut
+Frei               jeder andere Tag der Saison
 =================  ==========================================
 
 Gezeichnet wird mit ``QPainter``, wie im ganzen Projekt: PySide6 bringt
@@ -40,26 +35,18 @@ FLAECHE = QColor("#fcfcfb")
 TEXT_ZWEITRANGIG = QColor("#52514e")
 RAHMEN = QColor("#dedcd6")
 
-# Die Zustaende eines Tages. Renntag und Qualifying tragen die Farben, die
-# die Karriereseite schon benutzt; belegt und frei kommen aus der
-# Statuspalette, weil sie "genutzt" und "vertan" bedeuten.
+# Die Zustaende eines Tages.
 FARBEN = {
     "rennen": QColor("#c62828"),
     "qualifying": QColor("#eda100"),
     "reise": QColor("#8b93a1"),
-    "verloren": QColor("#7b1fa2"),
-    "voll": QColor("#2e7d32"),
-    "halb": QColor("#85c88a"),
     "frei": QColor("#e6e4de"),
 }
 BESCHRIFTUNG = {
     "rennen": "Rennen",
     "qualifying": "Qualifying",
     "reise": "Reise",
-    "verloren": "verloren (E29)",
-    "voll": "beide Plaetze belegt",
-    "halb": "ein Platz belegt",
-    "frei": "frei und ungenutzt",
+    "frei": "frei",
 }
 
 TAGE_JE_SPALTE = 7
@@ -95,13 +82,6 @@ class Kalenderstreifen(QWidget):
             self.update()
             return
 
-        # Wie viele Plaetze an einem Tag schon belegt sind. Der laufende
-        # Tag steht in ``belegt``, die vergangenen in den Buchungen.
-        belegt: dict[dt.date, int] = {}
-        for buchung in karriere.buchungen:
-            if buchung.platz:
-                belegt[buchung.datum] = belegt.get(buchung.datum, 0) + 1
-
         self._heute = karriere.heute
         self._tage = [tag.datum for tag in karriere.saison.tage]
         # Der 1. Januar ist selten ein Montag. Ohne Versatz stuende der
@@ -110,25 +90,18 @@ class Kalenderstreifen(QWidget):
         # das Rennwochenende immer ganz unten.
         self._versatz = self._tage[0].weekday() if self._tage else 0
         self._zustaende = {
-            tag.datum: self._zustand(tag, karriere, belegt.get(tag.datum, 0))
-            for tag in karriere.saison.tage
+            tag.datum: self._zustand(tag) for tag in karriere.saison.tage
         }
         self.update()
 
     @staticmethod
-    def _zustand(tag, karriere, belegt: int) -> str:
+    def _zustand(tag) -> str:
         if tag.art is Tagesart.RENNEN:
             return "rennen"
         if tag.art is Tagesart.QUALIFYING:
             return "qualifying"
         if tag.art is Tagesart.REISE:
             return "reise"
-        if tag.datum in karriere.verlorene_tage:
-            return "verloren"
-        if belegt >= 2:
-            return "voll"
-        if belegt == 1:
-            return "halb"
         return "frei"
 
     def zaehle(self) -> dict[str, int]:

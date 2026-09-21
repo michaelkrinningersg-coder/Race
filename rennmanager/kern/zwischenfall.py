@@ -280,22 +280,6 @@ def wertfaktoren(konfiguration: Konfiguration, defekte: list[dict]) -> dict[str,
     return faktoren
 
 
-def reparaturkosten(konfiguration: Konfiguration, defekt: dict, liga: int) -> int:
-    """Was die Reparatur eines Defekts kostet (GDD 14).
-
-    "Reparatur kostet nur Geld (Stufe x Liga-Faktor) und wirkt sofort."
-    Der Liga-Faktor ist die Siegpraemie der Liga; die Entscheidung dazu
-    steht in OFFENE_PUNKTE.md, Punkt 18.
-    """
-    from rennmanager.kern.einnahmen import siegpraemie
-
-    anteil = konfiguration.wert("defekte", "reparatur", "anteil_siegpraemie_je_stufe")
-    return int(round(defekt["kostenstufe"] * anteil * siegpraemie(konfiguration, liga)))
-
-
-# ---------------------------------------------------------------------------
-# Unfaelle
-# ---------------------------------------------------------------------------
 def ausfallgrenze(konfiguration: Konfiguration, wuerfel) -> int:
     """Obergrenze der Ausfaelle in diesem Rennen, 0 bis 5 (GDD 4)."""
     einstellung = konfiguration.wert("unfaelle")

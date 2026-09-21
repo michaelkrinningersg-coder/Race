@@ -1,7 +1,7 @@
 """Editor fuer Fahrer und Autos (GDD 15: Balancing-Werkzeuge).
 
 GDD 15 nennt unter den Werkzeugen eine Debug-Ansicht. Diese Seite ist sie:
-Sie laesst jeden der 400 Fahrer aendern - alle 32 Einzelwerte aus GDD 5
+Sie laesst jeden der 50 Fahrer aendern - alle 32 Einzelwerte aus GDD 5
 und 6, die sechs Faehigkeiten neben der Wirkungsmatrix (GDD 7 und der
 Reifenfluesterer), die Streckenkenntnis je Strecke (GDD 6) und die
 Stammdaten.
@@ -10,12 +10,11 @@ Links der Fahrer, rechts drei Blaetter: Fahrzeug, Fahrer, Strecken. Unten
 steht, was die Aenderung bewirkt - Bereichsmittel und freie Rundenzeit -,
 damit man nicht blind schiebt.
 
-Liga und Team bleiben aussen vor: Ein Wechsel dort spraenge die
-Ligastaerken aus GDD 9 und die Teamgroessen aus GDD 12.
+Das Team bleibt aussen vor: Ein Wechsel dort spraenge die Teamgroessen
+aus GDD 12.
 
-Die Aenderungen sind dauerhaft. Sie bauen die Welt neu auf und wandern mit
-dem Spielstand auf die Platte; beim Spieler gehen sie zusaetzlich in die
-Karriere, weil dort seine entwickelten Werte stehen.
+Die Aenderungen sind dauerhaft. Sie bauen die Welt neu auf und wandern
+mit dem Spielstand auf die Platte.
 """
 
 from __future__ import annotations
@@ -49,8 +48,6 @@ from rennmanager.kern.zeit import formatiere_dauer, formatiere_rueckstand
 from rennmanager.konfiguration import Konfiguration
 from rennmanager.ui.tabellen import SortierbareZeile as Zeile
 
-ALLE_LIGEN = 0
-
 # Die Oberflaeche ist deutsch (CLAUDE.md); QSpinBox richtet sich sonst
 # nach der Locale des Rechners und schreibt 23,504 statt 23.504.
 DEUTSCH = QLocale(QLocale.German, QLocale.Germany)
@@ -69,7 +66,6 @@ class Editorseite(QWidget):
         welt: Welt,
         kenntnis: kern_kenntnis.Streckenkenntnis,
         popularitaet=None,
-        karriere=None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -77,14 +73,13 @@ class Editorseite(QWidget):
         self._welt = welt
         self._kenntnis = kenntnis
         self._popularitaet = popularitaet
-        self._karriere = karriere
         self._strecken = tuple(e["name"] for e in konfiguration.strecken)
         self._geladen: int | None = None
         self._felder: dict[str, QSpinBox] = {}
         self._kenntnisfelder: dict[str, QSpinBox] = {}
         self._probestrecke: kern_strecke.Strecke | None = None
-        # Rundenzeiten je (Strecke, Fahrer); 400 Fahrer kosten sonst bei
-        # jedem Streckenwechsel gut eine Sekunde.
+        # Rundenzeiten je (Strecke, Fahrer); sie einzeln zu rechnen kostet
+        # bei jedem Streckenwechsel spuerbar Zeit.
         self._zeiten: dict[tuple[str, int], int] = {}
         # Solange nichts uebernommen wurde, muss das Fenster nichts neu
         # aufbauen.
@@ -108,16 +103,7 @@ class Editorseite(QWidget):
     # -- Aufbau ------------------------------------------------------------
     def _baue_kopf(self) -> QHBoxLayout:
         zeile = QHBoxLayout()
-        self._liga = QComboBox()
-        self._liga.addItem("Alle Ligen", ALLE_LIGEN)
-        for nummer in range(1, self._konfiguration.wert("ligen", "anzahl") + 1):
-            self._liga.addItem(
-                f"Liga {nummer} - {self._konfiguration.ligenname(nummer)}", nummer
-            )
         spieler = self._welt.spieler
-        if spieler is not None:
-            self._liga.setCurrentIndex(spieler.liga)
-        self._liga.currentIndexChanged.connect(self._fuelle_liste)
 
         self._suche = QLineEdit()
         self._suche.setPlaceholderText("Name oder Kuerzel ...")
@@ -135,8 +121,6 @@ class Editorseite(QWidget):
             self._probe.addItem(f"{eintrag['nummer']:>2}  {eintrag['name']}", eintrag["name"])
         self._probe.currentIndexChanged.connect(self._strecke_gewechselt)
 
-        zeile.addWidget(QLabel("Liga:"))
-        zeile.addWidget(self._liga)
         zeile.addWidget(QLabel("Suche:"))
         zeile.addWidget(self._suche, stretch=1)
         zeile.addWidget(QLabel("Strecke:"))
@@ -149,10 +133,10 @@ class Editorseite(QWidget):
         spalte = QVBoxLayout(self._listenkasten)
         self._liste = QTreeWidget()
         self._liste.setHeaderLabels(
-            ["Liga", "Kuerzel", "Fahrer", "Team", "Staerke", "Rundenzeit", "Rueckstand"]
+            ["Kuerzel", "Fahrer", "Team", "Staerke", "Rundenzeit", "Rueckstand"]
         )
         self._liste.headerItem().setToolTip(
-            5,
+            4,
             "Gefahrene Runde auf der gewaehlten Strecke: trocken, ohne Tagesform, "
             "Rundenform und Eigenschafts-Zufall (GDD 11), ohne Reifenverschleiss "
             "und ohne den Qualifying-Bonus. Die Streckenkenntnis (GDD 6) ist drin, "
@@ -287,8 +271,8 @@ class Editorseite(QWidget):
         self._uebernehmen.clicked.connect(self._uebernimm)
         self._verwerfen = QPushButton("Verwerfen")
         self._verwerfen.clicked.connect(lambda: self._lade_fahrer(self._liste.currentItem()))
-        self._zuruecksetzen = QPushButton("Auf Ligastaerke setzen")
-        self._zuruecksetzen.clicked.connect(self._setze_auf_ligastaerke)
+        self._zuruecksetzen = QPushButton("Auf Mittelwert setzen")
+        self._zuruecksetzen.clicked.connect(self._setze_auf_mittelwert)
 
         zeile.addWidget(self._wirkung, stretch=1)
         zeile.addWidget(self._zuruecksetzen)
@@ -304,16 +288,8 @@ class Editorseite(QWidget):
 
     # -- Liste -------------------------------------------------------------
     def _fahrerauswahl(self) -> tuple:
-        liga = self._liga.currentData()
         wenn = self._suche.text().strip().lower()
-        if liga == ALLE_LIGEN:
-            fahrer = tuple(
-                f
-                for nummer in range(1, self._konfiguration.wert("ligen", "anzahl") + 1)
-                for f in self._welt.liga(nummer)
-            )
-        else:
-            fahrer = self._welt.liga(liga)
+        fahrer = self._welt.feld
         if wenn:
             fahrer = tuple(
                 f for f in fahrer if wenn in f.name.lower() or wenn in f.kuerzel.lower()
@@ -328,7 +304,7 @@ class Editorseite(QWidget):
         return self._probestrecke
 
     def _auto_von(self, fahrer) -> Auto:
-        """Das Auto eines Fahrers - beim Spieler aus der Karriere."""
+        """Das Auto eines Fahrers, so wie es der Editor sieht."""
         werte = self._werte_von(fahrer)
         matrix = {f.schluessel for f in self._konfiguration.faehigkeiten}
         return Auto(
@@ -380,7 +356,6 @@ class Editorseite(QWidget):
             zeile = Zeile(
                 self._liste,
                 [
-                    str(fahrer.liga),
                     fahrer.kuerzel,
                     fahrer.name,
                     team.name,
@@ -390,12 +365,11 @@ class Editorseite(QWidget):
                 ],
             )
             zeile.setData(0, Qt.UserRole, fahrer.nummer)
-            zeile.setze_sortierwert(0, fahrer.liga)
-            zeile.setze_sortierwert(4, staerke)
-            zeile.setze_sortierwert(5, zeit)
-            zeile.setze_sortierwert(6, zeit - bestzeit)
+            zeile.setze_sortierwert(3, staerke)
+            zeile.setze_sortierwert(4, zeit)
+            zeile.setze_sortierwert(5, zeit - bestzeit)
             if fahrer.ist_spieler:
-                schrift = zeile.font(2)
+                schrift = zeile.font(1)
                 schrift.setBold(True)
                 for spalte in range(self._liste.columnCount()):
                     zeile.setFont(spalte, schrift)
@@ -417,7 +391,6 @@ class Editorseite(QWidget):
         if spieler is None:
             return
         self._suche.clear()
-        self._liga.setCurrentIndex(spieler.liga)
         for stelle in range(self._liste.topLevelItemCount()):
             zeile = self._liste.topLevelItem(stelle)
             if zeile.data(0, Qt.UserRole) == spieler.nummer:
@@ -448,19 +421,13 @@ class Editorseite(QWidget):
             self._popularitaetsfeld.setValue(int(round(self._popularitaet.stand(nummer))))
         team = self._welt.team_von(fahrer)
         self._unveraenderlich.setText(
-            f"Liga {fahrer.liga} · Team {team.name} · Hersteller {team.hersteller} · "
+            f"Team {team.name} · Hersteller {team.hersteller} · "
             f"Kuerzel {fahrer.kuerzel}"
         )
         self._zeige_wirkung()
 
     def _werte_von(self, fahrer) -> dict[str, int]:
-        """Woher die Werte kommen - beim Spieler aus der Karriere.
-
-        Der Spieler entwickelt sich (GDD 1); seine Werte stehen deshalb in
-        der Karriere und nicht in der Welt.
-        """
-        if self._karriere is not None and fahrer.nummer == self._karriere.fahrernummer:
-            return dict(self._karriere.werte)
+        """Alle Werte eines Fahrers, aus der Matrix und daneben."""
         werte = dict(fahrer.auto.werte)
         werte.update(fahrer.auto.wetterwerte)
         return werte
@@ -504,10 +471,6 @@ class Editorseite(QWidget):
             self._kenntnis.setze(nummer, name, feld.value())
         if self._popularitaet is not None:
             self._popularitaet.setze(nummer, self._popularitaetsfeld.value())
-        # Ein editierter Fahrer behaelt seinen Stand; sonst schriebe die
-        # naechste Session ihn sofort wieder hoch (GDD 12 fuer die KI).
-        if self._karriere is not None and nummer == self._karriere.fahrernummer:
-            self._karriere.werte.update(werte)
 
         self._geaendert = True
         # Die Zeiten des geaenderten Fahrers stimmen nicht mehr.
@@ -519,7 +482,7 @@ class Editorseite(QWidget):
         self._fuelle_liste()
         self._zeige_wirkung()
 
-    def _setze_auf_ligastaerke(self) -> None:
+    def _setze_auf_mittelwert(self) -> None:
         """Setzt alle Werte auf den Mittelwert des geladenen Fahrers."""
         if self._geladen is None:
             return
@@ -574,10 +537,6 @@ class Editorseite(QWidget):
     @property
     def liste(self) -> QTreeWidget:
         return self._liste
-
-    @property
-    def liga_auswahl(self) -> QComboBox:
-        return self._liga
 
     @property
     def streckenauswahl(self) -> QComboBox:

@@ -1,14 +1,13 @@
 """Fahrersuche im Fensterkopf (Punkt 18).
 
-400 Fahrer stehen in 10 Ligen. Wer einen bestimmten sucht, musste bisher
-wissen, in welcher Liga er faehrt, dort hinblaettern und die Liste
-durchsehen. Ein Suchfeld nimmt das ab: Name tippen, Eingabetaste, seine
-Fahrerkarte geht auf.
+Fuenfzig Fahrer stehen in der Liste. Wer einen bestimmten sucht, musste
+bisher blaettern. Ein Suchfeld nimmt das ab: Name tippen, Eingabetaste,
+seine Fahrerkarte geht auf.
 
-Der Vorschlag nennt Name, Kuerzel, Liga und Team - Nachnamen gibt es
-zweimal. Gesucht wird ueber die ganze Zeile, also auch ueber Team und
-Liga: "Rosskamp" findet die vier Fahrer dieses Teams. Teiltreffer zaehlen
-an beliebiger Stelle, wer nur "kamp" tippt, findet "Holtkamp".
+Der Vorschlag nennt Name, Kuerzel und Team - Nachnamen gibt es zweimal.
+Gesucht wird ueber die ganze Zeile, also auch ueber das Team:
+"Rosskamp" findet beide Fahrer dieses Teams. Teiltreffer zaehlen an
+beliebiger Stelle, wer nur "kamp" tippt, findet "Holtkamp".
 
 **Fahrertreffer stehen vorn.** Wer einen Namen tippt und die
 Eingabetaste drueckt, meint den Fahrer und nicht dessen Teamkollegen -
@@ -37,10 +36,8 @@ HOECHSTENS = 12
 
 def eintrag(konfiguration: Konfiguration, fahrer, team) -> str:
     """Wie ein Fahrer in der Vorschlagsliste steht."""
-    return (
-        f"{fahrer.name} · {fahrer.kuerzel} · Liga {fahrer.liga} "
-        f"({konfiguration.ligenname(fahrer.liga)}) · {team.name}"
-    )
+    del konfiguration  # die Zeile steht fest, sie braucht keinen Wert
+    return f"{fahrer.name} · {fahrer.kuerzel} · {team.name}"
 
 
 class Fahrersuche(QWidget):
@@ -96,7 +93,7 @@ class Fahrersuche(QWidget):
         """Die Fahrernummern, auf die eine Eingabe passt.
 
         Zuerst die, deren **Name oder Kuerzel** passt, dann die uebrigen -
-        die ueber Team oder Liga. Sonst oeffnete die Eingabetaste bei
+        die ueber das Team. Sonst oeffnete die Eingabetaste bei
         "Fahrenkamp" einen Fahrer von Rosskamp Engineering.
         """
         gesucht = text.strip().casefold()

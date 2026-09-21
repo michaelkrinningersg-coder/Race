@@ -13,7 +13,6 @@ import time
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QCheckBox,
     QComboBox,
     QGroupBox,
     QHBoxLayout,
@@ -123,11 +122,6 @@ FARBE_VERLOREN = "#c62828"
 # Neuaufbauten hinweg stehen - anders als bei den Tabellen mit Auswahl
 # braucht es dafuer hier nichts.
 TICKER_ZEILEN = 50
-# Punkt 95: Die Weltmeisterschaft hat 400 Zeilen. Gezeigt werden die
-# Spitze und ein Fenster um jeden eigenen Fahrer - alles andere kostet
-# beim Zeichnen mehr, als es sagt.
-WELT_SPITZE = 10
-WELT_UMFELD = 5
 # Punkt 93 (B59): Schriftgroesse der Rangliste im Kompaktmodus.
 SCHRIFT_KOMPAKT = 14
 # Punkt 93 (B49): Je Art ein eigenes Zeichen. Zwoelf Zeilen Fliesstext
@@ -189,23 +183,16 @@ class Rennseite(QWidget):
         self,
         konfiguration: Konfiguration,
         welt: Welt,
-        karriere=None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._konfiguration = konfiguration
         self._welt = welt
-        # Die entwickelten Werte des Spielers stehen in der Karriere, nicht
-        # in der Welt (GDD 1 und 14); ohne sie faehrt er hier mit Nullen.
-        self._karriere = karriere
         self._strecken: dict[str, kern_strecke.Strecke] = {}
         self._verlauf: Rennverlauf | None = None
         self._qualifying = None
         # Punkt 73: Der Meisterschaftsstand vor diesem Rennen.
         self._tabelle = None
-        # Punkt 95: Alle Ligatabellen, fuer die Weltsicht der
-        # Meisterschaft. Ohne sie bleibt der Umschalter wirkungslos.
-        self._tabellen: dict[int, object] | None = None
         self._zeit_ms = 0.0
         self._laeuft = False
         # Das Rennen laeuft erst los, wenn diese Seite auch zu sehen ist.
@@ -488,27 +475,11 @@ class Rennseite(QWidget):
         # zu Ende - als zweites Blatt unter dem Zeitenmonitor.
         self._meisterschaft = QTreeWidget()
         self._meisterschaft.setHeaderLabels(
-            ["Pos", "Liga", "Auto", "Fahrer", "Team", "+/-", "Punkte", "davon jetzt"]
+            ["Pos", "Auto", "Fahrer", "Team", "+/-", "Punkte", "davon jetzt"]
         )
         self._meisterschaft.setRootIsDecorated(False)
         self._meisterschaft.setAlternatingRowColors(True)
         self._meisterschaft.currentItemChanged.connect(self._auswahl_geaendert)
-        # Punkt 95: Die Meisterschaft laeuft ueber alle Ligen. Hier
-        # umschaltbar, weil waehrend des Rennens nur die eigene Liga
-        # faehrt - die uebrigen stehen auf dem Stand vor diesem
-        # Wochenende und bewegen sich erst danach.
-        self._alle_ligen = QCheckBox("Alle Ligen")
-        self._alle_ligen.setToolTip(
-            "Die Weltmeisterschaft ueber alle Ligen statt nur der eigenen. "
-            "Waehrend des Rennens faehrt nur die eigene Liga; die uebrigen "
-            "stehen auf dem Stand vor diesem Wochenende."
-        )
-        self._alle_ligen.toggled.connect(self._zeige_meisterschaft_neu)
-        self._meisterschaftsblatt = QWidget()
-        meisterspalte = QVBoxLayout(self._meisterschaftsblatt)
-        meisterspalte.setContentsMargins(0, 0, 0, 0)
-        meisterspalte.addWidget(self._alle_ligen)
-        meisterspalte.addWidget(self._meisterschaft)
 
         # Punkt 82: Dieselben Sektoren, aber die persoenlich besten -
         # und was sie zusammen ergaeben.
@@ -526,7 +497,7 @@ class Rennseite(QWidget):
         self._monitorblaetter = QTabWidget()
         self._monitorblaetter.addTab(self._monitor, "Zeitenmonitor")
         self._monitorblaetter.addTab(self._ideal, "Bestmoegliche Runde")
-        self._monitorblaetter.addTab(self._meisterschaftsblatt, "Meisterschaft")
+        self._monitorblaetter.addTab(self._meisterschaft, "Meisterschaft")
         # Punkt 82: Die Meldungen standen fest unter der Seite und nahmen
         # den Tabellen Hoehe weg. Als viertes Blatt stoeren sie nicht mehr
         # und sind trotzdem einen Klick entfernt.
@@ -559,7 +530,6 @@ class Rennseite(QWidget):
         strecke: kern_strecke.Strecke,
         qualifying=None,
         tabelle=None,
-        tabellen=None,
     ) -> None:
         """Uebernimmt ein fertig gerechnetes Rennen und spielt es ab.
 
@@ -569,16 +539,11 @@ class Rennseite(QWidget):
         :param tabelle: der Meisterschaftsstand **vor** diesem Rennen
             (Punkt 73). Ohne ihn bleibt das Blatt "Meisterschaft" leer -
             ein Testrennen ohne Saison hat keinen Stand.
-        :param tabellen: alle Ligatabellen, fuer die Weltsicht der
-            Meisterschaft (Punkt 95). Ohne sie bleibt der Umschalter
-            "Alle Ligen" ohne Wirkung.
         """
         self._halte_an()
         self._verlauf = verlauf
         self._qualifying = qualifying
         self._tabelle = tabelle
-        self._tabellen = tabellen
-        self._alle_ligen.setEnabled(bool(tabellen))
         self._ansicht.zeige(strecke)
         self._rueckstand.zeige(verlauf)
         # Ein neues Rennen faengt ohne Auswahl an.
@@ -1341,14 +1306,7 @@ class Rennseite(QWidget):
             return
 
         lage = self._rennlage(verlauf, reihenfolge, zeit)
-        welt = bool(self._alle_ligen.isChecked() and self._tabellen)
-        if welt:
-            zeilen = kern_wertung.weltlivewertung(
-                self._konfiguration, self._tabellen, self._tabelle.liga, lage
-            )
-            zeilen = self._ausschnitt(zeilen, verlauf)
-        else:
-            zeilen = kern_wertung.livewertung(self._konfiguration, self._tabelle, lage)
+        zeilen = kern_wertung.livewertung(self._konfiguration, self._tabelle, lage)
         nummern = {t.nummer: i for i, t in enumerate(verlauf.teilnehmer)}
         for zeile in zeilen:
             stelle = nummern.get(zeile.fahrer)
@@ -1359,16 +1317,14 @@ class Rennseite(QWidget):
                 )
                 farbe = teilnehmer.farbe
             else:
-                # Punkt 95: In der Weltsicht stehen 400 Fahrer, im Rennen
-                # sind 40. Die anderen 360 holen Name, Team und Farbe aus
-                # der Welt - sonst fuehrte die Weltmeisterschaft jemand
-                # ohne Namen an.
+                # Ein Testrennen kann ein Feld fahren, das nicht der Welt
+                # entspricht; dann steht in der Tabelle jemand, der hier
+                # nicht mitfaehrt.
                 kuerzel, name, team, farbe = self._aus_der_welt(zeile.fahrer)
             eintrag = QTreeWidgetItem(
                 self._meisterschaft,
                 [
                     str(zeile.platz),
-                    str(zeile.liga),
                     kuerzel,
                     name,
                     team,
@@ -1378,12 +1334,12 @@ class Rennseite(QWidget):
                 ],
             )
             if farbe:
-                eintrag.setForeground(2, schriftfarbe(farbe))
+                eintrag.setForeground(1, schriftfarbe(farbe))
             if stelle is not None:
                 eintrag.setData(0, Qt.UserRole, stelle)
             if zeile.veraenderung:
                 eintrag.setForeground(
-                    5,
+                    4,
                     QColor(
                         FARBE_GEWONNEN if zeile.veraenderung > 0 else FARBE_VERLOREN
                     ),
@@ -1408,43 +1364,6 @@ class Rennseite(QWidget):
         bekannt = (fahrer.kuerzel, kurzname(fahrer.name), team.name, team.farbe)
         self._weltnamen[nummer] = bekannt
         return bekannt
-
-    def _zeige_meisterschaft_neu(self) -> None:
-        """Zeichnet nur das Meisterschaftsblatt neu (Punkt 95).
-
-        Der Umschalter "Alle Ligen" aendert nichts am Rennen; ein voller
-        Neuaufbau der Seite waere verschwendet.
-        """
-        if self._verlauf is None:
-            return
-        self._fuelle_meisterschaft(
-            self._verlauf,
-            self._verlauf.reihenfolge_zu(self._zeit_ms),
-            self._zeit_ms,
-        )
-        for spalte in range(self._meisterschaft.columnCount()):
-            self._meisterschaft.resizeColumnToContents(spalte)
-
-    def _ausschnitt(self, zeilen: list, verlauf: Rennverlauf) -> list:
-        """Die Spitze der Welt und das Umfeld der eigenen Fahrer (Punkt 95).
-
-        Vierhundert Zeilen je Aktualisierung zu zeichnen kostet mehr als
-        sie zu rechnen, und zu lesen waeren sie auch nicht. Gezeigt wird
-        deshalb die Spitze, dazu ein Fenster um jeden eigenen Fahrer.
-        """
-        eigene = {
-            t.nummer for t in verlauf.teilnehmer if t.ist_spieler
-        }
-        behalten = set(range(min(WELT_SPITZE, len(zeilen))))
-        for stelle, zeile in enumerate(zeilen):
-            if zeile.fahrer in eigene:
-                behalten.update(
-                    range(
-                        max(0, stelle - WELT_UMFELD),
-                        min(len(zeilen), stelle + WELT_UMFELD + 1),
-                    )
-                )
-        return [zeilen[stelle] for stelle in sorted(behalten)]
 
     def _rennlage(
         self, verlauf: Rennverlauf, reihenfolge: list[int], zeit: float

@@ -1201,7 +1201,6 @@ def feldstrategien(
     streckenfaktor: float,
     wetter,
     seedquelle: Seedquelle,
-    liga: int | None = None,
 ) -> Rennstrategien:
     """Rechnet die Strategien eines ganzen Feldes vor dem Rennen.
 
@@ -1232,10 +1231,8 @@ def feldstrategien(
         kern_tempo.rundenzeit_ms(strecke, kern_tempo.geschwindigkeitsprofil(strecke, grenzen))
     )
     stoppverlust = float(
-        kern_boxenstopp.durchfahrtsverlust_ms(
-            konfiguration, strecke, grenzen, liga=liga
-        )
-        + kern_boxenstopp.haltverlust_ms(konfiguration, grenzen, liga)
+        kern_boxenstopp.durchfahrtsverlust_ms(konfiguration, strecke, grenzen)
+        + kern_boxenstopp.haltverlust_ms(konfiguration, grenzen)
         + kern_boxenstopp.mittlere_standzeit_ms(konfiguration)
     )
     naesse = vorhersage(konfiguration, wetter, runden, rundenzeit)

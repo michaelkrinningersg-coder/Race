@@ -1,20 +1,21 @@
-"""Statistiken und Historie (GDD 13).
+"""Statistiken und Historie (GDD 13, Punkt 101).
 
-"Rundenrekorde je Strecke und Liga in Tausendsteln. Karriere: Siege,
-Podien, Pole-Positions, schnellste Runden, Gesamtpunkte je Liga und
-Saison. Historie aller Saisons und Ligen."
+"Rundenrekorde je Strecke in Tausendsteln. Karriere: Siege, Podien,
+Pole-Positions, schnellste Runden, Gesamtpunkte je Saison. Historie aller
+Saisons." Seit Punkt 101 gibt es eine Liga, also auch nur je einen
+Rekord, eine Abschlusstabelle und einen Punktestand.
 
 Die Statistik sammelt, was ein Rennwochenende hinterlaesst, und ueberdauert
 die Saison - anders als ``rennmanager.kern.wertung.Tabelle``, die mit dem
-Saisonende abgeschlossen ist. Drei Dinge werden gefuehrt:
+Saisonende abgeschlossen ist. Vier Dinge werden gefuehrt:
 
-* **Rundenrekorde** je Paar aus Strecke und Liga, in ganzen Millisekunden
-  (die Einheit des ganzen Projekts).
+* **Rundenrekorde** je Strecke, in ganzen Millisekunden (die Einheit des
+  ganzen Projekts).
 * **Karrierezahlen** je Fahrer: Rennen, Siege, Podien, Poles, schnellste
   Runden, Ausfaelle und Punkte.
 * **Saisonverlauf**: die Punkte je Rennwochenende der *laufenden* Saison,
   damit sich zeichnen laesst, wer wann gefuehrt hat (Punkt 9).
-* **Historie**: je Saison und Liga die vollstaendige Abschlusstabelle -
+* **Historie**: je Saison die vollstaendige Abschlusstabelle -
   Platz, Punkte, Siege, Podien, Poles, schnellste Runden, Ausfaelle und
   Rennen je Fahrer. Vollstaendig, weil die Tabelle der Saison beim
   Saisonwechsel geleert wird: Was dann nicht in der Historie steht, ist
@@ -38,10 +39,9 @@ class StatistikFehler(Exception):
 
 @dataclass(frozen=True)
 class Rekord:
-    """Die schnellste je gefahrene Runde auf einer Strecke in einer Liga."""
+    """Die schnellste je gefahrene Runde auf einer Strecke."""
 
     strecke: str
-    liga: int
     zeit_ms: int
     fahrer: int
     saison: int
@@ -62,10 +62,10 @@ class Karrierezahlen:
     punkte: int = 0
 
     def verbuche(
-        self, konfiguration: Konfiguration, ergebnis: Rennergebnis, liga: int
+        self, konfiguration: Konfiguration, ergebnis: Rennergebnis
     ) -> None:
         self.rennen += 1
-        self.punkte += punkte_fuer(konfiguration, liga, ergebnis)
+        self.punkte += punkte_fuer(konfiguration, ergebnis)
         if ergebnis.rennplatz == 1:
             self.siege += 1
         if ergebnis.rennplatz <= 3:
@@ -88,14 +88,10 @@ class Bilanz:
 
     Dieselben Zahlen wie in ``Karrierezahlen``, aber je Strecke oder je
     Wetterlage. Gefuehrt wird die **Summe**, nicht die Liste der einzelnen
-    Rennen: 400 Fahrer mal 20 Rennen mal beliebig vielen Saisons waere ein
-    Spielstand, der endlos waechst. Als Summe bleiben es 12.000 Zeilen je
-    Strecke und 3.000 je Wetterlage - gleich viele nach der ersten Saison
+    Rennen: 50 Fahrer mal 20 Rennen mal beliebig vielen Saisons waere ein
+    Spielstand, der endlos waechst. Als Summe bleiben es 1.000 Zeilen je
+    Strecke und 250 je Wetterlage - gleich viele nach der ersten Saison
     wie nach der zwanzigsten.
-
-    ``beste_liga`` ist die staerkste Liga (also die kleinste Nummer), in
-    der hier ein Podium gelang. Zehn Siege in Liga 10 und einer in Liga 3
-    stehen sonst gleichwertig nebeneinander. 0 heisst: noch kein Podium.
     """
 
     rennen: int = 0
@@ -107,13 +103,12 @@ class Bilanz:
     punkte: int = 0
     # Das beste je erreichte Rennergebnis; 0 heisst "noch nie angekommen".
     bester_platz: int = 0
-    beste_liga: int = 0
 
     def verbuche(
-        self, konfiguration: Konfiguration, ergebnis: Rennergebnis, liga: int
+        self, konfiguration: Konfiguration, ergebnis: Rennergebnis
     ) -> None:
         self.rennen += 1
-        self.punkte += punkte_fuer(konfiguration, liga, ergebnis)
+        self.punkte += punkte_fuer(konfiguration, ergebnis)
         if ergebnis.ausgefallen:
             self.ausfaelle += 1
         else:
@@ -123,8 +118,6 @@ class Bilanz:
             self.siege += 1
         if ergebnis.rennplatz <= 3:
             self.podien += 1
-            if not self.beste_liga or liga < self.beste_liga:
-                self.beste_liga = liga
         if ergebnis.qualifyingplatz == 1:
             self.poles += 1
         if ergebnis.schnellste_runde:
@@ -162,10 +155,9 @@ class Saisonzeile:
 
 @dataclass(frozen=True)
 class Saisonabschluss:
-    """Der Endstand einer Liga in einer Saison (GDD 13: Historie)."""
+    """Der Endstand einer Saison (GDD 13: Historie)."""
 
     saison: int
-    liga: int
     # Die Abschlusstabelle, Bester zuerst.
     zeilen: tuple[Saisonzeile, ...]
 
@@ -195,23 +187,20 @@ class Statistik:
     """Alles, was ueber die Saison hinaus aufgehoben wird (GDD 13)."""
 
     konfiguration: Konfiguration
-    rekorde: dict[tuple[str, int], Rekord] = field(default_factory=dict)
+    rekorde: dict[str, Rekord] = field(default_factory=dict)
     # Punkt 93 (A17): Dasselbe fuers Qualifying, getrennt gefuehrt. Eine
     # Qualirunde faehrt man auf leerer Strecke mit frischen Reifen, eine
     # Rennrunde mit Verkehr und abbauenden Reifen - in einem Topf fiele
     # der Rennrekord nie wieder.
-    qualirekorde: dict[tuple[str, int], Rekord] = field(default_factory=dict)
+    qualirekorde: dict[str, Rekord] = field(default_factory=dict)
     karriere: dict[int, Karrierezahlen] = field(default_factory=dict)
     historie: list[Saisonabschluss] = field(default_factory=list)
-    # Punkte je (Saison, Fahrer). Punkt 95: Die Meisterschaft laeuft ueber
-    # alle Ligen, und ein Fahrer wechselt sie mitten in der Saison - seine
-    # Punkte je Liga zu fuehren hiesse, seinen Stand auf zwei Schluessel zu
-    # verteilen. Welche Liga er gefahren hat, steht in der Historie.
+    # Punkte je (Saison, Fahrer).
     saisonpunkte: dict[tuple[int, int], int] = field(default_factory=dict)
     # Punkte je (Rennen, Fahrer) der *laufenden* Saison (Punkt 9). Nur
     # daraus laesst sich zeichnen, wer wann gefuehrt hat. Beim
     # Saisonwechsel wird die Sammlung geleert: Der Endstand steht dann in
-    # der Historie, und 400 Fahrer mal 20 Rennen mal beliebig viele
+    # der Historie, und 50 Fahrer mal 20 Rennen mal beliebig viele
     # Saisons waere ein Spielstand, der nur noch waechst.
     saisonverlauf: dict[tuple[int, int], int] = field(default_factory=dict)
     # Punkt 21 und 23: Summen je (Fahrer, Strecke) und je (Fahrer,
@@ -220,11 +209,11 @@ class Statistik:
     wetterbilanz: dict[tuple[int, str], Bilanz] = field(default_factory=dict)
 
     # -- Rundenrekorde -----------------------------------------------------
-    def rekord(self, strecke: str, liga: int) -> Rekord | None:
-        return self.rekorde.get((strecke, liga))
+    def rekord(self, strecke: str) -> Rekord | None:
+        return self.rekorde.get(strecke)
 
     # -- Der Qualifyingrekord (Punkt 93, A17) ------------------------------
-    def qualirekord(self, strecke: str, liga: int) -> Rekord | None:
+    def qualirekord(self, strecke: str) -> Rekord | None:
         """Die schnellste je gefahrene **Qualirunde** hier.
 
         Getrennt vom Rennrekord gefuehrt, und zwar mit Absicht: Eine
@@ -233,12 +222,11 @@ class Statistik:
         beiden in einen Topf zu werfen hiesse, dass der Rennrekord nie
         wieder faellt.
         """
-        return self.qualirekorde.get((strecke, liga))
+        return self.qualirekorde.get(strecke)
 
     def melde_qualirunde(
         self,
         strecke: str,
-        liga: int,
         zeit_ms: int,
         fahrer: int,
         saison: int,
@@ -250,12 +238,11 @@ class Statistik:
         """
         if zeit_ms <= 0:
             return False
-        bisher = self.qualirekorde.get((strecke, liga))
+        bisher = self.qualirekorde.get(strecke)
         if bisher is not None and bisher.zeit_ms <= zeit_ms:
             return False
-        self.qualirekorde[(strecke, liga)] = Rekord(
+        self.qualirekorde[strecke] = Rekord(
             strecke=strecke,
-            liga=liga,
             zeit_ms=zeit_ms,
             fahrer=fahrer,
             saison=saison,
@@ -266,7 +253,6 @@ class Statistik:
     def melde_runde(
         self,
         strecke: str,
-        liga: int,
         zeit_ms: int,
         fahrer: int,
         saison: int,
@@ -278,23 +264,17 @@ class Statistik:
         """
         if zeit_ms <= 0:
             return False
-        bisher = self.rekorde.get((strecke, liga))
+        bisher = self.rekorde.get(strecke)
         if bisher is not None and bisher.zeit_ms <= zeit_ms:
             return False
-        self.rekorde[(strecke, liga)] = Rekord(
+        self.rekorde[strecke] = Rekord(
             strecke=strecke,
-            liga=liga,
             zeit_ms=zeit_ms,
             fahrer=fahrer,
             saison=saison,
             rennen=rennen,
         )
         return True
-
-    def rekorde_je_strecke(self, strecke: str) -> tuple[Rekord, ...]:
-        """Alle Ligarekorde einer Strecke, schnellste Liga zuerst."""
-        gefunden = [r for (name, _), r in self.rekorde.items() if name == strecke]
-        return tuple(sorted(gefunden, key=lambda r: r.zeit_ms))
 
     # -- Karriere ----------------------------------------------------------
     def zahlen(self, fahrer: int) -> Karrierezahlen:
@@ -319,7 +299,6 @@ class Statistik:
         self,
         saison: int,
         rennen: int,
-        liga: int,
         strecke: str,
         ergebnisse: tuple[Rennergebnis, ...],
         schnellste_runde_ms: int = 0,
@@ -327,7 +306,7 @@ class Statistik:
         quali_ms: int = 0,
         quali_fahrer: int | None = None,
     ) -> bool:
-        """Traegt ein Rennwochenende einer Liga ein.
+        """Traegt ein Rennwochenende ein.
 
         :param wetter: die vorherrschende Lage des Rennens (Punkt 23).
             Ohne sie bleibt die Wetterbilanz unberuehrt - so bleiben alte
@@ -337,32 +316,32 @@ class Statistik:
         :return: ob dabei ein **Renn**rundenrekord gefallen ist
         """
         for ergebnis in ergebnisse:
-            self.zahlen(ergebnis.fahrer).verbuche(self.konfiguration, ergebnis, liga)
+            self.zahlen(ergebnis.fahrer).verbuche(self.konfiguration, ergebnis)
             schluessel = (saison, ergebnis.fahrer)
-            punkte = punkte_fuer(self.konfiguration, liga, ergebnis)
+            punkte = punkte_fuer(self.konfiguration, ergebnis)
             self.saisonpunkte[schluessel] = self.saisonpunkte.get(schluessel, 0) + punkte
             self.saisonverlauf[(rennen, ergebnis.fahrer)] = punkte
             self.strecke_von(ergebnis.fahrer, strecke).verbuche(
-                self.konfiguration, ergebnis, liga
+                self.konfiguration, ergebnis
             )
             if wetter:
                 self.wetter_von(ergebnis.fahrer, wetter).verbuche(
-                    self.konfiguration, ergebnis, liga
+                    self.konfiguration, ergebnis
                 )
 
         # Punkt 93 (A17): Die Polezeit getrennt melden - sie steht im
         # Qualifying der naechsten Saison als Streckenbestmarke.
         if quali_ms > 0 and quali_fahrer is not None:
-            self.melde_qualirunde(strecke, liga, quali_ms, quali_fahrer, saison, rennen)
+            self.melde_qualirunde(strecke, quali_ms, quali_fahrer, saison, rennen)
 
         schnellster = next((e.fahrer for e in ergebnisse if e.schnellste_runde), None)
         if schnellster is None or schnellste_runde_ms <= 0:
             return False
-        return self.melde_runde(strecke, liga, schnellste_runde_ms, schnellster, saison, rennen)
+        return self.melde_runde(strecke, schnellste_runde_ms, schnellster, saison, rennen)
 
     # -- Bilanzen (Punkte 21 und 23) ---------------------------------------
     def strecke_von(self, fahrer: int, strecke: str) -> Bilanz:
-        """Die Bilanz eines Fahrers auf einer Strecke, ueber alle Ligen."""
+        """Die Bilanz eines Fahrers auf einer Strecke."""
         return self.streckenbilanz.setdefault((fahrer, strecke), Bilanz())
 
     def wetter_von(self, fahrer: int, lage: str) -> Bilanz:
@@ -401,34 +380,29 @@ class Statistik:
             if name == lage
         }
 
-    def schliesse_saison(self, saison: int, tabellen: dict[int, Tabelle]) -> None:
-        """Schreibt den Endstand aller Ligen in die Historie (GDD 13).
+    def schliesse_saison(self, saison: int, tabelle: Tabelle) -> None:
+        """Schreibt den Endstand in die Historie (GDD 13).
 
         Vollstaendig, nicht nur Reihenfolge und Punkte: Nach dem
-        Saisonwechsel sind die Tabellen leer, und was dann nicht in der
+        Saisonwechsel ist die Tabelle leer, und was dann nicht in der
         Historie steht, ist fort.
         """
         # Der Verlauf gehoert zur abgelaufenen Saison; was bleiben soll,
         # steht jetzt in der Historie.
         self.saisonverlauf.clear()
-        for liga in sorted(tabellen):
-            stand = tabellen[liga].stand()
-            self.historie.append(
-                Saisonabschluss(
-                    saison=saison,
-                    liga=liga,
-                    zeilen=tuple(
-                        zeile_aus(eintrag, platz)
-                        for platz, eintrag in enumerate(stand, start=1)
-                    ),
-                )
+        self.historie.append(
+            Saisonabschluss(
+                saison=saison,
+                zeilen=tuple(
+                    zeile_aus(eintrag, platz)
+                    for platz, eintrag in enumerate(tabelle.stand(), start=1)
+                ),
             )
+        )
 
     # -- Historie ----------------------------------------------------------
-    def abschluss(self, saison: int, liga: int) -> Saisonabschluss | None:
-        return next(
-            (a for a in self.historie if a.saison == saison and a.liga == liga), None
-        )
+    def abschluss(self, saison: int) -> Saisonabschluss | None:
+        return next((a for a in self.historie if a.saison == saison), None)
 
     @property
     def saisons(self) -> tuple[int, ...]:
@@ -438,61 +412,14 @@ class Statistik:
         """Alle Meisterschaften eines Fahrers."""
         return tuple(a for a in self.historie if a.meister == fahrer)
 
-    def laufbahn(self, fahrer: int) -> tuple[tuple[int, int, int], ...]:
-        """Je Saison Liga und Platz des Fahrers, aeltestes zuerst."""
+    def laufbahn(self, fahrer: int) -> tuple[tuple[int, int], ...]:
+        """Je Saison der Platz des Fahrers, aeltestes zuerst."""
         bahn = []
         for a in self.historie:
             platz = a.platz_von(fahrer)
             if platz is not None:
-                bahn.append((a.saison, a.liga, platz))
+                bahn.append((a.saison, platz))
         return tuple(sorted(bahn))
-
-    def vergiss_fahrer(self, nummer: int) -> None:
-        """Loescht, was an einer Fahrernummer haengt (Punkt 35).
-
-        Ein Newgen erbt die Nummer des Zurueckgetretenen - die Welt haelt
-        genau 400 Fahrer, und an 53 Stellen ist die Nummer zugleich der
-        Platz in der Liste. Ohne dieses Vergessen begaenne er seine
-        Laufbahn mit dessen Siegen, Punkten und Bilanzen.
-
-        Die **Historie** bleibt: Sie ist das Protokoll dessen, was wirklich
-        passiert ist, und gehoert nicht dem Nachfolger, sondern der Saison.
-        """
-        self.karriere.pop(nummer, None)
-        for sammlung in (self.saisonpunkte, self.saisonverlauf):
-            for schluessel in [s for s in sammlung if s[-1] == nummer]:
-                del sammlung[schluessel]
-        for bilanz in (self.streckenbilanz, self.wetterbilanz):
-            for schluessel in [s for s in bilanz if s[0] == nummer]:
-                del bilanz[schluessel]
-
-    def karriere_in_liga(self, liga: int) -> dict[int, Karrierezahlen]:
-        """Die Karrierezahlen, aber nur aus einer Liga (Punkt 25).
-
-        ``Karrierezahlen`` wissen nicht, in welcher Liga ein Sieg fiel -
-        sie zaehlen alles zusammen. Wer wissen will, wer **in Liga 14** am
-        meisten gewonnen hat, braucht die Historie: Sie fuehrt je Saison
-        und Liga eine vollstaendige Abschlusstabelle.
-
-        Der Preis: Nur **abgeschlossene** Saisons zaehlen. Die laufende
-        steht noch in den Tabellen, nicht in der Historie.
-        """
-        summen: dict[int, Karrierezahlen] = {}
-        for abschluss in self.historie:
-            if abschluss.liga != liga:
-                continue
-            for zeile in abschluss.zeilen:
-                zahlen = summen.setdefault(
-                    zeile.fahrer, Karrierezahlen(fahrer=zeile.fahrer)
-                )
-                zahlen.rennen += zeile.rennen
-                zahlen.siege += zeile.siege
-                zahlen.podien += zeile.podien
-                zahlen.poles += zeile.poles
-                zahlen.schnellste_runden += zeile.schnellste_runden
-                zahlen.ausfaelle += zeile.ausfaelle
-                zahlen.punkte += zeile.punkte
-        return summen
 
     def punkte_in(self, saison: int, fahrer: int) -> int:
         """Die Meisterschaftspunkte eines Fahrers in dieser Saison."""
@@ -500,12 +427,7 @@ class Statistik:
 
     # -- Verlauf der laufenden Saison (Punkt 9) ----------------------------
     def gefahrene_rennen(self) -> tuple[int, ...]:
-        """Die Rennnummern der laufenden Saison.
-
-        Alle Ligen fahren dieselben Rennen; seit Punkt 95 waere eine
-        Frage je Liga auch irrefuehrend, weil Fahrer die Liga mitten in
-        der Saison wechseln.
-        """
+        """Die Rennnummern der laufenden Saison."""
         return tuple(sorted({rennen for (rennen, _) in self.saisonverlauf}))
 
     def punktestand(self, fahrer: int) -> tuple[int, ...]:

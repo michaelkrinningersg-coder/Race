@@ -1,11 +1,11 @@
-"""Seite fuer die Welt: Ligen, Teams und Fahrer (GDD 12).
+"""Seite fuer die Welt: Teams und Fahrer (GDD 12).
 
 Links die Fahrerliste, rechts der Steckbrief des gewaehlten Fahrers mit
 seinen 32 Einzelwerten (F1 bis F16 aus GDD 5, D1 bis D16 aus GDD 6) und
 den Faehigkeiten ausserhalb der Wirkungsmatrix.
 
-Die Liste zeigt wahlweise eine Liga oder alle 400 Fahrer und wahlweise nur
-die Stammdaten oder zusaetzlich jeden Einzelwert als eigene Spalte.
+Die Liste zeigt alle 50 Fahrer, wahlweise nur mit ihren Stammdaten oder
+zusaetzlich mit jedem Einzelwert als eigener Spalte.
 """
 
 from __future__ import annotations
@@ -13,7 +13,6 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
-    QComboBox,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
@@ -35,7 +34,6 @@ from rennmanager.ui.tabellen import schriftfarbe, verbinde_fahrerkarte
 
 # Spalten, die unabhaengig von der Eigenschaftsansicht immer stehen.
 STAMMSPALTEN = ("#", "Kuerzel", "Fahrer", "Land", "Alter", "Team", "Hersteller", "Staerke")
-ALLE_LIGEN = 0
 
 
 def _zahl(wert: float) -> str:
@@ -44,7 +42,7 @@ def _zahl(wert: float) -> str:
 
 
 class Weltseite(QWidget):
-    """Zeigt die 10 Ligen mit ihren 40 Fahrern und die Teams."""
+    """Zeigt die 50 Fahrer des Feldes und ihre Teams."""
 
     # Doppelklick auf einen Namen: Das Fenster oeffnet die Fahrerkarte.
     fahrerkarte_gewuenscht = Signal(int)
@@ -73,7 +71,7 @@ class Weltseite(QWidget):
         teiler.setStretchFactor(1, 2)
         spalte.addWidget(teiler, stretch=1)
 
-        self._zeige_liga()
+        self._zeige_feld()
 
     # -- Nachziehen --------------------------------------------------------
     def setze_welt(self, welt: Welt) -> None:
@@ -87,7 +85,7 @@ class Weltseite(QWidget):
         self._welt = welt
         gewaehlt = self._liste.currentItem()
         nummer = gewaehlt.data(0, Qt.UserRole) if gewaehlt is not None else None
-        self._zeige_liga()
+        self._zeige_feld()
         if nummer is None:
             return
         for stelle in range(self._liste.topLevelItemCount()):
@@ -99,17 +97,6 @@ class Weltseite(QWidget):
     # -- Aufbau ------------------------------------------------------------
     def _baue_kopf(self) -> QHBoxLayout:
         zeile = QHBoxLayout()
-        self._liga = QComboBox()
-        self._liga.addItem("Alle Ligen", ALLE_LIGEN)
-        for nummer in range(1, self._konfiguration.wert("ligen", "anzahl") + 1):
-            self._liga.addItem(
-                f"Liga {nummer} - {self._konfiguration.ligenname(nummer)}", nummer
-            )
-        spieler = self._welt.spieler
-        if spieler is not None:
-            self._liga.setCurrentIndex(spieler.liga)
-        self._liga.currentIndexChanged.connect(self._zeige_liga)
-
         # Alle 32 Einzelwerte als Spalten - sonst stehen nur die Stammdaten
         # in der Liste und die Werte einzeln im Steckbrief.
         self._alle_werte = QCheckBox("Alle Eigenschaften")
@@ -117,10 +104,8 @@ class Weltseite(QWidget):
             "Zeigt F1 bis F16 (GDD 5), D1 bis D16 (GDD 6) und die "
             "Faehigkeiten ausserhalb der Wirkungsmatrix als eigene Spalten."
         )
-        self._alle_werte.toggled.connect(self._zeige_liga)
+        self._alle_werte.toggled.connect(self._zeige_feld)
 
-        zeile.addWidget(QLabel("Liga:"))
-        zeile.addWidget(self._liga)
         zeile.addWidget(self._alle_werte)
         zeile.addWidget(
             QLabel(
@@ -171,25 +156,14 @@ class Weltseite(QWidget):
     # -- Inhalt ------------------------------------------------------------
     def _fahrerliste(self) -> tuple:
         """Die anzuzeigenden Fahrer, staerkster zuerst."""
-        liga = self._liga.currentData()
-        if liga != ALLE_LIGEN:
-            return self._welt.liga(liga)
-        return tuple(
-            fahrer
-            for nummer in range(1, self._konfiguration.wert("ligen", "anzahl") + 1)
-            for fahrer in self._welt.liga(nummer)
-        )
+        return self._welt.feld
 
-    def _zeige_liga(self, *_) -> None:
+    def _zeige_feld(self, *_) -> None:
         self._liste.clear()
-        liga = self._liga.currentData()
         mit_werten = self._alle_werte.isChecked()
         schluessel = self._wertspalten() if mit_werten else ()
 
-        kopf = list(STAMMSPALTEN)
-        if liga == ALLE_LIGEN:
-            kopf.insert(1, "Liga")
-        kopf += list(schluessel)
+        kopf = list(STAMMSPALTEN) + list(schluessel)
         self._liste.setColumnCount(len(kopf))
         self._liste.setHeaderLabels(kopf)
         self._setze_spaltenhilfe(kopf)
@@ -199,11 +173,8 @@ class Weltseite(QWidget):
         for platz, fahrer in enumerate(fahrer_liste, start=1):
             team = self._welt.team_von(fahrer)
             staerke = sum(fahrer.auto.werte.values()) / len(fahrer.auto.werte)
-            # Bei "Alle Ligen" zaehlt der Platz innerhalb der Liga, sonst
-            # stuende hinter dem Ersten der Liga 2 eine 31.
-            nummer = (platz - 1) % self._konfiguration.wert("ligen", "autos_je_liga") + 1
             felder = [
-                str(nummer if liga == ALLE_LIGEN else platz),
+                str(platz),
                 fahrer.kuerzel,
                 fahrer.name,
                 fahrer.land,
@@ -212,8 +183,6 @@ class Weltseite(QWidget):
                 team.hersteller,
                 _zahl(staerke),
             ]
-            if liga == ALLE_LIGEN:
-                felder.insert(1, str(fahrer.liga))
             felder += [_zahl(self._wert_von(fahrer, s)) for s in schluessel]
 
             zeile = QTreeWidgetItem(self._liste, felder)
@@ -270,11 +239,9 @@ class Weltseite(QWidget):
             ("Fahrer:", fahrer.name),
             ("Land:", fahrer.land),
             ("Geboren:", fahrer.geburtstag.strftime("%d.%m.%Y")),
-            ("Liga:", f"{fahrer.liga} - {self._konfiguration.ligenname(fahrer.liga)}"),
             ("Team:", f"{team.name} ({team.land})"),
             ("Hersteller:", team.hersteller),
-            ("Teambudget:", f"{team.budget:,} €".replace(",", ".")),
-            ("Teamkollegen:", kollegen),
+            ("Teamkollege:", kollegen),
             # Punkt 32: ein Satz aus den vorhandenen Werten - 38 Zahlen
             # sagen alles und zeigen nichts.
             ("Charakter:", kern_charakter.profil(self._konfiguration, fahrer.auto)),
@@ -322,10 +289,6 @@ class Weltseite(QWidget):
     @property
     def liste(self) -> QTreeWidget:
         return self._liste
-
-    @property
-    def liga_auswahl(self) -> QComboBox:
-        return self._liga
 
     @property
     def alle_werte(self) -> QCheckBox:

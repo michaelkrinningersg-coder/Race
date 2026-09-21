@@ -41,17 +41,12 @@ from rennmanager.konfiguration import Konfiguration
 from rennmanager.ui.editorseite import Editorseite
 from rennmanager.ui.fahrerkarte import Fahrerkarte
 from rennmanager.ui.fahrersuche import Fahrersuche
-from rennmanager.ui.finanzseite import Finanzseite
-from rennmanager.ui.karriereseite import Karriereseite
-from rennmanager.ui.karriereseite import beginne as beginne_karriere
 from rennmanager.ui.rennwochenendeseite import Rennwochenendeseite
 from rennmanager.ui.rundenseite import Rundenseite
 from rennmanager.ui.saisonseite import Saisonseite
-from rennmanager.ui.sponsorenseite import Sponsorenseite
 from rennmanager.ui.startdialog import Startdialog
 from rennmanager.ui.statistikseite import Statistikseite
 from rennmanager.ui.streckenseite import Streckenseite
-from rennmanager.ui.transferseite import Transferseite
 from rennmanager.ui.weltseite import Weltseite
 
 # Qt-Spinboxen rechnen mit 32-Bit-Ganzzahlen; der Hauptseed wird in der
@@ -73,12 +68,8 @@ class Hauptfenster(QMainWindow):
         # denselben Namen holt die vorhandene nach vorn, ein Neuaufbau des
         # Fensters schliesst sie.
         self._karten: dict[int, Fahrerkarte] = {}
-        # Eine Welt je Fenster: 400 Autos, 100 Teams, 10 Ligen (GDD 12).
-        self._welt = kern_welt.erzeuge(
-            konfiguration,
-            self._seedquelle.zweig("welt"),
-            spielerliga=konfiguration.wert("ligen", "startliga"),
-        )
+        # Eine Welt je Fenster: 50 Autos, 25 Teams, ein Feld (GDD 12).
+        self._welt = kern_welt.erzeuge(konfiguration, self._seedquelle.zweig("welt"))
         # Statistik und Streckenkenntnis ueberdauern die Saison (GDD 6 und
         # 13) und gehoeren deshalb dem Fenster, nicht dem Saisonlauf.
         self._karriere = None
@@ -86,17 +77,15 @@ class Hauptfenster(QMainWindow):
         # eines hoch (GDD 13).
         self._jahr = kern_karriere.startjahr(konfiguration)
         self._statistik = kern_statistik.Statistik(konfiguration)
-        self._kenntnis = kern_streckenkenntnis.Streckenkenntnis(
-            konfiguration, seedquelle=self._seedquelle.zweig("lerntempo")
-        )
-        # Punkt 5: Bekanntheit, gestreut aber nicht nach Ligastaerke.
+        self._kenntnis = kern_streckenkenntnis.Streckenkenntnis(konfiguration)
+        # Punkt 5: Bekanntheit, gestreut aber nicht nach Staerke.
         self._popularitaet = kern_popularitaet.Popularitaet(konfiguration)
         self._popularitaet.anfang(
             tuple(f.nummer for f in self._welt.fahrer),
             self._seedquelle.zweig("popularitaet"),
         )
-        # Die KI bekommt ihre Streckenkenntnis einmal fest (GDD 12).
-        kern_streckenkenntnis.setze_ki_anfang(
+        # Punkt 101: Jeder bekommt seine Streckenkenntnis einmal fest.
+        kern_streckenkenntnis.setze_feldanfang(
             konfiguration,
             self._welt,
             self._kenntnis,
@@ -170,10 +159,6 @@ class Hauptfenster(QMainWindow):
         # Fahrer, die es so nicht mehr gibt (Saisonwechsel, Editor,
         # geladener Spielstand).
         self._schliesse_fahrerkarten()
-        # Die alte Saisonseite haelt noch die alte Welt. Solange die neue
-        # nicht steht, ist ``self._welt`` der Stand - sonst baute die
-        # Weltseite sich aus einem Lauf auf, der gerade ersetzt wird
-        # (``laufende_welt``).
         self._saisonseite = None
         self._reiter = QTabWidget()
         self._reiter.addTab(self._baue_uebersichtsseite(), "Uebersicht")
@@ -182,52 +167,22 @@ class Hauptfenster(QMainWindow):
         self._rundenseite = Rundenseite(self._konfiguration)
         self._reiter.addTab(self._rundenseite, "Runde")
         self._weltseite = Weltseite(
-            self._konfiguration, self.anzeigewelt, jahr=self._jahr
+            self._konfiguration, self.welt, jahr=self._jahr
         )
         self._reiter.addTab(self._weltseite, "Welt")
         if getattr(self, "_karriere", None) is None:
-            self._karriere = beginne_karriere(
+            self._karriere = kern_karriere.beginne(
                 self._konfiguration,
-                self._welt,
-                self._seedquelle.zweig("karriere", self._jahr),
                 self._jahr,
+                fahrer=tuple(f.nummer for f in self._welt.spielerfahrer),
             )
-        self._karriereseite = Karriereseite(self._konfiguration, self._karriere)
-        # Die Welt kennt die Werte der eigenen Autos nicht - die stehen in
-        # der Karriere (GDD 1). Jede Aenderung dort muss in der Anzeige
-        # ankommen, sonst bleibt der Steckbrief auf dem Anfangsstand.
-        self._karriereseite.werte_geaendert.connect(self._ziehe_werte_nach)
-        self._ziehe_werte_nach()
-        # Die Auswahl der vier eigenen Autos soll Namen tragen, nicht
-        # Nummern - die kennt nur die Welt.
-        self._karriereseite.zeige_namen(
-            {f.nummer: f.name for f in self._welt.spielerfahrer}
-        )
-        # Punkt 17: Jeder Tageswechsel schreibt den Autosave.
-        self._karriereseite.tag_gewechselt.connect(self.autosave)
-        self._reiter.addTab(self._karriereseite, "Karriere")
-        self._sponsorenseite = Sponsorenseite(
-            self._konfiguration,
-            self._karriere,
-            self._seedquelle.zweig("sponsoren"),
-            self._popularitaet,
-        )
-        # Die Sponsoren sitzen je Auto; die Wahl soll Namen tragen.
-        self._sponsorenseite.zeige_namen(
-            {f.nummer: f.name for f in self._welt.spielerfahrer}
-        )
-        self._reiter.addTab(self._sponsorenseite, "Sponsoren")
-        # Punkt 72: Woher das Geld kam und wohin es ging.
-        self._finanzseite = Finanzseite(self._konfiguration, self._karriere)
-        self._karriereseite.werte_geaendert.connect(self._finanzseite.zeichne)
-        self._reiter.addTab(self._finanzseite, "Finanzen")
         self._saisonseite = Saisonseite(
             self._konfiguration,
             self._welt,
             seed=self._seedquelle.seed,
             statistik=self._statistik,
             kenntnis=self._kenntnis,
-            tabellen=getattr(self, "_geladene_tabellen", None),
+            tabelle=getattr(self, "_geladene_tabelle", None),
             gefahrene_rennen=getattr(self, "_gefahrene_rennen", 0),
             karriere=self._karriere,
             jahr=self._jahr,
@@ -243,14 +198,6 @@ class Hauptfenster(QMainWindow):
         self._wochenendeseite.wochenende_gefahren.connect(self._wochenende_gefahren)
         self._reiter.addTab(self._wochenendeseite, "Rennwochenende")
         self._reiter.addTab(self._saisonseite, "Saison")
-        # Punkt 7: Der Transfermarkt steht neben der Saison, weil er zu
-        # ihrem Ende gehoert - verpflichtet wird im Winter.
-        self._transferseite = Transferseite(
-            self._konfiguration, self._saisonseite.lauf
-        )
-        self._transferseite.fahrerkarte_gewuenscht.connect(self.oeffne_fahrerkarte)
-        self._transferseite.verpflichtet.connect(self._fahrer_verpflichtet)
-        self._reiter.addTab(self._transferseite, "Transfermarkt")
         self._statistikseite = Statistikseite(
             self._konfiguration, self._welt, self._statistik
         )
@@ -261,7 +208,6 @@ class Hauptfenster(QMainWindow):
             self._welt,
             self._kenntnis,
             popularitaet=self._popularitaet,
-            karriere=self._karriere,
         )
         self._reiter.addTab(self._editorseite, "Editor")
         # Die Statistik waechst mit jedem Rennwochenende; beim Aufschlagen
@@ -274,7 +220,7 @@ class Hauptfenster(QMainWindow):
         rahmen = QWidget()
         spalte = QVBoxLayout(rahmen)
         spalte.setContentsMargins(6, 4, 6, 0)
-        self._suche = Fahrersuche(self._konfiguration, self.anzeigewelt)
+        self._suche = Fahrersuche(self._konfiguration, self.welt)
         self._suche.fahrer_gewaehlt.connect(self.oeffne_fahrerkarte)
         spalte.addWidget(self._suche)
         spalte.addWidget(self._reiter, stretch=1)
@@ -315,11 +261,11 @@ class Hauptfenster(QMainWindow):
         lauf = self._saisonseite.lauf
         karte = Fahrerkarte(
             self._konfiguration,
-            self.anzeigewelt,
+            self.welt,
             nummer,
             statistik=self._statistik,
             kenntnis=self._kenntnis,
-            tabelle=lauf.tabelle(lauf.welt.fahrer[nummer].liga),
+            tabelle=lauf.tabelle,
             strecken=lauf.strecken,
             popularitaet=self._popularitaet,
             jahr=lauf.jahr,
@@ -336,10 +282,6 @@ class Hauptfenster(QMainWindow):
         aber neu lesen; Karriere und Statistik ebenso.
         """
         self._saisonseite._aktualisiere()
-        # Punkt 95: Nach jedem fuenften Rennen stehen Fahrer in anderen
-        # Ligen. Die Seiten, die eine eigene Kopie der Welt halten,
-        # bekommen sie hier nachgereicht.
-        self._ziehe_werte_nach()
         self.statusBar().showMessage(
             f"Rennwochenende gefahren - {self._saisonseite.lauf.gefahren} von "
             f"{self._saisonseite.lauf.rennen_je_saison} Rennen",
@@ -358,11 +300,6 @@ class Hauptfenster(QMainWindow):
             return
         if seite is self._statistikseite:
             self._statistikseite.aktualisiere()
-        elif seite is self._sponsorenseite:
-            # Die Angebote haengen an der Kalenderwoche (GDD 10).
-            self._sponsorenseite.wuerfle_angebote()
-        elif seite is self._karriereseite:
-            self._karriereseite._zeichne()
 
     def _baue_uebersichtsseite(self) -> QWidget:
         seite = QWidget()
@@ -378,11 +315,11 @@ class Hauptfenster(QMainWindow):
         formular = QFormLayout(kasten)
         formular.addRow("GDD-Version:", QLabel(str(k.wert("gdd_version"))))
         formular.addRow(
-            "Ligen:",
+            "Feld:",
             QLabel(
-                f"{k.wert('ligen', 'anzahl')} "
-                f"({k.ligenname(1)} bis {k.ligenname(k.wert('ligen', 'anzahl'))}), "
-                f"je {k.wert('ligen', 'autos_je_liga')} Autos"
+                f"{k.wert('rennen', 'autos')} Autos, "
+                f"{k.wert('teams', 'anzahl')} Teams zu je "
+                f"{k.wert('teams', 'autos_je_team')}"
             ),
         )
         formular.addRow(
@@ -395,13 +332,7 @@ class Hauptfenster(QMainWindow):
         formular.addRow(
             "Fahrer-Eigenschaften:", QLabel(f"{len(k.fahrer)} (D1 bis D16)")
         )
-        formular.addRow(
-            "Ereignisse / Defekte:",
-            QLabel(
-                f"{len(k.wert('ereignisse', 'liste'))} / "
-                f"{len(k.wert('defekte', 'liste'))}"
-            ),
-        )
+        formular.addRow("Defekte:", QLabel(str(len(k.wert("defekte", "liste")))))
 
         hersteller_text = f"{len(k.hersteller)}"
         if not k.hersteller_bestaetigt:
@@ -472,60 +403,18 @@ class Hauptfenster(QMainWindow):
 
     @property
     def welt(self) -> kern_welt.Welt:
-        """Die Welt dieses Fensters, wie sie gerade steht.
-
-        Seit Punkt 95 wechseln Fahrer mitten in der Saison die Liga; wer
-        nach der Welt fragt, meint diesen Stand und nicht den vom
-        Karrierebeginn. Der liegt in ``_welt`` und dient nur noch als
-        Ausgangspunkt fuer eine neue Karriere.
-        """
-        return self.laufende_welt
-
-    @property
-    def anzeigewelt(self) -> kern_welt.Welt:
-        """Die Welt mit den entwickelten Autos der eigenen Fahrer.
-
-        Die eigenen Autos fangen bei null an und werden ueber die Karriere
-        entwickelt (GDD 1); die Welt haelt nur die leeren Huellen. Wer
-        Werte anzeigt, braucht diese Welt - ``self._welt`` bleibt der
-        Ausgangsstand, aus dem eine neue Karriere startet.
-        """
-        welt = self.laufende_welt
-        if getattr(self, "_karriere", None) is None:
-            return welt
-        return welt.mit_autos(self._karriere.entwickelte_autos(welt))
-
-    @property
-    def laufende_welt(self) -> kern_welt.Welt:
-        """Die Welt, wie sie gerade steht - mit allen Ligawechseln.
-
-        Seit Punkt 95 wird alle fuenf Rennen auf- und abgestiegen, und der
-        Saisonlauf tauscht dabei seine Welt aus. ``self._welt`` ist der
-        Ausgangsstand und bleibt es; wer wissen will, wer heute in welcher
-        Liga faehrt, fragt hier.
-        """
-        seite = getattr(self, "_saisonseite", None)
-        return self._welt if seite is None else seite.lauf.welt
+        """Die Welt dieses Fensters."""
+        return self._welt
 
     def _ziehe_werte_nach(self) -> None:
-        """Gibt der Weltseite die frisch entwickelten Autos."""
+        """Gibt der Weltseite den aktuellen Stand."""
         seite = getattr(self, "_weltseite", None)
         if seite is not None:
-            seite.setze_welt(self.anzeigewelt)
+            seite.setze_welt(self.welt)
 
     @property
     def weltseite(self) -> Weltseite:
         return self._weltseite
-
-    @property
-    def finanzseite(self) -> Finanzseite:
-        """Die Seite mit Ein- und Ausgaben nach Kategorien."""
-        return self._finanzseite
-
-    @property
-    def karriereseite(self) -> Karriereseite:
-        """Die Seite mit Kalender, Entwicklung und Sponsoren."""
-        return self._karriereseite
 
     @property
     def fahrersuche(self) -> Fahrersuche:
@@ -549,18 +438,13 @@ class Hauptfenster(QMainWindow):
 
     @property
     def saisonseite(self) -> Saisonseite:
-        """Die Seite mit Saisonwertung und Auf-/Abstieg."""
+        """Die Seite mit der Saisonwertung."""
         return self._saisonseite
 
     @property
     def editorseite(self) -> Editorseite:
         """Die Debug-Ansicht aus GDD 15."""
         return self._editorseite
-
-    @property
-    def sponsorenseite(self) -> Sponsorenseite:
-        """Die Seite mit den sechs Sponsorenplaetzen."""
-        return self._sponsorenseite
 
     @property
     def statistikseite(self) -> Statistikseite:
@@ -597,9 +481,9 @@ class Hauptfenster(QMainWindow):
         return kern_spielstand.aus_teilen(
             seed=self._seedquelle.seed,
             saisonjahr=self._karriere.saison.jahr,
-            welt=self.laufende_welt,
+            welt=self._welt,
             karriere=self._karriere,
-            tabellen=self._saisonseite.lauf.tabellen,
+            tabelle=self._saisonseite.lauf.tabelle,
             statistik=self._statistik,
             kenntnis=self._kenntnis,
             gefahrene_rennen=self._saisonseite.lauf.gefahren,
@@ -609,9 +493,8 @@ class Hauptfenster(QMainWindow):
     def neue_karriere(self) -> bool:
         """Fragt Name, Land und Geburtstag und beginnt von vorn (Punkt 11).
 
-        Alles andere wuerfelt der Seed: Welt, Teams, Gegner. Die Startliga
-        ist fest die aus der Konfiguration - freie Wahl waere der
-        Schwierigkeitsgrad durch die Hintertuer.
+        Alles andere wuerfelt der Seed: Welt, Teams, Gegner und welches
+        der 25 Teams dem Spieler gehoert.
         """
         dialog = Startdialog(
             self._konfiguration,
@@ -624,23 +507,11 @@ class Hauptfenster(QMainWindow):
         self.beginne_neue_karriere(dialog.stammdaten())
         return True
 
-    def _fahrer_verpflichtet(self, nummer: int) -> None:
-        """Ein Transfer ist durch - Konto und Karriereseite nachziehen."""
-        self._karriereseite.zeige_namen(
-            {f.nummer: f.name for f in self._welt.spielerfahrer}
-        )
-        fahrer = self._welt.fahrer[nummer]
-        self.statusBar().showMessage(
-            f"{fahrer.name} unterschreibt - er faehrt ab der naechsten Saison "
-            "in einem leeren Auto.",
-            8000,
-        )
-
     def beginne_neue_karriere(self, stammdaten: dict) -> None:
         """Setzt Welt, Karriere und Statistik auf Anfang.
 
         ``stammdaten`` kommt aus dem Startdialog: ein Teamname und die
-        Stammdaten der vier eigenen Fahrer.
+        Stammdaten der beiden eigenen Fahrer.
         """
         eigene = self._welt.spielerfahrer
         if eigene:
@@ -660,18 +531,27 @@ class Hauptfenster(QMainWindow):
         self._jahr = kern_karriere.startjahr(self._konfiguration)
         self._karriere = None
         self._statistik = kern_statistik.Statistik(self._konfiguration)
-        self._kenntnis = kern_streckenkenntnis.Streckenkenntnis(
-            self._konfiguration, seedquelle=self._seedquelle.zweig("lerntempo")
+        self._kenntnis = kern_streckenkenntnis.Streckenkenntnis(self._konfiguration)
+        kern_streckenkenntnis.setze_feldanfang(
+            self._konfiguration,
+            self._welt,
+            self._kenntnis,
+            tuple(e["name"] for e in self._konfiguration.strecken),
+            self._seedquelle.zweig("kikenntnis"),
         )
         self._popularitaet = kern_popularitaet.Popularitaet(self._konfiguration)
-        self._geladene_tabellen = None
+        self._popularitaet.anfang(
+            tuple(f.nummer for f in self._welt.fahrer),
+            self._seedquelle.zweig("popularitaet"),
+        )
+        self._geladene_tabelle = None
         self._gefahrene_rennen = 0
         self.setCentralWidget(self._baue_inhalt())
         mannschaft = self._welt.spielerteam
         name = mannschaft.name if mannschaft is not None else "Das Team"
         self.statusBar().showMessage(
-            f"Neue Karriere: {name} mit {len(self._welt.spielerfahrer)} Autos, Liga "
-            f"{self._konfiguration.wert('ligen', 'startliga')}, Saison {self._jahr}",
+            f"Neue Karriere: {name} mit {len(self._welt.spielerfahrer)} Autos, "
+            f"Saison {self._jahr}",
             8000,
         )
 
@@ -746,15 +626,11 @@ class Hauptfenster(QMainWindow):
         )
 
     def _saison_gewechselt(self) -> None:
-        """Uebernimmt die Welt der neuen Saison (GDD 13).
-
-        Auf- und Abstieg haben die Ligen umgestellt; alle Seiten halten
-        noch die alte Welt.
-        """
+        """Uebernimmt den Stand der neuen Saison (GDD 13)."""
         lauf = self._saisonseite.lauf
         self._welt = lauf.welt
         self._jahr = lauf.jahr
-        self._geladene_tabellen = lauf.tabellen
+        self._geladene_tabelle = lauf.tabelle
         self._gefahrene_rennen = lauf.gefahren
         # Der Neuaufbau ersetzt die Seite, die dieses Signal gerade
         # gesendet hat - deshalb erst nach der Rueckkehr in die
@@ -770,9 +646,9 @@ class Hauptfenster(QMainWindow):
     def uebernimm_welt(self, welt: kern_welt.Welt) -> None:
         """Uebernimmt eine im Editor geaenderte Welt (GDD 15)."""
         self._welt = welt
-        # Die Tabellen der laufenden Saison bleiben; nur die Werte aendern
-        # sich, nicht wer in welcher Liga faehrt.
-        self._geladene_tabellen = self._saisonseite.lauf.tabellen
+        # Die Tabelle der laufenden Saison bleibt; nur die Werte aendern
+        # sich.
+        self._geladene_tabelle = self._saisonseite.lauf.tabelle
         self._gefahrene_rennen = self._saisonseite.lauf.gefahren
         stelle = self._reiter.currentIndex()
         self.setCentralWidget(self._baue_inhalt())
@@ -798,13 +674,12 @@ class Hauptfenster(QMainWindow):
         if stand.popularitaet is not None and stand.popularitaet.werte:
             self._popularitaet = stand.popularitaet
         else:
-            # Ein Stand vor Version 3 kennt sie noch nicht.
             self._popularitaet = kern_popularitaet.Popularitaet(self._konfiguration)
             self._popularitaet.anfang(
                 tuple(f.nummer for f in stand.welt.fahrer),
                 Seedquelle(stand.seed).zweig("popularitaet"),
             )
-        self._geladene_tabellen = stand.tabellen
+        self._geladene_tabelle = stand.tabelle
         self._gefahrene_rennen = stand.gefahrene_rennen
 
         stelle = self._reiter.currentIndex()

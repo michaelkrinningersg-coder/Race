@@ -6,26 +6,24 @@ auf fuenf Seiten verstreut steht.
 
 **Die Karte rechnet nichts.** Sie liest nur, was Welt, Auto, Statistik,
 Streckenkenntnis und Popularitaet ohnehin fuehren, und ist rein lesend:
-Werte aendern geht weiter nur ueber den Editor. Fuer alle 400 Fahrer
-zeigt sie dasselbe; Konto, Sponsoren und Werkstatt des Spielers bleiben
-auf ihren eigenen Seiten, sonst gaebe es sie zweimal.
+Werte aendern geht weiter nur ueber den Editor. Fuer alle 50 Fahrer zeigt
+sie dasselbe.
 
 Fuenf Reiter:
 
 ===========  =============================================================
-Steckbrief   Person, Team, Charakter, Stand in der Liga, Popularitaet
+Steckbrief   Person, Team, Charakter, Stand im Feld, Popularitaet
 Werte        die 11 Wirkungsbereiche als Balken, dann alle Einzelwerte
 Saison       die Zeile der laufenden Saison und der Punkteverlauf
-Laufbahn     Karrierezahlen, Titel, Liga je Jahr, gehaltene Rundenrekorde
+Laufbahn     Karrierezahlen, Titel, Platz je Jahr, gehaltene Rundenrekorde
 Strecken     Streckenkenntnis je Strecke, Heimstrecken hervorgehoben
 ===========  =============================================================
 
 Die Balken messen gegen den **eigenen** Hoechstwert, nicht gegen die
-Skala: Ein Fahrer aus Liga 10 steht zwischen 12.000 und 19.285 von
-100.000 - gegen die Skala waeren seine Balken kaum zu unterscheiden, und
-zu sehen ist hier ohnehin die
-Form seines Profils, nicht sein Platz auf der Skala. Die Zahl steht
-daneben.
+Skala: Das Feld liegt zwischen 87.445 und 98.000 von 100.000 - gegen die
+Skala waeren die Balken kaum zu unterscheiden, und zu sehen ist hier
+ohnehin die Form des Profils, nicht der Platz auf der Skala. Die Zahl
+steht daneben.
 """
 
 from __future__ import annotations
@@ -69,13 +67,13 @@ def _prozent(anteil: float) -> str:
 
 
 def _bilanzfelder(bilanz) -> list[str]:
-    """Die neun Spalten einer Bilanz als Text (Punkte 21 und 23).
+    """Die acht Spalten einer Bilanz als Text (Punkte 21 und 23).
 
     Ohne Bilanz - also vor dem ersten Rennen dort - bleiben sie leer statt
     auf 0 zu stehen: "noch nie gefahren" ist etwas anderes als "null Siege".
     """
     if bilanz is None or not bilanz.rennen:
-        return [""] * 9
+        return [""] * 8
     return [
         str(bilanz.rennen),
         str(bilanz.siege),
@@ -85,14 +83,13 @@ def _bilanzfelder(bilanz) -> list[str]:
         str(bilanz.ausfaelle),
         _zahl(bilanz.punkte),
         str(bilanz.bester_platz) if bilanz.bester_platz else "-",
-        str(bilanz.beste_liga) if bilanz.beste_liga else "-",
     ]
 
 
 def _setze_bilanzsortierung(zeile, bilanz, ab: int) -> None:
     """Sortiert die Bilanzspalten nach Zahlen, nicht nach Text."""
     if bilanz is None:
-        werte = [0] * 9
+        werte = [0] * 8
     else:
         werte = [
             bilanz.rennen,
@@ -105,7 +102,6 @@ def _setze_bilanzsortierung(zeile, bilanz, ab: int) -> None:
             # Platz 1 ist der beste: ohne Vorzeichenwechsel stuende der
             # Sieger beim Sortieren ganz unten. Wer nie ankam, auch.
             -bilanz.bester_platz if bilanz.bester_platz else -99,
-            -bilanz.beste_liga if bilanz.beste_liga else -99,
         ]
     for versatz, wert in enumerate(werte):
         zeile.setze_sortierwert(ab + versatz, wert)
@@ -178,8 +174,6 @@ class Fahrerkarte(QDialog):
         kasten.addWidget(
             QLabel(
                 f"#{self._fahrer.nummer} · {self._fahrer.kuerzel} · "
-                f"Liga {self._fahrer.liga} "
-                f"({self._konfiguration.ligenname(self._fahrer.liga)}) · "
                 f"{self._team.name}"
             )
         )
@@ -201,7 +195,7 @@ class Fahrerkarte(QDialog):
             ("Alter:", f"{self._alter()} Jahre"),
             ("Team:", f"{self._team.name} ({self._team.land})"),
             ("Hersteller:", self._team.hersteller),
-            ("Teamkollegen:", kollegen),
+            ("Teamkollege:", kollegen),
         ):
             marke = QLabel(wert)
             marke.setWordWrap(True)
@@ -211,18 +205,12 @@ class Fahrerkarte(QDialog):
         stand = QFormLayout()
         standkasten = QGroupBox("Stand")
         standkasten.setLayout(stand)
-        platz, feld = self._platz_in_der_liga()
+        platz, feld = self._platz_im_feld()
         stand.addRow("Staerke:", QLabel(_zahl(gesamtwert(self._konfiguration, self._fahrer.auto))))
-        stand.addRow("Platz nach Staerke:", QLabel(f"{platz} von {feld} in seiner Liga"))
+        stand.addRow("Platz nach Staerke:", QLabel(f"{platz} von {feld}"))
         if self._popularitaet is not None:
             beliebt = self._popularitaet.stand(self._fahrer.nummer)
-            faktor = f"{self._popularitaet.faktor(self._fahrer.nummer):.2f}".replace(
-                ".", ","
-            )
-            stand.addRow(
-                "Popularitaet:",
-                QLabel(f"{_zahl(beliebt)} · Sponsorenfaktor {faktor}"),
-            )
+            stand.addRow("Popularitaet:", QLabel(_zahl(beliebt)))
         spalte.addWidget(standkasten)
 
         charakterkasten = QGroupBox("Charakter")
@@ -255,8 +243,8 @@ class Fahrerkarte(QDialog):
             kern_kalender.saisonstart(self._konfiguration, jahr)
         )
 
-    def _platz_in_der_liga(self) -> tuple[int, int]:
-        feld = self._welt.liga(self._fahrer.liga)
+    def _platz_im_feld(self) -> tuple[int, int]:
+        feld = self._welt.feld
         nummern = [f.nummer for f in feld]
         return nummern.index(self._fahrer.nummer) + 1, len(feld)
 
@@ -307,9 +295,9 @@ class Fahrerkarte(QDialog):
     def _fuelle_zweig(self, name: str, eintraege) -> None:
         """Ein Ast mit Balken, die gegen den groessten Wert des Astes messen.
 
-        Gegen die Skala (0 bis 100.000) waere jeder Balken eines
-        Liga-20-Fahrers unsichtbar. Zu sehen ist hier die Form des
-        Profils, nicht der Platz auf der Skala.
+        Gegen die Skala (0 bis 100.000) laegen alle Balken des Feldes
+        dicht beieinander. Zu sehen ist hier die Form des Profils, nicht
+        der Platz auf der Skala.
         """
         ast = QTreeWidgetItem(self._werte, [name, "", ""])
         schrift = ast.font(0)
@@ -358,10 +346,10 @@ class Fahrerkarte(QDialog):
                 felder.addRow(beschriftung, QLabel(str(wert)))
         spalte.addWidget(kasten)
 
-        verlaufkasten = QGroupBox("Punkteverlauf der Liga")
+        verlaufkasten = QGroupBox("Punkteverlauf des Feldes")
         verlaufspalte = QVBoxLayout(verlaufkasten)
         self._verlauf = Punkteansicht(
-            "Punktestand je Rennwochenende - grau die Liga, farbig dieser Fahrer"
+            "Punktestand je Rennwochenende - grau das Feld, farbig dieser Fahrer"
         )
         verlaufspalte.addWidget(self._verlauf)
         spalte.addWidget(verlaufkasten, stretch=1)
@@ -369,13 +357,12 @@ class Fahrerkarte(QDialog):
         return seite
 
     def _fuelle_verlauf(self) -> None:
-        """Die Liga als graues Feld, dieser Fahrer als einzige Linie."""
+        """Das Feld grau, dieser Fahrer als einzige farbige Linie."""
         if self._statistik is None:
             return
-        liga = self._fahrer.liga
         reihen = []
         eigene = 0
-        for stelle, mitfahrer in enumerate(self._welt.liga(liga)):
+        for stelle, mitfahrer in enumerate(self._welt.feld):
             reihen.append(
                 (
                     mitfahrer.kuerzel,
@@ -417,16 +404,14 @@ class Fahrerkarte(QDialog):
             felder.addRow(
                 "Meisterschaften:",
                 QLabel(
-                    ", ".join(f"{a.saison} (Liga {a.liga})" for a in titel)
-                    if titel
-                    else "-"
+                    ", ".join(str(a.saison) for a in titel) if titel else "-"
                 ),
             )
         spalte.addWidget(kasten)
 
-        bahnkasten = QGroupBox("Liga je Saison")
+        bahnkasten = QGroupBox("Platz je Saison")
         bahnspalte = QVBoxLayout(bahnkasten)
-        self._bahn = Laufbahnansicht(self._konfiguration.wert("ligen", "anzahl"))
+        self._bahn = Laufbahnansicht(self._konfiguration.wert("rennen", "autos"))
         if self._statistik is not None:
             self._bahn.zeige(
                 self._statistik.laufbahn(self._fahrer.nummer), self._team.farbe
@@ -437,7 +422,7 @@ class Fahrerkarte(QDialog):
         rekordkasten = QGroupBox("Gehaltene Rundenrekorde")
         rekordspalte = QVBoxLayout(rekordkasten)
         self._rekorde = QTreeWidget()
-        self._rekorde.setHeaderLabels(["Strecke", "Liga", "Zeit", "Saison", "Rennen"])
+        self._rekorde.setHeaderLabels(["Strecke", "Zeit", "Saison", "Rennen"])
         self._rekorde.setRootIsDecorated(False)
         self._rekorde.setAlternatingRowColors(True)
         self._fuelle_rekorde()
@@ -453,18 +438,17 @@ class Fahrerkarte(QDialog):
             for rekord in self._statistik.rekorde.values()
             if rekord.fahrer == self._fahrer.nummer
         ]
-        for rekord in sorted(eigene, key=lambda r: (r.strecke, r.liga)):
+        for rekord in sorted(eigene, key=lambda r: r.strecke):
             zeile = SortierbareZeile(
                 self._rekorde,
                 [
                     rekord.strecke,
-                    str(rekord.liga),
                     formatiere_dauer(rekord.zeit_ms),
                     str(rekord.saison),
                     str(rekord.rennen),
                 ],
             )
-            zeile.setze_sortierwert(2, rekord.zeit_ms)
+            zeile.setze_sortierwert(1, rekord.zeit_ms)
         for stelle in range(self._rekorde.columnCount()):
             self._rekorde.resizeColumnToContents(stelle)
 
@@ -515,7 +499,6 @@ class Fahrerkarte(QDialog):
                 "DNF",
                 "Punkte",
                 "Bester",
-                "Beste Liga",
             ]
         )
         self._streckenliste.setRootIsDecorated(False)
@@ -594,7 +577,6 @@ class Fahrerkarte(QDialog):
                 "DNF",
                 "Punkte",
                 "Bester",
-                "Beste Liga",
             ]
         )
         self._wetterliste.setRootIsDecorated(False)

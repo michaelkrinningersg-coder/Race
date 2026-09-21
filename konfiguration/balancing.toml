@@ -76,82 +76,30 @@ faktor_beschleunigen = 0.45
 hoechstgeschwindigkeit_bei_referenz_kmh = 400.0
 
 # ---------------------------------------------------------------------------
-# GDD 9 / 12 – Ligen
+# GDD 9 / 12 – Das Feld
 # ---------------------------------------------------------------------------
-[ligen]
-anzahl = 10
-autos_je_liga = 40
-# Punkt 95: Der Ligakorridor haengt nicht mehr an einer Ziel-Durchschnitts-
-# geschwindigkeit je Liga, sondern steht direkt auf der Werteskala. Liga 10
-# beginnt bei S = 20 000, Liga 1 endet bei S = 100 000. Alle zehn Ligen sind
-# gleich breit, benachbarte Ligen ueberlappen zu 25 %:
+# Punkt 101: Eine einzige Liga zu 50 Autos. Ligen, Korridore, Ueberlappung
+# und Auf- und Abstieg gibt es nicht mehr; geblieben ist die Spanne des
+# Feldes auf der Werteskala.
 #
-#     breite  = (oberste_s - unterste_s) / ((anzahl - 1) * (1 - ueberlappung) + 1)
-#     schritt = breite * (1 - ueberlappung)
-#     s_letzter(liga) = unterste_s + (anzahl - liga) * schritt
-#     s_bester(liga)  = s_letzter(liga) + breite
+# Der Beste faehrt den Anker der Kalibrierung - S = 98.000, in Zandvoort
+# 180,00 km/h. Der Letzte braucht fuer dieselbe Runde 4 % laenger. Weil
+# jede Grenze des Tempomodells linear im Leistungsanteil
+# p = sqrt(S / referenz) steht, ist das genau die Umkehrung der
+# Kalibrierfunktion:
 #
-# Mit den Werten unten: breite = 10 322,58 und schritt = 7 741,94.
-# Liga 1 trifft damit fast genau den alten Korridor (3,83 % Feldbreite gegen
-# 3,80 % bisher); nach unten wird das Feld breiter, Liga 10 kommt auf 11,72 %.
-unterste_s = 20_000
-oberste_s = 100_000
-ueberlappung_anteil = 0.25
-startliga = 10
-
-# Pruefwerte zum Korridor. Sie stammen aus derselben Formel; weicht
-# ligastaerken() davon ab, faellt die Konfigurationspruefung.
-[[ligen.kontrolle]]
-liga = 1
-s_bester = 100_000
-s_letzter = 89_677
-
-[[ligen.kontrolle]]
-liga = 3
-s_bester = 84_516
-s_letzter = 74_194
-
-[[ligen.kontrolle]]
-liga = 5
-s_bester = 69_032
-s_letzter = 58_710
-
-[[ligen.kontrolle]]
-liga = 8
-s_bester = 45_806
-s_letzter = 35_484
-
-[[ligen.kontrolle]]
-liga = 10
-s_bester = 30_323
-s_letzter = 20_000
-
-# Ligennamen: fuenf Stufen zu je zwei Ligen (Punkt 95). Die vier Namen aus
-# GDD 12 bleiben in ihrer Reihenfolge, unten kommt Eisen dazu.
-[[ligen.namen]]
-stufe = "Platin"
-von_liga = 1
-bis_liga = 2
-
-[[ligen.namen]]
-stufe = "Gold"
-von_liga = 3
-bis_liga = 4
-
-[[ligen.namen]]
-stufe = "Silber"
-von_liga = 5
-bis_liga = 6
-
-[[ligen.namen]]
-stufe = "Bronze"
-von_liga = 7
-bis_liga = 8
-
-[[ligen.namen]]
-stufe = "Eisen"
-von_liga = 9
-bis_liga = 10
+#     v_letzter = 180 / 1,04           = 173,077 km/h
+#     p_letzter = (173,077 - 55) / 125 =   0,944615
+#     s_letzter = p_letzter^2 * 98.000 =  87.445
+#
+# Nachgemessen: S = 87.445 faehrt in Zandvoort 88,282 s gegen 84,887 s des
+# Besten, also +3,9994 %. Die Pruefung rechnet das bei jedem Start nach.
+[feld]
+s_bester = 98_000
+s_letzter = 87_445
+# Um wie viel die Rundenzeit des Letzten ueber der des Besten liegt.
+# Pruefwert zu s_letzter, nicht selbst benutzt.
+spanne_rundenzeit = 0.04
 
 # ---------------------------------------------------------------------------
 # GDD 2 – Kalender und Zeitmodell
@@ -174,50 +122,7 @@ vorsaison_start_monat = 1
 vorsaison_start_tag = 1
 nachsaison_ende_monat = 12
 nachsaison_ende_tag = 31
-# Zwei parallele Plaetze je Tag: Fahrer (Training) und Werkstatt (Entwicklung)
-plaetze_je_tag = ["fahrer", "werkstatt"]
 
-[zeitmodell]
-# Ein zugewiesener Tag hebt den Wert um max(schritt_absolut, anteil * S)
-schritt_absolut = 10
-schritt_anteil = 0.01
-# Schrittweite fuer Kaeufe (GDD 9)
-kaufschritt = 10
-
-[zeitmodell.training]
-# Trainingsprogramme ueber mehrere Tage (Punkt 84, Entscheidung des
-# Auftraggebers). Bis dahin belegte eine Buchung einen Platz bis zum
-# naechsten Rennen und die zehn nutzbaren Tage dazwischen wurden zwar
-# angezeigt, aber nie verbraucht. Ein Programm macht sie zur Waehrung.
-#
-# Was ein einzelner Trainingstag bringt, als Anteil dessen, was eine
-# Einzelbuchung braechte. Ein Fuenftel - fuenf Tage sind damit eine
-# Buchung, zehn Tage sind zwei.
-#
-# Die Zahl haengt an der Rundung, nicht am Bauchgefuehl: Jeder Zuwachs
-# wird auf ganze Kaufschritte abgerundet (GDD 9, kaufschritt = 10), und
-# der Tageszuwachs ist fuer jeden Wert unter 2000 genau diese 10. Der
-# Anteil muss also erst einen vollen Schritt fuellen, bevor er ueberhaupt
-# sichtbar wird. Gemessen:
-#
-#   Tage |  bei 0,15  |  bei 0,20
-#      5 | 7,5  ->  0 | 10,0 -> 10
-#      7 | 10,5 -> 10 | 14,0 -> 10
-#     10 | 15,0 -> 10 | 20,0 -> 20
-#
-# Eine Einzelbuchung bringt 10 und belegt den Platz ebenfalls bis zum
-# Rennen. Unter 0,20 ist ein Programm damit nie besser als sie - bei 0,15
-# braechten fuenf Tage gar nichts und zehn Tage genau dasselbe, bei
-# gleichem Platz und zusaetzlichem Abbruchrisiko. Erst ab hier traegt die
-# Mechanik. test_training.py haelt genau das fest, damit die Zahl nicht
-# still unter die Schwelle rutschen kann.
-tag_anteil = 0.20
-# Ein Programm dauert mindestens so viele und hoechstens so viele
-# nutzbare Tage. Zehn ist zugleich die Zahl der nutzbaren Tage zwischen
-# zwei Rennen - ein Programm reicht also nie ueber ein Rennwochenende
-# hinweg, so hat es der Auftraggeber festgelegt.
-min_tage = 5
-max_tage = 10
 # Keinen Bonus fuers Durchhalten: Bricht ein Ereignis das Programm ab,
 # zahlt es genau die geleisteten Tage aus. Die Zeit war dann nicht
 # umsonst, aber der Rest ist verloren.
@@ -483,10 +388,8 @@ datei = "YasMarina"
 # GDD 4 – Rennsimulation
 # ---------------------------------------------------------------------------
 [rennen]
-autos = 40
-# Punkt 95: Jede Liga faehrt dieselbe Distanz - die volle. Bisher war sie
-# gestaffelt (Liga 20 = 100 km, je Liga aufwaerts +10 km bis 290 km in
-# Liga 1); der Spitzenwert gilt jetzt ueberall.
+# Punkt 101: Ein Feld, 50 Autos - 25 Hersteller zu je zwei.
+autos = 50
 distanz_km = 290
 # Rundenzahl = Distanz / Streckenlaenge, aufgerundet
 rundenzahl_aufrunden = true
@@ -567,26 +470,17 @@ spalten = ["letzte_runde", "beste_runde", "sektor_1", "sektor_2", "sektor_3", "s
 [streckenkenntnis]
 max_bonus = 0.015          # bis +1,5 % Tempo
 volle_kenntnis_runden = 1000
-streuung_je_start = 0.75   # +/- 75 %
-streuung_je_runde = 0.50   # +/- 50 %
-# Entscheidung zu Punkt 38: je Fahrer ein festes Lerntempo. Die beiden
-# Streuungen oben mitteln sich ueber eine Saison weg - nach 20 Starts
-# stehen alle Fahrer nahezu gleich da. Ein fester Faktor je Fahrer bleibt
-# dagegen bestehen: Manche lernen eine Strecke schnell, andere nie ganz.
-lerntempo_streuung = 0.60
 
-# --- Punkt 39: Streckenkenntnis der KI ------------------------------------
-[streckenkenntnis.ki]
-# GDD 12: "Die KI verbessert sich vorerst nicht." Dann darf auch ihre
-# Streckenkenntnis nicht wachsen - sonst wuerden alle 570 KI-Autos ueber
-# die Saisons langsam schneller und liefen der Kalibriertabelle aus GDD 9
-# davon. Der Stand wird deshalb einmal bei der Welterzeugung je Fahrer und
-# Strecke gesetzt und bleibt dann fest.
+# --- Punkt 101: Der Stand steht fest --------------------------------------
+[streckenkenntnis.anfang]
+# Seit Punkt 101 waechst die Streckenkenntnis nicht mehr - niemand
+# entwickelt sich. Der Stand wird einmal bei der Welterzeugung je Fahrer
+# und Strecke gesetzt und bleibt dann, wie er ist.
 #
-# Die Streuung ist bewusst breit: Sie steht fuer alles, was ein KI-Fahrer
+# Die Streuung ist bewusst breit: Sie steht fuer alles, was ein Fahrer
 # vor Karrierebeginn auf dieser Strecke gefahren ist.
-anfang_anteil = 0.35       # im Mittel 35 % der vollen Kenntnis
-anfang_streuung = 0.80     # +/- 80 % darum
+anteil = 0.35              # im Mittel 35 % der vollen Kenntnis
+streuung = 0.80            # +/- 80 % darum
 
 # ---------------------------------------------------------------------------
 # GDD 4 – Qualifying
@@ -932,164 +826,6 @@ er = "Ermuedung"
 q = "Qualifying"
 
 # ---------------------------------------------------------------------------
-# GDD 9 – Kosten
-# ---------------------------------------------------------------------------
-[kosten]
-# K(S) = k0 * (1 + S / teiler) ^ exponent, je Kaufschritt von +10
-teiler = 1000.0
-exponent = 0.6
-k0_geld = 50.0
-k0_erfahrung = 5.0
-# Wer Zeit einsetzt, gibt auch etwas Erfahrung dazu: Ein belegter Tag ist
-# Arbeit am Auto und am Fahrer, und die kostet Koepfe. Die Zeit selbst
-# bleibt bei einem Tag - sie skaliert nicht -, die Erfahrung waechst mit
-# jedem Kauf ueber dieselbe Kurve wie Geld und Erfahrung. Faehigkeiten,
-# die ohnehin schon Erfahrung kosten, zahlen nicht doppelt.
-k0_erfahrung_zeit = 2.0
-# Nur Einzelkauf, kein Mehrfachkauf
-mehrfachkauf = false
-# Punkt 95: Mit dem Startwert 12.000 kostet ein belegter Tag nicht mehr
-# 50 EUR, sondern rund 2.800 - der Tageszuwachs ist max(10, 1 %), also
-# +120 statt +10, und jeder Schritt kostet mehr. Der Faktor ist 56.
-# Mitskaliert, damit das Startkapital dieselben rund zwanzig Tage kauft
-# wie bisher: 1.000 x 56 = 56.000, abgerundet auf 55.000.
-startkapital_euro = 55_000
-# Punkt 95: Womit die vier eigenen Autos in eine neue Karriere gehen.
-# GDD 1 nennt 0, und das stimmte, solange die unterste Liga bei S = 157
-# begann. Seit dem Ligenumbau beginnt sie bei 20.000: Ein Auto mit 0
-# faehrt in Zandvoort 277,8 s je Runde gegen 138,6 s des Ligabesten -
-# ueber die Renndistanz 69 Runden Rueckstand, und herauskaufen liesse es
-# sich nicht (350.000 EUR je Auto gegen rund 240.000 EUR Saisoneinnahmen).
-# Der Spieler startet deshalb auf demselben Boden wie die KI: auf
-# ``mindeststaerke``. Er faehrt damit 154,7 s - hinterher, aber im selben
-# Rennen.
-startwert_spieler = 12_000
-# Erfahrungssockel zum Start (Entscheidung des Auftraggebers). Seit ein
-# belegter Tag auch Erfahrung kostet, stuende der Spieler am 1. Januar
-# sonst mit null da: Der erste Zeitkauf kostet 2 EP, Erfahrung gibt es
-# aber erst fuers Fahren. Die ersten zehn Tage einer Karriere waeren
-# damit tot. Zwanzig reichen fuer einen Handvoll erster Schritte; ab dem
-# ersten Rennen spielt der Sockel keine Rolle mehr (Platz 12 bringt 243,
-# ein Sieg 775 EP).
-# Derselbe Faktor 56 wie beim Startkapital: Ein Tag kostet bei S = 12.000
-# rund 112 EP statt 2. Zwanzig EP truegen nicht einmal mehr den ersten
-# Trainings- **und** den ersten Werkstatttag, wofuer der Sockel gedacht
-# ist. 20 x 56 = 1.120, abgerundet auf 1.100.
-startkapital_erfahrung = 1_100
-
-# Kontrollwerte aus der Tabelle in GDD 9
-[[kosten.kontrolle]]
-bezeichnung = "Bester Liga 20"
-s = 157
-naechster_schritt_euro = 55
-summe_ab_0_euro = 820
-
-[[kosten.kontrolle]]
-bezeichnung = "Bester Liga 15"
-s = 8_400
-naechster_schritt_euro = 190
-summe_ab_0_euro = 110_000
-
-[[kosten.kontrolle]]
-bezeichnung = "Bester Liga 10"
-s = 29_170
-naechster_schritt_euro = 390
-summe_ab_0_euro = 725_000
-
-[[kosten.kontrolle]]
-bezeichnung = "Bester Liga 5"
-s = 62_470
-naechster_schritt_euro = 600
-summe_ab_0_euro = 2_400_000
-
-[[kosten.kontrolle]]
-bezeichnung = "Bester Liga 1"
-s = 98_130
-naechster_schritt_euro = 790
-summe_ab_0_euro = 4_900_000
-
-# ---------------------------------------------------------------------------
-# GDD 10 – Einnahmen
-# ---------------------------------------------------------------------------
-[preisgeld]
-# Punkt 95: Zehn Ligen, zehn feste Siegpraemien - interpoliert wird nichts
-# mehr. Die Kurve laesst sich nicht aus GDD 10 ableiten: Dort beginnt die
-# unterste Liga bei S = 157 und bekommt 4.000 EUR, die neue unterste
-# beginnt bei S = 20.000 und ist damit etwa so stark wie die alte Liga 10
-# (370.000 EUR). Folgte das Preisgeld der Staerke, laege die Spanne vom
-# Anfaenger zum Weltmeister bei 1,5 - eine Karriere ohne Aufstiegslohn.
-#
-# Verankert ist sie deshalb neu: Liga 1 bleibt bei 1.300.000 EUR wie im
-# GDD, Liga 10 steht bei 60.000 EUR, dazwischen geometrisch mit rund 1,41
-# je Liga. Die 60.000 stammen aus dem GDD-Ziel "Aufstieg in etwa 1,5
-# Saisons": Ein Ligaschritt kostet in Liga 10 nach der Kostenkurve rund
-# 365.000 EUR je Auto, bei vier Autos 1,46 Mio. ueber 30 Rennen; ein
-# Mittelfeldteam holt je Rennen etwa 0,8 Siegpraemien.
-[preisgeld.siegpraemie_euro]
-10 = 60_000
-9 = 85_000
-8 = 120_000
-7 = 170_000
-6 = 235_000
-5 = 330_000
-4 = 470_000
-3 = 660_000
-2 = 920_000
-1 = 1_300_000
-
-[preisgeld.anteil]
-# Anteil an der Siegpraemie je Platz; im GDD sind nur diese Stuetzstellen
-# genannt. Punkt 95: Das Feld hat 40 Autos, die Kurve endet also auf
-# Platz 40 statt 30 - sonst gingen zehn Autos leer aus.
-1 = 1.00
-2 = 0.80
-3 = 0.65
-40 = 0.05
-
-[erfahrung]
-# EP-Betraege = Preisgeld / 10
-teiler_gegenueber_preisgeld = 10
-# Grundbetrag je Session, Platzierungsbonus und Bonus je Ueberholmanoever
-quellen = ["grundbetrag_session", "platzierungsbonus", "ueberholbonus"]
-
-[erfahrung.wetter]
-# Eigener Topf je Wetter, nur fuer die passende Wetterfaehigkeit nutzbar
-eigener_topf_je_wetter = true
-quellen = ["je_km_im_wetter", "platzierungsbonus"]
-
-[finanzen]
-laufende_kosten = false
-schulden = false
-bankrott = false
-# KI-Teambudgets sind vorerst nur Anzeige
-ki_budget_wirksam = false
-# Punkt 72: Das Teambudget des Spielers war bisher ebenfalls nur Anzeige.
-# Jetzt zahlt es sich in Monatsraten aus und fuellt das Konto - am Ersten
-# jedes Monats eine Rate, zwoelf im Jahr, auch in Vor- und Nachsaison.
-budget_raten_je_jahr = 12
-
-[sponsoren]
-plaetze = ["anzug", "helm", "muetze", "auto_haupt", "auto_neben_1", "auto_neben_2"]
-angebote_je_platz_min = 3
-angebote_je_platz_max = 10
-angebot_gueltig_wochen_min = 3
-angebot_gueltig_wochen_max = 10
-laufzeit_rennen_min = 3
-laufzeit_rennen_max = 25
-saisonuebergreifend = true
-verguetung = ["grundbetrag_je_rennen", "praemie_sieg", "praemie_top3", "praemie_top10"]
-skaliert_mit_liga = true
-
-# Anzeigenamen der sechs Plaetze; die Oberflaeche ist deutsch.
-[sponsoren.bezeichnung]
-anzug = "Anzug"
-helm = "Helm"
-muetze = "Muetze"
-auto_haupt = "Auto, Hauptplatz"
-auto_neben_1 = "Auto, Nebenplatz 1"
-auto_neben_2 = "Auto, Nebenplatz 2"
-
-# ---------------------------------------------------------------------------
 # GDD 11 – Zufallssystem
 # ---------------------------------------------------------------------------
 [zufall.tagesform]
@@ -1115,56 +851,56 @@ verkleinert_durch = "D12"
 # GDD 12 – Teams, Hersteller, KI
 # ---------------------------------------------------------------------------
 [teams]
-# Punkt 95: 10 Ligen zu je 40 Autos sind 400 Autos. Vier Autos je Team sind
-# aus GDD 12 gesetzt und bleiben, also sinkt die Teamzahl von 150 auf 100.
-anzahl = 100
-autos_je_team = 4
+# Punkt 101: Ein Team je Hersteller, zwei Autos je Team - 25 x 2 = 50.
+# GDD 12 nannte vier Autos je Team; der Auftraggeber hat zwei entschieden.
+anzahl = 25
+autos_je_team = 2
 # Teamnamen aus zwei Teilen (siehe namen.toml). Das GDD nennt fuer Teams
 # nur die Felder, nicht die Namensbildung; Begruendung in OFFENE_PUNKTE.md.
 namensbildung = "zwei_teile"
-# Budget je Team, nur Anzeige (GDD 10). Es folgt der Siegpraemie der
-# Ligen, in denen die vier Autos des Teams fahren.
-budget_in_siegpraemien = 8.0
-budget_streuung = 0.35
-# Die 4 Autos eines Teams koennen in verschiedenen Ligen fahren
-ligen_gemischt = true
-# Der Spieler faehrt in einem Team mit 3 KI-Fahrern
-ki_teamkollegen = 3
-felder = ["name", "herkunftsland", "hersteller", "budget", "teamfarbe"]
+# Punkt 101: Geld gibt es nicht mehr, also auch kein Budget.
+felder = ["name", "herkunftsland", "hersteller", "teamfarbe"]
 
 [namen]
 # Fahrer- und Teamnamen stehen ausgelagert, damit sie austauschbar sind.
 datei = "namen.toml"
 
 [hersteller]
-anzahl = 20
+# Punkt 101: Ein Hersteller je Team.
+anzahl = 25
 # Namen stehen in konfiguration/hersteller.toml (austauschbar, Markenrecht)
 datei = "hersteller.toml"
 leistungsbonus = false
 
 [ki]
-# Einzelwerte streuen um den Mittelwert des Autos (GDD 12: +/-25 %)
-profil_streuung = 0.25
+# Punkt 101: Das Feld ist nur noch 4 % breit. Mit den bisherigen +/-25 %
+# je Einzelwert streute allein das Profil eines Autos die Zandvoort-Runde
+# um 4,44 % - die Leiter waere darin verschwunden, ein schwaches Auto mit
+# guenstigem Profil haette jedes starke geschlagen. Gemessen bleiben mit
+# 3 % noch 1,04 % Spanne; das verschiebt ein Auto um rund sechs Plaetze,
+# die Leiter entscheidet aber weiter. Spezialisten aus GDD 12 bleiben
+# damit erhalten, nur nicht mehr staerker als der Rest des Feldes.
+profil_streuung = 0.03
 # Entscheidung zu Punkt 37: zusaetzlich ein Profil ueber die elf
 # Wirkungsbereiche. Ohne das mittelt sich die Einzelwert-Streuung im
 # Bereichsmittel weg - gemessen blieben von +/-25 % nur 20 % Spanne
 # zwischen dem staerksten und dem schwaechsten Bereich eines Fahrers.
 # Erst dieser Faktor macht Spezialisten, wie GDD 12 sie nennt.
-bereichs_streuung = 0.30
+# Punkt 101: mit profil_streuung heruntergezogen.
+bereichs_streuung = 0.035
 # Die Wetterfaehigkeiten stehen neben der Matrix und streuen fuer sich.
 wetter_streuung = 0.45
-# Punkt 35: Die KI entwickelt sich jetzt - jeder Fahrer nach seinem
-# eigenen Talent (siehe [talent]). Damit lernt sie auch Strecken dazu.
-entwicklung = true
+# Punkt 101: Feste Staerken. Weder KI noch Spieler entwickeln sich.
+entwicklung = false
 
 [fahrernamen]
 geschlecht = "maennlich"
 regionen = ["Europa", "Nordamerika"]
 an_echte_fahrer_angelehnt = false
 felder = ["vorname", "nachname", "herkunftsland", "geburtsdatum", "team", "hersteller"]
-# Punkt 35: Die KI altert jetzt. Das GDD nannte ein Geburtsdatum "vorerst
-# ohne Altern"; der Auftraggeber hat Ruecktritt und Newgens entschieden.
-altern = true
+# Punkt 101: Feste Fahrer, feste Staerken - niemand altert, tritt zurueck
+# oder rueckt nach. Das Geburtsdatum bleibt als Angabe im Steckbrief.
+altern = false
 # Geburtsjahre der erzeugten Fahrer. Das GDD nennt ein Geburtsdatum
 # "vorerst ohne Altern", aber keine Spanne; gewaehlt ist ein uebliches
 # Rennfahreralter zum Saisonstart.
@@ -1177,78 +913,6 @@ anteil_nordamerika = 0.1
 # ---------------------------------------------------------------------------
 # Punkt 35 – Ruecktritt, Newgens und die Entwicklung der KI
 # ---------------------------------------------------------------------------
-[generationen]
-# Ruecktrittsalter, je Fahrer einmal gestreut. Der Wert haengt am Seed und
-# an der Fahrernummer, steht also fest, ohne gespeichert zu werden.
-ruecktritt_min = 34
-ruecktritt_max = 42
-# Hoechstens so viele Ruecktritte je Winter. Die Startwelt wuerfelt Alter
-# von 18 bis 42, damit waeren im ersten Winter 152 Fahrer ueber ihrer
-# Grenze - ein Viertel des Feldes auf einmal. Die Grenze verteilt die
-# Welle auf mehrere Jahre; wer nicht drankommt, tritt im naechsten zurueck.
-#
-# Mehr als 30 gehen, weil die Newgens von unten aufsteigen duerfen: erst
-# Liga 20, und wenn es mehr sind, als dort Platz haben, auch Liga 19. Bei
-# einer Obergrenze von 30 blieben gemessen dauerhaft rund 60 Fahrer im
-# Rueckstau, weil die natuerliche Rate darueber liegt (600 Fahrer bei
-# rund 18 Jahren Laufbahn sind etwa 33 im Jahr).
-ruecktritte_je_saison_max = 45
-# Alter der Newgens beim Einstieg in Liga 20.
-newgen_alter_min = 18
-newgen_alter_max = 22
-
-# Faktor am Ende der Laufbahn, gemessen am Gipfel (1,0): Wer sein
-# Ruecktrittsalter erreicht, steht bei 85 % dessen, was er konnte.
-faktor_bei_ruecktritt = 0.85
-
-# ---------------------------------------------------------------------------
-# Punkt 35 - Das Talent eines Fahrers
-# ---------------------------------------------------------------------------
-# Bis hierher fuhr jeder Fahrer dieselbe Alterskurve. Damit entschied
-# innerhalb einer Liga allein das Alter, wer vorne stand - die Ligen
-# wurden Altersklassen statt Leistungsklassen. Ein Talent je Fahrer loest
-# das: Jeder hat sein eigenes Potential, sein eigenes Tempo und sein
-# eigenes Gipfelalter.
-#
-# Alles aus Seed und Fahrernummer abgeleitet, nichts gespeichert - damit
-# steht es von Anfang an fest und ueberlebt jeden Spielstand (GDD 15).
-[talent]
-# Entscheidung des Auftraggebers zur Ligastaerke: Seit die Entwicklung am
-# Talent haengt, wird **nicht mehr normiert**. Die Kontrolltabelle in
-# [ligen] beschreibt damit nur noch den Weltstart; danach sind die Ligen
-# das, was die Talentverteilung aus ihnen macht. Gemessen ueber dreissig
-# Saisons, Ist gegen Soll: L1 84 %, L5 59 %, L10 88 %, L15 149 %,
-# L20 5182 % - Liga 20 ist der Talentpool der Welt, kein schwaches Feld.
-# Die Kalibrierung selbst bleibt exakt: zieltempo(98000) = 180,00 km/h
-# haengt an den Konstanten, nicht an der Welt.
-#
-# Band "Extrem" (Entscheidung des Auftraggebers): grosse Unterschiede
-# zwischen den Laufbahnen, bis hin zum Fahrer, der mit 24 fertig ist, und
-# dem, der mit 36 noch aufsteigt.
-tempo_min = 0.3
-tempo_max = 2.0
-gipfel_min = 23
-gipfel_max = 33
-abbau_min = 28
-abbau_max = 38
-# Wie nah ein Fahrer seinem Potential zu seinem Gipfelalter gekommen ist.
-# Daraus wird das jaehrliche Schrittmass abgeleitet: Wer frueh seinen
-# Gipfel hat, waechst schneller. Deshalb braucht es keine eigene
-# Wachstumskonstante - Gipfelalter und Tempo sagen alles.
-reife_am_gipfel = 0.90
-# Was ein Achtzehnjaehriger schon von seinem Potential mitbringt. Ohne
-# das stuende ein Einsteiger bei null und wuerde jede Runde ueberrundet.
-anfang_anteil = 0.12
-# Punkt 95: Der Boden der Welt. Die erreichte Staerke eines Fahrers ist
-# sein Gipfel mal Reifegrad mal Zielfaktor - ein junger Fahrer mit
-# schwachem Potential landete damit bei 2.500, waehrend die unterste Liga
-# bei 17.700 beginnt. Gemessen fuhr er in Zandvoort 205 s gegen 139 s des
-# Ligabesten. Der Boden faengt genau diesen Schwanz ab: Gemessen stehen
-# 17 von 396 KI-Fahrern darauf, die Ligen 1 bis 9 bleiben unberuehrt, und
-# Liga 10 reicht von 12.000 bis 17.662 statt von 2.559 bis 17.662.
-# Er liegt unter dem Korridorboden aus [ligen] - der beschreibt die
-# **Potentiale**, dieser Wert das erreichte Koennen.
-mindeststaerke = 12_000
 
 # ---------------------------------------------------------------------------
 # Punkt 39 - Reifenmischungen
@@ -1362,21 +1026,11 @@ naesse = 0.85
 # rechnet dasselbe Geschwindigkeitsprofil wie sonst.
 [boxenstopp]
 limit_kmh = 80
-# Das Limit steht nicht ueberall gleich: Je tiefer die Liga, desto
-# strenger die Boxengasse. So hat es der Auftraggeber gesetzt. Jeder
-# Eintrag gilt **bis** zu seiner Liga einschliesslich; ohne Treffer gilt
-# ``limit_kmh``.
-# Punkt 95: Die neue Liga 10 ist etwa so stark wie die alte Liga 10, die
-# beiden untersten Stufen von 65 und 60 km/h haben damit keine Liga mehr.
-limit_je_liga = [
-    { bis_liga = 5, kmh = 80 },
-    { bis_liga = 10, kmh = 70 },
-]
-# Wo die Strecke ohnehin langsamer als das Limit ist - in den unteren
-# Ligen kommt das oft vor -, gilt nicht das Limit, sondern das
-# Streckentempo **minus diesem Anteil**. Ohne den Abzug kostete die
-# Boxengasse dort gar nichts, und ein Stopp waere in Liga 20 fast
-# umsonst.
+# Punkt 101: Eine Liga, ein Limit. Die Staffelung nach Ligen ist mit den
+# Ligen weggefallen; geblieben ist der Wert, der fuer das Feld galt.
+# Wo die Strecke ohnehin langsamer als das Limit ist, gilt nicht das
+# Limit, sondern das Streckentempo **minus diesem Anteil**. Ohne den
+# Abzug kostete die Boxengasse dort gar nichts.
 abzug_unter_limit = 0.05
 # Spanne der Boxengassenlaenge. Ohne sie kam Monza mit der ganzen
 # Start-Ziel-Geraden auf 1350 m und 44 s Durchfahrt - mehr als eine halbe
@@ -1567,99 +1221,34 @@ eignungsgrenze = 0.30
 3 = 1.0
 
 # ---------------------------------------------------------------------------
-# Punkt 7 - Fahrer holen: Vertraege, Gehalt und Abloese
-# ---------------------------------------------------------------------------
-# Steht im GDD nirgends; alle Regeln hier kommen vom Auftraggeber:
-# Transferfenster im Winter, Gehalt plus Abloese, Potentiale voll
-# sichtbar, und ein Fahrer darf ablehnen.
-[transfer]
-# Vertragslaufzeiten. Sie haengen wie das Ruecktrittsalter an Seed und
-# Fahrernummer und muessen deshalb nicht gespeichert werden. Mit 1 bis 4
-# Saisons ist in jedem Winter rund ein Drittel des Feldes frei.
-laufzeit_min = 1
-laufzeit_max = 4
-
-# Das Gehalt eines Fahrers haengt an dem, was er **verdienen** kann: ein
-# Anteil der Siegpraemie der Liga, in die sein Koennen gehoert - und der
-# Liga, in die sein Potential ihn noch bringen kann. Ein fester
-# Grundbetrag taete es nicht, denn ein Sieg in Liga 20 bringt 4.000 EUR
-# und einer in Liga 1 das Dreihundertfache.
-#
-# Bei 0,75 kostet ein Spitzenfahrer rund ein Fuenftel dessen, was eine
-# gute Saison in seiner Liga einbringt.
-anteil_der_siegpraemie = 0.75
-gewicht_koennen = 2.0
-gewicht_potential = 1.0
-# Ein junger Fahrer verlangt weniger, auch wenn er viel kann - er hat
-# noch nichts bewiesen. Voll wirksam mit 18, weg ab 28.
-jugendrabatt = 0.45
-
-# Abloese je verbleibender Vertragssaison, als Vielfaches des
-# Jahresgehalts. Ein Fahrer mit drei Restjahren kostet damit das
-# Dreifache eines Jahresgehalts obendrauf.
-abloese_je_saison = 1.0
-
-# Wie ein Fahrer ein Angebot abwaegt. Die drei Gewichte werden auf die
-# jeweilige Spanne bezogen: Ligavorteil an der Zahl der Ligen, Autovorteil
-# an der Skala, Geldvorteil am Marktwert.
-#
-# Das Geld wiegt am schwersten, und das muss es: Ein neuer Fahrer bringt
-# ein leeres Auto mit, der Autovorteil ist beim Spieler also fast immer
-# negativ. Wer einen Star holen will, muss ihn ueberzahlen.
-gewicht_liga = 1.4
-gewicht_auto = 0.8
-gewicht_geld = 0.5
-# Ab hier sagt er ja. Bei 0 wuerde jedes Angebot reichen, das nicht
-# schlechter ist als sein Status quo.
-schwelle = 0.05
-# Je bekannter ein Fahrer, desto mehr will er (Punkt 5).
-anspruch_bekanntheit = 0.8
-
-# ---------------------------------------------------------------------------
-# GDD 13 – Wertung, Auf- und Abstieg
+# GDD 13 – Wertung
 # ---------------------------------------------------------------------------
 [wertung]
-# Punkt 95: Eine einzige Leiter ueber alle zehn Ligen statt einer Tabelle
-# je Liga. Die Meisterschaft laeuft ueber alle 400 Fahrer; wer in welcher
-# Liga faehrt, entscheidet nur, wie hoch seine Leitersprosse liegt.
+# Punkt 101: Eine Liga, eine Tabelle, eine feste Punktetabelle. Die Leiter
+# ueber zehn Ligen ist mit den Ligen weggefallen; Auf- und Abstieg gibt es
+# nicht mehr.
 #
-#     punkte(liga, platz) = sieger_liga1 - (liga - 1) * versatz - abstand(platz)
-#
-# mit  abstand(1) = 0
-#      abstand(2) = abstand_erster_zweiter
-#      abstand(p) = abstand_erster_zweiter + abstand_zweiter_dritter
-#                   + schritt * (p - 3)            fuer p >= 3
-#      versatz    = abstand(ankerplatz)
-#
-# Der Versatz ist damit keine eigene Zahl, sondern eine Folge des
-# Ankerplatzes: Der Sieger einer Liga bekommt genau so viel wie dieser
-# Platz der Liga darueber. Mit den Werten unten sind das 82 Punkte je
-# Liga, eine Liga ist 127 Punkte breit, und 12 Fahrer je Liga liegen im
-# Punktebereich der Liga darueber.
-sieger_liga1 = 1000
-abstand_erster_zweiter = 10
-abstand_zweiter_dritter = 6
-schritt = 3
-ankerplatz = 25
-# Zusatzpunkte als Anteil der Siegerpunkte **derselben** Liga, immer
-# aufgerundet und mindestens 1 Punkt. Die schnellste Rennrunde zaehlt auch
-# ohne Zielankunft (GDD 13).
+# Die Tabelle hat der Auftraggeber vorgegeben: 100, 90, 80, dann in
+# Vierersprüngen 76 und 72, ab Platz 6 in Zweierschritten bis 20 auf Platz
+# 31, danach 19 bis 1. Das sind genau 50 Werte - jeder Platz des Feldes
+# bekommt Punkte, auch die Ausgefallenen (sie stehen nach Runden und Zeit
+# hinter den Angekommenen, siehe rennen._ergebnisse).
+punkte_je_platz = [
+  100,  90,  80,  76,  72,  70,  68,  66,  64,  62,
+   60,  58,  56,  54,  52,  50,  48,  46,  44,  42,
+   40,  38,  36,  34,  32,  30,  28,  26,  24,  22,
+   20,  19,  18,  17,  16,  15,  14,  13,  12,  11,
+   10,   9,   8,   7,   6,   5,   4,   3,   2,   1,
+]
+# Zusatzpunkte als Anteil der Siegerpunkte, immer aufgerundet und
+# mindestens 1 Punkt. Die schnellste Rennrunde zaehlt auch ohne
+# Zielankunft (GDD 13). Die Anteile stehen unveraendert seit Punkt 95;
+# weil der Sieg jetzt 100 statt 1000 Punkte bringt, sind es 1 Punkt fuer
+# die schnellste Runde und 2/1/1 fuer die ersten drei im Qualifying.
 anteil_schnellste_runde = 0.01
 anteil_qualifying = [0.015, 0.005, 0.0025]
-# Gleichstand in der Weltmeisterschaft: erst die hoehere Liga, dann mehr
-# Siege, dann mehr zweite Plaetze und so weiter.
-gleichstand = "hoehere_liga_dann_platzierungen"
-
-[auf_abstieg]
-aufsteiger = 3
-absteiger = 3
-# Liga 1 ohne Aufstieg, die unterste ohne Abstieg
-gilt_fuer = "fahrer"
-# Punkt 95: Gewechselt wird nicht erst am Saisonende, sondern alle fuenf
-# Rennen - bei 20 Rennen je Saison also viermal. Entschieden wird nach der
-# Gesamttabelle seit Saisonbeginn.
-alle_rennen = 5
-grundlage = "gesamttabelle"
+# Gleichstand: mehr Siege, dann mehr zweite Plaetze und so weiter.
+gleichstand = "platzierungen"
 
 [schnellsimulation]
 # Die uebrigen 19 Ligen nach jedem Rennwochenende des Spielers
@@ -1668,237 +1257,18 @@ enthaelt = ["wetter", "fehler", "unfaelle", "defekte"]
 
 [statistik]
 inhalte = [
-  "rundenrekorde_je_strecke_und_liga",
+  "rundenrekorde_je_strecke",
   "siege",
   "podien",
   "pole_positions",
   "schnellste_runden",
-  "gesamtpunkte_je_liga_und_saison",
-  "historie_aller_saisons_und_ligen",
+  "gesamtpunkte_je_saison",
+  "historie_aller_saisons",
 ]
 
 # ---------------------------------------------------------------------------
 # GDD 14 – Einzelereignisse
 # ---------------------------------------------------------------------------
-[ereignisse]
-je_zyklus_min = 0
-je_zyklus_max = 2
-# Ausgeloest nur in den ersten 4 Tagen eines Zyklus, beim Tageswechsel
-ausloesefenster_tage = 4
-gilt_fuer = ["spieler", "ki"]
-
-[[ereignisse.liste]]
-schluessel = "E1"
-name = "Erkaeltung"
-wirkung = [{ ziel = "D2", faktor = -0.15 }, { ziel = "D1", faktor = -0.10 }]
-dauer = { art = "rennwochenenden", anzahl = 1 }
-
-[[ereignisse.liste]]
-schluessel = "E2"
-name = "Trainingsverletzung"
-wirkung = [{ ziel = "D3", faktor = -0.20 }, { ziel = "fahrertraining", sperre = true }]
-dauer = { art = "rennwochenenden", anzahl = 2 }
-
-[[ereignisse.liste]]
-schluessel = "E3"
-name = "Motivationsschub"
-wirkung = [{ ziel = "tagesform_mittelwert", faktor = 0.03 }]
-dauer = { art = "rennwochenenden", anzahl = 1 }
-
-[[ereignisse.liste]]
-schluessel = "E4"
-name = "Medienrummel"
-wirkung = [{ ziel = "D1", faktor = -0.08 }, { ziel = "geld", einmalig = true }]
-dauer = { art = "rennwochenenden", anzahl = 1 }
-
-[[ereignisse.liste]]
-schluessel = "E5"
-name = "Genialer Mechaniker"
-wirkung = [{ ziel = "F14", faktor = 0.10 }]
-dauer = { art = "rennwochenenden", anzahl = 3 }
-
-[[ereignisse.liste]]
-schluessel = "E6"
-name = "Teilelieferung verzoegert"
-wirkung = [{ ziel = "F5", sperre = true }, { ziel = "F6", sperre = true }]
-dauer = { art = "zyklen", anzahl = 1 }
-
-[[ereignisse.liste]]
-schluessel = "E7"
-name = "Sponsorbonus"
-wirkung = [{ ziel = "geld", einmalig = true }]
-dauer = { art = "sofort" }
-
-[[ereignisse.liste]]
-schluessel = "E8"
-name = "Motorschaden im Test"
-wirkung = [{ ziel = "F1", faktor = -0.05 }]
-dauer = { art = "bis_reparatur" }
-
-[[ereignisse.liste]]
-schluessel = "E9"
-name = "Mentor-Tipp"
-wirkung = [{ ziel = "erfahrung", einmalig = true }]
-dauer = { art = "sofort" }
-
-[[ereignisse.liste]]
-schluessel = "E10"
-name = "Testfahrt geglueckt"
-wirkung = [{ ziel = "streckenkenntnis_naechste", faktor = 0.20 }]
-dauer = { art = "rennwochenenden", anzahl = 1 }
-
-[[ereignisse.liste]]
-schluessel = "E11"
-name = "Fahrsicherheitstraining"
-wirkung = [{ ziel = "D8", faktor = 0.01 }]
-dauer = { art = "dauerhaft" }
-
-[[ereignisse.liste]]
-schluessel = "E12"
-name = "Schlecht geschlafen"
-wirkung = [{ ziel = "D1", faktor = -0.05 }]
-dauer = { art = "nur_qualifying" }
-
-[[ereignisse.liste]]
-schluessel = "E13"
-name = "Neues Ernaehrungskonzept"
-wirkung = [{ ziel = "D2", faktor = 0.01 }]
-dauer = { art = "dauerhaft" }
-
-[[ereignisse.liste]]
-schluessel = "E14"
-name = "Sponsorenabend"
-wirkung = [{ ziel = "geld", einmalig = true }, { ziel = "D2", faktor = -0.05 }]
-dauer = { art = "rennwochenenden", anzahl = 1 }
-
-[[ereignisse.liste]]
-schluessel = "E15"
-name = "Streit im Team"
-wirkung = [{ ziel = "D16", faktor = -0.10 }]
-dauer = { art = "rennwochenenden", anzahl = 2 }
-
-[[ereignisse.liste]]
-schluessel = "E16"
-name = "Simulatortag beim Hersteller"
-wirkung = [{ ziel = "erfahrung", einmalig = true }]
-dauer = { art = "sofort" }
-
-[[ereignisse.liste]]
-schluessel = "E17"
-name = "Neue Bremsbelaege vom Zulieferer"
-wirkung = [{ ziel = "F8", faktor = 0.02 }]
-dauer = { art = "rennwochenenden", anzahl = 3 }
-
-[[ereignisse.liste]]
-schluessel = "E18"
-name = "Fehlerhafte Reifencharge"
-wirkung = [{ ziel = "F9", faktor = -0.05 }]
-dauer = { art = "rennwochenenden", anzahl = 1 }
-
-[[ereignisse.liste]]
-schluessel = "E19"
-name = "Windkanalzeit gewonnen"
-wirkung = [{ ziel = "F5", faktor = 0.01 }]
-dauer = { art = "dauerhaft" }
-
-[[ereignisse.liste]]
-schluessel = "E20"
-name = "Lebensmittelvergiftung"
-wirkung = [{ ziel = "D2", faktor = -0.20 }, { ziel = "D1", faktor = -0.10 }]
-dauer = { art = "rennwochenenden", anzahl = 1 }
-
-[[ereignisse.liste]]
-schluessel = "E21"
-name = "Fanpost-Welle"
-wirkung = [{ ziel = "D16", faktor = 0.05 }]
-dauer = { art = "rennwochenenden", anzahl = 2 }
-
-[[ereignisse.liste]]
-schluessel = "E22"
-name = "Regentraining"
-wirkung = [{ ziel = "regenfahren", faktor = 0.02 }]
-dauer = { art = "dauerhaft" }
-
-[[ereignisse.liste]]
-schluessel = "E23"
-name = "Hitzetraining"
-wirkung = [
-  { ziel = "hitzeresistenz", faktor = 0.01, dauerhaft = true },
-  { ziel = "D2", faktor = -0.05 },
-]
-dauer = { art = "rennwochenenden", anzahl = 1 }
-
-[[ereignisse.liste]]
-schluessel = "E24"
-name = "Motor-Update vom Hersteller"
-wirkung = [{ ziel = "F1", faktor = 0.03 }]
-dauer = { art = "rennwochenenden", anzahl = 2 }
-
-[[ereignisse.liste]]
-schluessel = "E25"
-name = "Getriebeproblem im Test"
-wirkung = [{ ziel = "F3", faktor = -0.05 }]
-dauer = { art = "bis_reparatur" }
-
-[[ereignisse.liste]]
-schluessel = "E26"
-name = "Gewichtsersparnis entdeckt"
-wirkung = [{ ziel = "F11", faktor = 0.01 }]
-dauer = { art = "dauerhaft" }
-
-[[ereignisse.liste]]
-schluessel = "E27"
-name = "Pressekritik"
-wirkung = [{ ziel = "D15", faktor = -0.08 }]
-dauer = { art = "rennwochenenden", anzahl = 1 }
-
-[[ereignisse.liste]]
-schluessel = "E28"
-name = "Mentaltrainer-Workshop"
-wirkung = [{ ziel = "D16", faktor = 0.01 }]
-dauer = { art = "dauerhaft" }
-
-[[ereignisse.liste]]
-schluessel = "E29"
-name = "Reisechaos"
-wirkung = [{ ziel = "kalendertage", absolut = -2 }]
-dauer = { art = "zyklen", anzahl = 1 }
-
-[[ereignisse.liste]]
-schluessel = "E30"
-name = "Besuch einer Rennlegende"
-wirkung = [{ ziel = "D13", faktor = 0.03 }]
-dauer = { art = "rennwochenenden", anzahl = 1 }
-
-[[ereignisse.liste]]
-schluessel = "E31"
-name = "Verschleppte Nackenzerrung"
-wirkung = [{ ziel = "D3", faktor = -0.01 }]
-dauer = { art = "dauerhaft" }
-
-[[ereignisse.liste]]
-schluessel = "E32"
-name = "Materialermuedung am Motorblock"
-wirkung = [{ ziel = "F1", faktor = -0.005 }]
-dauer = { art = "dauerhaft" }
-
-[[ereignisse.liste]]
-schluessel = "E33"
-name = "Falsche Gewohnheit im Simulator"
-wirkung = [{ ziel = "D8", faktor = -0.01 }]
-dauer = { art = "dauerhaft" }
-
-[[ereignisse.liste]]
-schluessel = "E34"
-name = "Chassis beim Transport verzogen"
-wirkung = [{ ziel = "F7", faktor = -0.01 }]
-dauer = { art = "dauerhaft" }
-
-[[ereignisse.liste]]
-schluessel = "E35"
-name = "Vertrauensverlust nach Dreher"
-wirkung = [{ ziel = "D15", faktor = -0.01 }]
-dauer = { art = "dauerhaft" }
 
 # ---------------------------------------------------------------------------
 # GDD 14 – 20 Defekte
@@ -1906,131 +1276,109 @@ dauer = { art = "dauerhaft" }
 [defekte]
 # Alle aktiven Defekte zusammen senken den Fahrzeugzustand um hoechstens 50 %
 max_gesamtmalus = 0.50
-# Reparatur kostet nur Geld (Stufe x Liga-Faktor) und wirkt sofort
-reparatur_waehrung = "G"
-reparatur_sofort = true
-# Ohne Reparatur bleibt der Malus ueber die Rennen bestehen
-malus_bleibt = true
+# Punkt 101: Ohne Geld gibt es keine Reparatur - ein Defekt gilt fuer das
+# Rennen, in dem er auftritt, und ist danach vorbei.
+malus_bleibt = false
 
 [[defekte.liste]]
 schluessel = "X1"
 name = "Zuendaussetzer"
 wirkung = [{ ziel = "F1", faktor = -0.025 }]
-kostenstufe = 1
 
 [[defekte.liste]]
 schluessel = "X2"
 name = "Leistungsverlust Ansaugtrakt"
 wirkung = [{ ziel = "F1", faktor = -0.04 }]
-kostenstufe = 2
 
 [[defekte.liste]]
 schluessel = "X3"
 name = "Kupplung schleift"
 wirkung = [{ ziel = "F3", faktor = -0.03 }]
-kostenstufe = 1
 
 [[defekte.liste]]
 schluessel = "X4"
 name = "Schaltprobleme"
 wirkung = [{ ziel = "F3", faktor = -0.05 }]
-kostenstufe = 2
 
 [[defekte.liste]]
 schluessel = "X5"
 name = "Antriebswelle"
 wirkung = [{ ziel = "F2", faktor = -0.03 }]
-kostenstufe = 2
 
 [[defekte.liste]]
 schluessel = "X6"
 name = "Differenzial"
 wirkung = [{ ziel = "F12", faktor = -0.04 }]
-kostenstufe = 2
 
 [[defekte.liste]]
 schluessel = "X7"
 name = "Bremsscheibe verzogen"
 wirkung = [{ ziel = "F8", faktor = -0.03 }]
-kostenstufe = 1
 
 [[defekte.liste]]
 schluessel = "X8"
 name = "Bremskuehlung verstopft"
 wirkung = [{ ziel = "F8", faktor = -0.02 }]
-kostenstufe = 1
 
 [[defekte.liste]]
 schluessel = "X9"
 name = "Frontfluegel beschaedigt"
 wirkung = [{ ziel = "F5", faktor = -0.04 }]
-kostenstufe = 2
 
 [[defekte.liste]]
 schluessel = "X10"
 name = "Unterboden beschaedigt"
 wirkung = [{ ziel = "F5", faktor = -0.025 }, { ziel = "F6", faktor = -0.015 }]
-kostenstufe = 3
 
 [[defekte.liste]]
 schluessel = "X11"
 name = "Heckfluegel lose"
 wirkung = [{ ziel = "F6", faktor = -0.025 }]
-kostenstufe = 1
 
 [[defekte.liste]]
 schluessel = "X12"
 name = "Stossdaempfer"
 wirkung = [{ ziel = "F7", faktor = -0.035 }]
-kostenstufe = 2
 
 [[defekte.liste]]
 schluessel = "X13"
 name = "Aufhaengung verbogen"
 wirkung = [{ ziel = "F7", faktor = -0.05 }]
-kostenstufe = 3
 
 [[defekte.liste]]
 schluessel = "X14"
 name = "Lenkungsspiel"
 wirkung = [{ ziel = "F13", faktor = -0.04 }]
-kostenstufe = 2
 
 [[defekte.liste]]
 schluessel = "X15"
 name = "Kuehlerleck"
 wirkung = [{ ziel = "F16", faktor = -0.05 }]
-kostenstufe = 2
 
 [[defekte.liste]]
 schluessel = "X16"
 name = "Elektronikfehler"
 wirkung = [{ ziel = "F15", faktor = -0.04 }]
-kostenstufe = 2
 
 [[defekte.liste]]
 schluessel = "X17"
 name = "Radlager"
 wirkung = [{ ziel = "F9", faktor = -0.025 }]
-kostenstufe = 1
 
 [[defekte.liste]]
 schluessel = "X18"
 name = "Motor ueberhitzt"
 wirkung = [{ ziel = "F1", faktor = -0.02 }, { ziel = "F16", faktor = -0.025 }]
-kostenstufe = 3
 
 [[defekte.liste]]
 schluessel = "X19"
 name = "Getriebeoelverlust"
 wirkung = [{ ziel = "F3", faktor = -0.02 }, { ziel = "F14", faktor = -0.025 }]
-kostenstufe = 2
 
 [[defekte.liste]]
 schluessel = "X20"
 name = "Karosserieschaden"
 wirkung = [{ ziel = "F6", faktor = -0.02 }, { ziel = "F11", faktor = -0.01 }]
-kostenstufe = 1
 
 # ---------------------------------------------------------------------------
 # GDD 4 – Reifen (nur Verschleiss, Boxenstopps spaeter)
@@ -2510,101 +1858,6 @@ verlust_am_ende_bei_null = 0.040
 verlust_am_ende_bei_maximum = 0.005
 
 # --- Punkte 12 bis 19: Geld (GDD 9, 10, 14) -------------------------------
-[preisgeld.interpolation]
-# Entscheidung A: logarithmisch. Das GDD begruendet die Preisgelder relativ
-# ("Aufstieg in etwa 1,5 Saisons"), also muss auch die Interpolation ueber
-# das Verhaeltnis laufen. Seit Punkt 95 steht jede der zehn Ligen
-# ausdruecklich in der Tabelle; die Interpolation greift nur noch, wenn
-# jemand eine Liga ergaenzt, ohne ihre Praemie zu nennen.
-verfahren = "logarithmisch"
 
-[preisgeld.anteil_kurve]
-# Entscheidung A: geometrisch von Platz 3 (65 %) auf den letzten Platz
-# (5 %). Punkt 95: Der letzte ist jetzt der vierzigste.
-verfahren = "geometrisch"
-von_platz = 3
-bis_platz = 40
-
-[preisgeld.startgeld]
-# Entscheidung A: Sockel unterhalb des Anteils fuer Platz 30.
-anteil_siegpraemie = 0.05
-
-[erfahrung.betraege]
-# Entscheidung B: ausgewogen. Der Spieler startet laut GDD 1 bei 0 und wird
-# anfangs Letzter; ohne Sockel kaeme er nicht in Gang.
-grundbetrag_je_session = 0.15
-platzierung_nach_tabelle = 1.0
-je_ueberholmanoever = 0.01
-
-[erfahrung.wetter.betrag]
-# Entscheidung B: ein voller Renntag im Regen zahlt spuerbar ein, reicht
-# aber bei weitem nicht fuer die Faehigkeit.
-je_km_anteil_sieg_ep = 0.001
-
-[kosten.k0_faktor]
-# Entscheidung B: nach Wirkungsbreite. Der Faktor ist die Summe der
-# Gewichte einer Faehigkeit aus der Wirkungsmatrix, geteilt durch den
-# Mittelwert ueber alle Faehigkeiten. Breit wirkende Faehigkeiten kosten
-# mehr, damit Schwerpunkte noetig werden (GDD 9).
-verfahren = "wirkungsbreite"
-
-[defekte.reparatur]
-# Entscheidung A: Kostenstufe mal Anteil der Siegpraemie. Die Kopplung an
-# die Siegpraemie haelt die Kosten ueber alle 20 Ligen im Verhaeltnis.
-anteil_siegpraemie_je_stufe = 0.01
-
-[sponsoren.betraege]
-# Entscheidung B: zweite Saeule neben dem Preisgeld.
-grundbetrag_alle_plaetze = 0.60
-praemie_sieg = 1.00
-praemie_top3 = 0.50
-praemie_top10 = 0.20
-
-# Streuung der Angebote gegeneinander, damit die Auswahl etwas bringt.
-streuung = 0.30
-
-[sponsoren.aufteilung]
-auto_haupt = 0.40
-auto_neben_1 = 0.15
-auto_neben_2 = 0.15
-anzug = 0.10
-helm = 0.10
-muetze = 0.10
 
 # --- Punkt 34: Dauerhafte Prozentwirkungen der Ereignisse (GDD 14) --------
-[ereignisse.dauerhaft]
-# Elf Ereignisse wirken "dauerhaft", meist mit +/-1 %. Bei niedrigen Werten
-# waere ein Prozentsatz davon fast nichts - gerechnet wird deshalb wie im
-# Zeitmodell aus GDD 2: max(+10, +1 %). Seit dem Startwert 2.500 aus
-# Punkt 95 ist beim Spieler von Anfang an das Prozent die groessere Zahl;
-# der Mindestschritt traegt jetzt die Werte, die ein Ereignis nach unten
-# gedrueckt hat.
-# Bei abweichenden Prozentsaetzen skaliert der Mindestschritt mit, damit
-# die Ereignisse untereinander im Verhaeltnis bleiben: +2 % ergibt
-# mindestens +20, -0,5 % hoechstens -5.
-mindestschritt = 10
-bezugsanteil = 0.01
-
-# --- Punkt 35: Auswahl des Ereignisses (GDD 14) ---------------------------
-[ereignisse.auswahl]
-# GDD 14 nennt keine Gewichte; alle 35 sind gleich wahrscheinlich. Innerhalb
-# eines Zyklus wird ohne Zuruecklegen gezogen, sonst traefe dieselbe
-# Erkaeltung zweimal in vier Tagen.
-verfahren = "gleichverteilt"
-ohne_zuruecklegen_je_zyklus = true
-
-# --- Punkt 36: Ereignisse nur fuer den Spieler (GDD 14) -------------------
-[ereignisse.umfang]
-# GDD 14 schreibt "betreffen Spieler und KI gleichermassen". Entschieden am
-# 2026-09-17: vorerst nur der Spieler. Begruendung in OFFENE_PUNKTE.md.
-gilt_fuer_ki = false
-
-# --- Punkt 20: Ereignisbetraege (GDD 14) ----------------------------------
-[ereignisse.betraege]
-# Entscheidung B: spuerbar. Ereignisse treten nur 0 bis 2 je Zyklus auf,
-# ein einzelnes darf also auffallen. Anteile an Siegpraemie bzw. Sieg-EP.
-E4 = 0.10
-E7 = 0.25
-E14 = 0.15
-E9 = 0.15
-E16 = 0.15

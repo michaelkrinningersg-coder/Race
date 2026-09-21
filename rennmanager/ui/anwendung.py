@@ -6,8 +6,6 @@ import sys
 
 from rennmanager import __version__
 from rennmanager.kern import auto as kern_auto
-from rennmanager.kern import einnahmen as kern_einnahmen
-from rennmanager.kern import ereignis as kern_ereignis
 from rennmanager.kern import kalender as kern_kalender
 from rennmanager.kern import karriere as kern_karriere
 from rennmanager.kern import rennen as kern_rennen
@@ -16,6 +14,7 @@ from rennmanager.kern import spielstand as kern_spielstand
 from rennmanager.kern import strecke as kern_strecke
 from rennmanager.kern import streckenkenntnis as kern_kenntnis
 from rennmanager.kern import tempo as kern_tempo
+from rennmanager.kern import welt as kern_welt
 from rennmanager.kern import wertung as kern_wertung
 from rennmanager.kern import zwischenfall as kern_zwischenfall
 from rennmanager.kern.zeit import formatiere_dauer
@@ -26,11 +25,6 @@ from rennmanager.konfiguration import KonfigurationsFehler, lade
 # beendet sich dann. Der Build nutzt das, um die fertige .exe zu testen,
 # ohne dass ein Fenster geoeffnet werden muss.
 PRUEFMODUS = "--pruefe"
-
-
-def euro(betrag: int) -> str:
-    """Betrag mit Punkt als Tausendertrennzeichen."""
-    return f"{betrag:,} EUR".replace(",", ".")
 
 
 def pruefe() -> int:
@@ -45,7 +39,7 @@ def pruefe() -> int:
     print(f"Konfiguration: {konfiguration.quelle}")
     print(f"GDD-Version:   {konfiguration.wert('gdd_version')}")
     print(
-        f"Geladen:       {konfiguration.wert('ligen', 'anzahl')} Ligen, "
+        f"Geladen:       {konfiguration.wert('rennen', 'autos')} Autos, "
         f"{len(konfiguration.strecken)} Strecken, "
         f"{len(konfiguration.faehigkeiten)} Faehigkeiten, "
         f"{len(konfiguration.hersteller)} Hersteller"
@@ -77,12 +71,10 @@ def pruefe() -> int:
         f"(Soll {soll:.2f}, Abweichung {runde.schnitt_kmh - soll:+.2f})"
     )
     # Ein Kurzrennen ueber zwei Runden: prueft die Rennschleife im Bundle.
-    # Gemessen wird in der untersten Liga - dort startet der Spieler.
-    unterste = konfiguration.wert("ligen", "anzahl")
     verlauf = kern_rennen.simuliere(
         konfiguration,
         referenz,
-        kern_rennen.starterfeld(konfiguration, unterste, umgedreht=True),
+        kern_rennen.starterfeld(konfiguration, umgedreht=True),
         2,
         Seedquelle(1),
         kern_rennen.mittlerer_ueberholzonenanteil(konfiguration, strecken),
@@ -96,17 +88,16 @@ def pruefe() -> int:
     )
     # Ein Rennwochenende im Schnellmodus und seine Wertung: prueft die
     # Bausteine der Saison (GDD 13) im fertigen Bundle.
-    feld = kern_rennen.starterfeld(konfiguration, unterste, seedquelle=Seedquelle(2))
+    feld = kern_rennen.starterfeld(konfiguration, seedquelle=Seedquelle(2))
     schnell = kern_schnell.fahre_wochenende(
         konfiguration,
-        unterste,
         referenz,
         feld,
         2,
         Seedquelle(2),
         kern_rennen.mittlerer_ueberholzonenanteil(konfiguration, strecken),
     )
-    tabelle = kern_wertung.Tabelle(unterste)
+    tabelle = kern_wertung.Tabelle()
     tabelle.verbuche(konfiguration, schnell.ergebnisse)
     bester = tabelle.stand()[0]
     print(
@@ -122,20 +113,15 @@ def pruefe() -> int:
         f"{len(saison.vorsaison)} Tage Vorsaison, "
         f"{len(saison.nachsaison)} Tage Nachsaison"
     )
-    print(
-        f"Wirtschaft:    Siegpraemie Liga {unterste} "
-        f"{euro(kern_einnahmen.siegpraemie(konfiguration, unterste))}"
-        f", Liga 1 {euro(kern_einnahmen.siegpraemie(konfiguration, 1))}"
-        f", Startkapital {euro(kern_einnahmen.startkapital(konfiguration))}"
-        f" und {kern_einnahmen.starterfahrung(konfiguration)} EP"
+    # Punkt 101: Die Spanne des Feldes, gegen die Kalibrierung gerechnet.
+    bester, letzter = kern_welt.feldgrenzen(konfiguration)
+    langsam = kern_tempo.fahre_runde(
+        konfiguration, referenz, kern_auto.gleichverteilt(konfiguration, letzter)
     )
-    # Ereignisse einer Saison: prueft GDD 14 im Bundle.
-    plan = kern_ereignis.plane_saison(konfiguration, saison, Seedquelle(3))
-    gezogen = sum(len(liste) for liste in plan.values())
     print(
-        f"Ereignisse:    {len(kern_ereignis.liste(konfiguration))} moeglich, "
-        f"{gezogen} in der Saison {jahr} mit Seed 3, "
-        f"{len(kern_ereignis.zyklen(konfiguration, saison))} Zyklen"
+        f"Feld:          S von {letzter:,} bis {bester:,}".replace(",", ".")
+        + f", {langsam.schnitt_kmh:.2f} bis {runde.schnitt_kmh:.2f} km/h, "
+        f"Rundenzeitspanne {langsam.zeit_ms / runde.zeit_ms - 1:+.2%}"
     )
     # Streckenkenntnis (GDD 6) und Spielstand (GDD 15).
     voll = konfiguration.wert("streckenkenntnis", "volle_kenntnis_runden")

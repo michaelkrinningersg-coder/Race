@@ -605,14 +605,8 @@ def startdistanz_m(konfiguration: Konfiguration, startplatz: int) -> float:
     return -konfiguration.wert("start", "abstand_m") * (startplatz - 1)
 
 
-def rundenzahl(konfiguration: Konfiguration, strecke: Strecke, liga: int) -> int:
-    """Rundenzahl = Distanz durch Streckenlaenge, aufgerundet (GDD 4).
-
-    Punkt 95: Die Distanz haengt nicht mehr an der Liga - jede faehrt die
-    volle. ``liga`` bleibt im Aufruf stehen, damit die Rundenzahl eine
-    Frage des Rennens bleibt und nicht der Strecke allein.
-    """
-    del liga
+def rundenzahl(konfiguration: Konfiguration, strecke: Strecke) -> int:
+    """Rundenzahl = Distanz durch Streckenlaenge, aufgerundet (GDD 4)."""
     distanz_km = konfiguration.wert("rennen", "distanz_km")
     return max(1, math.ceil(distanz_km * 1000.0 / strecke.laenge_m))
 
@@ -748,10 +742,8 @@ class _Lauf:
         mischungen: tuple[kern_reifen.Mischung, ...] | None = None,
         strategien: tuple[kern_strategie.Strategie, ...] | None = None,
         mischungspflicht: bool = False,
-        liga: int | None = None,
     ) -> None:
         self.mischungspflicht = mischungspflicht
-        self.liga = liga
         self.k = konfiguration
         self.strecke = strecke
         self.teilnehmer = teilnehmer
@@ -1136,7 +1128,7 @@ class _Lauf:
         self.faehrt_stopps = self.strategien is not None and not self.ohne_zufall
         self.boxenstopps: list[Boxenstopp] = []
         self.bremsverlust = np.array(
-            [kern_boxenstopp.bremsverlust_ms(self.k, g, self.liga) for g in grenzen],
+            [kern_boxenstopp.bremsverlust_ms(self.k, g) for g in grenzen],
             dtype=float,
         )
         # Das Fenster des naechsten Stopps, in gefahrenen Metern. Es
@@ -1194,7 +1186,7 @@ class _Lauf:
                     self.strecke,
                     g,
                     limit=kern_boxenstopp.gedeckeltes_limit(
-                        self.k, self.strecke, g, liga=self.liga
+                        self.k, self.strecke, g
                     ),
                 )
                 for g in grenzen
@@ -2270,7 +2262,6 @@ def simuliere(
     strategien: tuple[kern_strategie.Strategie, ...] | None = None,
     strategieblaetter: tuple[Strategieblatt, ...] = (),
     mischungspflicht: bool = False,
-    liga: int | None = None,
     fortschritt: Callable[[int, int], None] | None = None,
 ) -> Rennverlauf:
     """Faehrt ein ganzes Rennen und liefert den fertigen Verlauf.
@@ -2307,9 +2298,6 @@ def simuliere(
     :param mischungspflicht: ob in diesem Rennen zwei Mischungen Pflicht
         sind. Nur fuer die Anzeige; gefahren wird, was in ``strategien``
         steht.
-    :param liga: bestimmt das Boxenlimit (Punkt 39). Liga 1 bis 5 faehrt
-        80 km/h, die unteren Ligen weniger. Ohne Angabe gilt der
-        Grundwert.
     :param fortschritt: wird bei jeder vollen Runde des Fuehrenden mit
         ``(Runde, Runden)`` gerufen (E10). Damit kann die Oberflaeche
         anzeigen, wie weit die Rechnung ist, statt vierzehn Sekunden zu
@@ -2325,7 +2313,6 @@ def simuliere(
         konfiguration, strecke, teilnehmer, runden, seedquelle, streckenmittel,
         wetter, ohne_zufall, streckenverschleiss, kenntnisfaktor, tagesformbonus,
         rhythmusfaktor, strategien=strategien, mischungspflicht=mischungspflicht,
-        liga=liga,
     )
     # Punkt 39: Die Mischung wird als Index gefuehrt, nicht als Kuerzel -
     # ein Bild je 200 Millisekunden mal 40 Autos waere sonst eine
@@ -2423,23 +2410,23 @@ def simuliere(
 # ---------------------------------------------------------------------------
 def starterfeld(
     konfiguration: Konfiguration,
-    liga: int,
     spielerplatz: int | None = None,
     umgedreht: bool = False,
     seedquelle: Seedquelle | None = None,
 ) -> tuple[Teilnehmer, ...]:
-    """Baut ein Feld fuer eine Liga, so gross wie [rennen] autos sagt.
+    """Baut ein Feld, so gross wie [rennen] autos sagt.
 
-    Die Staerken sind gleichmaessig zwischen dem Letzten und dem Besten der
-    Liga verteilt, wie es die Kalibriertabelle in GDD 9 vorgibt. Mit einer
+    Die Staerken sind gleichmaessig zwischen dem Letzten und dem Besten
+    des Feldes verteilt, wie es [feld] vorgibt. Mit einer
     Seedquelle streuen die Einzelwerte zusaetzlich um ihren Mittelwert
     (GDD 12: "Einzelwerte streuen +/- 25 % um den Mittelwert, z. B.
     Regenspezialist, Qualifying-Experte, Reifenschoner"). Erst dadurch
     unterscheiden sich die Autos im Profil und nicht nur in der Staerke -
     ohne das faehrt jedes seine Reifen gleich schnell ab.
 
-    Fahrer, Teams und die vollstaendige KI-Erzeugung kommen in Schritt 7;
-    bis dahin dienen die Herstellerfarben als Platzhalter.
+    Fahrer und Teams stehen in ``rennmanager.kern.welt``; hier dienen die
+    Herstellerfarben als Platzhalter. Genutzt von Tests und Werkzeugen,
+    die ein Feld ohne Welt brauchen.
 
     :param spielerplatz: Startplatz des Spielers, ``None`` fuer ein reines
         KI-Feld
@@ -2447,15 +2434,11 @@ def starterfeld(
         Ueberholen zu pruefen
     :param seedquelle: ohne Angabe hat jedes Auto ueberall denselben Wert
     """
-    # Punkt 95: Der Korridor kommt aus der Formel und gilt fuer jede Liga;
-    # die Kontrollwerte sind nur noch Pruefwerte. Der Import steht hier,
-    # weil welt seinerseits Teilnehmer aus diesem Modul holt.
-    from rennmanager.kern.welt import ligagrenzen
+    # Der Import steht hier, weil welt seinerseits Teilnehmer aus diesem
+    # Modul holt.
+    from rennmanager.kern.welt import feldgrenzen
 
-    anzahl_ligen = konfiguration.wert("ligen", "anzahl")
-    if not 1 <= liga <= anzahl_ligen:
-        raise ValueError(f"Liga {liga} liegt ausserhalb von 1 bis {anzahl_ligen}")
-    staerkster, schwaechster = ligagrenzen(konfiguration, liga)
+    staerkster, schwaechster = feldgrenzen(konfiguration)
     anzahl = konfiguration.wert("rennen", "autos")
     hersteller = konfiguration.hersteller
     streuung = konfiguration.wert("ki", "profil_streuung")

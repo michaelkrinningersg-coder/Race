@@ -1,15 +1,16 @@
 """Seite fuer die Statistiken (GDD 13).
 
-"Rundenrekorde je Strecke und Liga in Tausendsteln. Karriere: Siege,
-Podien, Pole-Positions, schnellste Runden, Gesamtpunkte je Liga und
-Saison. Historie aller Saisons und Ligen."
+"Rundenrekorde je Strecke in Tausendsteln. Karriere: Siege, Podien,
+Pole-Positions, schnellste Runden, Gesamtpunkte je Saison. Historie aller
+Saisons."
 
-Drei Ansichten in einer Seite, umschaltbar:
+Sechs Ansichten in einer Seite, umschaltbar:
 
-* **Rundenrekorde** - je Strecke die schnellste Runde jeder Liga
+* **Rundenrekorde** - je Strecke die schnellste Runde, Renn- und Qualirunde
 * **Bestenliste** - die Karrierezahlen aller Fahrer, nach einem Merkmal
   geordnet
-* **Historie** - der Endstand einer Saison in einer Liga
+* **Historie** - der Endstand einer Saison
+* **Strecken- und Wetterbilanz** sowie **Bestmarken**
 """
 
 from __future__ import annotations
@@ -20,7 +21,6 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
-    QPushButton,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -32,9 +32,6 @@ from rennmanager.kern.welt import Welt
 from rennmanager.kern.zeit import formatiere_dauer, formatiere_rueckstand
 from rennmanager.konfiguration import Konfiguration
 from rennmanager.ui.tabellen import schriftfarbe, verbinde_fahrerkarte
-
-# Die Bestmarken ueber alle Ligen hinweg.
-ALLE_LIGEN = 0
 
 REKORDE = "rekorde"
 BESTENLISTE = "bestenliste"
@@ -54,7 +51,6 @@ BILANZSPALTEN = (
     "DNF",
     "Punkte",
     "Bester",
-    "Beste Liga",
 )
 
 # Merkmale der Bestenliste - Schluessel in Karrierezahlen, Anzeigename.
@@ -108,7 +104,7 @@ class Statistikseite(QWidget):
         zeile = QHBoxLayout()
 
         self._ansicht = QComboBox()
-        self._ansicht.addItem("Rundenrekorde je Strecke und Liga", REKORDE)
+        self._ansicht.addItem("Rundenrekorde je Strecke", REKORDE)
         self._ansicht.addItem("Bestenliste der Karriere", BESTENLISTE)
         self._ansicht.addItem("Historie aller Saisons", HISTORIE)
         self._ansicht.addItem("Streckenbilanz aller Fahrer", STRECKENBILANZ)
@@ -135,26 +131,6 @@ class Statistikseite(QWidget):
             self._lage.addItem(lage, lage)
         self._lage.currentIndexChanged.connect(self.aktualisiere)
 
-        # Bestmarken: erst insgesamt, dann Liga fuer Liga. Mit Pfeilen zum
-        # Durchschalten - 10 Ligen einzeln aus einer Liste zu klicken ist
-        # umstaendlich, wenn man sie vergleichen will.
-        self._bestliga = QComboBox()
-        self._bestliga.addItem("Insgesamt", ALLE_LIGEN)
-        for nummer in range(1, self._konfiguration.wert("ligen", "anzahl") + 1):
-            self._bestliga.addItem(
-                f"Liga {nummer} - {self._konfiguration.ligenname(nummer)}", nummer
-            )
-        self._bestliga.currentIndexChanged.connect(self.aktualisiere)
-
-        self._zurueck = QPushButton("\u2190")
-        self._zurueck.setFixedWidth(28)
-        self._zurueck.setToolTip("Eine Liga zurueck")
-        self._zurueck.clicked.connect(lambda: self._blaettere(-1))
-        self._vor = QPushButton("\u2192")
-        self._vor.setFixedWidth(28)
-        self._vor.setToolTip("Eine Liga weiter")
-        self._vor.clicked.connect(lambda: self._blaettere(1))
-
         self._hinweis = QLabel()
 
         zeile.addWidget(QLabel("Ansicht:"))
@@ -163,9 +139,6 @@ class Statistikseite(QWidget):
         zeile.addWidget(self._merkmal)
         zeile.addWidget(self._saison)
         zeile.addWidget(self._lage)
-        zeile.addWidget(self._zurueck)
-        zeile.addWidget(self._bestliga)
-        zeile.addWidget(self._vor)
         zeile.addWidget(self._hinweis, stretch=1)
         return zeile
 
@@ -186,8 +159,6 @@ class Statistikseite(QWidget):
         self._merkmal.setVisible(art == BESTENLISTE)
         self._saison.setVisible(art == HISTORIE)
         self._lage.setVisible(art == WETTERBILANZ)
-        for knopf in (self._zurueck, self._bestliga, self._vor):
-            knopf.setVisible(art == BESTMARKEN)
         self.aktualisiere()
 
     def aktualisiere(self, *_) -> None:
@@ -225,26 +196,34 @@ class Statistikseite(QWidget):
         self._saison.blockSignals(False)
 
     def _zeige_rekorde(self) -> None:
+        """Renn- und Qualifyingrekord der gewaehlten Strecke (Punkt 93)."""
         strecke = self._strecke.currentData()
         self._kasten.setTitle(f"Rundenrekorde - {strecke}")
         self._tabelle.setColumnCount(6)
         self._tabelle.setHeaderLabels(
-            ["Liga", "Zeit", "Rueckstand", "Fahrer", "Saison", "Rennen"]
+            ["Session", "Zeit", "Rueckstand", "Fahrer", "Saison", "Rennen"]
         )
 
-        rekorde = self._statistik.rekorde_je_strecke(strecke)
+        rekorde = [
+            (name, rekord)
+            for name, rekord in (
+                ("Rennrunde", self._statistik.rekord(strecke)),
+                ("Qualirunde", self._statistik.qualirekord(strecke)),
+            )
+            if rekord is not None
+        ]
         if not rekorde:
             self._hinweis.setText("Noch keine Runde gefahren.")
             return
-        self._hinweis.setText(f"{len(self._statistik.rekorde)} Rekorde insgesamt")
+        self._hinweis.setText(f"{len(self._statistik.rekorde)} Streckenrekorde")
 
-        bestzeit = rekorde[0].zeit_ms
-        for rekord in rekorde:
+        bestzeit = min(rekord.zeit_ms for _, rekord in rekorde)
+        for name, rekord in rekorde:
             fahrer = self._welt.fahrer[rekord.fahrer]
             zeile = QTreeWidgetItem(
                 self._tabelle,
                 [
-                    f"{rekord.liga} - {self._konfiguration.ligenname(rekord.liga)}",
+                    name,
                     formatiere_dauer(rekord.zeit_ms),
                     "" if rekord.zeit_ms == bestzeit
                     else formatiere_rueckstand(rekord.zeit_ms - bestzeit),
@@ -259,12 +238,11 @@ class Statistikseite(QWidget):
         merkmal = self._merkmal.currentData()
         name = dict(MERKMALE)[merkmal]
         self._kasten.setTitle(f"Bestenliste nach {name}")
-        self._tabelle.setColumnCount(10)
+        self._tabelle.setColumnCount(9)
         self._tabelle.setHeaderLabels(
             [
                 "#",
                 "Fahrer",
-                "Liga",
                 "Rennen",
                 "Siege",
                 "Podien",
@@ -288,7 +266,6 @@ class Statistikseite(QWidget):
                 [
                     str(platz),
                     fahrer.name,
-                    str(fahrer.liga),
                     str(zahlen.rennen),
                     str(zahlen.siege),
                     str(zahlen.podien),
@@ -301,36 +278,39 @@ class Statistikseite(QWidget):
             self._faerbe(zeile, fahrer)
 
     def _zeige_historie(self) -> None:
+        """Die Abschlusstabelle einer beendeten Saison (GDD 13)."""
         jahr = self._saison.currentData()
-        self._tabelle.setColumnCount(4)
-        self._tabelle.setHeaderLabels(["Liga", "Meister", "Punkte", "Zweiter"])
+        self._tabelle.setColumnCount(9)
+        self._tabelle.setHeaderLabels(
+            ["#", "Fahrer", "Punkte", "Siege", "Podien", "Poles", "SR", "DNF", "Rennen"]
+        )
         if jahr is None:
             self._kasten.setTitle("Historie")
             self._hinweis.setText("Noch keine Saison abgeschlossen.")
             return
 
+        abschluss = self._statistik.abschluss(jahr)
         self._kasten.setTitle(f"Historie - Saison {jahr}")
         self._hinweis.setText(f"{len(self._statistik.saisons)} abgeschlossene Saisons")
-        for liga in range(1, self._konfiguration.wert("ligen", "anzahl") + 1):
-            abschluss = self._statistik.abschluss(jahr, liga)
-            if abschluss is None:
-                continue
-            meister = self._welt.fahrer[abschluss.meister]
-            zweiter = (
-                self._welt.fahrer[abschluss.reihenfolge[1]].name
-                if len(abschluss.reihenfolge) > 1
-                else ""
-            )
+        if abschluss is None:  # pragma: no cover - die Auswahl kennt nur Saisons
+            return
+        for zeile_der_saison in abschluss.zeilen:
+            fahrer = self._welt.fahrer[zeile_der_saison.fahrer]
             zeile = QTreeWidgetItem(
                 self._tabelle,
                 [
-                    f"{liga} - {self._konfiguration.ligenname(liga)}",
-                    meister.name,
-                    str(abschluss.punkte[0]),
-                    zweiter,
+                    str(zeile_der_saison.platz),
+                    fahrer.name,
+                    _zahl(zeile_der_saison.punkte),
+                    str(zeile_der_saison.siege),
+                    str(zeile_der_saison.podien),
+                    str(zeile_der_saison.poles),
+                    str(zeile_der_saison.schnellste_runden),
+                    str(zeile_der_saison.ausfaelle),
+                    str(zeile_der_saison.rennen),
                 ],
             )
-            self._faerbe(zeile, meister)
+            self._faerbe(zeile, fahrer)
 
     # -- Bilanzen (Punkte 21 und 23) ---------------------------------------
     def _zeige_streckenbilanz(self) -> None:
@@ -351,8 +331,8 @@ class Statistikseite(QWidget):
 
     def _zeige_bilanzen(self, bilanzen: dict, leer: str) -> None:
         """Eine Bilanztabelle ueber alle Fahrer, bester zuerst."""
-        self._tabelle.setColumnCount(3 + len(BILANZSPALTEN))
-        self._tabelle.setHeaderLabels(["#", "Fahrer", "Liga", *BILANZSPALTEN])
+        self._tabelle.setColumnCount(2 + len(BILANZSPALTEN))
+        self._tabelle.setHeaderLabels(["#", "Fahrer", *BILANZSPALTEN])
         if not bilanzen:
             self._hinweis.setText(leer)
             return
@@ -371,7 +351,6 @@ class Statistikseite(QWidget):
                 [
                     str(platz),
                     fahrer.name,
-                    str(fahrer.liga),
                     str(bilanz.rennen),
                     str(bilanz.siege),
                     str(bilanz.podien),
@@ -380,51 +359,30 @@ class Statistikseite(QWidget):
                     str(bilanz.ausfaelle),
                     _zahl(bilanz.punkte),
                     str(bilanz.bester_platz) if bilanz.bester_platz else "-",
-                    str(bilanz.beste_liga) if bilanz.beste_liga else "-",
                 ],
             )
             self._faerbe(zeile, fahrer)
 
     # -- Bestmarken (Punkt 25) ---------------------------------------------
-    def _blaettere(self, richtung: int) -> None:
-        """Eine Liga vor oder zurueck, ohne die Liste aufzuklappen."""
-        stelle = self._bestliga.currentIndex() + richtung
-        if 0 <= stelle < self._bestliga.count():
-            self._bestliga.setCurrentIndex(stelle)
-
     def _zeige_bestmarken(self) -> None:
         """Was in dieser Welt bisher am weitesten ging.
 
         Drei Gruppen: die Rundenrekorde je Strecke, die Bestmarken der
-        Karriere ueber alle Fahrer und die besten Saisons aus der Historie.
-
-        Waehlbar ist, ob das ueber alle Ligen gilt oder in einer einzelnen.
-        Insgesamt gewinnt fast immer Liga 1 - dort faehrt das staerkste
-        Feld. Wer wissen will, wer in Liga 14 am meisten gewonnen hat, muss
-        die Liga einzeln sehen koennen.
+        Karriere ueber alle Fahrer und die besten Saisons aus der
+        Historie.
         """
-        liga = self._bestliga.currentData()
-        wo = "insgesamt" if liga == ALLE_LIGEN else f"Liga {liga}"
-        self._kasten.setTitle(f"Bestmarken - {wo}")
+        self._kasten.setTitle("Bestmarken")
         self._tabelle.setColumnCount(4)
         self._tabelle.setHeaderLabels(["Marke", "Wert", "Fahrer", "Wo und wann"])
         self._tabelle.setRootIsDecorated(True)
-        self._zurueck.setEnabled(self._bestliga.currentIndex() > 0)
-        self._vor.setEnabled(
-            self._bestliga.currentIndex() < self._bestliga.count() - 1
-        )
 
         zeilen = (
-            self._marken_der_strecken(liga)
-            + self._marken_der_karriere(liga)
-            + self._marken_der_saisons(liga)
+            self._marken_der_strecken()
+            + self._marken_der_karriere()
+            + self._marken_der_saisons()
         )
         if not zeilen:
-            self._hinweis.setText(
-                "Noch kein Rennen gefahren."
-                if liga == ALLE_LIGEN
-                else f"In Liga {liga} ist noch kein Rennen gefahren."
-            )
+            self._hinweis.setText("Noch kein Rennen gefahren.")
             return
         self._hinweis.setText(f"{len(zeilen)} Bestmarken")
         for marke, wert, fahrer, wo in zeilen:
@@ -433,42 +391,26 @@ class Statistikseite(QWidget):
                 zeile.setText(2, fahrer.name)
                 self._faerbe(zeile, fahrer, spalte=2)
 
-    def _marken_der_strecken(self, liga: int = ALLE_LIGEN) -> list[tuple]:
-        """Die schnellste Runde je Strecke, in einer Liga oder ueber alle."""
+    def _marken_der_strecken(self) -> list[tuple]:
+        """Die schnellste Rennrunde je Strecke."""
         marken = []
         for eintrag in self._konfiguration.strecken:
-            rekorde = self._statistik.rekorde_je_strecke(eintrag["name"])
-            if liga != ALLE_LIGEN:
-                rekorde = tuple(r for r in rekorde if r.liga == liga)
-            if not rekorde:
+            beste = self._statistik.rekord(eintrag["name"])
+            if beste is None:
                 continue
-            beste = min(rekorde, key=lambda r: r.zeit_ms)
             marken.append(
                 (
                     f"Schnellste Runde in {eintrag['name']}",
                     formatiere_dauer(beste.zeit_ms),
                     self._welt.fahrer[beste.fahrer],
-                    f"Liga {beste.liga}, Saison {beste.saison}, Rennen {beste.rennen}",
+                    f"Saison {beste.saison}, Rennen {beste.rennen}",
                 )
             )
         return marken
 
-    def _marken_der_karriere(self, liga: int = ALLE_LIGEN) -> list[tuple]:
-        """Die Bestmarken ueber alle Fahrer.
-
-        Insgesamt zaehlen die Karrierezahlen, die alles zusammenrechnen.
-        Fuer eine einzelne Liga taugen die nicht: Sie wissen nicht, in
-        welcher Liga ein Sieg fiel. Dort kommen die Zahlen deshalb aus der
-        Historie, die je Saison und Liga eine Abschlusstabelle fuehrt -
-        also aus den **abgeschlossenen** Saisons dieser Liga.
-        """
-        if liga == ALLE_LIGEN:
-            quelle = self._statistik.karriere.values()
-            zusatz = ""
-        else:
-            quelle = self._statistik.karriere_in_liga(liga).values()
-            zusatz = f" in Liga {liga}"
-        zahlen = [z for z in quelle if z.rennen]
+    def _marken_der_karriere(self) -> list[tuple]:
+        """Die Bestmarken ueber alle Fahrer."""
+        zahlen = [z for z in self._statistik.karriere.values() if z.rennen]
         if not zahlen:
             return []
         marken = []
@@ -481,7 +423,7 @@ class Statistikseite(QWidget):
                 continue
             marken.append(
                 (
-                    f"Meiste {name} (Karriere{zusatz})",
+                    f"Meiste {name} (Karriere)",
                     _zahl(wert),
                     self._welt.fahrer[beste.fahrer],
                     f"in {beste.rennen} Rennen",
@@ -495,7 +437,7 @@ class Statistikseite(QWidget):
             if beste.siege:
                 marken.append(
                     (
-                        f"Beste Siegquote (ab {MINDESTRENNEN} Rennen{zusatz})",
+                        f"Beste Siegquote (ab {MINDESTRENNEN} Rennen)",
                         f"{beste.siegquote:.1%}".replace(".", ","),
                         self._welt.fahrer[beste.fahrer],
                         f"{beste.siege} Siege in {beste.rennen} Rennen",
@@ -503,16 +445,11 @@ class Statistikseite(QWidget):
                 )
         return marken
 
-    def _marken_der_saisons(self, liga: int = ALLE_LIGEN) -> list[tuple]:
-        """Die besten einzelnen Saisons aus der Historie.
-
-        Hier steht die Liga wirklich dabei: Die Historie fuehrt je Saison
-        und Liga eine eigene Abschlusstabelle.
-        """
+    def _marken_der_saisons(self) -> list[tuple]:
+        """Die besten einzelnen Saisons aus der Historie."""
         zeilen = [
             (abschluss, zeile)
             for abschluss in self._statistik.historie
-            if liga == ALLE_LIGEN or abschluss.liga == liga
             for zeile in abschluss.zeilen
         ]
         if not zeilen:
@@ -528,7 +465,7 @@ class Statistikseite(QWidget):
                     f"Meiste {name} in einer Saison",
                     _zahl(wert),
                     self._welt.fahrer[beste.fahrer],
-                    f"Liga {abschluss.liga}, Saison {abschluss.saison}",
+                    f"Saison {abschluss.saison}",
                 )
             )
         return marken
@@ -561,18 +498,6 @@ class Statistikseite(QWidget):
     @property
     def streckenauswahl(self) -> QComboBox:
         return self._strecke
-
-    @property
-    def bestmarkenliga(self) -> QComboBox:
-        return self._bestliga
-
-    @property
-    def knopf_liga_zurueck(self) -> QPushButton:
-        return self._zurueck
-
-    @property
-    def knopf_liga_vor(self) -> QPushButton:
-        return self._vor
 
     @property
     def merkmalauswahl(self) -> QComboBox:

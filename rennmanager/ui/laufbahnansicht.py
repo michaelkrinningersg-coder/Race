@@ -1,12 +1,10 @@
-"""Die Ligen eines Fahrers ueber die Jahre.
+"""Der Meisterschaftsplatz eines Fahrers ueber die Jahre.
 
-Ein Fahrer steigt auf und ab (GDD 13). Die Liste der Saisons sagt das
-auch, aber erst als Linie sieht man den Weg: ob jemand stetig nach oben
-geht, in einer Liga haengt oder wieder durchgereicht wird.
+Die Liste der Saisons sagt es auch, aber erst als Linie sieht man den
+Weg: ob jemand stetig nach vorn kommt, auf seinem Platz bleibt oder
+durchgereicht wird.
 
-Die Achse steht auf dem Kopf - **Liga 1 oben**, Liga 10 unten, weil "oben"
-im Ligensystem die starke Liga ist. Neben jedem Punkt steht der Platz, den
-er in dieser Liga belegt hat.
+Die Achse steht auf dem Kopf - **Platz 1 oben**, der letzte unten.
 
 Gezeichnet wird mit ``QPainter`` wie alle Diagramme des Projekts; die
 Toene kommen aus ``rennmanager.ui.diagramm``.
@@ -27,7 +25,7 @@ from rennmanager.ui.diagramm import (
     zeichne_linie,
 )
 
-# Links steht "Liga 10" an der Achse - schmaler geht es nicht, sonst
+# Links steht "Platz 50" an der Achse - schmaler geht es nicht, sonst
 # schneidet der Rand die Beschriftung an.
 RAND_LINKS = 62
 RAND_RECHTS = 16
@@ -38,21 +36,21 @@ PUNKT = 7
 
 
 class Laufbahnansicht(QWidget):
-    """Zeichnet Liga und Platz eines Fahrers je abgeschlossener Saison."""
+    """Zeichnet den Platz eines Fahrers je abgeschlossener Saison."""
 
-    def __init__(self, ligen: int = 20, parent: QWidget | None = None) -> None:
+    def __init__(self, plaetze: int = 50, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._ligen = ligen
-        # Je Saison: Jahr, Liga, Platz.
-        self._bahn: list[tuple[int, int, int]] = []
+        self._plaetze = plaetze
+        # Je Saison: Jahr und Platz.
+        self._bahn: list[tuple[int, int]] = []
         self._farbe = QColor("#0b0b0b")
         self.setMinimumHeight(180)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
     # -- Daten -------------------------------------------------------------
     def zeige(self, bahn, farbe: str = "#0b0b0b") -> None:
-        """Uebernimmt die Laufbahn als Folge aus Jahr, Liga und Platz."""
-        self._bahn = [(jahr, liga, platz) for jahr, liga, platz in bahn]
+        """Uebernimmt die Laufbahn als Folge aus Jahr und Platz."""
+        self._bahn = [(jahr, platz) for jahr, platz in bahn]
         self._farbe = QColor(farbe)
         self.update()
 
@@ -79,11 +77,11 @@ class Laufbahnansicht(QWidget):
         self._zeichne_gitter(maler, flaeche, masse)
 
         x = [self._x(flaeche, stelle) for stelle in range(len(self._bahn))]
-        y = [self._y(flaeche, liga) for _, liga, _ in self._bahn]
+        y = [self._y(flaeche, platz) for _, platz in self._bahn]
         if len(x) > 1:
             zeichne_linie(maler, x, y, self._farbe, BREITE_FOKUS)
 
-        for stelle, (jahr, _liga, platz) in enumerate(self._bahn):
+        for stelle, (jahr, platz) in enumerate(self._bahn):
             maler.setBrush(self._farbe)
             maler.setPen(QPen(self._farbe))
             maler.drawEllipse(
@@ -109,20 +107,20 @@ class Laufbahnansicht(QWidget):
             return flaeche.left() + flaeche.width() / 2
         return flaeche.left() + stelle / (len(self._bahn) - 1) * flaeche.width()
 
-    def _y(self, flaeche, liga: int) -> float:
-        """Liga 1 oben, Liga 10 unten - im Ligensystem ist oben stark."""
-        if self._ligen <= 1:
+    def _y(self, flaeche, platz: int) -> float:
+        """Platz 1 oben, der letzte unten."""
+        if self._plaetze <= 1:
             return flaeche.top() + flaeche.height() / 2
-        anteil = (liga - 1) / (self._ligen - 1)
+        anteil = (platz - 1) / (self._plaetze - 1)
         return flaeche.top() + anteil * flaeche.height()
 
     def _zeichne_gitter(self, maler: QPainter, flaeche, masse: QFontMetrics) -> None:
-        for liga in (1, self._ligen):
-            y = self._y(flaeche, liga)
+        for platz in (1, self._plaetze):
+            y = self._y(flaeche, platz)
             maler.setPen(QPen(GITTER, 1.0))
             maler.drawLine(int(flaeche.left()), int(y), int(flaeche.right()), int(y))
             maler.setPen(QPen(TEXT_ZWEITRANGIG))
-            text = f"Liga {liga}"
+            text = f"Platz {platz}"
             maler.drawText(
                 int(flaeche.left() - 6 - masse.horizontalAdvance(text)),
                 int(y + masse.ascent() / 2),

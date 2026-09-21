@@ -251,23 +251,13 @@ def laenge_m(konfiguration: Konfiguration, strecke: Strecke) -> float:
 # ---------------------------------------------------------------------------
 # Was sie kostet
 # ---------------------------------------------------------------------------
-def limit_ms(konfiguration: Konfiguration, liga: int | None = None) -> float:
-    """Das Boxenlimit dieser Liga, in m/s.
+def limit_ms(konfiguration: Konfiguration) -> float:
+    """Das Boxenlimit, in m/s.
 
-    Je tiefer die Liga, desto strenger - so hat es der Auftraggeber
-    gesetzt: Liga 1 bis 5 faehrt 80 km/h, Liga 6 bis 10 siebzig. Ohne
-    Ligaangabe gilt der
-    Grundwert; daran haengen die Streckengeometrie und alles, was nicht
-    an einem bestimmten Rennen haengt.
+    Punkt 101: Eine Liga, ein Limit - die Staffelung nach Ligen ist mit
+    den Ligen weggefallen.
     """
-    einstellung = konfiguration.wert("boxenstopp")
-    kmh = einstellung["limit_kmh"]
-    if liga is not None:
-        for eintrag in einstellung.get("limit_je_liga", ()):
-            if liga <= eintrag["bis_liga"]:
-                kmh = eintrag["kmh"]
-                break
-    return kmh / 3.6
+    return konfiguration.wert("boxenstopp", "limit_kmh") / 3.6
 
 
 def _decke_ab(
@@ -275,7 +265,6 @@ def _decke_ab(
     limit: np.ndarray,
     von: int,
     bis: int,
-    liga: int | None = None,
 ):
     """Setzt das Boxentempo auf dem Abschnitt, in m/s.
 
@@ -285,10 +274,10 @@ def _decke_ab(
     * Wo sie ohnehin **langsamer** ist, gilt ihr eigenes Tempo minus
       einem kleinen Abzug. Ohne ihn kostete die Boxengasse dort gar
       nichts, wo die Strecke ohnehin langsam ist: In Spa faehrt das
-      schwaechste Auto der Liga 10 auf der Start-Ziel-Geraden
-      stellenweise nur 53 km/h, in Yas Marina 52.
+      schwaechste Auto auf der Start-Ziel-Geraden stellenweise nur
+      53 km/h, in Yas Marina 52.
     """
-    deckel = limit_ms(konfiguration, liga)
+    deckel = limit_ms(konfiguration)
     abzug = 1.0 - konfiguration.wert("boxenstopp", "abzug_unter_limit")
 
     def setze(teil: np.ndarray) -> np.ndarray:
@@ -307,12 +296,11 @@ def gedeckeltes_limit(
     strecke: Strecke,
     grenzen: Grenzen,
     grip=1.0,
-    liga: int | None = None,
 ) -> np.ndarray:
     """Das Kurvenlimit mit gedeckelter Boxengasse, in m/s."""
     von, bis = abschnitt(konfiguration, strecke)
     return _decke_ab(
-        konfiguration, kern_tempo.kurvenlimit(strecke, grenzen, grip), von, bis, liga
+        konfiguration, kern_tempo.kurvenlimit(strecke, grenzen, grip), von, bis
     )
 
 
@@ -321,7 +309,6 @@ def durchfahrtsverlust_ms(
     strecke: Strecke,
     grenzen: Grenzen,
     grip=1.0,
-    liga: int | None = None,
 ) -> int:
     """Was die Durchfahrt kostet, ohne Standzeit - in Millisekunden.
 
@@ -334,7 +321,7 @@ def durchfahrtsverlust_ms(
         strecke,
         grenzen,
         grip,
-        limit=gedeckeltes_limit(konfiguration, strecke, grenzen, grip, liga),
+        limit=gedeckeltes_limit(konfiguration, strecke, grenzen, grip),
     )
     return kern_tempo.rundenzeit_ms(strecke, mit_box) - kern_tempo.rundenzeit_ms(
         strecke, frei
@@ -342,7 +329,7 @@ def durchfahrtsverlust_ms(
 
 
 def anfahrverlust_ms(
-    konfiguration: Konfiguration, grenzen: Grenzen, liga: int | None = None
+    konfiguration: Konfiguration, grenzen: Grenzen
 ) -> int:
     """Was das Anfahren aus dem Stand kostet, in Millisekunden.
 
@@ -356,12 +343,12 @@ def anfahrverlust_ms(
     nicht mit einer eigenen Zahl: Ein Auto mit mehr Antrieb kommt schneller
     aus der Box.
     """
-    tempo = limit_ms(konfiguration, liga)
+    tempo = limit_ms(konfiguration)
     return int(round(1000.0 * tempo / (2.0 * max(grenzen.laengs, 1e-6))))
 
 
 def bremsverlust_ms(
-    konfiguration: Konfiguration, grenzen: Grenzen, liga: int | None = None
+    konfiguration: Konfiguration, grenzen: Grenzen
 ) -> int:
     """Was das Bremsen bis zum Stillstand kostet, in Millisekunden.
 
@@ -372,16 +359,16 @@ def bremsverlust_ms(
     Bremszonen schon eingerechnet hat. Fuer den Halt in der Box muss der
     Posten deshalb ausdruecklich dazu.
     """
-    tempo = limit_ms(konfiguration, liga)
+    tempo = limit_ms(konfiguration)
     return int(round(1000.0 * tempo / (2.0 * max(grenzen.brems, 1e-6))))
 
 
 def haltverlust_ms(
-    konfiguration: Konfiguration, grenzen: Grenzen, liga: int | None = None
+    konfiguration: Konfiguration, grenzen: Grenzen
 ) -> int:
     """Bremsen und Anfahren zusammen - was der Halt selbst kostet."""
-    return bremsverlust_ms(konfiguration, grenzen, liga) + anfahrverlust_ms(
-        konfiguration, grenzen, liga
+    return bremsverlust_ms(konfiguration, grenzen) + anfahrverlust_ms(
+        konfiguration, grenzen
     )
 
 

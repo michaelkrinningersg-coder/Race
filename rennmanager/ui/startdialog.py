@@ -1,17 +1,15 @@
 """Der Dialog "Neue Karriere" (Punkt 11).
 
-Der Spieler ist Teamchef: Ihm gehoert ein Team mit **vier** Autos, und
-alle vier fangen bei null an. Wie das Team heisst und wer darin faehrt -
-Name, Land und Geburtstag jedes der vier -, bestimmt er hier selbst.
+Der Spieler ist Teamchef: Ihm gehoert eines der 25 Teams mit seinen
+**zwei** Autos. Wie das Team heisst und wer darin faehrt - Name, Land
+und Geburtstag beider Fahrer -, bestimmt er hier selbst.
 
-Vier Fahrer zu je vier Feldern waeren untereinander eine Wand aus
-Eingabezeilen. Sie liegen deshalb auf Reitern, einer je Auto; der
-Teamname steht darueber, weil er fuer alle vier gilt.
+Zwei Fahrer zu je vier Feldern liegen auf Reitern, einer je Auto; der
+Teamname steht darueber, weil er fuer beide gilt.
 
-**Die Startliga steht nicht zur Wahl.** Sie ist immer Liga 10, und alle
-vier starten dort. Freie Wahl waere der Schwierigkeitsgrad durch die
-Hintertuer: Wer in Liga 5 anfinge, liesse die halbe Karriere aus GDD 13
-einfach aus.
+**Die Staerke steht nicht zur Wahl.** Welches Team dem Spieler gehoert
+und wo es auf der Leiter steht, entscheidet der Seed (Punkt 101) - freie
+Wahl waere der Schwierigkeitsgrad durch die Hintertuer.
 
 Die Laender kommen aus derselben Liste, aus der die KI-Fahrer ihre
 bekommen (``konfiguration/namen.toml``) - die eigenen Fahrer sollen kein
@@ -76,12 +74,11 @@ class Startdialog(QDialog):
         self.setWindowTitle("Neue Karriere")
         self.setModal(True)
 
-        startliga = konfiguration.wert("ligen", "startliga")
         spalte = QVBoxLayout(self)
         hinweis = QLabel(
-            f"Ihnen gehoert ein Team mit {self._anzahl} Autos. Alle "
-            f"{self._anzahl} Fahrer fangen bei null an und starten in "
-            f"Liga {startliga} - {konfiguration.ligenname(startliga)}."
+            f"Ihnen gehoert eines von {konfiguration.wert('teams', 'anzahl')} "
+            f"Teams mit {self._anzahl} Autos. Wie stark es ist, entscheidet "
+            "der Seed."
         )
         hinweis.setWordWrap(True)
         spalte.addWidget(hinweis)

@@ -50,7 +50,6 @@ STAU_ABSTAND_S = 0.05
 class Schnellergebnis:
     """Ergebnis eines Rennwochenendes im Schnellmodus."""
 
-    liga: int
     strecke: str
     ergebnisse: tuple[Rennergebnis, ...]
     wetter: tuple[str, ...]
@@ -97,7 +96,6 @@ def _grundrunden(
 
 def fahre_wochenende(
     konfiguration: Konfiguration,
-    liga: int,
     strecke: Strecke,
     teilnehmer: tuple[Teilnehmer, ...],
     runden: int,
@@ -326,10 +324,10 @@ def fahre_wochenende(
     stoppgrundlast = np.array(
         [
             kern_boxenstopp.durchfahrtsverlust_ms(
-                konfiguration, strecke, _grenzen(konfiguration, auto, faktor_r), liga=liga
+                konfiguration, strecke, _grenzen(konfiguration, auto, faktor_r)
             )
             + kern_boxenstopp.haltverlust_ms(
-                konfiguration, _grenzen(konfiguration, auto, faktor_r), liga
+                konfiguration, _grenzen(konfiguration, auto, faktor_r)
             )
             for auto, faktor_r in zip(autos, rhythmusfaktor, strict=True)
         ],
@@ -703,7 +701,6 @@ def fahre_wochenende(
     )
 
     return Schnellergebnis(
-        liga=liga,
         strecke=strecke.name,
         ergebnisse=ergebnisse,
         wetter=wetter.zustaende,

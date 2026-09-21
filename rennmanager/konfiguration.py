@@ -23,9 +23,7 @@ ANZAHL_FAHRZEUG_UPGRADES = 16       # GDD 5
 ANZAHL_FAHRER_EIGENSCHAFTEN = 16    # GDD 6
 ANZAHL_MIT_GELDANTEIL = 18          # GDD 9: "18 Faehigkeiten haben einen Geldanteil"
 ANZAHL_STRECKEN = 20                # GDD 3
-ANZAHL_LIGEN = 10                   # GDD 12, seit Punkt 95 zehn statt zwanzig
-ANZAHL_HERSTELLER = 20              # GDD 12
-ANZAHL_EREIGNISSE = 35              # GDD 14
+ANZAHL_HERSTELLER = 25              # GDD 12, seit Punkt 101 einer je Team
 ANZAHL_DEFEKTE = 20                 # GDD 14
 ANZAHL_WETTERZUSTAENDE = 5          # GDD 7
 WAEHRUNGEN = {"G", "E", "Z"}        # Geld, Erfahrung, Zeit
@@ -104,19 +102,6 @@ class Konfiguration:
         raise KeyError(f"Unbekannte Faehigkeit: {schluessel}")
 
     @cached_property
-    def k0_faktoren(self) -> dict[str, float]:
-        """Kostenfaktor je Faehigkeit aus ihrer Wirkungsbreite (GDD 9).
-
-        Entscheidung zu Punkt 17: die Summe der Gewichte aus der
-        Wirkungsmatrix, geteilt durch den Mittelwert ueber alle
-        Faehigkeiten. Breit wirkende Faehigkeiten kosten mehr, damit
-        Schwerpunkte noetig werden.
-        """
-        summen = {f.schluessel: sum(f.gewichte.values()) for f in self.faehigkeiten}
-        mittel = sum(summen.values()) / len(summen)
-        return {schluessel: summe / mittel for schluessel, summe in summen.items()}
-
-    @cached_property
     def zusatzeintraege(self) -> tuple[dict[str, Any], ...]:
         """Alle Eigenschaften neben der Wirkungsmatrix, mit ihren Angaben.
 
@@ -177,14 +162,6 @@ class Konfiguration:
     def offene_punkte(self) -> dict[str, str]:
         """Im GDD nicht festgelegte Angaben, die noch geklaert werden muessen."""
         return dict(self.wert("offen", standard={}))
-
-    def ligenname(self, liga: int) -> str:
-        """Ligenname aus Stufe und Nummer, z. B. ``"Eisen 2"`` fuer Liga 10."""
-        for gruppe in self.wert("ligen", "namen"):
-            if gruppe["von_liga"] <= liga <= gruppe["bis_liga"]:
-                return f"{gruppe['stufe']} {liga - gruppe['von_liga'] + 1}"
-        raise ValueError(f"Liga ausserhalb des gueltigen Bereichs: {liga}")
-
 
 # ---------------------------------------------------------------------------
 # Laden
@@ -310,11 +287,9 @@ def _pruefe(k: Konfiguration) -> None:
     _pruefe_wetterprofile(k)
     _pruefe_geldanteil(k)
     _pruefe_strecken(k)
-    _pruefe_ligen(k)
+    _pruefe_feld(k)
     _pruefe_wetter(k)
     _pruefe_wertung(k)
-    _pruefe_sponsoren(k)
-    _pruefe_listenlaenge(k, ("ereignisse", "liste"), ANZAHL_EREIGNISSE, "E")
     _pruefe_listenlaenge(k, ("defekte", "liste"), ANZAHL_DEFEKTE, "X")
 
     if len(k.hersteller) != ANZAHL_HERSTELLER:
@@ -454,50 +429,51 @@ def _pruefe_strecken(k: Konfiguration) -> None:
         )
 
 
-def _pruefe_ligen(k: Konfiguration) -> None:
-    anzahl = k.wert("ligen", "anzahl")
-    if anzahl != ANZAHL_LIGEN:
-        raise KonfigurationsFehler(f"{ANZAHL_LIGEN} Ligen erwartet, {anzahl} gefunden")
+def _pruefe_feld(k: Konfiguration) -> None:
+    """Prueft die Spanne des Feldes gegen die Kalibrierung (Punkt 101).
 
-    # Punkt 95: Der Korridor steht als Formel in der Konfiguration; die
-    # Eintraege unter [[ligen.kontrolle]] sind Pruefwerte dazu. Laufen die
-    # beiden auseinander, hat jemand an einem Ende gedreht und am anderen
-    # nicht - das faellt hier auf, nicht erst in einer schiefen Welt.
-    unten = float(k.wert("ligen", "unterste_s"))
-    oben = float(k.wert("ligen", "oberste_s"))
-    rest = 1.0 - k.wert("ligen", "ueberlappung_anteil")
-    if not 0.0 < rest <= 1.0:
-        raise KonfigurationsFehler("Die Ligaueberlappung muss zwischen 0 und 1 liegen")
-    if oben <= unten:
-        raise KonfigurationsFehler("oberste_s muss groesser sein als unterste_s")
-    breite = (oben - unten) / ((anzahl - 1) * rest + 1.0)
-    for pruef in k.wert("ligen", "kontrolle"):
-        liga = pruef["liga"]
-        letzter = unten + (anzahl - liga) * breite * rest
-        erwartet = (round(letzter + breite), round(letzter))
-        gefunden = (pruef["s_bester"], pruef["s_letzter"])
-        if erwartet != gefunden:
-            raise KonfigurationsFehler(
-                f"Liga {liga}: Korridor ergibt {erwartet}, Pruefwert sagt {gefunden}"
-            )
-
-    # Punkt 95: Der Boden der erreichten Staerke gehoert unter den
-    # Korridorboden. Daraus werden die **Potentiale** gezogen; was ein
-    # Fahrer heute kann, liegt darunter. Stuende der Boden darueber, waere
-    # jeder Fahrer der Welt sofort besser als sein eigenes Potential.
-    boden = k.wert("talent", "mindeststaerke")
-    if not 0 <= boden <= unten:
+    Der Beste faehrt den Ankerwert, der Letzte eine um
+    ``spanne_rundenzeit`` laengere Runde. Weil jede Grenze des
+    Tempomodells linear im Leistungsanteil ``p = sqrt(S / referenz)``
+    steht, ist die Rundenzeit umgekehrt proportional dazu - ``s_letzter``
+    laesst sich damit aus der Spanne ausrechnen. Stimmen die beiden Zahlen
+    in der Konfiguration nicht ueberein, hat jemand an einer gedreht und
+    an der anderen nicht.
+    """
+    bester = float(k.wert("feld", "s_bester"))
+    letzter = float(k.wert("feld", "s_letzter"))
+    referenz = float(k.wert("skala", "referenz"))
+    maximum = float(k.wert("skala", "maximum"))
+    if not 0 < letzter < bester <= maximum:
         raise KonfigurationsFehler(
-            f"Die Mindeststaerke {boden} muss zwischen 0 und dem Korridorboden "
-            f"{unten:.0f} liegen"
+            f"Das Feld braucht 0 < s_letzter ({letzter:.0f}) < s_bester "
+            f"({bester:.0f}) <= Skalenmaximum ({maximum:.0f})"
         )
 
-    abgedeckt: set[int] = set()
-    for gruppe in k.wert("ligen", "namen"):
-        abgedeckt.update(range(gruppe["von_liga"], gruppe["bis_liga"] + 1))
-    fehlend = set(range(1, anzahl + 1)) - abgedeckt
-    if fehlend:
-        raise KonfigurationsFehler(f"Ohne Ligennamen: {sorted(fehlend)}")
+    basis = float(k.wert("kalibrierung", "basis_kmh"))
+    spanne_kmh = float(k.wert("kalibrierung", "spanne_kmh"))
+    spanne = float(k.wert("feld", "spanne_rundenzeit"))
+    if not 0 < spanne < 1:
+        raise KonfigurationsFehler(
+            f"spanne_rundenzeit muss zwischen 0 und 1 liegen, gefunden {spanne}"
+        )
+    v_bester = basis + spanne_kmh * (bester / referenz) ** 0.5
+    p_letzter = (v_bester / (1.0 + spanne) - basis) / spanne_kmh
+    erwartet = round(p_letzter * p_letzter * referenz)
+    if erwartet != int(letzter):
+        raise KonfigurationsFehler(
+            f"Bei {spanne:.1%} Rundenzeitspanne gehoert s_letzter auf {erwartet}, "
+            f"in der Konfiguration steht {int(letzter)}"
+        )
+
+    autos = k.wert("rennen", "autos")
+    teams = k.wert("teams", "anzahl")
+    je_team = k.wert("teams", "autos_je_team")
+    if teams * je_team != autos:
+        raise KonfigurationsFehler(
+            f"{teams} Teams zu je {je_team} Autos ergeben {teams * je_team}, "
+            f"im Rennen stehen {autos}"
+        )
 
 
 def _pruefe_wetter(k: Konfiguration) -> None:
@@ -524,32 +500,23 @@ def _pruefe_wetter(k: Konfiguration) -> None:
 
 
 def _pruefe_wertung(k: Konfiguration) -> None:
-    """Prueft die Punkteleiter aus Punkt 95.
+    """Prueft die Punktetabelle aus Punkt 101.
 
-    Zwei Dinge koennen an ihr schiefgehen, und beide faellt man erst
-    mitten in einer Saison auf die Fuesse: Die Leiter kann unter null
-    rutschen, wenn Schrittweite oder Ankerplatz zu gross werden, und die
-    Punkte koennen innerhalb einer Liga steigen statt fallen.
+    Sie muss fuer jeden Platz des Feldes einen Wert nennen, von Platz 1 an
+    fallen und nirgends unter 1 rutschen - sonst faellt das erst mitten in
+    einer Saison auf.
     """
     autos = k.wert("rennen", "autos")
-    ligen = k.wert("ligen", "anzahl")
-    anker = k.wert("wertung", "ankerplatz")
-    if not 2 <= anker <= autos:
+    punkte = list(k.wert("wertung", "punkte_je_platz"))
+    if len(punkte) != autos:
         raise KonfigurationsFehler(
-            f"Der Ankerplatz muss zwischen 2 und {autos} liegen, gefunden {anker}"
+            f"Die Punktetabelle nennt {len(punkte)} Plaetze, im Rennen stehen {autos}"
         )
-
-    abstand = _leiterabstand(k)
-    if any(abstand(platz) >= abstand(platz + 1) for platz in range(1, autos)):
+    if any(davor <= danach for davor, danach in zip(punkte, punkte[1:], strict=False)):
         raise KonfigurationsFehler("Die Rennpunkte muessen von Platz 1 an fallen")
-
-    sieger = k.wert("wertung", "sieger_liga1")
-    letzter = sieger - (ligen - 1) * abstand(anker) - abstand(autos)
-    if letzter < 1:
+    if punkte[-1] < 1:
         raise KonfigurationsFehler(
-            f"Die Punkteleiter reicht nicht ueber {ligen} Ligen: Der Letzte der "
-            f"untersten Liga kaeme auf {letzter} Punkte. Kleinere Schrittweite "
-            f"oder frueherer Ankerplatz."
+            f"Der Letzte bekaeme {punkte[-1]} Punkte; die Tabelle endet bei mindestens 1"
         )
 
     quali = k.wert("wertung", "anteil_qualifying")
@@ -560,46 +527,6 @@ def _pruefe_wertung(k: Konfiguration) -> None:
     if len(quali) > autos:
         raise KonfigurationsFehler(
             f"Mehr Qualifying-Raenge ({len(quali)}) als Autos im Rennen ({autos})"
-        )
-
-    takt = k.wert("auf_abstieg", "alle_rennen")
-    rennen = k.wert("kalender", "rennen_je_saison")
-    if not 1 <= takt <= rennen:
-        raise KonfigurationsFehler(
-            f"Gewechselt wird alle {takt} Rennen, eine Saison hat aber {rennen}"
-        )
-
-
-def _leiterabstand(k: Konfiguration):
-    """Der Punktabstand eines Platzes zum Sieger seiner Liga (Punkt 95)."""
-    erster_zweiter = k.wert("wertung", "abstand_erster_zweiter")
-    zweiter_dritter = k.wert("wertung", "abstand_zweiter_dritter")
-    schritt = k.wert("wertung", "schritt")
-
-    def abstand(platz: int) -> int:
-        if platz <= 1:
-            return 0
-        if platz == 2:
-            return int(erster_zweiter)
-        return int(erster_zweiter + zweiter_dritter + schritt * (platz - 3))
-
-    return abstand
-
-
-def _pruefe_sponsoren(k: Konfiguration) -> None:
-    """Jeder Sponsorenplatz braucht einen deutschen Anzeigenamen."""
-    plaetze = set(k.wert("sponsoren", "plaetze"))
-    benannt = set(k.wert("sponsoren", "bezeichnung"))
-    fehlend = plaetze - benannt
-    if fehlend:
-        raise KonfigurationsFehler(
-            "Ohne Anzeigenamen in [sponsoren.bezeichnung]: " + ", ".join(sorted(fehlend))
-        )
-    ueberzaehlig = benannt - plaetze
-    if ueberzaehlig:
-        raise KonfigurationsFehler(
-            "[sponsoren.bezeichnung] nennt unbekannte Plaetze: "
-            + ", ".join(sorted(ueberzaehlig))
         )
 
 

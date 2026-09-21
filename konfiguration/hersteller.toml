@@ -1,11 +1,12 @@
 # Rennmanager – Hersteller (GDD 12)
 #
-# 20 reale Autohersteller, nur Name und Farbe, kein Leistungsbonus.
+# 25 reale Autohersteller, nur Name und Farbe, kein Leistungsbonus.
 # Diese Datei ist bewusst ausgelagert, damit die Namen bei einer
 # Veroeffentlichung austauschbar sind (Markenrecht).
 #
-# Das GDD nennt die Zahl 20, aber weder die konkreten Hersteller noch
-# deren Farben. Diese Liste ist am 2026-09-17 bestaetigt worden
+# Das GDD nennt die Zahl 20; seit Punkt 101 faehrt jeder Hersteller ein
+# Team zu zwei Autos, deshalb sind es 25. Weder die konkreten Hersteller
+# noch deren Farben stehen dort. Diese Liste ist am 2026-09-17 bestaetigt
 # (OFFENE_PUNKTE.md, Punkt O1). Vor einer Veroeffentlichung laesst sie
 # sich hier austauschen, ohne den Code anzufassen.
 
@@ -111,3 +112,33 @@ farbe = "#B12B28"
 schluessel = "H20"
 name = "Toyota"
 farbe = "#EB0A1E"
+
+# Punkt 101: 25 statt 20 Hersteller. Seit dem Umbau auf eine Liga faehrt
+# jeder Hersteller genau ein Team zu zwei Autos - 25 x 2 = 50. Die fuenf
+# neuen Farben fuellen Luecken der bisherigen Liste (Violett, Magenta,
+# Silbergrau, Hellgruen, Hellblau), damit die Punkte im Rennen
+# auseinanderzuhalten bleiben.
+[[hersteller]]
+schluessel = "H21"
+name = "Bentley"
+farbe = "#6C3FA0"
+
+[[hersteller]]
+schluessel = "H22"
+name = "Lancia"
+farbe = "#E0457B"
+
+[[hersteller]]
+schluessel = "H23"
+name = "Nissan"
+farbe = "#9AA5AD"
+
+[[hersteller]]
+schluessel = "H24"
+name = "Subaru"
+farbe = "#3FB878"
+
+[[hersteller]]
+schluessel = "H25"
+name = "Volkswagen"
+farbe = "#3FA9D6"
