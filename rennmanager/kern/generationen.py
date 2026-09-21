@@ -245,21 +245,29 @@ def entwickelt(
     sortieren sich die Ligen ueber Auf- und Abstieg - dann sind sie
     Leistungsklassen und nicht mehr, wie gemessen, Altersklassen.
 
-    Das kostet die Ligatabelle aus GDD 9, und zwar deutlich. Gemessen
-    ueber dreissig Saisons mit echtem Rennbetrieb, Ist gegen Soll::
+    Mit den zwanzig Ligen von frueher kostete das die Ligatabelle aus
+    GDD 9, und zwar deutlich: Ueber dreissig Saisons stand die unterste
+    Liga bei 5182 Prozent ihres Solls, weil jeder Newgen-Jahrgang
+    geschlossen in einer Liga einstieg, deren Soll bei 82 lag.
 
-        Liga  1     5    10    15     20
-              84%   59%  88%  149%  5182%
+    Seit dem Ligenumbau (Punkt 95) passiert das nicht mehr. Gemessen
+    ueber zehn Saisons mit echtem Rennbetrieb, Ist gegen Soll (Soll ist
+    die Mitte des Korridors)::
 
-    Der Grund ist strukturell: Ein Newgen-Jahrgang traegt im Schnitt ein
-    Potential von rund 33000 - Liga-10-Niveau - steigt aber geschlossen
-    in Liga 20 ein, deren Soll bei 82 liegt. Liga 20 ist damit kein
-    schwaches Feld mehr, sondern der Talentpool der ganzen Welt.
+        Liga        1     3     5     8    10
+        Start      90%   82%   77%   75%   60%
+        Saison 10  90%   82%   77%   75%   60%
 
-    **Der Auftraggeber hat das so entschieden**, nachdem ihm die Zahlen
-    und drei Gegenmassnahmen vorlagen. Die Ligen sind ab jetzt das, was
-    die Talentverteilung aus ihnen macht; die Kontrolltabelle in
-    ``[ligen] kontrolle`` beschreibt nur noch den Weltstart.
+    Kein Wert bewegt sich ueber zehn Saisons um mehr als einen
+    Prozentpunkt: Die Mindeststaerke stuetzt die unterste Liga von unten,
+    und der Korridor 20.000 bis 100.000 ist breit genug, dass ein
+    Jahrgang ihn nicht sprengt.
+
+    Dass das Ist unter dem Soll liegt, ist kein Fehler - der Korridor
+    beschreibt **Potentiale**, gefahren wird mit dem Anteil davon, den
+    ein Fahrer in seinem Alter abruft. Die Kontrolltabelle in
+    ``[[ligen.kontrolle]]`` beschreibt den Weltstart, nicht den
+    Dauerzustand.
 
     Die Kalibrierung selbst bleibt unberuehrt: ``zieltempo(98000) =
     180,00 km/h`` ist eine Funktion der Konstanten, nicht der Welt.

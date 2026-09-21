@@ -1187,25 +1187,43 @@ allein. Sonst erbte ein Newgen das Talent seines Vorgaengers, denn er
 uebernimmt dessen Nummer und Teamplatz - so bleiben die Teams bei vier
 Autos.
 
-### Was das die Ligatabelle gekostet hat
+### Was das die Ligatabelle kostet
 
 Der Ligakorridor aus GDD 9 gilt seither **nur noch beim Weltstart**.
-Danach sortieren sich die Ligen ueber Auf- und Abstieg. Gemessen ueber
-dreissig Saisons mit echtem Rennbetrieb, Ist gegen Soll:
+Danach sortieren sich die Ligen ueber Auf- und Abstieg. Mit den zwanzig
+Ligen von frueher lief die Welt dabei auseinander: Gemessen ueber
+dreissig Saisons stand Liga 20 bei 5182 Prozent ihres Solls, weil jeder
+Newgen-Jahrgang geschlossen in einer Liga einstieg, deren Soll bei 82
+lag. Die unterste Liga war damit kein schwaches Feld mehr, sondern der
+Talentpool der ganzen Welt.
+
+**Mit zehn Ligen, dem Korridor 20.000 bis 100.000 und der Mindeststaerke
+von 12.000 passiert das nicht mehr.** Gemessen ueber zehn Saisons mit
+echtem Rennbetrieb, Ist gegen Soll (Soll ist die Mitte des Korridors):
 
 ```
-Liga      1     5    10    15      20
-         84%   59%   88%  149%   5182%
+Liga        1     3     5     8    10
+Start      90%   82%   77%   75%   60%
+Saison 5   90%   82%   77%   75%   60%
+Saison 10  90%   82%   77%   75%   60%
 ```
 
-Der Grund ist strukturell: Ein Newgen-Jahrgang traegt im Schnitt ein
-Potential von rund 33000 - Liga-10-Niveau -, steigt aber geschlossen in
-Liga 20 ein, deren Soll bei 82 liegt. Liga 20 ist damit kein schwaches
-Feld mehr, sondern der Talentpool der ganzen Welt.
+Kein Wert bewegt sich ueber zehn Saisons um mehr als einen Prozentpunkt.
+Der Einstieg der Newgens faellt nicht mehr ins Gewicht, weil die
+Mindeststaerke die unterste Liga von unten stuetzt und der Korridor breit
+genug ist, dass ein Jahrgang ihn nicht sprengt.
 
-**Der Auftraggeber hat das so entschieden**, nachdem ihm die Zahlen und
-drei Gegenmassnahmen vorlagen. Die Ligen sind ab jetzt Leistungsklassen,
-nicht mehr Altersklassen.
+**Dass das Ist durchgehend unter dem Soll liegt, ist kein Fehler.** Der
+Korridor beschreibt **Potentiale**; gefahren wird mit
+`gipfelstaerke * reifegrad(alter) * zielfaktor(alter)`, also mit dem
+Anteil davon, den ein Fahrer in seinem Alter gerade abruft. Ein Feld aus
+lauter Fahrern auf ihrem Gipfel gibt es nicht. Liga 10 liegt mit
+60 Prozent am weitesten darunter, weil dort die Mindeststaerke von 12.000
+greift, waehrend der Korridor erst bei 20.000 anfaengt.
+
+**Der Auftraggeber hat den Korridor so entschieden.** Die Ligen sind
+Leistungsklassen, nicht Altersklassen; die Kontrolltabelle in
+`[[ligen.kontrolle]]` beschreibt den Weltstart, nicht den Dauerzustand.
 
 ## Die Welt
 
