@@ -681,15 +681,26 @@ class Karriere:
             else WERKSTATTPLATZ
         )
 
-    def vorschau(self, schluessel: str) -> kern_entwicklung.Entwicklung:
-        """Was eine Tageszuweisung oder ein Kauf braechte, ohne zu buchen."""
+    def vorschau(
+        self, schluessel: str, schritte: int = 1
+    ) -> kern_entwicklung.Entwicklung:
+        """Was eine Tageszuweisung oder ein Kauf braechte, ohne zu buchen.
+
+        :param schritte: wie viele Kaufschritte auf einmal (Punkt 99).
+            Jeder Schritt kostet, was er an **seiner** Stelle der Leiter
+            kostet - fuenf Schritte am Stueck sind also so teuer wie
+            fuenf einzelne, nicht fuenfmal der erste. Fuer den Weg ueber
+            einen Tag hat die Zahl keine Bedeutung: Ein Tag ist ein Tag.
+        """
         faehigkeit = self._faehigkeit(schluessel)
         wert = self.wert(schluessel)
         if faehigkeit is None:
-            return self._zusatz_vorschau(schluessel, wert)
+            return self._zusatz_vorschau(schluessel, wert, schritte)
         if kern_entwicklung.braucht_tag(faehigkeit):
             return kern_entwicklung.plane_tag(self.konfiguration, faehigkeit, wert)
-        return kern_entwicklung.plane_kauf(self.konfiguration, faehigkeit, wert)
+        return kern_entwicklung.plane_kauf(
+            self.konfiguration, faehigkeit, wert, schritte
+        )
 
     def belege_tag(self, schluessel: str) -> kern_entwicklung.Entwicklung:
         """Belegt den heutigen Platz mit einer Faehigkeit (GDD 2)."""
@@ -831,10 +842,18 @@ class Karriere:
         finally:
             self.fahrernummer = vorher
 
-    def kaufe(self, schluessel: str) -> kern_entwicklung.Entwicklung:
-        """Kauft einen +10-Schritt sofort - nur ohne Zeitanteil (GDD 2)."""
+    def kaufe(
+        self, schluessel: str, schritte: int = 1
+    ) -> kern_entwicklung.Entwicklung:
+        """Kauft Kaufschritte sofort - nur ohne Zeitanteil (GDD 2).
+
+        :param schritte: wie viele auf einmal (Punkt 99). Gebucht wird
+            **eine** Entwicklung ueber die ganze Strecke; sie kostet
+            dasselbe wie die einzelnen Schritte nacheinander und haelt
+            am Maximum der Skala an.
+        """
         self._pruefe_sperre(schluessel)
-        entwicklung = self.vorschau(schluessel)
+        entwicklung = self.vorschau(schluessel, schritte)
         if entwicklung.braucht_tag:
             raise KarriereFehler(
                 f"{schluessel} braucht einen Tag - ueber belege_tag statt kaufen"
@@ -890,7 +909,9 @@ class Karriere:
         except KeyError:
             return None
 
-    def _zusatz_vorschau(self, schluessel: str, wert: int) -> kern_entwicklung.Entwicklung:
+    def _zusatz_vorschau(
+        self, schluessel: str, wert: int, schritte: int = 1
+    ) -> kern_entwicklung.Entwicklung:
         """Wetterfaehigkeiten und Reifenfluesterer stehen ausserhalb der Matrix.
 
         Ihre Waehrung steht bei ihnen selbst; die Wetter-Erfahrung kommt
@@ -908,7 +929,9 @@ class Karriere:
         entwicklung = (
             kern_entwicklung.plane_tag(self.konfiguration, faehigkeit, wert)
             if kern_entwicklung.braucht_tag(faehigkeit)
-            else kern_entwicklung.plane_kauf(self.konfiguration, faehigkeit, wert)
+            else kern_entwicklung.plane_kauf(
+                self.konfiguration, faehigkeit, wert, schritte
+            )
         )
         wetter = eintrag.get("wetter")
         if wetter:

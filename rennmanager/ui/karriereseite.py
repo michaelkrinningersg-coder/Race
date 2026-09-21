@@ -199,9 +199,25 @@ class Karriereseite(QWidget):
         self._belegen = QPushButton("Heutigen Tag belegen")
         self._belegen.clicked.connect(self._belege_tag)
         self._kaufen = QPushButton("Sofort kaufen (+10)")
-        self._kaufen.clicked.connect(self._kaufe)
+        self._kaufen.clicked.connect(lambda: self._kaufe(1))
+        # Punkt 99: Mehrfachkauf. Wer eine Faehigkeit um mehrere hundert
+        # heben will, klickte bisher dreissigmal. Gekostet wird dabei
+        # **nicht** weniger: Jeder Schritt kostet, was er an seiner
+        # Stelle der Leiter kostet - fuenf am Stueck sind so teuer wie
+        # fuenf einzelne.
+        self._kaufen5 = QPushButton("x5")
+        self._kaufen5.clicked.connect(lambda: self._kaufe(5))
+        self._kaufen10 = QPushButton("x10")
+        self._kaufen10.clicked.connect(lambda: self._kaufe(10))
+        for knopf in (self._kaufen5, self._kaufen10):
+            knopf.setToolTip(
+                "Mehrere Kaufschritte auf einmal - zum selben Preis wie "
+                "einzeln nacheinander."
+            )
         knoepfe.addWidget(self._belegen)
         knoepfe.addWidget(self._kaufen)
+        knoepfe.addWidget(self._kaufen5)
+        knoepfe.addWidget(self._kaufen10)
         # Punkt 84: Das Trainingsprogramm. Die Dauer steht daneben, damit
         # sie ohne zweiten Dialog zu sehen und zu aendern ist.
         knoepfe.addSpacing(16)
@@ -357,12 +373,18 @@ class Karriereseite(QWidget):
         self._zeichne()
         self.werte_geaendert.emit()
 
-    def _kaufe(self) -> None:
+    def _kaufe(self, schritte: int = 1) -> None:
+        """Kauft einen oder mehrere Schritte sofort (GDD 2, Punkt 99).
+
+        Gebucht wird **eine** Entwicklung ueber die ganze Strecke: Wer
+        sie nicht bezahlen kann, bekommt gar nichts - kein halber Kauf,
+        bei dem hinterher niemand mehr weiss, was durchging.
+        """
         schluessel = self._gewaehlt()
         if schluessel is None:
             return
         try:
-            self._karriere.kaufe(schluessel)
+            self._karriere.kaufe(schluessel, schritte)
         except (KarriereFehler, EntwicklungsFehler) as fehler:
             QMessageBox.information(self, "Nicht moeglich", str(fehler))
             return

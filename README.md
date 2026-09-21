@@ -1194,6 +1194,13 @@ ergeben.
 
 Zwei Entscheidungen des Auftraggebers weichen vom GDD ab:
 
+* **Mehrere Kaufschritte auf einmal** (Punkt 99): Neben "Sofort kaufen
+  (+10)" stehen **x5** und **x10**. Wer eine Faehigkeit um mehrere
+  hundert heben will, klickte bisher dreissigmal. Billiger wird es
+  dadurch nicht - jeder Schritt kostet, was er an **seiner** Stelle der
+  Leiter kostet, fuenf am Stueck sind also so teuer wie fuenf einzelne
+  nacheinander. Reicht das Konto nicht fuer die ganze Strecke, wird gar
+  nichts gebucht; ein halber Kauf waere nicht nachvollziehbar.
 * **Alles, was Zeit kostet, kostet auch etwas Erfahrung.** Die Zeit bleibt
   ein Tag und skaliert nicht; die Erfahrung waechst ueber dieselbe Kurve
   wie das Geld, also mit jedem Kauf. Wer schon Erfahrung zahlt, zahlt

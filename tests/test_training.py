@@ -341,3 +341,38 @@ def test_ein_programm_uebersteht_speichern_und_laden(k, tmp_path) -> None:
     assert nachher == vorher, f"{nachher} != {vorher}"
     # Und der Platz ist nach dem Laden weiter belegt.
     assert c.platz_fuer(name) in geladen.karriere.belegt
+
+
+# --- Punkt 99: Mehrfachkauf -----------------------------------------------
+def test_mehrfachkauf_kostet_wie_einzelne_kaeufe(k) -> None:
+    """Punkt 99: Fuenf Schritte am Stueck sind so teuer wie fuenf einzelne.
+
+    Jeder Schritt kostet, was er an **seiner** Stelle der Leiter kostet -
+    sonst waere der Sammelkauf ein Rabatt, den niemand beschlossen hat.
+    """
+    from rennmanager.kern import karriere as kk
+
+    einzeln = kk.beginne(k, 2026, 10)
+    gesamt = kk.beginne(k, 2026, 10)
+    geld = einzeln.konto.geld
+    for _ in range(5):
+        einzeln.kaufe("F1")
+    gesamt.kaufe("F1", 5)
+    assert gesamt.wert("F1") == einzeln.wert("F1")
+    assert geld - gesamt.konto.geld == geld - einzeln.konto.geld
+    assert gesamt.konto.erfahrung == einzeln.konto.erfahrung
+
+
+def test_mehrfachkauf_ohne_deckung_bucht_gar_nichts(k) -> None:
+    """Entweder ganz oder nicht - ein halber Kauf waere nicht nachvollziehbar."""
+    import pytest as pt
+
+    from rennmanager.kern import entwicklung as ke
+    from rennmanager.kern import karriere as kk
+
+    c = kk.beginne(k, 2026, 10)
+    c.konto = c.konto.mit(geld=-c.konto.geld)
+    vorher = c.wert("F1")
+    with pt.raises(ke.EntwicklungsFehler):
+        c.kaufe("F1", 10)
+    assert c.wert("F1") == vorher
