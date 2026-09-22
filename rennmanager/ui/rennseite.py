@@ -32,7 +32,7 @@ from rennmanager.kern import gummierung as kern_gummierung
 from rennmanager.kern import strecke as kern_strecke
 from rennmanager.kern import wertung as kern_wertung
 from rennmanager.kern import zwischenfall as kern_zwischenfall
-from rennmanager.kern.rennen import Rennverlauf
+from rennmanager.kern.rennen import KEIN_FAHRER, Rennverlauf
 from rennmanager.kern.welt import Welt
 from rennmanager.kern.zeit import (
     formatiere_dauer,
@@ -761,8 +761,8 @@ class Rennseite(QWidget):
         Wie ``_nachname``: Ein Feld aus ``rennen.starterfeld`` hat keinen
         Fahrer dahinter, dann bleibt die Spalte leer.
         """
-        nummer = getattr(teilnehmer, "nummer", 0)
-        if not nummer or self._welt is None or nummer >= len(self._welt.fahrer):
+        nummer = getattr(teilnehmer, "nummer", KEIN_FAHRER)
+        if self._welt is None or not 0 <= nummer < len(self._welt.fahrer):
             return ""
         return self._welt.team_von(self._welt.fahrer[nummer]).name
 
@@ -776,8 +776,8 @@ class Rennseite(QWidget):
         auch trennt. Ein Feld aus ``rennen.starterfeld`` hat keinen
         Fahrer dahinter - dann bleibt die Spalte leer.
         """
-        nummer = getattr(teilnehmer, "nummer", 0)
-        if not nummer or self._welt is None or nummer >= len(self._welt.fahrer):
+        nummer = getattr(teilnehmer, "nummer", KEIN_FAHRER)
+        if self._welt is None or not 0 <= nummer < len(self._welt.fahrer):
             return ""
         return kurzname(self._welt.fahrer[nummer].name)
 
@@ -1356,7 +1356,7 @@ class Rennseite(QWidget):
         bekannt = self._weltnamen.get(nummer)
         if bekannt is not None:
             return bekannt
-        if self._welt is None or not 0 < nummer < len(self._welt.fahrer):
+        if self._welt is None or not 0 <= nummer < len(self._welt.fahrer):
             return ("", "", "", "")
         fahrer = self._welt.fahrer[nummer]
         team = self._welt.team_von(fahrer)

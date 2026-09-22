@@ -51,6 +51,12 @@ if TYPE_CHECKING:  # pragma: no cover
 BEREICH_DUELL = "du"
 
 
+# Ein Feld aus ``starterfeld`` dieses Moduls hat keinen Fahrer hinter
+# dem Auto. Nicht die 0: Die Welt zaehlt ihre Fahrer ab null, und die
+# Nummer 0 gehoert einem echten Fahrer.
+KEIN_FAHRER = -1
+
+
 @dataclass(frozen=True)
 class Teilnehmer:
     """Ein Auto am Start, mit Anzeigedaten und Startplatz.
@@ -58,14 +64,18 @@ class Teilnehmer:
     :param nummer: Fahrernummer aus der Welt, damit die Oberflaeche von
         einer Zeile der Rangliste zum Fahrer zurueckfindet. Die Simulation
         liest sie nie; ein Feld aus ``starterfeld`` dieses Moduls hat
-        keinen Fahrer dahinter und behaelt die 0.
+        keinen Fahrer dahinter und behaelt die **-1**.
+
+        Der Platzhalter war einmal die 0 - und traf damit den Fahrer mit
+        der Nummer 0, den es wirklich gibt: In der Rangliste und im
+        Zeitenmonitor standen seine Zeilen ohne Namen und ohne Team da.
     """
 
     auto: Auto
     startplatz: int
     farbe: str
     ist_spieler: bool = False
-    nummer: int = 0
+    nummer: int = KEIN_FAHRER
 
     @property
     def kuerzel(self) -> str:

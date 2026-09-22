@@ -457,6 +457,39 @@ def test_der_ticker_ist_ein_blatt_neben_den_tabellen(gefahren) -> None:
         eltern = eltern.parent()
 
 
+def test_auch_fahrer_null_bekommt_namen_und_team(gefahren, konfig) -> None:
+    """Die Welt zaehlt ihre Fahrer ab null - die 0 ist kein Platzhalter.
+
+    Sie war es einmal: ``Teilnehmer.nummer`` stand ohne Fahrer auf 0, und
+    die Rangliste las das als "kein Fahrer dahinter". Der Fahrer mit der
+    Nummer 0 stand dadurch in jedem Rennen ohne Namen und ohne Team da -
+    in der Rangliste wie im Zeitenmonitor.
+    """
+    fenster, seite = gefahren
+    seite._halte_an()
+    stelle = next(
+        i for i, t in enumerate(seite.verlauf.teilnehmer) if t.nummer == 0
+    )
+    assert seite._namen[stelle], "Fahrer 0 hat keinen Namen in der Rangliste"
+    assert seite._teams[stelle], "Fahrer 0 hat kein Team in der Rangliste"
+    fahrer = fenster.welt.fahrer[0]
+    assert fahrer.nachname in seite._namen[stelle]
+    assert seite._teams[stelle] == fenster.welt.team_von(fahrer).name
+
+
+def test_ein_feld_ohne_fahrer_bleibt_leer(qtbot, konfig) -> None:
+    """Das Gegenstueck: ``rennen.starterfeld`` hat keine Fahrer dahinter."""
+    from rennmanager.kern import rennen as kern_rennen
+
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.rennseite
+    feld = kern_rennen.starterfeld(konfig)
+    assert all(t.nummer == kern_rennen.KEIN_FAHRER for t in feld)
+    assert seite._nachname(feld[0]) == ""
+    assert seite._teamname(feld[0]) == ""
+
+
 # --- Punkt 73: Live-Meisterschaftsstand -----------------------------------
 # Spalten des Meisterschaftsblattes. Seit Punkt 82 steht "Team" dazwischen;
 # die Zahlen stehen hier einmal, statt in jedem Test zu stecken.
