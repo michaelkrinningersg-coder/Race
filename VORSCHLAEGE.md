@@ -404,3 +404,127 @@ belegen — so wie es `werkzeuge/boxenstopps.py` für das Balancing tut.
 gefühlte Ladezeit), dann E1–E5 (zusammen rund **−3,3 s**, gemessen
 erwartbar, ohne jede Verhaltensänderung), E12 nebenbei. E9 bleibt
 deine Entscheidung.
+
+---
+
+# Vorschläge, Stand 2026-09-22
+
+Nach Punkt 101 (ein Feld aus 50 Autos, feste Fahrer), Punkt 102
+(Führungsrunden) und Punkt 103 (keine geschätzten Rückstände). **Nichts
+davon ist gebaut.** Sag die Nummern, dann zeige ich für die gewählten
+einen Plan, bevor ich anfange (CLAUDE.md).
+
+Die Liste oben von 2026-09-20 gilt weiter, aber **mit Lücken**: Alles,
+was an Ligen, Geld, Erfahrung oder den vier Spielerautos hing, ist
+gegenstandslos geworden — A15 (Teamduell der vier Fahrer), A19 (was die
+Pole an Entwicklungspunkten gekostet hätte), B47 bis B52 (Team und
+Strategie mit Konto). Gebaut sind unter anderem A9, A17, A23, B53 und
+B59.
+
+Sechs Punkte unten sind **gemessen**, nicht geraten: 6, 12, 19, 25, 29
+und 30. Sie beschreiben etwas, das heute nachweislich schief steht.
+
+## Rennen
+
+1. **Rundenzeitenband unter der Rangliste.** Je Auto eine Zeile aus 55
+   kleinen Kästchen, eines je Runde, eingefärbt nach Mischung. Ein Blick
+   sagt, wer wann gestoppt hat und wo eine Runde ausriss. Die Daten
+   stehen komplett in `Rundenprotokoll`.
+2. **Der Führungswechsel als Meldung.** Der Ticker meldet Fehler,
+   Unfälle und Defekte — nicht aber „VER übernimmt die Führung". Nach
+   Punkt 102 liegt die Information vor; gemessen fallen 7 bis 10 Wechsel
+   je Rennen, das wären 7 bis 10 zusätzliche Zeilen.
+3. **Rennbericht in fünf Sätzen** am Ende, statt nur einer Tabelle: wer
+   führte, wo es kippte, wer am meisten aufholte, die schnellste Runde,
+   der teuerste Zwischenfall. Alles aus dem Verlauf ablesbar.
+4. **Undercut sichtbar machen.** Wenn zwei Autos in benachbarten Runden
+   stoppen, die Positionen davor und danach gegenüberstellen. Die
+   Boxenbilanz sagt heute, was ein Stopp *gekostet* hat, nicht was er
+   *gebracht* hat.
+5. **Die eigenen zwei Autos anheften**: eine schmale Leiste über der
+   Rangliste, die sie immer zeigt — auch wenn sie auf P27 und P34
+   stehen und man gerade oben scrollt.
+6. **Der Zieleinlauf braucht eine eigene Ansicht.** *(gemessen)* Heute
+   steht am Ende dieselbe Rangliste wie in Runde 30, nur eingefroren.
+   Im letzten Screenshot standen 22 von 50 Autos auf „+1 Rd." — bei
+   vier Prozent Feldspanne über 55 Runden ist Überrunden die Regel, und
+   die Tabelle sagt nicht, wer auf der Führungsrunde blieb.
+7. **Positionsdiagramm über die Runden**, eine Linie je Auto wie beim
+   Rückstandsdiagramm, aber mit Platz statt Sekunden. Zeigt Verläufe,
+   die in Momentaufnahmen untergehen.
+8. **Reifenwahl auch während des Rennens** für die eigenen Autos: beim
+   nächsten Stopp eine andere Mischung. Heute steht die Strategie vor
+   dem Start fest — das ist eine Mechanikfrage, keine Anzeigefrage.
+
+## Qualifying
+
+9. **Die theoretische Pole** als Zeile über dem Feld: die vier besten
+   Sektoren des Feldes zusammengezählt. Steht schon als A4 auf der alten
+   Liste und ist nach wie vor der billigste Mehrwert dort.
+10. **Sektorbalken je Fahrer** statt vier Zahlenspalten — vier Balken,
+    Länge gleich Abstand zum besten Sektor.
+11. **Das Feld als Histogramm** der Rundenzeiten, die eigenen zwei Autos
+    markiert. Bei 4 % Spanne und 50 Autos ist die spannende Frage, wie
+    dicht der Pulk an der Stelle ist, wo man selbst steht.
+12. **Warum ist die Pole langsamer als die schnellste Rennrunde?**
+    *(gemessen)* Sakhir: Pole 1:34.020, schnellste Rennrunde 1:32.338.
+    Ursache ist die Gummierung — das Qualifying fährt auf grünerer
+    Strecke. Kein Fehler, aber es sieht nach einem aus. Entweder
+    erklären (ein Satz in der Session-Box) oder das Modell ändern.
+13. **Q1/Q2/Q3 statt einer Session.** 50 Autos, ein Lauf, eine Runde
+    jeder — das ist viel Feld für wenig Spannung. Ein Ausscheidungsmodus
+    wäre eine echte Mechanikerweiterung; steht nicht im GDD.
+14. **Sektorenvergleich zweier Fahrer** auf Knopfdruck, nebeneinander —
+    der Griff, den man nach jeder Session macht.
+
+## Statistiken
+
+15. **Führungsrunden in die Fahrerkarte.** Punkt 102 hat sie in die
+    Bestenliste gebracht, aber der Reiter *Saison* und der Reiter
+    *Laufbahn* kennen sie noch nicht. Dort gehören sie hin.
+16. **Führungsrunden je Strecke** in der Streckenbilanz — wer Monza
+    beherrscht, sieht man daran besser als an Siegen.
+17. **Kopf-an-Kopf zweier Fahrer** über die ganze Karriere: Qualifying,
+    Rennen, Punkte, Führungsrunden, wer wen wie oft geschlagen hat.
+18. **Saisonvergleich im Diagramm**: mehrere Saisons als Linien
+    übereinander, um zu sehen, ob eine Saison eng oder früh entschieden
+    war.
+19. **Der 30-Saisons-Lauf steht seit Block 5 offen.** *(gemessen: 10
+    von 30)* Seit Punkt 101 altert niemand mehr und entwickelt sich
+    niemand — der Lauf sollte jetzt ein völlig anderes Ergebnis liefern
+    als damals und wäre die Probe darauf, ob die Welt über Jahrzehnte
+    stabil bleibt. Aufgabe #37.
+20. **Rekorde mit Kontext**: Neben der schnellsten Runde stehen Jahr,
+    Wetter und Reifenmischung. Heute steht nur die Zeit da.
+21. **Eine Ansicht „Diese Saison in Zahlen"**: verschiedene Sieger,
+    Führungswechsel, engster Zieleinlauf, meiste Ausfälle. Die Saison
+    als Ganzes, nicht Fahrer für Fahrer.
+22. **Statistik ausgeben** als CSV — wer eigene Auswertungen fahren
+    will, kommt heute nur über den Spielstand heran.
+
+## Oberfläche und Bedienung
+
+23. **Die Reiterleiste rechts rollt.** Sechs Blätter brauchen 688 px,
+    verfügbar sind rund 570. Drei Wege: rechte Spalte breiter, Etiketten
+    kürzer, oder die Blätter in zwei Reihen. Steht seit Punkt 102 offen.
+24. **Tastatur im Rennen und im Qualifying**: Leertaste Start/Pause,
+    Pfeiltasten für den Zeitraffer, Pos1 an den Anfang. Heute ist alles
+    Maus.
+25. **Der Fortschrittsbalken ist nicht klickbar.** *(gemessen)* Wer in
+    Runde 40 sehen will, was in Runde 12 passiert ist, muss zurück auf
+    Anfang und vorspulen. `_springe` kann es längst — es fehlt nur der
+    Klick.
+26. **Spaltenwahl merken.** Die Rangliste hat 14 Spalten; wer Alter,
+    Reichweite und Planstopp nicht braucht, sollte sie dauerhaft
+    ausblenden können.
+27. **Dunkle Darstellung.** Elf Sekunden Rennen mit weißem Hintergrund
+    sind abends anstrengend, und die Teamfarben sind auf Dunkel ohnehin
+    besser zu unterscheiden.
+28. **Fenstergröße und Reiter merken** über den Programmstart hinweg.
+29. **Das Standbild sagt zu wenig.** *(gemessen)* Seit Punkt 103 steht
+    vor dem Start überall ein Strich — richtig, aber karg. Der
+    Startplatzabstand in Metern wäre dort eine echte Information.
+30. **`kern/wettersaison.py` ist tot.** *(gemessen)* Kein Modul
+    importiert es; nur sein eigener Test hält es am Leben. Entweder
+    anschließen — es würde eine Saison mit zusammenhängendem Wetter
+    ermöglichen statt 20 unabhängiger Würfe — oder löschen.
