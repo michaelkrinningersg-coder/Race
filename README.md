@@ -298,6 +298,21 @@ vorbeigeht, war am letzten gemeinsamen Punkt noch hinten. Gemessen kam
 das in 11,6 % der Bilder vor, vor allem in der ersten Runde, wo der
 einzige gemeinsame Punkt die Startlinie ist.
 
+Seit Punkt 103 wird **gar nicht mehr geschaetzt**. Solange zwei Autos
+keinen gemeinsamen Messpunkt passiert haben, steht in beiden Spalten ein
+Strich. Weil der erste Messpunkt einer Runde auf der Start/Ziel-Linie
+liegt, heisst das: **Vor seiner ersten Ueberfahrt hat ein Fahrer keinen
+Rueckstand** - und die Anzeige behauptet auch keinen.
+
+Der Rest der Schaetzung war nur auf dem Standbild vor dem Start uebrig,
+und dort lieferte er Unsinn: Die Autos kriechen im ersten Bild mit
+0,345 m/s los, und 5 m Startabstand geteilt durch dieses Tempo ergaben
+**14,47 s je Startplatz** - der Fuenfzigste lag 11:49 zurueck, bevor das
+Rennen begonnen hatte. Die alte Schwelle "wer steht, hat keinen Abstand"
+(``TEMPO_STEHT``) fing das nicht ab, weil die Autos eben nicht ganz
+standen. Gemessen in Sakhir stehen die ersten echten Zahlen jetzt nach
+rund zwei Sekunden da, sobald beide die Linie hinter sich haben.
+
 #### Warum die Reihenfolge im Ziel nicht aus der Strecke kommt
 
 Die Rangliste sortierte anfangs allein nach zurueckgelegter Strecke. Das

@@ -1096,33 +1096,30 @@ class Rennseite(QWidget):
     ) -> str:
         """Der Zeitabstand zweier Autos am letzten gemeinsamen Messpunkt.
 
-        Auf den ersten Metern eines Rennens hat noch keiner einen Punkt
-        passiert; dann bleibt nur die alte Schaetzung aus Strecke und
-        Tempo. Sobald der erste Messpunkt faellt, stehen echte Zeiten da.
+        **Geschaetzt wird gar nichts** (Punkt 103). Solange die beiden
+        keinen gemeinsamen Messpunkt passiert haben, steht hier ein
+        Strich. Der erste Messpunkt einer Runde liegt auf der
+        Start/Ziel-Linie - vor seiner ersten Ueberfahrt hat ein Fahrer
+        also keinen Rueckstand, und die Anzeige behauptet auch keinen.
+
+        Davor stand hier eine Schaetzung aus Strecke geteilt durch Tempo.
+        Auf dem Standbild vor dem Start kam dabei Unsinn heraus: Die
+        Autos kriechen im ersten Bild mit 0,345 m/s los, und 5 m
+        Startabstand geteilt durch dieses Tempo ergaben 14,47 s **je
+        Startplatz** - der Fuenfzigste lag 11:49 zurueck, bevor das
+        Rennen begonnen hatte. Die Schwelle ``TEMPO_STEHT`` fing das
+        nicht ab, weil die Autos eben nicht ganz standen.
 
         **Ein Minus ist moeglich und richtig so.** Zwischen zwei
         Messpunkten liegt rund ein Achtel Runde. Wer in dieser Zeit
         vorbeigeht, liegt jetzt vorn, war am letzten gemeinsamen Punkt
         aber noch hinten - dann steht dort ein negativer Wert, und der
         sagt genau das: seit dem letzten Split hat sich etwas geaendert.
-        Gemessen kam das in 11,6 % der Bilder vor, vor allem in der ersten
-        Runde, wo der einzige gemeinsame Punkt die Startlinie ist und die
-        Zeiten dort noch die Startaufstellung tragen. Geschaetzt wird
-        nichts - so hat es der Auftraggeber verlangt.
+        Gemessen kam das in 11,6 % der Bilder vor, vor allem in der
+        ersten Runde.
         """
         echt = verlauf.abstand_ms(hinten, vorne, zeit)
-        if echt is not None:
-            return formatiere_rueckstand(echt)
-        distanzen = verlauf.distanzen_zu(zeit)
-        abstand = float(distanzen[vorne]) - float(distanzen[hinten])
-        tempo = self._tempo_naeherung(verlauf, vorne, zeit)
-        # Punkt 83: Ein stehendes Auto hat kein Tempo, durch das sich
-        # teilen liesse. Frueher fing ``max(tempo, 1e-6)`` das ab - und
-        # machte aus einer Rundenlaenge rund anderthalb Millionen Stunden.
-        # Wer steht, hat keinen Abstand in Sekunden; dann steht da nichts.
-        if tempo <= TEMPO_STEHT:
-            return "-"
-        return formatiere_rueckstand(int(abstand / tempo * 1000))
+        return formatiere_rueckstand(echt) if echt is not None else "-"
 
     @staticmethod
     def _status(zwischenfaelle, ausgefallen: bool) -> str:

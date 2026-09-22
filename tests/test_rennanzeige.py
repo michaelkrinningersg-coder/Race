@@ -639,8 +639,8 @@ class _Standlauf:
         self.zeitpunkte_ms = np.array([0, 1000])
 
     def abstand_ms(self, hinten, vorne, zeit):
-        # Kein gemeinsamer Messpunkt - genau der Fall, der in die
-        # Schaetzung unten faellt.
+        # Kein gemeinsamer Messpunkt - genau der Fall, in dem frueher
+        # geschaetzt wurde und seit Punkt 103 ein Strich steht.
         return None
 
     def distanzen_zu(self, zeit):
@@ -650,11 +650,15 @@ class _Standlauf:
         return 0
 
 
-def test_ein_stehendes_auto_hat_keinen_abstand_in_sekunden(qtbot, konfig) -> None:
-    """Punkt 83: ``max(tempo, 1e-6)`` machte aus einer Runde 1,5 Mio Stunden.
+def test_ohne_gemeinsamen_messpunkt_steht_ein_strich(qtbot, konfig) -> None:
+    """Punkt 103: Geschaetzt wird gar nichts mehr.
 
-    Gemessen in der Rangliste: ``-1487467:14:28.515``. 5355 m geteilt
-    durch 1e-6 m/s sind 5,4 Milliarden Sekunden - genau diese Zahl.
+    Frueher rechnete die Anzeige hier Strecke durch Tempo. Punkt 83 hatte
+    daran schon den groebsten Unsinn abgefangen (``max(tempo, 1e-6)``
+    machte aus einer Runde 1,5 Mio Stunden), aber die Schaetzung selbst
+    blieb - und lieferte vor dem Start 14,47 s je Startplatz. Jetzt steht
+    dort ein Strich, solange die beiden keinen gemeinsamen Messpunkt
+    passiert haben.
     """
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
@@ -933,3 +937,52 @@ def test_die_ueberschrift_nennt_die_wechsel(gefahren) -> None:
     titel = seite._fuehrungskasten.title()
     assert f"{seite.verlauf.runden} von {seite.verlauf.runden} Runden" in titel
     assert f"{seite.verlauf.fuehrungswechsel()} Wechsel" in titel
+
+
+# --- Punkt 103: Vor der ersten Ueberfahrt gibt es keinen Rueckstand -------
+def test_vor_dem_start_hat_niemand_einen_rueckstand(gefahren) -> None:
+    """Punkt 103: Auf dem Standbild steht ueberall ein Strich.
+
+    Gemessen stand dort vorher Unsinn: Die Autos kriechen im ersten Bild
+    mit 0,345 m/s los, und 5 m Startabstand geteilt durch dieses Tempo
+    ergaben 14,47 s **je Startplatz** - der Fuenfzigste lag 11:49
+    zurueck, bevor das Rennen begonnen hatte.
+    """
+    _fenster, seite = gefahren
+    seite._halte_an()
+    seite._springe(0)
+
+    rueckstaende = set(_spalte_je_auto(seite, rs.SPALTE_ZEIT).values())
+    intervalle = set(_spalte_je_auto(seite, rs.SPALTE_INTERVALL).values())
+    # Der Fuehrende zeigt seine Rennzeit, alle anderen einen Strich.
+    assert rueckstaende <= {"-", "0:00.000"}
+    assert intervalle == {"-"}
+
+
+def test_nach_der_ersten_ueberfahrt_stehen_echte_zeiten(gefahren) -> None:
+    """Sobald beide die Linie hinter sich haben, wird gemessen statt nichts.
+
+    Der erste Messpunkt einer Runde liegt auf der Start/Ziel-Linie
+    (``messpunkte[0] == 0``); davor gibt es keinen gemeinsamen Punkt.
+    """
+    _fenster, seite = gefahren
+    verlauf = seite.verlauf
+    seite._halte_an()
+
+    # Irgendwann im Rennen muessen echte Abstaende dastehen.
+    seite._springe(verlauf.dauer_ms * 0.5)
+    intervalle = _spalte_je_auto(seite, rs.SPALTE_INTERVALL)
+    mit_zeit = [t for t in intervalle.values() if t not in ("-", "")]
+    assert len(mit_zeit) > len(intervalle) // 2, intervalle
+
+    # Und sie kommen wirklich aus der Messung, nicht aus einer Schaetzung.
+    zeit = verlauf.dauer_ms * 0.5
+    reihenfolge = verlauf.reihenfolge_zu(zeit)
+    hinten, vorne = reihenfolge[1], reihenfolge[0]
+    echt = verlauf.abstand_ms(hinten, vorne, zeit)
+    if echt is not None:
+        from rennmanager.kern.zeit import formatiere_rueckstand
+
+        assert seite._zeitabstand(verlauf, hinten, vorne, zeit) == (
+            formatiere_rueckstand(echt)
+        )

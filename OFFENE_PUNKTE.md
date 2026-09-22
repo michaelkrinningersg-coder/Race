@@ -3,9 +3,9 @@
 Das GDD nennt an vielen Stellen eine Mechanik, ohne sie zu beziffern.
 Dieses Dokument listet jede solche Lücke, drei Varianten und die getroffene
 Entscheidung. **Stand 2026-09-17: alle 41 Punkte entschieden.**
-Was danach dazukam, steht als Nachtrag am Ende — zuletzt **Punkt 102**,
-die Führungsrunden, und davor **Punkt 101**, der Umbau auf ein Feld aus
-50 Autos mit festen Fahrern.
+Was danach dazukam, steht als Nachtrag am Ende — zuletzt **Punkt 103**
+(keine geschätzten Rückstände mehr), davor **Punkt 102** (Führungsrunden)
+und **Punkt 101** (ein Feld aus 50 Autos mit festen Fahrern).
 
 Die entschiedenen Werte stehen in `konfiguration/balancing.toml`; der
 Abschnitt `[offen]` dort ist leer. Jede Entscheidung lässt sich ändern,
@@ -3128,3 +3128,39 @@ Schnellmodus lässt je Runde nur einen Überholversuch zu.
   das behoben haben will, muss entweder die rechte Spalte breiter
   machen oder mehrere Etiketten kürzen. Das ist eine Layoutfrage und
   wurde nicht eigenmächtig entschieden.
+
+---
+
+## Punkt 103: Vor der ersten Überfahrt gibt es keinen Rückstand
+
+Aufgefallen beim Fotografieren der Standbilder zu Punkt 101: Vor dem
+Start standen in der Rangliste absurde Abstände — P2 lag +14.473
+zurück, P50 volle +11:49, und zwar bevor die Ampel aus war.
+
+Gemessene Ursache: Die Anzeige schätzte den Abstand aus Strecke geteilt
+durch Tempo, wenn noch kein gemeinsamer Messpunkt vorlag. Im ersten
+50-ms-Bild kriechen die Autos mit **0,345 m/s** los; 5 m Startabstand
+geteilt durch dieses Tempo sind 14,47 s **je Startplatz**. Die Schwelle
+aus Punkt 83 („wer steht, hat keinen Abstand", `TEMPO_STEHT = 0,1 m/s`)
+griff nicht, weil die Autos eben nicht ganz standen.
+
+Drei Wege standen zur Wahl: die Schwelle hochsetzen, gar nicht schätzen,
+oder im Stand den Startplatzabstand in Metern zeigen.
+
+**Entscheidung des Auftraggebers: gar nicht schätzen.** „Bis zum ersten
+Mal Start/Ziel hat ein Fahrer keinen Rückstand."
+
+Das fiel mit dem Modell zusammen, ohne dass etwas erfunden werden
+musste: Der erste der acht Messpunkte je Runde liegt auf der
+Start/Ziel-Linie. `Rennverlauf.abstand_ms` liefert `None`, solange die
+beiden keinen gemeinsamen Punkt passiert haben — also genau bis zur
+ersten Überfahrt. Die Anzeige gibt diesen Fall jetzt als Strich weiter,
+statt ihn mit einer Schätzung zu füllen.
+
+Gemessen in Sakhir: Bei t = 0 und t = 1 s steht überall ein Strich, ab
+rund zwei Sekunden stehen echte Zeiten da (+1.010 s für P2 — die
+Differenz der beiden Linienüberfahrten, nicht geschätzt).
+
+Betroffen sind beide Spalten, „Zeit / Rückstand" und „Intervall": Sie
+gehen durch dieselbe Funktion. Die km/h-Spalte bleibt, wie sie war; sie
+braucht das Momentantempo weiterhin und hat ihre eigene Schwelle.
