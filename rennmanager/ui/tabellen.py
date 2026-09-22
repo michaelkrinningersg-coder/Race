@@ -57,6 +57,80 @@ def setze_breiten(tabelle: QTreeWidget, proben, rand: int = 16) -> None:
         tabelle.setColumnWidth(spalte, breite + rand)
 
 
+# Die Spalten einer Bilanz (Punkte 21 und 23). Sie stehen in der
+# Fahrerkarte und auf der Statistikseite, und zwar in beiden gleich -
+# deshalb hier und nicht zweimal dort. Die letzten beiden kamen mit
+# Vorschlag 16 dazu.
+BILANZSPALTEN = (
+    "Starts",
+    "Siege",
+    "Podien",
+    "Poles",
+    "SR",
+    "DNF",
+    "Punkte",
+    "Bester",
+    "Fuehrung",
+    "Anteil",
+)
+
+
+def _zahl(wert: float) -> str:
+    """Ganze Zahl mit Punkt als Tausendertrennung, wie im ganzen Spiel."""
+    return f"{round(wert):,}".replace(",", ".")
+
+
+def _prozent(anteil: float) -> str:
+    return f"{anteil * 100:.2f} %".replace(".", ",")
+
+
+def bilanzfelder(bilanz) -> list[str]:
+    """Die Spalten einer Bilanz als Text, zu ``BILANZSPALTEN`` passend.
+
+    Ohne Bilanz - also vor dem ersten Rennen dort - bleiben sie leer statt
+    auf 0 zu stehen: "noch nie gefahren" ist etwas anderes als "null Siege".
+    """
+    if bilanz is None or not bilanz.rennen:
+        return [""] * len(BILANZSPALTEN)
+    return [
+        _zahl(bilanz.rennen),
+        _zahl(bilanz.siege),
+        _zahl(bilanz.podien),
+        _zahl(bilanz.poles),
+        _zahl(bilanz.schnellste_runden),
+        _zahl(bilanz.ausfaelle),
+        _zahl(bilanz.punkte),
+        str(bilanz.bester_platz) if bilanz.bester_platz else "-",
+        # Vorschlag 16: die Runden in Fuehrung hier und ihr Anteil an
+        # denen, die er hier ueberhaupt gefahren ist.
+        _zahl(bilanz.fuehrungsrunden),
+        _prozent(bilanz.fuehrungsanteil) if bilanz.gefahrene_runden else "-",
+    ]
+
+
+def setze_bilanzsortierung(zeile, bilanz, ab: int) -> None:
+    """Sortiert die Bilanzspalten nach Zahlen, nicht nach Text."""
+    if bilanz is None:
+        werte = [0] * len(BILANZSPALTEN)
+    else:
+        werte = [
+            bilanz.rennen,
+            bilanz.siege,
+            bilanz.podien,
+            bilanz.poles,
+            bilanz.schnellste_runden,
+            bilanz.ausfaelle,
+            bilanz.punkte,
+            # Platz 1 ist der beste: ohne Vorzeichenwechsel stuende der
+            # Sieger beim Sortieren ganz unten. Wer nie ankam, auch.
+            -bilanz.bester_platz if bilanz.bester_platz else -99,
+            bilanz.fuehrungsrunden,
+            bilanz.fuehrungsanteil,
+        ]
+    for versatz, wert in enumerate(werte):
+        zeile.setze_sortierwert(ab + versatz, wert)
+
+
 class SortierbareZeile(QTreeWidgetItem):
     """Eine Zeile, die sich nach hinterlegten Schluesseln sortiert.
 

@@ -121,6 +121,11 @@ class Bilanz:
     punkte: int = 0
     # Das beste je erreichte Rennergebnis; 0 heisst "noch nie angekommen".
     bester_platz: int = 0
+    # Vorschlag 16: dieselben zwei Zahlen wie in ``Karrierezahlen``, nur
+    # hier je Strecke und je Lage. Sie kommen nicht aus dem Rennergebnis,
+    # sondern ueber ``verbuche_fuehrungsrunden`` aus dem Rennmodell.
+    fuehrungsrunden: int = 0
+    gefahrene_runden: int = 0
 
     def verbuche(
         self, konfiguration: Konfiguration, ergebnis: Rennergebnis
@@ -148,6 +153,20 @@ class Bilanz:
     @property
     def podestquote(self) -> float:
         return self.podien / self.rennen if self.rennen else 0.0
+
+    @property
+    def fuehrungsanteil(self) -> float:
+        """Anteil der hier gefahrenen Runden, die er vorn lag.
+
+        Der Anteil und nicht die blosse Zahl macht die Strecken
+        vergleichbar: Fuenf Runden in Fuehrung sind in Monaco wenig und
+        in Spa viel, weil die Rennen verschieden lang sind.
+        """
+        return (
+            self.fuehrungsrunden / self.gefahrene_runden
+            if self.gefahrene_runden
+            else 0.0
+        )
 
 
 @dataclass(frozen=True)
@@ -364,7 +383,12 @@ class Statistik:
         return self.melde_runde(strecke, schnellste_runde_ms, schnellster, saison, rennen)
 
     def verbuche_fuehrungsrunden(
-        self, saison: int, je_fahrer: dict[int, int], starter: Iterable[int]
+        self,
+        saison: int,
+        je_fahrer: dict[int, int],
+        starter: Iterable[int],
+        strecke: str = "",
+        wetter: str = "",
     ) -> None:
         """Traegt die Runden in Fuehrung eines Rennens ein (Punkt 102).
 
@@ -380,6 +404,10 @@ class Statistik:
         :param starter: alle gemeldeten Fahrer. Sie bekommen die Distanz
             als gefahrene Runden gutgeschrieben - auch der Letzte, sonst
             haette der Anteil keinen Nenner.
+        :param strecke: Strecke des Rennens (Vorschlag 16). Ohne sie
+            bleibt die Streckenbilanz unberuehrt - wie bei der
+            Wetterlage in ``verbuche_wochenende``.
+        :param wetter: vorherrschende Lage des Rennens (Vorschlag 16)
         """
         runden = sum(je_fahrer.values())
         if not runden:
@@ -390,8 +418,28 @@ class Statistik:
             self.saisonfuehrung[schluessel] = (
                 self.saisonfuehrung.get(schluessel, 0) + anzahl
             )
+            for bilanz in self._bilanzen_von(fahrer, strecke, wetter):
+                bilanz.fuehrungsrunden += anzahl
         for fahrer in starter:
             self.zahlen(fahrer).gefahrene_runden += runden
+            for bilanz in self._bilanzen_von(fahrer, strecke, wetter):
+                bilanz.gefahrene_runden += runden
+
+    def _bilanzen_von(
+        self, fahrer: int, strecke: str, wetter: str
+    ) -> list[Bilanz]:
+        """Die Bilanzen, in die ein Rennen dieses Fahrers zaehlt.
+
+        Aufgerufen wird das erst **nach** ``verbuche_wochenende``, das
+        beide Bilanzen fuer jeden Starter ohnehin anlegt - hier entsteht
+        also keine Zeile, die sonst leer bliebe.
+        """
+        gefunden: list[Bilanz] = []
+        if strecke:
+            gefunden.append(self.strecke_von(fahrer, strecke))
+        if wetter:
+            gefunden.append(self.wetter_von(fahrer, wetter))
+        return gefunden
 
     # -- Bilanzen (Punkte 21 und 23) ---------------------------------------
     def strecke_von(self, fahrer: int, strecke: str) -> Bilanz:

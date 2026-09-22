@@ -133,6 +133,13 @@ TICKER_ZEICHEN = {
     kern_zwischenfall.Art.UNFALL: "✖",   # Kreuz
     kern_zwischenfall.Art.DEFEKT: "⚙",   # Zahnrad
 }
+# Vorschlag 2: Der Fuehrungswechsel ist **kein** Zwischenfall - er steht
+# nicht in ``verlauf.zwischenfaelle`` und zaehlt nirgends als einer. Er
+# bekommt trotzdem eine Zeile im Ticker, weil er dorthin gehoert: Was im
+# Rennen passiert, steht hier. Deshalb ein eigenes Zeichen und eine
+# eigene Farbe.
+TICKER_FUEHRUNG = "⚑"
+FARBE_FUEHRUNG = "#1565c0"
 # Wer ausfaellt, bekommt dasselbe Zeichen in Rot - der Ausfall ist keine
 # vierte Art, sondern das Ende einer der drei.
 FARBE_AUSFALL = "#c62828"
@@ -1557,12 +1564,79 @@ class Rennseite(QWidget):
                 for spalte in range(self._fuehrung.columnCount()):
                     zeile.setFont(spalte, schrift)
 
+    def _fuehrungsmeldungen(
+        self, verlauf: Rennverlauf, zeit: float
+    ) -> list[tuple[int, int, int, str]]:
+        """Die Fuehrungswechsel bis hierher (Vorschlag 2).
+
+        ``(Zeit, Runde, Auto, Text)`` je Wechsel. Der Zeitpunkt ist die
+        Ueberfahrt an der Start/Ziel-Linie - der Moment, in dem der
+        Wechsel wirklich stattfindet (Punkt 102).
+
+        Der erste Fuehrende ist kein Wechsel: Dass der Erste der ersten
+        Runde fuehrt, ist keine Meldung wert.
+        """
+        meldungen: list[tuple[int, int, int, str]] = []
+        davor: int | None = None
+        for runde, (wer, ende) in enumerate(verlauf.fuehrender_je_runde, start=1):
+            if ende > zeit:
+                break
+            if davor is not None and wer != davor:
+                meldungen.append(
+                    (
+                        int(ende),
+                        runde,
+                        wer,
+                        f"uebernimmt die Fuehrung von "
+                        f"{verlauf.teilnehmer[davor].kuerzel}",
+                    )
+                )
+            davor = wer
+        return meldungen
+
     def _fuelle_ticker(self, verlauf: Rennverlauf, zeit: float) -> None:
-        """Zwischenfaelle bis zur laufenden Rennzeit, neueste zuerst (Punkt 4)."""
+        """Was bis zur laufenden Rennzeit passiert ist, neueste zuerst.
+
+        Zwei Quellen in einer Liste: die Zwischenfaelle aus Punkt 4 und
+        die Fuehrungswechsel aus Punkt 102 (Vorschlag 2). Gezaehlt werden
+        sie **getrennt** - ein Fuehrungswechsel ist kein Zwischenfall,
+        und eine Ueberschrift, die beides zusammenwirft, luegt.
+        """
         bisher = [z for z in verlauf.zwischenfaelle if z.zeit_ms <= zeit]
-        self._tickerkasten.setTitle(f"Zwischenfaelle ({len(bisher)})")
+        wechsel = self._fuehrungsmeldungen(verlauf, zeit)
+        self._tickerkasten.setTitle(
+            f"Meldungen - {len(bisher)} Zwischenfaelle, "
+            f"{len(wechsel)} Fuehrungswechsel"
+        )
         self._ticker.clear()
-        for z in sorted(bisher, key=lambda z: -z.zeit_ms)[:TICKER_ZEILEN]:
+
+        # Beide Quellen auf dieselbe Form bringen, dann gemeinsam sortieren.
+        eintraege: list[tuple[int, object]] = [(int(z.zeit_ms), z) for z in bisher]
+        eintraege += [(m[0], m) for m in wechsel]
+        for _zeitpunkt, was in sorted(
+            eintraege, key=lambda paar: -paar[0]
+        )[:TICKER_ZEILEN]:
+            if isinstance(was, tuple):
+                zeitpunkt, runde, stelle, text = was
+                teilnehmer = verlauf.teilnehmer[stelle]
+                zeile = QTreeWidgetItem(
+                    self._ticker,
+                    [
+                        TICKER_FUEHRUNG,
+                        formatiere_dauer(zeitpunkt),
+                        str(runde),
+                        teilnehmer.kuerzel,
+                        text,
+                    ],
+                )
+                zeile.setForeground(0, QColor(FARBE_FUEHRUNG))
+                zeile.setForeground(4, QColor(FARBE_FUEHRUNG))
+                zeile.setForeground(3, schriftfarbe(teilnehmer.farbe))
+                zeile.setData(0, Qt.UserRole, zeitpunkt)
+                zeile.setData(3, Qt.UserRole, stelle)
+                continue
+
+            z = was
             teilnehmer = verlauf.teilnehmer[z.teilnehmer]
             zeile = QTreeWidgetItem(
                 self._ticker,

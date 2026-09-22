@@ -50,7 +50,14 @@ from rennmanager.kern.zeit import formatiere_dauer
 from rennmanager.konfiguration import Konfiguration
 from rennmanager.ui.laufbahnansicht import Laufbahnansicht
 from rennmanager.ui.punkteansicht import Punkteansicht
-from rennmanager.ui.tabellen import Balkenzeichner, SortierbareZeile, schriftfarbe
+from rennmanager.ui.tabellen import (
+    BILANZSPALTEN,
+    Balkenzeichner,
+    SortierbareZeile,
+    bilanzfelder,
+    schriftfarbe,
+    setze_bilanzsortierung,
+)
 
 # Der Balken der Wirkungsbereiche soll die Form zeigen, nicht warnen -
 # deshalb liegen beide Schwellen unter jedem vorkommenden Anteil.
@@ -64,47 +71,6 @@ def _zahl(wert: float) -> str:
 
 def _prozent(anteil: float) -> str:
     return f"{anteil * 100:.2f} %".replace(".", ",")
-
-
-def _bilanzfelder(bilanz) -> list[str]:
-    """Die acht Spalten einer Bilanz als Text (Punkte 21 und 23).
-
-    Ohne Bilanz - also vor dem ersten Rennen dort - bleiben sie leer statt
-    auf 0 zu stehen: "noch nie gefahren" ist etwas anderes als "null Siege".
-    """
-    if bilanz is None or not bilanz.rennen:
-        return [""] * 8
-    return [
-        str(bilanz.rennen),
-        str(bilanz.siege),
-        str(bilanz.podien),
-        str(bilanz.poles),
-        str(bilanz.schnellste_runden),
-        str(bilanz.ausfaelle),
-        _zahl(bilanz.punkte),
-        str(bilanz.bester_platz) if bilanz.bester_platz else "-",
-    ]
-
-
-def _setze_bilanzsortierung(zeile, bilanz, ab: int) -> None:
-    """Sortiert die Bilanzspalten nach Zahlen, nicht nach Text."""
-    if bilanz is None:
-        werte = [0] * 8
-    else:
-        werte = [
-            bilanz.rennen,
-            bilanz.siege,
-            bilanz.podien,
-            bilanz.poles,
-            bilanz.schnellste_runden,
-            bilanz.ausfaelle,
-            bilanz.punkte,
-            # Platz 1 ist der beste: ohne Vorzeichenwechsel stuende der
-            # Sieger beim Sortieren ganz unten. Wer nie ankam, auch.
-            -bilanz.bester_platz if bilanz.bester_platz else -99,
-        ]
-    for versatz, wert in enumerate(werte):
-        zeile.setze_sortierwert(ab + versatz, wert)
 
 
 class Fahrerkarte(QDialog):
@@ -344,6 +310,10 @@ class Fahrerkarte(QDialog):
                 ("Ausfaelle:", eintrag.ausfaelle),
             ):
                 felder.addRow(beschriftung, QLabel(str(wert)))
+            # Punkt 102: Die Fuehrungsrunden stehen nicht in der Tabelle,
+            # sondern in der Statistik - sie kommen aus dem Rennmodell und
+            # nicht aus dem Rennergebnis.
+            felder.addRow("Fuehrungsrunden:", QLabel(self._fuehrung_der_saison()))
         spalte.addWidget(kasten)
 
         verlaufkasten = QGroupBox("Punkteverlauf des Feldes")
@@ -355,6 +325,15 @@ class Fahrerkarte(QDialog):
         spalte.addWidget(verlaufkasten, stretch=1)
         self._fuelle_verlauf()
         return seite
+
+    def _fuehrung_der_saison(self) -> str:
+        """Runden in Fuehrung in der laufenden Saison (Punkt 102)."""
+        if self._statistik is None or self._jahr is None:
+            return "-"
+        runden = self._statistik.saisonfuehrung.get(
+            (self._jahr, self._fahrer.nummer), 0
+        )
+        return str(runden)
 
     def _fuelle_verlauf(self) -> None:
         """Das Feld grau, dieser Fahrer als einzige farbige Linie."""
@@ -390,6 +369,16 @@ class Fahrerkarte(QDialog):
         if zahlen is None or not zahlen.rennen:
             felder.addRow(QLabel("Noch kein Rennen gefahren."))
         else:
+            # Punkt 102: Die Fuehrungsrunden mit ihrem Anteil - 30 sagen
+            # wenig, solange nicht danebensteht, ob es 60 oder 600
+            # gefahrene Runden waren.
+            fuehrung = (
+                f"{_zahl(zahlen.fuehrungsrunden)} von "
+                f"{_zahl(zahlen.gefahrene_runden)} "
+                f"({zahlen.fuehrungsanteil:.1%})".replace(".", ",")
+                if zahlen.gefahrene_runden
+                else "-"
+            )
             for beschriftung, wert in (
                 ("Rennen:", str(zahlen.rennen)),
                 ("Siege:", f"{zahlen.siege} ({zahlen.siegquote:.1%})".replace(".", ",")),
@@ -398,6 +387,7 @@ class Fahrerkarte(QDialog):
                 ("Schnellste Runden:", str(zahlen.schnellste_runden)),
                 ("Ausfaelle:", str(zahlen.ausfaelle)),
                 ("Punkte:", _zahl(zahlen.punkte)),
+                ("Fuehrungsrunden:", fuehrung),
             ):
                 felder.addRow(beschriftung, QLabel(wert))
             titel = self._statistik.titel_von(self._fahrer.nummer)
@@ -491,14 +481,7 @@ class Fahrerkarte(QDialog):
                 "Runden",
                 "Tempogewinn",
                 "Kenntnis",
-                "Starts",
-                "Siege",
-                "Podien",
-                "Poles",
-                "SR",
-                "DNF",
-                "Punkte",
-                "Bester",
+                *BILANZSPALTEN,
             ]
         )
         self._streckenliste.setRootIsDecorated(False)
@@ -531,12 +514,12 @@ class Fahrerkarte(QDialog):
                     f"{runden:.1f}".replace(".", ","),
                     _prozent(bonus),
                     "",
-                    *_bilanzfelder(bilanz),
+                    *bilanzfelder(bilanz),
                 ],
             )
             zeile.setze_sortierwert(2, runden)
             zeile.setze_sortierwert(3, bonus)
-            _setze_bilanzsortierung(zeile, bilanz, ab=5)
+            setze_bilanzsortierung(zeile, bilanz, ab=5)
             anteil = min(runden / voll, 1.0) if voll else 0.0
             zeile.setData(4, Balkenzeichner.ANTEILSROLLE, anteil)
             zeile.setze_sortierwert(4, anteil)
@@ -569,14 +552,7 @@ class Fahrerkarte(QDialog):
             [
                 "Wetterlage",
                 "Koennen",
-                "Starts",
-                "Siege",
-                "Podien",
-                "Poles",
-                "SR",
-                "DNF",
-                "Punkte",
-                "Bester",
+                *BILANZSPALTEN,
             ]
         )
         self._wetterliste.setRootIsDecorated(False)
@@ -609,13 +585,13 @@ class Fahrerkarte(QDialog):
                 else "-"
             )
             zeile = SortierbareZeile(
-                self._wetterliste, [lage, wert, *_bilanzfelder(bilanz)]
+                self._wetterliste, [lage, wert, *bilanzfelder(bilanz)]
             )
             if eintrag:
                 zeile.setze_sortierwert(
                     1, self._fahrer.auto.wetterwert(eintrag["schluessel"])
                 )
-            _setze_bilanzsortierung(zeile, bilanz, ab=2)
+            setze_bilanzsortierung(zeile, bilanz, ab=2)
         for stelle in range(self._wetterliste.columnCount()):
             self._wetterliste.resizeColumnToContents(stelle)
 

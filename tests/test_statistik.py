@@ -280,3 +280,77 @@ def test_die_abschlusstabelle_traegt_die_fuehrungsrunden_der_saison(k):
         assert zeile.fuehrungsrunden == lauf.statistik.saisonfuehrung.get(
             (2026, zeile.fahrer), 0
         )
+
+
+# -- Vorschlag 16: Fuehrungsrunden je Strecke und Wetterlage ----------------
+def test_die_fuehrungsrunden_stehen_auch_in_der_streckenbilanz(k):
+    """Dieselbe Zahl noch einmal dort, wo sie zustande kam."""
+    strecken = st.lade_alle(k)
+    welt = kw.erzeuge(k, Seedquelle(4).zweig("welt"))
+    lauf = sa.Saisonlauf(k, welt, Seedquelle(4), jahr=2026, strecken=strecken)
+    wochenende = lauf.fahre_rennen()
+
+    runden = sum(wochenende.fuehrungsrunden_je_fahrer.values())
+    for fahrer, anzahl in wochenende.fuehrungsrunden_je_fahrer.items():
+        bilanz = lauf.statistik.strecke_von(fahrer, wochenende.strecke)
+        assert bilanz.fuehrungsrunden == anzahl
+    # Und der Nenner steht bei jedem Starter, auch beim Letzten.
+    for ergebnis in wochenende.ergebnisse:
+        bilanz = lauf.statistik.strecke_von(ergebnis.fahrer, wochenende.strecke)
+        assert bilanz.gefahrene_runden == runden
+
+
+def test_die_fuehrungsrunden_stehen_auch_in_der_wetterbilanz(k):
+    """Nach dem ersten Rennen ist die Lage des Rennens voll belegt."""
+    strecken = st.lade_alle(k)
+    welt = kw.erzeuge(k, Seedquelle(4).zweig("welt"))
+    lauf = sa.Saisonlauf(k, welt, Seedquelle(4), jahr=2026, strecken=strecken)
+    wochenende = lauf.fahre_rennen()
+
+    lage = wochenende.vorherrschendes_wetter
+    assert lage, "Jedes Rennen hat eine vorherrschende Lage (Punkt 23)"
+    runden = sum(wochenende.fuehrungsrunden_je_fahrer.values())
+    gesamt = sum(
+        lauf.statistik.wetter_von(e.fahrer, lage).fuehrungsrunden
+        for e in wochenende.ergebnisse
+    )
+    assert gesamt == runden
+
+
+def test_zwei_strecken_teilen_die_fuehrungsrunden_auf(k):
+    """Die Summe ueber die Strecken ist die Karrierezahl - nicht mehr."""
+    strecken = st.lade_alle(k)
+    welt = kw.erzeuge(k, Seedquelle(4).zweig("welt"))
+    lauf = sa.Saisonlauf(k, welt, Seedquelle(4), jahr=2026, strecken=strecken)
+    erstes = lauf.fahre_rennen()
+    zweites = lauf.fahre_rennen()
+    assert erstes.strecke != zweites.strecke, "Zwei verschiedene Strecken"
+
+    for fahrer in (e.fahrer for e in zweites.ergebnisse):
+        zahlen = lauf.statistik.zahlen(fahrer)
+        je_strecke = lauf.statistik.strecken_von(fahrer)
+        assert sum(b.fuehrungsrunden for b in je_strecke.values()) == (
+            zahlen.fuehrungsrunden
+        )
+        assert sum(b.gefahrene_runden for b in je_strecke.values()) == (
+            zahlen.gefahrene_runden
+        )
+
+
+def test_ohne_strecke_und_lage_bleiben_die_bilanzen_leer(statistik):
+    """Der alte Aufrufweg fuehrt weiter nur die Karrierezahlen.
+
+    Wichtig, damit ``verbuche_fuehrungsrunden`` nicht heimlich Bilanzen
+    anlegt, die nie ein Rennen gesehen haben.
+    """
+    statistik.verbuche_fuehrungsrunden(2026, {1: 10}, [1, 2])
+    assert statistik.zahlen(1).fuehrungsrunden == 10
+    assert not statistik.streckenbilanz
+    assert not statistik.wetterbilanz
+
+
+def test_der_anteil_einer_bilanz_haengt_an_den_gefahrenen_runden():
+    bilanz = stt.Bilanz(rennen=2, fuehrungsrunden=15, gefahrene_runden=60)
+    assert bilanz.fuehrungsanteil == pytest.approx(0.25)
+    # Ohne Nenner kein Anteil - und keine Division durch null.
+    assert stt.Bilanz(rennen=1).fuehrungsanteil == 0.0

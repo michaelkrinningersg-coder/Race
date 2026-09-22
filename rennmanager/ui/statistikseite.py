@@ -31,7 +31,12 @@ from rennmanager.kern.statistik import Statistik
 from rennmanager.kern.welt import Welt
 from rennmanager.kern.zeit import formatiere_dauer, formatiere_rueckstand
 from rennmanager.konfiguration import Konfiguration
-from rennmanager.ui.tabellen import schriftfarbe, verbinde_fahrerkarte
+from rennmanager.ui.tabellen import (
+    BILANZSPALTEN,
+    bilanzfelder,
+    schriftfarbe,
+    verbinde_fahrerkarte,
+)
 
 REKORDE = "rekorde"
 BESTENLISTE = "bestenliste"
@@ -40,18 +45,6 @@ HISTORIE = "historie"
 STRECKENBILANZ = "streckenbilanz"
 WETTERBILANZ = "wetterbilanz"
 BESTMARKEN = "bestmarken"
-
-# Die Spalten einer Bilanz, ueberall gleich (Punkte 21 und 23).
-BILANZSPALTEN = (
-    "Starts",
-    "Siege",
-    "Podien",
-    "Poles",
-    "SR",
-    "DNF",
-    "Punkte",
-    "Bester",
-)
 
 # Merkmale der Bestenliste - Schluessel in Karrierezahlen, Anzeigename.
 # Ab so vielen Rennen zaehlt eine Quote als Bestmarke - sonst gewinnt,
@@ -366,20 +359,11 @@ class Statistikseite(QWidget):
         )
         for platz, (nummer, bilanz) in enumerate(geordnet, start=1):
             fahrer = self._welt.fahrer[nummer]
+            # Dieselben Felder wie in der Fahrerkarte - aus demselben
+            # Helfer, damit beide Tabellen nicht auseinanderlaufen.
             zeile = QTreeWidgetItem(
                 self._tabelle,
-                [
-                    str(platz),
-                    fahrer.name,
-                    str(bilanz.rennen),
-                    str(bilanz.siege),
-                    str(bilanz.podien),
-                    str(bilanz.poles),
-                    str(bilanz.schnellste_runden),
-                    str(bilanz.ausfaelle),
-                    _zahl(bilanz.punkte),
-                    str(bilanz.bester_platz) if bilanz.bester_platz else "-",
-                ],
+                [str(platz), fahrer.name, *bilanzfelder(bilanz)],
             )
             self._faerbe(zeile, fahrer)
 
@@ -518,6 +502,10 @@ class Statistikseite(QWidget):
     @property
     def streckenauswahl(self) -> QComboBox:
         return self._strecke
+
+    @property
+    def lagenauswahl(self) -> QComboBox:
+        return self._lage
 
     @property
     def merkmalauswahl(self) -> QComboBox:

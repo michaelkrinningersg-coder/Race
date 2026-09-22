@@ -496,8 +496,12 @@ class Rennverlauf:
         return tuple(gesehen)
 
     @cached_property
-    def _fuehrender_je_runde(self) -> tuple[tuple[int, int], ...]:
+    def fuehrender_je_runde(self) -> tuple[tuple[int, int], ...]:
         """Je gefuehrter Runde: wer sie fuehrte und wann sie zu Ende war.
+
+        Oeffentlich, weil der Ticker der Rennseite den **Zeitpunkt**
+        jedes Wechsels braucht (Vorschlag 2) - den geben
+        ``fuehrungsrunden`` und ``fuehrungswechsel`` nicht her.
 
         Gefuehrt hat eine Runde, wer sie an der **Start/Ziel-Linie** als
         Erster abschliesst. Das ist genau die Zaehlweise, die der
@@ -542,7 +546,7 @@ class Rennverlauf:
             zeigen.
         """
         gezaehlt = [0] * self.anzahl
-        for wer, ende in self._fuehrender_je_runde:
+        for wer, ende in self.fuehrender_je_runde:
             if zeit_ms is not None and ende > zeit_ms:
                 break
             gezaehlt[wer] += 1
@@ -556,7 +560,7 @@ class Rennverlauf:
         """
         wechsel = 0
         davor: int | None = None
-        for wer, ende in self._fuehrender_je_runde:
+        for wer, ende in self.fuehrender_je_runde:
             if zeit_ms is not None and ende > zeit_ms:
                 break
             if davor is not None and wer != davor:

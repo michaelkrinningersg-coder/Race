@@ -652,3 +652,66 @@ def test_die_bestenliste_zeigt_fuehrungsrunden(qtbot, konfig) -> None:
     assert sum(runden) == sum(wochenende.fuehrungsrunden_je_fahrer.values())
     # Und der Anteil steht als Prozentzahl daneben.
     assert seite.tabelle.topLevelItem(0).text(10).endswith("%")
+
+
+# -- Vorschlag 16: Fuehrungsrunden je Strecke und Wetterlage ----------------
+def test_die_streckenbilanz_zeigt_die_fuehrungsrunden(qtbot, konfig) -> None:
+    """Dieselben zwei Spalten wie in der Bestenliste, nur je Strecke."""
+    from rennmanager.ui.statistikseite import STRECKENBILANZ
+
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    fenster.saisonseite.lauf.fahre_rennen()
+    wochenende = fenster.saisonseite.lauf.wochenenden[0]
+
+    seite = fenster.statistikseite
+    seite.ansicht.setCurrentIndex(seite.ansicht.findData(STRECKENBILANZ))
+    seite.streckenauswahl.setCurrentIndex(
+        seite.streckenauswahl.findData(wochenende.strecke)
+    )
+    seite.aktualisiere()
+
+    kopf = [
+        seite.tabelle.headerItem().text(i)
+        for i in range(seite.tabelle.columnCount())
+    ]
+    assert kopf[-2:] == ["Fuehrung", "Anteil"]
+
+    zeilen = seite.tabelle.topLevelItemCount()
+    assert zeilen > 0
+    stelle = kopf.index("Fuehrung")
+    runden = [
+        int(seite.tabelle.topLevelItem(i).text(stelle)) for i in range(zeilen)
+    ]
+    # Jede Runde des Rennens hat genau einen Fuehrenden - die Summe ueber
+    # das Feld ist also die Renndistanz.
+    assert sum(runden) == sum(wochenende.fuehrungsrunden_je_fahrer.values())
+    assert seite.tabelle.topLevelItem(0).text(kopf.index("Anteil")).endswith("%")
+
+
+def test_die_wetterbilanz_zeigt_die_fuehrungsrunden(qtbot, konfig) -> None:
+    """Und dieselben zwei je Lage - aus demselben Helfer wie oben."""
+    from rennmanager.ui.statistikseite import WETTERBILANZ
+
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    fenster.saisonseite.lauf.fahre_rennen()
+    wochenende = fenster.saisonseite.lauf.wochenenden[0]
+
+    seite = fenster.statistikseite
+    seite.ansicht.setCurrentIndex(seite.ansicht.findData(WETTERBILANZ))
+    seite.lagenauswahl.setCurrentIndex(
+        seite.lagenauswahl.findData(wochenende.vorherrschendes_wetter)
+    )
+    seite.aktualisiere()
+
+    kopf = [
+        seite.tabelle.headerItem().text(i)
+        for i in range(seite.tabelle.columnCount())
+    ]
+    stelle = kopf.index("Fuehrung")
+    runden = [
+        int(seite.tabelle.topLevelItem(i).text(stelle))
+        for i in range(seite.tabelle.topLevelItemCount())
+    ]
+    assert sum(runden) == sum(wochenende.fuehrungsrunden_je_fahrer.values())

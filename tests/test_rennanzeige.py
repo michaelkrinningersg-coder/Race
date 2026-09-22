@@ -77,6 +77,46 @@ def gefahren(qtbot, konfig, vierrundenrennen):
     return fenster, seite
 
 
+# Vorschlag 2: Der Standardlauf (Seed 4711) hat keinen einzigen
+# Fuehrungswechsel - einer faehrt vier Runden lang vorn. Gemessen ueber
+# die Seeds 1 bis 24 auf derselben Strecke: Seed 4 bringt drei Wechsel
+# (VER, FOI, MEL, FOI) und dazu sieben Zwischenfaelle, also beide
+# Quellen des Tickers in einem Rennen.
+SEED_MIT_WECHSELN = 4
+
+
+@pytest.fixture(scope="module")
+def wechselrennen(konfig):
+    """Ein Vierrundenrennen, das wirklich Fuehrungswechsel hat.
+
+    Sonst pruefen die Ticker-Tests der Vorschlag-2-Zeilen nichts: Ohne
+    Wechsel ist die leere Liste richtig, und der Test gruen, obwohl die
+    Anzeige kaputt sein koennte.
+    """
+    from tests.oberflaeche import rennverlauf
+
+    fenster = Hauptfenster(konfig)
+    daten = rennverlauf(fenster, runden=4, seed=SEED_MIT_WECHSELN)
+    fenster.close()
+    return daten
+
+
+@pytest.fixture
+def gewechselt(qtbot, konfig, wechselrennen):
+    """Das Wechselrennen, abgespielt bis zum Ziel.
+
+    Bis zum Ende und nicht bis zur Mitte: Ein Wechsel in der letzten
+    Runde soll auch im Ticker stehen.
+    """
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    seite = fenster.rennseite
+    seite.zeige_verlauf(*wechselrennen)
+    seite._halte_an()
+    seite._zum_ende()
+    return fenster, seite
+
+
 # --- Punkt 1: Intervall ---------------------------------------------------
 def test_die_rangliste_zeigt_rueckstand_und_intervall(gefahren) -> None:
     _fenster, seite = gefahren
@@ -765,9 +805,13 @@ def test_der_ticker_traegt_je_art_ein_eigenes_zeichen(qtbot, konfig, stopprennen
         for i in range(seite._ticker.topLevelItemCount())
     ]
     assert gezeigt, "Dieser Lauf muss Zwischenfaelle haben"
-    assert set(gezeigt) <= set(rs.TICKER_ZEICHEN.values())
+    # Vorschlag 2: Der Fuehrungswechsel steht mit im Blatt und hat sein
+    # eigenes Zeichen - er ist aber keine vierte Art von Zwischenfall.
+    erlaubt = set(rs.TICKER_ZEICHEN.values()) | {rs.TICKER_FUEHRUNG}
+    assert set(gezeigt) <= erlaubt
     # Und die drei Arten haben wirklich verschiedene Zeichen.
     assert len(set(rs.TICKER_ZEICHEN.values())) == 3
+    assert rs.TICKER_FUEHRUNG not in rs.TICKER_ZEICHEN.values()
     assert set(rs.TICKER_ZEICHEN) == {zw.Art.FEHLER, zw.Art.UNFALL, zw.Art.DEFEKT}
 
 
@@ -986,3 +1030,67 @@ def test_nach_der_ersten_ueberfahrt_stehen_echte_zeiten(gefahren) -> None:
         assert seite._zeitabstand(verlauf, hinten, vorne, zeit) == (
             formatiere_rueckstand(echt)
         )
+
+
+# --- Vorschlag 2: Fuehrungswechsel im Ticker ------------------------------
+def test_der_ticker_meldet_die_fuehrungswechsel(gewechselt) -> None:
+    """Was im Rennen passiert, steht im Ticker - auch der Fuehrungswechsel."""
+    _fenster, seite = gewechselt
+    schlage_blatt_auf(seite, "ticker")
+
+    zeilen = [
+        seite.ticker.topLevelItem(i)
+        for i in range(seite.ticker.topLevelItemCount())
+    ]
+    wechsel = [z for z in zeilen if z.text(0) == rs.TICKER_FUEHRUNG]
+    assert wechsel, "Dieses Rennen hat Fuehrungswechsel"
+    assert all("Fuehrung" in z.text(4) for z in wechsel)
+    # Der Wechsel nennt beide: den, der uebernimmt, und den, von dem.
+    kuerzel = {t.kuerzel for t in seite.verlauf.teilnehmer}
+    for z in wechsel:
+        assert z.text(3) in kuerzel
+        assert any(k in z.text(4) for k in kuerzel)
+
+
+def test_die_ueberschrift_zaehlt_beide_getrennt(gewechselt) -> None:
+    """Ein Fuehrungswechsel ist kein Zwischenfall - die Zahl darf nicht luegen."""
+    _fenster, seite = gewechselt
+    schlage_blatt_auf(seite, "ticker")
+
+    verlauf = seite.verlauf
+    zwischenfaelle = len(verlauf.zwischenfaelle)
+    wechsel = verlauf.fuehrungswechsel()
+    titel = seite._tickerkasten.title()
+    assert f"{zwischenfaelle} Zwischenfaelle" in titel
+    assert f"{wechsel} Fuehrungswechsel" in titel
+
+
+def test_die_erste_runde_ist_kein_wechsel(gewechselt) -> None:
+    """Dass der Erste der ersten Runde fuehrt, ist keine Meldung wert."""
+    _fenster, seite = gewechselt
+    verlauf = seite.verlauf
+
+    # Bis zum Ende der ersten Runde kann es noch keinen Wechsel geben.
+    erste = verlauf.fuehrender_je_runde[0][1]
+    assert seite._fuehrungsmeldungen(verlauf, erste) == []
+    # Und ueber das ganze Rennen stimmt die Zahl mit dem Kern ueberein.
+    alle = seite._fuehrungsmeldungen(verlauf, verlauf.dauer_ms)
+    assert len(alle) == verlauf.fuehrungswechsel()
+
+
+def test_die_meldungen_stehen_nach_zeit_gemischt(gewechselt) -> None:
+    """Beide Quellen in einer Liste, neueste zuerst."""
+    _fenster, seite = gewechselt
+    schlage_blatt_auf(seite, "ticker")
+
+    zeiten = [
+        seite.ticker.topLevelItem(i).data(0, Qt.UserRole)
+        for i in range(seite.ticker.topLevelItemCount())
+    ]
+    assert zeiten == sorted(zeiten, reverse=True)
+    zeichen = {
+        seite.ticker.topLevelItem(i).text(0)
+        for i in range(seite.ticker.topLevelItemCount())
+    }
+    assert rs.TICKER_FUEHRUNG in zeichen
+    assert zeichen & set(rs.TICKER_ZEICHEN.values()), "Beide Quellen kommen vor"

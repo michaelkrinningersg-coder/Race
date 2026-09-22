@@ -844,6 +844,10 @@ class Saisonlauf:
             self.jahr,
             ergebnis.fuehrungsrunden_je_fahrer,
             [e.fahrer for e in ergebnis.ergebnisse],
+            # Vorschlag 16: dieselben Angaben wie oben, damit die
+            # Fuehrungsrunden auch je Strecke und je Lage stehen.
+            strecke=rahmen.strecke.name,
+            wetter=ergebnis.vorherrschendes_wetter,
         )
 
     def schliesse_wochenende_ab(self, ergebnis: Wochenende) -> Wochenende:

@@ -3164,3 +3164,91 @@ Differenz der beiden Linienüberfahrten, nicht geschätzt).
 Betroffen sind beide Spalten, „Zeit / Rückstand" und „Intervall": Sie
 gehen durch dieselbe Funktion. Die km/h-Spalte bleibt, wie sie war; sie
 braucht das Momentantempo weiterhin und hat ihre eigene Schwelle.
+
+---
+
+## Vorschläge 2, 15 und 16: die drei ausgewählten
+
+Aus den dreißig Vorschlägen (`VORSCHLAEGE.md`, Stand 2026-09-22) hat der
+Auftraggeber drei gewählt: **2** (Führungswechsel im Ticker), **15**
+(Führungsrunden in der Fahrerkarte) und **16** (Führungsrunden je
+Strecke und Wetterlage). Alle drei bauen auf Punkt 102 auf.
+
+### Vorschlag 15: Fahrerkarte
+
+Zwei Zeilen, keine neue Mechanik. Im Reiter **Saison** steht die Zahl
+der laufenden Saison (aus `Statistik.saisonfuehrung`), im Reiter
+**Laufbahn** die der ganzen Karriere, dort mit Nenner und Anteil:
+„387 von 1.276 (30,3 %)". Wer nie geführt hat, steht auf „0" — der
+Nenner steht trotzdem daneben, sonst wäre die Null nichtssagend.
+
+### Vorschlag 2: Führungswechsel im Ticker
+
+Das Blatt Meldungen zeigte nur Zwischenfälle. Ein Führungswechsel ist
+keiner, gehört aber in dieselbe Liste: Beide Quellen stehen jetzt nach
+Zeit gemischt, neueste zuerst, unter einem fünften Zeichen (⚑, blau)
+neben ⚠ ✖ ⚙.
+
+Die Kastenüberschrift zählt sie **getrennt** — „Meldungen — 24
+Zwischenfälle, 15 Führungswechsel". Eine gemeinsame Zahl wäre gelogen.
+
+Gemessen an einem vollen Rennen in Sakhir (55 Runden, gewürfeltes
+Wetter): 24 Zwischenfälle, 15 Führungswechsel, fünf verschiedene
+Führende (MEL 30, VER 12, FID 8, OBE 4, FOI 1).
+
+#### Was bei der Umsetzung auffiel
+
+Der Standardlauf der Anzeige-Tests (Seed 4711, vier Runden in Sakhir)
+hat **keinen einzigen Führungswechsel** — einer fährt vorn durch. Zwei
+neue Tests standen damit auf Sand: Ohne Wechsel ist die leere Liste
+richtig, und der Test bliebe grün, auch wenn die Anzeige kaputt wäre.
+
+Gemessen über die Seeds 1 bis 24 auf derselben Strecke: neun Seeds
+liefern null Wechsel, Seed 4 liefert drei (VER, FOI, MEL, FOI) und dazu
+sieben Zwischenfälle — also beide Quellen in einem Rennen. Dafür gibt
+es jetzt ein eigenes Fixture; `tests/oberflaeche.rennverlauf` nimmt den
+Seed als Parameter.
+
+### Vorschlag 16: je Strecke und je Wetterlage
+
+`Bilanz` bekommt dieselben zwei Zähler wie `Karrierezahlen`, und
+`Statistik.verbuche_fuehrungsrunden` nimmt Strecke und Lage entgegen.
+Bleiben sie leer, bleiben die Bilanzen unberührt — es wird keine Zeile
+angelegt, die nie ein Rennen gesehen hat.
+
+Gemessen über eine ganze Saison (20 Rennen, 1.276 Runden, Seed 0):
+15 von 50 Fahrern haben mindestens eine Runde geführt, der Beste 387
+Runden oder 30,3 Prozent.
+
+```
+Streckenbilanz des Besten          Wetterbilanz
+  Oschersleben   80 von  80 100,0 %  trocken      178 von 519  34,3 %  (9 Rennen)
+  Zandvoort      69 von  69 100,0 %  wechselhaft  160 von 367  43,6 %  (6 Rennen)
+  Nürburgring    57 von  58  98,3 %  heiss         35 von 261  13,4 %  (4 Rennen)
+  Catalunya      35 von  64  54,7 %  regen         14 von 129  10,9 %  (1 Rennen)
+  Norisring      14 von 129  10,9 %
+```
+
+Vier Strecken flag to flag, auf dem Norisring dagegen 129 Runden und
+nur 14 davon vorn. Erst der Anteil macht das vergleichbar — die bloße
+Zahl hängt an der Renndistanz.
+
+Probe über die fünf Bestgeführten: Die Summe über die Strecken und die
+Summe über die Lagen ergeben beide genau die Karrierezahl, und dasselbe
+gilt für den Nenner. Zwei Tests halten das fest.
+
+#### Was bei der Umsetzung auffiel
+
+**Die Bilanzspalten standen zweimal im Code** — als Liste in
+`statistikseite.py` und als Literale in `fahrerkarte.py`, dazu die
+Felder selbst einmal als Helfer und einmal von Hand geschrieben. Zwei
+neue Spalten hätten an vier Stellen nachgetragen werden müssen. Sie
+liegen jetzt einmal in `rennmanager/ui/tabellen.py`
+(`BILANZSPALTEN`, `bilanzfelder`, `setze_bilanzsortierung`); beide
+Seiten lesen von dort.
+
+**Der Spielstand geht auf Version 14**, Mindestversion ebenfalls 14.
+Entscheidung des Auftraggebers: abweisen wie bei Punkt 101 und 102,
+nichts umrechnen. Die Führungsrunden je Strecke stehen in keinem
+älteren Stand, und nachträglich lassen sie sich nicht ermitteln — die
+Rennen von damals sind nicht aufgehoben.

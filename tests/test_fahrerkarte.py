@@ -170,6 +170,50 @@ def test_saison_und_verlauf_fuellen_sich_nach_dem_rennen(fenster, konfig) -> Non
     assert verlauf._reihen[stelle][2][-1] == erster.punkte
 
 
+def test_die_karte_zeigt_die_fuehrungsrunden(fenster) -> None:
+    """Vorschlag 15: Saison und Laufbahn kennen sie seit Punkt 102 auch.
+
+    Die Zahl steht nicht in der Saisontabelle - sie kommt aus dem
+    Rennmodell, nicht aus dem Rennergebnis, und liegt deshalb in der
+    Statistik.
+    """
+    lauf = fenster.saisonseite.lauf
+    lauf.fahre_rennen()
+    fenster.saisonseite._aktualisiere()
+
+    wochenende = lauf.wochenenden[0]
+    gefuehrt = wochenende.fuehrungsrunden_je_fahrer
+    assert gefuehrt, "Irgendwer muss gefuehrt haben"
+    bester = max(gefuehrt, key=gefuehrt.get)
+    karte = fenster.oeffne_fahrerkarte(bester)
+
+    saison = formularwerte(karte.blaetter.widget(2).findChild(QFormLayout))
+    assert saison["Fuehrungsrunden:"] == str(gefuehrt[bester])
+
+    laufbahn = formularwerte(karte.blaetter.widget(3).findChild(QFormLayout))
+    runden = sum(gefuehrt.values())
+    assert laufbahn["Fuehrungsrunden:"].startswith(f"{gefuehrt[bester]} von {runden}")
+    assert laufbahn["Fuehrungsrunden:"].endswith("%)")
+
+
+def test_wer_nie_gefuehrt_hat_steht_auf_null(fenster) -> None:
+    """Der Nenner steht trotzdem da - sonst waere die Null nichtssagend."""
+    lauf = fenster.saisonseite.lauf
+    lauf.fahre_rennen()
+    fenster.saisonseite._aktualisiere()
+
+    gefuehrt = lauf.wochenenden[0].fuehrungsrunden_je_fahrer
+    ohne = next(
+        f.nummer for f in fenster.welt.fahrer if not gefuehrt.get(f.nummer)
+    )
+    karte = fenster.oeffne_fahrerkarte(ohne)
+
+    saison = formularwerte(karte.blaetter.widget(2).findChild(QFormLayout))
+    assert saison["Fuehrungsrunden:"] == "0"
+    laufbahn = formularwerte(karte.blaetter.widget(3).findChild(QFormLayout))
+    assert laufbahn["Fuehrungsrunden:"].startswith(f"0 von {sum(gefuehrt.values())}")
+
+
 def test_laufbahn_bleibt_vor_dem_saisonwechsel_leer(fenster) -> None:
     """GDD 13: Die Historie entsteht erst beim Saisonwechsel."""
     karte = fenster.oeffne_fahrerkarte(5)
@@ -229,6 +273,66 @@ def test_strecken_zeigen_kenntnis_und_heimstrecke(fenster, konfig) -> None:
         if liste.topLevelItem(i).font(0).bold()
     ]
     assert set(fett) == set(heim)
+
+
+def _spalte(liste, name: str) -> int:
+    """Die Stelle einer Spalte ueber ihre Ueberschrift."""
+    kopf = liste.headerItem()
+    for stelle in range(liste.columnCount()):
+        if kopf.text(stelle) == name:
+            return stelle
+    raise AssertionError(f"Keine Spalte {name!r} in {liste}")
+
+
+def test_die_streckenbilanz_zeigt_die_fuehrungsrunden(fenster) -> None:
+    """Vorschlag 16: Wo er vorn lag, steht neben dem, was er dort erreichte."""
+    lauf = fenster.saisonseite.lauf
+    lauf.fahre_rennen()
+    fenster.saisonseite._aktualisiere()
+
+    wochenende = lauf.wochenenden[0]
+    gefuehrt = wochenende.fuehrungsrunden_je_fahrer
+    bester = max(gefuehrt, key=gefuehrt.get)
+    liste = fenster.oeffne_fahrerkarte(bester).streckenliste
+
+    runden = _spalte(liste, "Fuehrung")
+    anteil = _spalte(liste, "Anteil")
+    zeile = next(
+        liste.topLevelItem(i)
+        for i in range(liste.topLevelItemCount())
+        if liste.topLevelItem(i).text(0) == wochenende.strecke
+    )
+    assert zeile.text(runden) == str(gefuehrt[bester])
+    assert zeile.text(anteil).endswith("%")
+
+    # Auf jeder anderen Strecke ist er noch nie gefahren - dort steht
+    # nichts, nicht etwa eine Null.
+    andere = next(
+        liste.topLevelItem(i)
+        for i in range(liste.topLevelItemCount())
+        if liste.topLevelItem(i).text(0) != wochenende.strecke
+    )
+    assert andere.text(runden) == ""
+
+
+def test_die_wetterbilanz_zeigt_die_fuehrungsrunden(fenster) -> None:
+    """Dieselben zwei Spalten, nur je Lage statt je Strecke."""
+    lauf = fenster.saisonseite.lauf
+    lauf.fahre_rennen()
+    fenster.saisonseite._aktualisiere()
+
+    wochenende = lauf.wochenenden[0]
+    gefuehrt = wochenende.fuehrungsrunden_je_fahrer
+    bester = max(gefuehrt, key=gefuehrt.get)
+    liste = fenster.oeffne_fahrerkarte(bester).wetterliste
+
+    runden = _spalte(liste, "Fuehrung")
+    zeile = next(
+        liste.topLevelItem(i)
+        for i in range(liste.topLevelItemCount())
+        if liste.topLevelItem(i).text(0) == wochenende.vorherrschendes_wetter
+    )
+    assert zeile.text(runden) == str(gefuehrt[bester])
 
 
 # --- Oeffnen aus den Listen -----------------------------------------------

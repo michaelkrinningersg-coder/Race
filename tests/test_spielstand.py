@@ -328,6 +328,24 @@ def test_die_bilanzen_ueberstehen_speichern_und_laden(k, gespielt, tmp_path):
     assert geladen.statistik.streckenbilanz
 
 
+def test_die_fuehrungsrunden_je_strecke_ueberstehen_die_runde(gespielt, geladen):
+    """Vorschlag 16: die zwei neuen Spalten beider Bilanztabellen.
+
+    Der Vergleich oben traegt sie mit - er verglich aber auch zwei
+    Nullen, wenn nichts darin stuende. Wie bei Punkt 102 steht deshalb
+    hier, dass wirklich etwas ankommt.
+    """
+    for name, sammlung in (
+        ("Strecke", geladen.statistik.streckenbilanz),
+        ("Lage", geladen.statistik.wetterbilanz),
+    ):
+        gefuehrt = [b for b in sammlung.values() if b.fuehrungsrunden]
+        assert gefuehrt, f"Je {name} muss jemand gefuehrt haben"
+        # Und der Nenner kam mit, sonst gaebe es keinen Anteil.
+        assert all(b.gefahrene_runden for b in sammlung.values())
+        assert all(0 < b.fuehrungsanteil <= 1 for b in gefuehrt)
+
+
 def test_keine_verbindung_bleibt_offen(k, gespielt, tmp_path, monkeypatch):
     """Sonst laesst sich der Stand unter Windows nicht ueberschreiben.
 

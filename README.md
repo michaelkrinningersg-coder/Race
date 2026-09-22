@@ -1570,6 +1570,60 @@ sortieren. Der Anteil misst gegen alle Runden, die der Fahrer gefahren
 ist - 30 Fuehrungsrunden sagen wenig, solange nicht danebensteht, ob es
 60 oder 600 Runden waren.
 
+In der **Fahrerkarte** steht die Zahl an zwei Stellen: im Reiter Saison
+die der laufenden Saison, im Reiter Laufbahn die der ganzen Karriere,
+dort als "387 von 1.276 (30,3 %)".
+
+#### Im Ticker: der Fuehrungswechsel (Vorschlag 2)
+
+Das Blatt Meldungen zeigte bisher nur Zwischenfaelle. Ein
+Fuehrungswechsel ist keiner - er gehoert aber in dieselbe Liste, denn
+was im Rennen passiert, steht hier. Er bekommt deshalb ein eigenes
+Zeichen:
+
+```
+⚠ | 1:07:21.943 | 40 | FON | Fehler, 1.0 s verloren
+⚑ | 1:03:15.050 | 38 | MEL | uebernimmt die Fuehrung von FID
+✖ |   22:17.400 | 14 | MUL | Unfall, ausgeschieden - Ausfall
+```
+
+Beide Quellen stehen nach Zeit gemischt, neueste zuerst - ein Ticker,
+der nach Herkunft sortiert, waere keiner. Die Kastenueberschrift zaehlt
+sie aber **getrennt**: "Meldungen - 24 Zwischenfaelle, 15
+Fuehrungswechsel". Eine gemeinsame Zahl waere gelogen; ein Wechsel ist
+kein Zwischenfall.
+
+Dass der Erste der ersten Runde fuehrt, ist kein Wechsel und keine
+Meldung wert. Gezaehlt wird erst ab dem zweiten Fuehrenden.
+
+#### Je Strecke und je Wetterlage (Vorschlag 16)
+
+Dieselben zwei Zahlen stehen noch einmal in der **Streckenbilanz** und
+in der **Wetterbilanz** - in der Fahrerkarte wie auf der Statistikseite,
+aus demselben Helfer (`rennmanager.ui.tabellen.bilanzfelder`), damit die
+beiden Tabellen nicht auseinanderlaufen.
+
+Erst hier wird die Zahl vergleichbar. Ueber eine gemessene Saison:
+
+```
+Streckenbilanz von Magnus Melchior     Wetterbilanz
+  Oschersleben   80 von  80  100,0 %     trocken      178 von 519  34,3 %
+  Zandvoort      69 von  69  100,0 %     wechselhaft  160 von 367  43,6 %
+  Nuerburgring   57 von  58   98,3 %     heiss         35 von 261  13,4 %
+  Catalunya      35 von  64   54,7 %     regen         14 von 129  10,9 %
+  Norisring      14 von 129   10,9 %
+```
+
+Vier Strecken flag to flag, auf dem Norisring dagegen 129 Runden und nur
+14 davon vorn - das sagt keine Siegesliste. Der Anteil und nicht die
+blosse Zahl macht die Strecken vergleichbar: Fuenf Runden in Fuehrung
+sind auf einem 129-Runden-Kurs etwas anderes als auf einem mit 55.
+
+Gemeldet werden Strecke und Lage auf demselben Weg wie die Zahl selbst -
+`Statistik.verbuche_fuehrungsrunden` nimmt sie entgegen. Bleiben sie
+leer, bleiben die Bilanzen unberuehrt; angelegt wird dabei keine Zeile,
+die nie ein Rennen gesehen hat.
+
 **Beide Rennmodelle liefern die Zahl**, sonst waeren die voll gefahrenen
 Rennen mit den schnell gefahrenen nicht vergleichbar. Der Schnellmodus
 bildet die Reihenfolge ohnehin je Runde; dort zaehlt ein Zaehler auf
@@ -1742,16 +1796,17 @@ gewuerfelt: Sobald jemand den Editor benutzt hat, stimmt die gewuerfelte
 Welt nicht mehr mit der gespielten ueberein. Ein Test haelt genau das
 fest.
 
-Der Stand traegt seine **Version**; die aktuelle ist **13** mit 19
+Der Stand traegt seine **Version**; die aktuelle ist **14** mit 19
 Tabellen. Sie ist zugleich die **aelteste lesbare**: Punkt 101 hat
 Weltgroesse, Punktesystem, Karriere und Wertung so veraendert, dass ein
-alter Stand nicht mehr zu retten war, und Punkt 102 hat die
-Fuehrungsrunden hinzugefuegt - die stehen in keinem aelteren Stand, und
-nachtraeglich lassen sie sich nicht ermitteln, weil die Rennen von
-damals nicht aufgehoben sind. Ein Stand vor Version 13 wird deshalb
-abgewiesen, mit einer Meldung, die den Grund nennt, statt still falsche
-Zahlen zu zeigen; ein Test haelt beides fest. Umgerechnet wird nichts -
-so hat es der Auftraggeber entschieden.
+alter Stand nicht mehr zu retten war, Punkt 102 hat die Fuehrungsrunden
+hinzugefuegt und Vorschlag 16 sie noch einmal je Strecke und je
+Wetterlage. Sie stehen in keinem aelteren Stand, und nachtraeglich
+lassen sie sich nicht ermitteln, weil die Rennen von damals nicht
+aufgehoben sind. Ein Stand vor Version 14 wird deshalb abgewiesen, mit
+einer Meldung, die den Grund nennt, statt still falsche Zahlen zu
+zeigen; ein Test haelt beides fest. Umgerechnet wird nichts - so hat es
+der Auftraggeber entschieden.
 
 ### Streckenbilanz, Wetterbilanz und Bestmarken
 
@@ -1766,12 +1821,19 @@ statistik.bilanzen_bei("regen")
 ```
 
 Je Zeile stehen Starts, Siege, Podien, Poles, schnellste Runden,
-Ausfaelle, Punkte und das beste Ergebnis.
+Ausfaelle, Punkte, das beste Ergebnis und - seit Vorschlag 16 - die
+Runden in Fuehrung mit ihrem Anteil.
 
 Zu sehen ist beides an zwei Stellen: in der Fahrerkarte (die
 Streckenbilanz im Reiter *Strecken* neben der Streckenkenntnis, die
 Wetterbilanz als eigener Reiter neben der Faehigkeit zu jeder Lage) und
-auf der Statistikseite als Vergleich ueber alle 50 Fahrer.
+auf der Statistikseite als Vergleich ueber alle 50 Fahrer. Die Spalten
+sind an allen vier Stellen dieselben, weil sie aus demselben Helfer
+kommen: `rennmanager.ui.tabellen.BILANZSPALTEN` und `bilanzfelder`.
+
+Wo noch kein Rennen gefahren wurde, bleiben die Felder **leer** statt
+auf null zu stehen - "noch nie dort gefahren" ist etwas anderes als
+"null Siege".
 
 #### Warum Summen und keine Rennliste
 

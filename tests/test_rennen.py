@@ -775,7 +775,7 @@ def test_jede_gefahrene_runde_hat_genau_einen_fuehrenden(rennen) -> None:
 
 def test_der_sieger_fuehrt_die_letzte_runde(rennen) -> None:
     """Wer als Erster ueber die Ziellinie faehrt, hat die Schlussrunde gefuehrt."""
-    wer, _ende = rennen._fuehrender_je_runde[-1]
+    wer, _ende = rennen.fuehrender_je_runde[-1]
     assert wer == rennen.ergebnisse[0].teilnehmer
 
 
@@ -804,7 +804,7 @@ def test_gezaehlt_wird_an_der_linie_und_nicht_die_aufstellung(umgedreht) -> None
     gelesen werden und nicht die Aufstellung.
     """
     pole = next(i for i, t in enumerate(umgedreht.teilnehmer) if t.startplatz == 1)
-    erster, _ = umgedreht._fuehrender_je_runde[0]
+    erster, _ = umgedreht.fuehrender_je_runde[0]
     assert erster != pole
     assert sum(umgedreht.fuehrungsrunden()) == umgedreht.runden
 
@@ -812,7 +812,7 @@ def test_gezaehlt_wird_an_der_linie_und_nicht_die_aufstellung(umgedreht) -> None
 def test_die_wechsel_zaehlen_die_uebergaenge(rennen) -> None:
     """Ein Wechsel ist, wenn zwei aufeinanderfolgende Runden verschieden
     gefuehrt werden - nicht, wie viele ueberhaupt einmal vorn lagen."""
-    fuehrende = [wer for wer, _ in rennen._fuehrender_je_runde]
+    fuehrende = [wer for wer, _ in rennen.fuehrender_je_runde]
     erwartet = sum(
         1 for a, b in zip(fuehrende, fuehrende[1:], strict=False) if a != b
     )

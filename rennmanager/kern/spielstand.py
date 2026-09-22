@@ -61,10 +61,21 @@ if TYPE_CHECKING:  # pragma: no cover
 # Ligen, ein Konto, Sponsorenvertraege und Punkte aus einer Tabelle, die
 # es nicht mehr gibt; umrechnen liesse sich das nur, indem man Zahlen
 # erfindet. Entscheidung des Auftraggebers: abweisen, nichts portieren.
-SPIELSTAND_VERSION = 13
+#
+# Version 13: Punkt 102 - die Statistik fuehrt die Runden in Fuehrung
+# mit, je Fahrer, je Saison und ueber die Laufbahn.
+#
+# Version 14: Vorschlag 16 - dieselben Runden noch einmal je Strecke und
+# je Wetterlage, als zwei Spalten in beiden Bilanztabellen.
+#
+# In beiden Faellen dieselbe Lage wie bei 12: Wer vor wie vielen Jahren
+# welche Runde anfuehrte, steht in keinem alten Stand und laesst sich
+# nicht nachrechnen - die Rennen sind nicht aufgehoben. Entscheidung des
+# Auftraggebers: abweisen wie bei Punkt 101.
+SPIELSTAND_VERSION = 14
 
 # Der aelteste Stand, den dieses Programm noch lesen kann.
-MINDESTVERSION = 13
+MINDESTVERSION = 14
 
 # Punkt 17: Autosave und Schnellspeicher liegen an einem festen Ort,
 # damit sie ohne Dateidialog geschrieben werden koennen.
@@ -176,6 +187,8 @@ CREATE TABLE streckenbilanz (
     ausfaelle INTEGER NOT NULL,
     punkte INTEGER NOT NULL,
     bester_platz INTEGER NOT NULL,
+    fuehrungsrunden INTEGER NOT NULL,
+    gefahrene_runden INTEGER NOT NULL,
     PRIMARY KEY (fahrer, strecke)
 );
 CREATE TABLE wetterbilanz (
@@ -189,6 +202,8 @@ CREATE TABLE wetterbilanz (
     ausfaelle INTEGER NOT NULL,
     punkte INTEGER NOT NULL,
     bester_platz INTEGER NOT NULL,
+    fuehrungsrunden INTEGER NOT NULL,
+    gefahrene_runden INTEGER NOT NULL,
     PRIMARY KEY (fahrer, lage)
 );
 CREATE TABLE historie (saison INTEGER PRIMARY KEY);
@@ -397,6 +412,8 @@ def _bilanzzeilen(sammlung: dict) -> list[tuple]:
             b.ausfaelle,
             b.punkte,
             b.bester_platz,
+            b.fuehrungsrunden,
+            b.gefahrene_runden,
         )
         for (nummer, name), b in sammlung.items()
     ]
@@ -444,11 +461,11 @@ def _schreibe_statistik(
         [(r, f, p) for (r, f), p in statistik.saisonverlauf.items()],
     )
     verbindung.executemany(
-        "INSERT INTO streckenbilanz VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO streckenbilanz VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         _bilanzzeilen(statistik.streckenbilanz),
     )
     verbindung.executemany(
-        "INSERT INTO wetterbilanz VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO wetterbilanz VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         _bilanzzeilen(statistik.wetterbilanz),
     )
     verbindung.executemany(
@@ -500,7 +517,8 @@ def lade(konfiguration: Konfiguration, pfad: Path | str) -> Spielstand:
             if kopf["version"] < MINDESTVERSION:
                 raise SpielstandFehler(
                     f"Spielstand hat Version {kopf['version']}. Seit Punkt 102 "
-                    f"fuehrt die Statistik die Runden in Fuehrung mit; sie "
+                    f"fuehrt die Statistik die Runden in Fuehrung mit, seit "
+                    f"Vorschlag 16 auch je Strecke und je Wetterlage; sie "
                     f"stehen in keinem aelteren Stand, und nachtraeglich lassen "
                     f"sie sich nicht ermitteln - die Rennen von damals sind "
                     f"nicht aufgehoben. Davor hatte schon Punkt 101 die Welt auf "
@@ -617,6 +635,8 @@ def _lies_bilanz(zeile) -> kern_statistik.Bilanz:
         ausfaelle=zeile["ausfaelle"],
         punkte=zeile["punkte"],
         bester_platz=zeile["bester_platz"],
+        fuehrungsrunden=zeile["fuehrungsrunden"],
+        gefahrene_runden=zeile["gefahrene_runden"],
     )
 
 

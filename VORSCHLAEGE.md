@@ -410,9 +410,13 @@ deine Entscheidung.
 # Vorschläge, Stand 2026-09-22
 
 Nach Punkt 101 (ein Feld aus 50 Autos, feste Fahrer), Punkt 102
-(Führungsrunden) und Punkt 103 (keine geschätzten Rückstände). **Nichts
-davon ist gebaut.** Sag die Nummern, dann zeige ich für die gewählten
-einen Plan, bevor ich anfange (CLAUDE.md).
+(Führungsrunden) und Punkt 103 (keine geschätzten Rückstände). Sag die
+Nummern, dann zeige ich für die gewählten einen Plan, bevor ich anfange
+(CLAUDE.md).
+
+**Gebaut sind 2, 15 und 16** — gewählt am 2026-09-22. Was dabei
+herauskam und was auffiel, steht in `OFFENE_PUNKTE.md` unter
+„Vorschläge 2, 15 und 16". Alles Übrige ist weiter nur Vorschlag.
 
 Die Liste oben von 2026-09-20 gilt weiter, aber **mit Lücken**: Alles,
 was an Ligen, Geld, Erfahrung oder den vier Spielerautos hing, ist

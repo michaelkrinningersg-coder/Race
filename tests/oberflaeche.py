@@ -83,11 +83,17 @@ def kurzes_rennen(fenster, runden: int = 2, umgedreht: bool = False):
     return seite
 
 
-def rennverlauf(fenster, runden: int = 2, umgedreht: bool = False):
+def rennverlauf(fenster, runden: int = 2, umgedreht: bool = False, seed: int = 4711):
     """Nur der Lauf, ohne Anzeige - damit er sich teilen laesst.
 
     Punkt 77: Wer denselben Lauf in zwanzig Tests zeigt, soll ihn einmal
     rechnen. Gemessen kostet ein Vierrundenrennen 4,8 Sekunden.
+
+    ``seed`` ist normalerweise 4711 - dieselbe Zahl fuer alle, damit die
+    Tests denselben Lauf sehen. Wer ein Rennen mit einer bestimmten
+    Eigenschaft braucht, dreht daran: Der Standardlauf hat zum Beispiel
+    keinen einzigen Fuehrungswechsel (gemessen), taugt also nicht als
+    Grundlage fuer einen Test, der die Wechsel prueft.
     """
     from rennmanager.kern import rennen as kern_rennen
     from rennmanager.kern import strecke as kern_strecke
@@ -110,7 +116,7 @@ def rennverlauf(fenster, runden: int = 2, umgedreht: bool = False):
             )
             for t in feld
         )
-    haupt = Seedquelle(4711)
+    haupt = Seedquelle(seed)
     # Das Wetter gehoert dazu (GDD 7); ohne es stuende im Rennen "None".
     rundendauer = kern_tempo.fahre_runde(
         fenster._konfiguration, strecke, feld[0].auto
