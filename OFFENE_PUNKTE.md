@@ -3252,3 +3252,89 @@ Entscheidung des Auftraggebers: abweisen wie bei Punkt 101 und 102,
 nichts umrechnen. Die Führungsrunden je Strecke stehen in keinem
 älteren Stand, und nachträglich lassen sie sich nicht ermitteln — die
 Rennen von damals sind nicht aufgehoben.
+
+---
+
+## Vorschlag 23: Die Blattleiste rollte — und was dabei auffiel
+
+Steht seit Punkt 102 offen. Die alte Notiz sagte „688 px gebraucht,
+rund 570 da" — die 570 waren geschätzt. Nachgemessen am wirklich
+ausgelegten Fenster mit laufendem Rennen:
+
+| Fenster | Blatt breit | Leiste braucht | fehlt |
+|---|---|---|---|
+| 1366 px | 358 px | 688 px | **330 px** |
+| 1600 px | 450 px | 688 px | 238 px |
+| 1920 px | 579 px | 688 px | 109 px |
+| 2560 px | 837 px | 688 px | passt |
+
+Erst ab rund 2560 px Fensterbreite passt es.
+
+### Zwei der drei vorgeschlagenen Wege tragen nicht
+
+Vorschlag 23 nannte drei: rechte Spalte breiter, Etiketten kürzer, zwei
+Reihen. Gemessen:
+
+* **Rechte Spalte breiter** geht nicht. Das Streckenbild hat eine harte
+  Mindestbreite von 424 px (`Streckenansicht.setMinimumSize(420, 320)`)
+  und gibt nichts ab. Die Breite käme also nur von der Rangliste — und
+  die ist selbst 393 px zu schmal. Erster Versuch mit
+  `setStretchFactor` änderte übrigens gar nichts: Der Faktor wirkt nur
+  auf noch nicht gesetzte Größen, für schon ausgelegte Teiler braucht
+  es `setSizes`.
+* **Zwei Reihen** kann `QTabWidget` nicht. Das wäre ein eigenes Widget.
+* **Kürzere Etiketten** („Zeiten | Ideal | Meister | Meldungen | Box |
+  Führung") bringen 688 px auf 405 px. Reicht ab 1600 px Fenster, bei
+  1366 fehlen noch 47 px.
+
+### Gewählt: die Leiste senkrecht an die linke Kante
+
+`setTabPosition(QTabWidget.West)`. Dieselbe Leiste braucht dann 26 px
+Breite und 688 px Höhe — und Höhe ist da: 963 px bei einem 1080er
+Fenster, 1206 px bei einem 1440er. Gemessen passt es bei **jeder**
+Fenstergröße. Nebenbei bekommen die Tabellen die Zeile Höhe zurück, die
+die waagerechte Leiste fraß.
+
+Der Platz ist nicht in der Breite, sondern in der Höhe — das war der
+Punkt, den die drei alten Wege übersahen.
+
+Ein Test hält den Deckel fest: Die Leiste muss senkrecht stehen und darf
+nicht mehr als 963 px Höhe brauchen. Ein siebtes Blatt wirft ihn um,
+statt stillschweigend wieder Rollpfeile zu erzeugen.
+
+### Dabei aufgefallen: die Rangliste ist schlimmer dran
+
+Sie braucht 1195 px für ihre 16 Spalten und bekommt 802 — **393 px
+fehlen**, sie rollt waagerecht. Im Rennen fallen damit sechs Spalten aus
+dem Bild, und zwar genau der Reifen- und Strategieblock:
+
+```
+sichtbar:  Pos  Auto  Fahrer  Team  +/-  Rd  Zeit/Rückstand  Intervall  km/h  Ø km/h
+aus dem Bild:  Mischung  Reifen  Alter  Reicht  Stopp  Status
+```
+
+Die teuersten Spalten: Team 172 px, Status 130 px, Zeit/Rückstand
+121 px, Fahrer 105 px, Reifen 96 px. Drei davon wegzulassen würde
+reichen (423 px).
+
+**Der Kompaktmodus löst das aber schon.** Gemessen: Mit ausgeblendeter
+Karte und ausgeblendeten Blättern hat die Rangliste 1844 px und braucht
+1828 — es passt, wenn auch knapp. Wer die volle Tabelle sehen will,
+drückt „Kompakt"; die Dreispaltenansicht ist zum Zusehen auf Karte und
+Blätter gedacht. Ob das so bleiben soll oder ob die Normalansicht
+weniger Spalten zeigen sollte, ist eine Entscheidung über Inhalt und
+steht offen.
+
+### Und noch etwas: das Fenster lässt sich nicht kleiner als 1197 px hoch machen
+
+Gemessen: `resize(1920, 1080)` liefert ein Fenster von 1920x1197,
+`resize(1366, 768)` eines von 1371x1197. `minimumSizeHint().height()`
+des Hauptfensters ist 1197. Auf einem 1080er Bildschirm — der
+verbreitetsten Auflösung — ist das Fenster also 117 px höher als der
+Schirm.
+
+Die Rennseite ist nicht die Ursache; ihre eigene Mindesthöhe liegt bei
+350 px. Die 1197 kommen aus einem anderen Reiter des Hauptfensters
+(`QStackedWidget` nimmt das Maximum über alle Seiten). Nicht weiter
+verfolgt — das ist ein eigener Punkt und keine Layoutfrage der
+Blattleiste.

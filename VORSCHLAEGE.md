@@ -508,9 +508,13 @@ und 30. Sie beschreiben etwas, das heute nachweislich schief steht.
 
 ## Oberfläche und Bedienung
 
-23. **Die Reiterleiste rechts rollt.** Sechs Blätter brauchen 688 px,
-    verfügbar sind rund 570. Drei Wege: rechte Spalte breiter, Etiketten
-    kürzer, oder die Blätter in zwei Reihen. Steht seit Punkt 102 offen.
+23. ~~**Die Reiterleiste rechts rollt.**~~ **Gebaut** — die Leiste steht
+    jetzt senkrecht an der linken Kante. Von den drei hier genannten
+    Wegen trug keiner: „rechte Spalte breiter" geht nicht (das
+    Streckenbild hat 424 px Mindestbreite und gibt nichts ab, die
+    Breite käme also von der ohnehin zu schmalen Rangliste), „zwei
+    Reihen" kann `QTabWidget` nicht. Kürzere Etiketten hätten gereicht,
+    aber erst ab 1600 px Fenster. Einzelheiten in `OFFENE_PUNKTE.md`.
 24. **Tastatur im Rennen und im Qualifying**: Leertaste Start/Pause,
     Pfeiltasten für den Zeitraffer, Pos1 an den Anfang. Heute ist alles
     Maus.

@@ -14,6 +14,7 @@ from rennmanager import konfiguration as kf
 pytest.importorskip("PySide6")
 
 from PySide6.QtCore import Qt  # noqa: E402
+from PySide6.QtWidgets import QTabWidget  # noqa: E402
 
 from rennmanager.kern import rennen as rn  # noqa: E402
 from rennmanager.ui import rennseite as rs  # noqa: E402
@@ -1094,3 +1095,45 @@ def test_die_meldungen_stehen_nach_zeit_gemischt(gewechselt) -> None:
     }
     assert rs.TICKER_FUEHRUNG in zeichen
     assert zeichen & set(rs.TICKER_ZEICHEN.values()), "Beide Quellen kommen vor"
+
+
+# --- Vorschlag 23: die Blattleiste rollte ---------------------------------
+# Was ein 1080er Fenster dem rechten Blatt an Hoehe laesst, gemessen am
+# laufenden Rennen. Der Deckel steht hier, damit ein siebtes Blatt den
+# Test umwirft und nicht stillschweigend wieder Rollpfeile erzeugt.
+HOEHE_FUERS_BLATT = 963
+
+
+def test_die_blattleiste_steht_senkrecht_und_passt(gefahren) -> None:
+    """Sechs Etiketten passen waagerecht nicht nebeneinander.
+
+    Gemessen am 1920er Fenster: waagerecht braucht die Leiste 688 px und
+    bekommt 579 - Qt blendete Rollpfeile ein, und "Fuehrungsrunden" war
+    nur ueber den Pfeil zu erreichen. Bei 1366 px Fenster fehlten sogar
+    330 px. Senkrecht braucht dieselbe Leiste 26 px Breite und 688 px
+    Hoehe, und Hoehe ist da.
+    """
+    _fenster, seite = gefahren
+    reiter = seite.blaetter_rechts
+    assert reiter.tabPosition() == QTabWidget.West
+
+    leiste = reiter.tabBar()
+    gebraucht = leiste.sizeHint()
+    assert gebraucht.height() <= HOEHE_FUERS_BLATT, (
+        f"{reiter.count()} Blaetter brauchen {gebraucht.height()} px Hoehe, "
+        f"da sind {HOEHE_FUERS_BLATT}"
+    )
+    # Und waagerecht kostet sie fast nichts mehr.
+    assert gebraucht.width() < 40
+
+
+def test_jedes_blatt_ist_ohne_rollpfeil_erreichbar(gefahren) -> None:
+    """Der eigentliche Schaden war, dass ein Blatt nicht mehr dastand."""
+    _fenster, seite = gefahren
+    reiter = seite.blaetter_rechts
+    leiste = reiter.tabBar()
+
+    # Die Leiste raeumt jedem Reiter seinen Platz ein, keiner faellt raus.
+    gesamt = sum(leiste.tabSizeHint(i).height() for i in range(reiter.count()))
+    assert gesamt <= HOEHE_FUERS_BLATT
+    assert reiter.count() == 6, "Sechs Blaetter - sonst stimmt der Deckel nicht"

@@ -503,6 +503,16 @@ class Rennseite(QWidget):
         self._ideal.currentItemChanged.connect(self._auswahl_geaendert)
 
         self._monitorblaetter = QTabWidget()
+        # Vorschlag 23: Die Leiste steht senkrecht an der linken Kante.
+        # Waagerecht brauchen die sechs Etiketten 688 px, und so breit
+        # wird der Kasten nie: gemessen 358 px bei einem 1366er Fenster,
+        # 579 px bei 1920 - erst ab rund 2560 px passte es. Qt blendete
+        # deshalb Rollpfeile ein, und "Fuehrungsrunden" war nur ueber den
+        # Pfeil erreichbar. Senkrecht braucht dieselbe Leiste 26 px
+        # Breite und 688 px Hoehe, und Hoehe ist da: 963 px bei einem
+        # 1080er Fenster. Nebenbei bekommen die Tabellen die Zeile Hoehe
+        # zurueck, die die waagerechte Leiste fraß.
+        self._monitorblaetter.setTabPosition(QTabWidget.West)
         self._monitorblaetter.addTab(self._monitor, "Zeitenmonitor")
         self._monitorblaetter.addTab(self._ideal, "Bestmoegliche Runde")
         self._monitorblaetter.addTab(self._meisterschaft, "Meisterschaft")

@@ -1556,7 +1556,14 @@ Drei Dinge folgen aus der Regel von selbst:
   jemand mitreichen muesste.
 
 Im Rennen steht das als sechstes Blatt rechts, neben Zeitenmonitor,
-Bestmoeglicher Runde, Meisterschaft, Meldungen und Boxenbilanz. Es
+Bestmoeglicher Runde, Meisterschaft, Meldungen und Boxenbilanz. Die
+Leiste dieser sechs Blaetter steht **senkrecht an der linken Kante**
+(Vorschlag 23): Waagerecht brauchen die Etiketten 688 px, und so breit
+wird der Kasten nie - gemessen 358 px bei einem 1366er Fenster und
+579 px bei 1920, erst ab rund 2560 px passte es. Qt blendete deshalb
+Rollpfeile ein, und das letzte Blatt war nur ueber den Pfeil zu
+erreichen. Senkrecht braucht dieselbe Leiste 26 px Breite und 688 px
+Hoehe - und Hoehe ist da, gemessen 963 px. Das Blatt
 **zaehlt mit**: In Runde 30 stehen dort die Fuehrungsrunden der ersten
 30 Runden, und man sieht die Fuehrung im Rennen wandern. Gezeigt wird
 nur, wer ueberhaupt vorn lag - bei 50 Autos waeren 45 leere Zeilen kein
