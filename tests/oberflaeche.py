@@ -48,7 +48,8 @@ def schlage_blatt_auf(seite, name: str):
     aus einem Blatt liest, muss es also aufschlagen - genau wie der
     Spieler.
 
-    :param name: monitor, ideal, meisterschaft oder ticker
+    :param name: monitor, ideal, meisterschaft, ticker, boxenbilanz
+        oder fuehrung
     """
     from rennmanager.ui import rennseite as rs
 
@@ -57,6 +58,8 @@ def schlage_blatt_auf(seite, name: str):
         "ideal": rs.BLATT_IDEAL,
         "meisterschaft": rs.BLATT_MEISTERSCHAFT,
         "ticker": rs.BLATT_TICKER,
+        "boxenbilanz": rs.BLATT_BOXENBILANZ,
+        "fuehrung": rs.BLATT_FUEHRUNG,
     }[name]
     seite.blaetter_rechts.setCurrentIndex(blatt)
     # setCurrentIndex meldet nichts, wenn das Blatt schon oben lag -

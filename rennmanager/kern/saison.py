@@ -127,6 +127,10 @@ class Wochenende:
     # im Rennen aufgetretenen Defekte.
     manoever_je_fahrer: dict[int, int] = field(default_factory=dict)
     defekte_je_fahrer: dict[int, tuple[str, ...]] = field(default_factory=dict)
+    # Punkt 102: Runden in Fuehrung je Fahrer, an der Start/Ziel-Linie
+    # gezaehlt. Beide Rennmodelle liefern sie; die Statistik schreibt sie
+    # in die Karrierezahlen und in die Abschlusstabelle der Saison.
+    fuehrungsrunden_je_fahrer: dict[int, int] = field(default_factory=dict)
 
     @property
     def sieger(self) -> int:
@@ -424,6 +428,11 @@ def _fahre_rennen(
         qualifying=quali,
         manoever_je_fahrer=manoever_je_fahrer,
         defekte_je_fahrer=defekte_je_fahrer,
+        fuehrungsrunden_je_fahrer={
+            nummer_von(stelle): anzahl
+            for stelle, anzahl in enumerate(verlauf.fuehrungsrunden())
+            if anzahl
+        },
     )
     return wochenende, verlauf
 
@@ -577,6 +586,11 @@ def _schnell(
             fahrer[i].nummer: defekte
             for i, defekte in enumerate(ergebnis.defekte_je_auto)
             if defekte
+        },
+        fuehrungsrunden_je_fahrer={
+            fahrer[i].nummer: anzahl
+            for i, anzahl in enumerate(ergebnis.fuehrungsrunden_je_auto)
+            if anzahl
         },
     )
 
@@ -823,6 +837,13 @@ class Saisonlauf:
             wetter=ergebnis.vorherrschendes_wetter,
             quali_ms=ergebnis.polezeit_ms,
             quali_fahrer=ergebnis.polefahrer or None,
+        )
+        # Punkt 102: getrennt gemeldet - die Fuehrungsrunden stehen nicht
+        # im Rennergebnis, sondern kommen aus dem Rennmodell.
+        self.statistik.verbuche_fuehrungsrunden(
+            self.jahr,
+            ergebnis.fuehrungsrunden_je_fahrer,
+            [e.fahrer for e in ergebnis.ergebnisse],
         )
 
     def schliesse_wochenende_ab(self, ergebnis: Wochenende) -> Wochenende:

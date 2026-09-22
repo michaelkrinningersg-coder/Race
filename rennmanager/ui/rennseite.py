@@ -108,6 +108,7 @@ BLATT_MEISTERSCHAFT = 2
 BLATT_TICKER = 3
 # Punkt 93 (B53): Was die Stopps gekostet haben, je Fahrer.
 BLATT_BOXENBILANZ = 4
+BLATT_FUEHRUNG = 5
 # Gruener Pfeil hoch, roter Pfeil runter - die Zahl daneben sagt, um wie
 # viele Plaetze. Die Farbe ist nie die einzige Auskunft.
 PFEIL_HOCH = "\u25b2"
@@ -503,6 +504,10 @@ class Rennseite(QWidget):
         # und sind trotzdem einen Klick entfernt.
         self._monitorblaetter.addTab(self._baue_ticker(), "Meldungen")
         self._monitorblaetter.addTab(self._baue_boxenbilanz(), "Boxenbilanz")
+        # Punkt 102: Wer wie viele Runden vorn lag. Das Blatt zaehlt mit,
+        # statt den Endstand vorwegzunehmen - man sieht die Fuehrung im
+        # Rennen wandern.
+        self._monitorblaetter.addTab(self._baue_fuehrung(), "Fuehrungsrunden")
         # D2: Ein frisch aufgeschlagenes Blatt steht sonst so lange leer
         # oder veraltet da, bis der naechste Takt faellig ist.
         self._monitorblaetter.currentChanged.connect(self._blatt_gewechselt)
@@ -754,6 +759,8 @@ class Rennseite(QWidget):
             self._fuelle_ticker(verlauf, zeit)
         elif blatt == BLATT_BOXENBILANZ:
             self._fuelle_boxenbilanz(verlauf, reihenfolge, zeit)
+        elif blatt == BLATT_FUEHRUNG:
+            self._fuelle_fuehrung(verlauf, zeit)
 
     def _teamname(self, teilnehmer) -> str:
         """Das Team hinter einem Auto (Punkt 82).
@@ -1487,6 +1494,72 @@ class Rennseite(QWidget):
                 for spalte in range(self._boxenbilanz.columnCount()):
                     zeile.setFont(spalte, schrift)
 
+    def _baue_fuehrung(self) -> QWidget:
+        """Punkt 102: Runden in Fuehrung, an der Start/Ziel-Linie gezaehlt."""
+        self._fuehrung = QTreeWidget()
+        self._fuehrung.setHeaderLabels(
+            ["Auto", "Fahrer", "Team", "Runden", "Anteil", "von"]
+        )
+        self._fuehrung.headerItem().setToolTip(
+            3,
+            "Runden, die dieses Auto als Erster an der Start/Ziel-Linie "
+            "abgeschlossen hat. Die Startaufstellung zaehlt nicht mit - "
+            "gefuehrt wird eine Runde erst, wenn sie gefahren ist.",
+        )
+        self._fuehrung.setRootIsDecorated(False)
+        self._fuehrung.setAlternatingRowColors(True)
+        verbinde_fahrerkarte(
+            self._fuehrung, self.fahrerkarte_gewuenscht.emit, self._fahrernummer_in(0)
+        )
+        self._fuehrungskasten = QGroupBox("Fuehrungsrunden")
+        spalte = QVBoxLayout(self._fuehrungskasten)
+        spalte.addWidget(self._fuehrung)
+        return self._fuehrungskasten
+
+    def _fuelle_fuehrung(self, verlauf: Rennverlauf, zeit: float) -> None:
+        """Wer bis hierher wie viele Runden vorn lag (Punkt 102).
+
+        Sortiert nach Runden, nicht nach der Rennposition: Die Frage ist,
+        wer das Rennen bestimmt hat, und die beantwortet keine Rangliste.
+        Wer nie vorn lag, steht nicht in der Liste - bei 50 Autos waeren
+        das sonst 45 leere Zeilen.
+        """
+        self._fuehrung.clear()
+        gezaehlt = verlauf.fuehrungsrunden(zeit)
+        gesamt = sum(gezaehlt)
+        wechsel = verlauf.fuehrungswechsel(zeit)
+        self._fuehrungskasten.setTitle(
+            f"Fuehrungsrunden - {gesamt} von {verlauf.runden} Runden gefahren, "
+            f"{wechsel} Wechsel an der Linie"
+        )
+        if not gesamt:
+            return
+
+        for i, runden in sorted(
+            enumerate(gezaehlt), key=lambda paar: (-paar[1], paar[0])
+        ):
+            if not runden:
+                continue
+            teilnehmer = verlauf.teilnehmer[i]
+            zeile = QTreeWidgetItem(
+                self._fuehrung,
+                [
+                    teilnehmer.kuerzel,
+                    self._namen[i],
+                    self._teams[i],
+                    str(runden),
+                    f"{runden / gesamt:.0%}",
+                    str(gesamt),
+                ],
+            )
+            zeile.setForeground(0, schriftfarbe(teilnehmer.farbe))
+            zeile.setData(0, Qt.UserRole, i)
+            if teilnehmer.ist_spieler:
+                schrift = zeile.font(0)
+                schrift.setBold(True)
+                for spalte in range(self._fuehrung.columnCount()):
+                    zeile.setFont(spalte, schrift)
+
     def _fuelle_ticker(self, verlauf: Rennverlauf, zeit: float) -> None:
         """Zwischenfaelle bis zur laufenden Rennzeit, neueste zuerst (Punkt 4)."""
         bisher = [z for z in verlauf.zwischenfaelle if z.zeit_ms <= zeit]
@@ -1630,6 +1703,10 @@ class Rennseite(QWidget):
     @property
     def meisterschaft(self) -> QTreeWidget:
         return self._meisterschaft
+
+    @property
+    def fuehrung(self) -> QTreeWidget:
+        return self._fuehrung
 
     @property
     def blaetter_rechts(self) -> QTabWidget:

@@ -861,3 +861,75 @@ def test_der_kompaktmodus_blendet_alles_ausser_der_rangliste_aus(gefahren) -> No
     seite._kompakt.setChecked(False)
     assert not seite.kompakt
     assert seite.rangliste.font().pointSize() == vorher
+
+
+# --- Punkt 102: Fuehrungsrunden -------------------------------------------
+def test_das_blatt_zeigt_nur_wer_gefuehrt_hat(gefahren) -> None:
+    """Bei 50 Autos waeren 45 leere Zeilen kein Blatt, sondern Ballast."""
+    _fenster, seite = gefahren
+    seite._halte_an()
+    seite._zum_ende()
+    schlage_blatt_auf(seite, "fuehrung")
+    liste = seite.fuehrung
+
+    gezaehlt = seite.verlauf.fuehrungsrunden(seite.verlauf.dauer_ms)
+    erwartet = sum(1 for n in gezaehlt if n)
+    assert liste.topLevelItemCount() == erwartet
+    assert 0 < erwartet < len(seite.verlauf.teilnehmer)
+
+
+def test_das_blatt_ordnet_nach_runden_und_nennt_den_anteil(gefahren) -> None:
+    _fenster, seite = gefahren
+    seite._halte_an()
+    seite._zum_ende()
+    schlage_blatt_auf(seite, "fuehrung")
+    liste = seite.fuehrung
+
+    runden = [
+        int(liste.topLevelItem(i).text(3)) for i in range(liste.topLevelItemCount())
+    ]
+    assert runden == sorted(runden, reverse=True)
+    assert sum(runden) == seite.verlauf.runden
+    # Der Anteil steht daneben und bezieht sich auf die gefahrenen Runden.
+    erste = liste.topLevelItem(0)
+    assert erste.text(4).endswith("%")
+    assert int(erste.text(5)) == sum(runden)
+
+
+def test_das_blatt_zaehlt_mit_dem_abspielzeitpunkt_mit(gefahren) -> None:
+    """Live wie Zeitenmonitor und Meisterschaft, nicht der Endstand."""
+    _fenster, seite = gefahren
+    seite._halte_an()
+    schlage_blatt_auf(seite, "fuehrung")
+
+    def gesamt() -> int:
+        liste = seite.fuehrung
+        return sum(
+            int(liste.topLevelItem(i).text(3))
+            for i in range(liste.topLevelItemCount())
+        )
+
+    seite._springe(0.0)
+    seite._erzwinge_fuellung()
+    seite._zeichne()
+    assert gesamt() == 0, "Vor dem Start hat niemand gefuehrt"
+    assert "0 von" in seite._fuehrungskasten.title()
+
+    seite._springe(seite.verlauf.dauer_ms * 0.5)
+    seite._erzwinge_fuellung()
+    seite._zeichne()
+    mitte = gesamt()
+    seite._zum_ende()
+    seite._erzwinge_fuellung()
+    seite._zeichne()
+    assert 0 < mitte < gesamt() == seite.verlauf.runden
+
+
+def test_die_ueberschrift_nennt_die_wechsel(gefahren) -> None:
+    _fenster, seite = gefahren
+    seite._halte_an()
+    seite._zum_ende()
+    schlage_blatt_auf(seite, "fuehrung")
+    titel = seite._fuehrungskasten.title()
+    assert f"{seite.verlauf.runden} von {seite.verlauf.runden} Runden" in titel
+    assert f"{seite.verlauf.fuehrungswechsel()} Wechsel" in titel

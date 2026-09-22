@@ -134,7 +134,7 @@ def test_neuere_version_faellt_auf(k, gespielt, tmp_path):
 
 
 def test_ein_stand_vor_dem_umbau_wird_abgewiesen(k, gespielt, tmp_path):
-    """Punkt 101: Alte Staende werden abgewiesen, nichts wird portiert."""
+    """Punkte 101 und 102: Alte Staende werden abgewiesen, nichts portiert."""
     pfad = sp.speichere(gespielt, tmp_path / "stand.sqlite")
     with sqlite3.connect(pfad) as verbindung:
         verbindung.execute("UPDATE kopf SET version = ?", (sp.MINDESTVERSION - 1,))
@@ -194,6 +194,26 @@ def test_die_statistik_kommt_zurueck(gespielt, geladen):
     assert geladen.statistik.karriere == gespielt.statistik.karriere
     assert geladen.statistik.saisonpunkte == gespielt.statistik.saisonpunkte
     assert geladen.statistik.historie == gespielt.statistik.historie
+
+
+def test_die_fuehrungsrunden_ueberstehen_die_runde(gespielt, geladen):
+    """Punkt 102: Sie stehen in der Karrierezeile und je Saison.
+
+    Der Vergleich der ganzen Karrierezeile oben traegt sie schon mit;
+    hier steht, dass wirklich etwas darin steht - sonst pruefte er nur,
+    dass zweimal dieselbe Null herauskommt.
+    """
+    gefuehrt = {
+        f: z.fuehrungsrunden
+        for f, z in geladen.statistik.karriere.items()
+        if z.fuehrungsrunden
+    }
+    assert gefuehrt, "Nach einem gefahrenen Rennen muss jemand gefuehrt haben"
+    assert geladen.statistik.saisonfuehrung == gespielt.statistik.saisonfuehrung
+    assert sum(gefuehrt.values()) == sum(geladen.statistik.saisonfuehrung.values())
+    # Und der Nenner kam mit: Jeder Starter hat gefahrene Runden.
+    nenner = {z.gefahrene_runden for z in geladen.statistik.karriere.values()}
+    assert nenner == {sum(gefuehrt.values())}
 
 
 def test_die_popularitaet_kommt_zurueck(gespielt, geladen):

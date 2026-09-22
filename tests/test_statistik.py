@@ -217,3 +217,66 @@ def test_die_streckenkenntnis_steht_fest(k):
     vorher = dict(lauf.kenntnis.runden)
     lauf.fahre_rennen()
     assert lauf.kenntnis.runden == vorher
+
+
+# -- Punkt 102: Fuehrungsrunden --------------------------------------------
+def test_die_fuehrungsrunden_eines_rennens_landen_in_der_karriere(k):
+    """Was das Rennmodell zaehlt, muss auch in den Zahlen ankommen."""
+    strecken = st.lade_alle(k)
+    welt = kw.erzeuge(k, Seedquelle(4).zweig("welt"))
+    lauf = sa.Saisonlauf(k, welt, Seedquelle(4), jahr=2026, strecken=strecken)
+    wochenende = lauf.fahre_rennen()
+
+    gemeldet = wochenende.fuehrungsrunden_je_fahrer
+    assert gemeldet, "Irgendwer muss gefuehrt haben"
+    for fahrer, anzahl in gemeldet.items():
+        assert lauf.statistik.zahlen(fahrer).fuehrungsrunden == anzahl
+
+
+def test_jede_runde_hat_genau_einen_fuehrenden(k):
+    """Die Summe ist die Renndistanz - daraus wird auch der Nenner."""
+    strecken = st.lade_alle(k)
+    welt = kw.erzeuge(k, Seedquelle(4).zweig("welt"))
+    lauf = sa.Saisonlauf(k, welt, Seedquelle(4), jahr=2026, strecken=strecken)
+    wochenende = lauf.fahre_rennen()
+
+    runden = sum(wochenende.fuehrungsrunden_je_fahrer.values())
+    assert runden > 0
+    # Jeder Starter bekommt die Distanz als gefahrene Runden - auch der,
+    # der nie vorn lag. Sonst haette der Anteil keinen Nenner.
+    for ergebnis in wochenende.ergebnisse:
+        zahlen = lauf.statistik.zahlen(ergebnis.fahrer)
+        assert zahlen.gefahrene_runden == runden
+    letzter = lauf.statistik.zahlen(wochenende.ergebnisse[-1].fahrer)
+    assert letzter.fuehrungsanteil == 0.0
+
+
+def test_der_anteil_haengt_an_den_gefahrenen_runden(k):
+    zahlen = stt.Karrierezahlen(fahrer=1, fuehrungsrunden=30, gefahrene_runden=120)
+    assert zahlen.fuehrungsanteil == pytest.approx(0.25)
+    # Ohne gefahrene Runden gibt es keinen Anteil - und keine Division.
+    assert stt.Karrierezahlen(fahrer=2).fuehrungsanteil == 0.0
+
+
+def test_die_abschlusstabelle_traegt_die_fuehrungsrunden_der_saison(k):
+    """Beim Saisonwechsel wandert die Zahl in die Historie."""
+    strecken = st.lade_alle(k)
+    welt = kw.erzeuge(k, Seedquelle(4).zweig("welt"))
+    lauf = sa.Saisonlauf(k, welt, Seedquelle(4), jahr=2026, strecken=strecken)
+    lauf.fahre_saison()
+    lauf.schliesse_ab()
+
+    abschluss = lauf.statistik.abschluss(2026)
+    assert abschluss is not None
+    gesamt = sum(z.fuehrungsrunden for z in abschluss.zeilen)
+    # Ueber die ganze Saison: so viele Runden, wie gefahren wurden.
+    erwartet = sum(
+        sum(w.fuehrungsrunden_je_fahrer.values()) for w in lauf.wochenenden
+    )
+    assert gesamt == erwartet
+    # Der Meister hat in aller Regel am meisten gefuehrt - aber nicht
+    # zwingend; gesichert ist nur, dass die Zahl zur Saison passt.
+    for zeile in abschluss.zeilen:
+        assert zeile.fuehrungsrunden == lauf.statistik.saisonfuehrung.get(
+            (2026, zeile.fahrer), 0
+        )

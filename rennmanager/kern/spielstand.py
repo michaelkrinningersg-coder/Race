@@ -61,10 +61,10 @@ if TYPE_CHECKING:  # pragma: no cover
 # Ligen, ein Konto, Sponsorenvertraege und Punkte aus einer Tabelle, die
 # es nicht mehr gibt; umrechnen liesse sich das nur, indem man Zahlen
 # erfindet. Entscheidung des Auftraggebers: abweisen, nichts portieren.
-SPIELSTAND_VERSION = 12
+SPIELSTAND_VERSION = 13
 
 # Der aelteste Stand, den dieses Programm noch lesen kann.
-MINDESTVERSION = 12
+MINDESTVERSION = 13
 
 # Punkt 17: Autosave und Schnellspeicher liegen an einem festen Ort,
 # damit sie ohne Dateidialog geschrieben werden koennen.
@@ -143,7 +143,15 @@ CREATE TABLE karrierezahl (
     poles INTEGER NOT NULL,
     schnellste_runden INTEGER NOT NULL,
     ausfaelle INTEGER NOT NULL,
-    punkte INTEGER NOT NULL
+    punkte INTEGER NOT NULL,
+    fuehrungsrunden INTEGER NOT NULL,
+    gefahrene_runden INTEGER NOT NULL
+);
+CREATE TABLE saisonfuehrung (
+    saison INTEGER NOT NULL,
+    fahrer INTEGER NOT NULL,
+    runden INTEGER NOT NULL,
+    PRIMARY KEY (saison, fahrer)
 );
 CREATE TABLE saisonpunkt (
     saison INTEGER NOT NULL,
@@ -195,6 +203,7 @@ CREATE TABLE historiezeile (
     schnellste_runden INTEGER NOT NULL,
     ausfaelle INTEGER NOT NULL,
     rennen INTEGER NOT NULL,
+    fuehrungsrunden INTEGER NOT NULL,
     PRIMARY KEY (saison, fahrer)
 );
 CREATE TABLE popularitaet (
@@ -405,7 +414,7 @@ def _schreibe_statistik(
             ],
         )
     verbindung.executemany(
-        "INSERT INTO karrierezahl VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO karrierezahl VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             (
                 z.fahrer,
@@ -416,9 +425,15 @@ def _schreibe_statistik(
                 z.schnellste_runden,
                 z.ausfaelle,
                 z.punkte,
+                z.fuehrungsrunden,
+                z.gefahrene_runden,
             )
             for z in statistik.karriere.values()
         ],
+    )
+    verbindung.executemany(
+        "INSERT INTO saisonfuehrung VALUES (?, ?, ?)",
+        [(s, f, n) for (s, f), n in statistik.saisonfuehrung.items()],
     )
     verbindung.executemany(
         "INSERT INTO saisonpunkt VALUES (?, ?, ?)",
@@ -441,7 +456,7 @@ def _schreibe_statistik(
         [(a.saison,) for a in statistik.historie],
     )
     verbindung.executemany(
-        "INSERT INTO historiezeile VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO historiezeile VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             (
                 a.saison,
@@ -454,6 +469,7 @@ def _schreibe_statistik(
                 z.schnellste_runden,
                 z.ausfaelle,
                 z.rennen,
+                z.fuehrungsrunden,
             )
             for a in statistik.historie
             for z in a.zeilen
@@ -483,12 +499,14 @@ def lade(konfiguration: Konfiguration, pfad: Path | str) -> Spielstand:
                 )
             if kopf["version"] < MINDESTVERSION:
                 raise SpielstandFehler(
-                    f"Spielstand hat Version {kopf['version']}. Mit Punkt 101 ist "
-                    f"die Welt auf eine Liga mit 50 Autos, feste Staerken und "
-                    f"ohne Geld, Erfahrung und Transfermarkt umgestellt worden; "
-                    f"ein aelterer Stand laesst sich darauf nicht umrechnen, ohne "
-                    f"Zahlen zu erfinden. Das Programm liest erst ab Version "
-                    f"{MINDESTVERSION}. Bitte eine neue Karriere anfangen."
+                    f"Spielstand hat Version {kopf['version']}. Seit Punkt 102 "
+                    f"fuehrt die Statistik die Runden in Fuehrung mit; sie "
+                    f"stehen in keinem aelteren Stand, und nachtraeglich lassen "
+                    f"sie sich nicht ermitteln - die Rennen von damals sind "
+                    f"nicht aufgehoben. Davor hatte schon Punkt 101 die Welt auf "
+                    f"ein Feld aus 50 Autos mit festen Staerken umgestellt. Das "
+                    f"Programm liest erst ab Version {MINDESTVERSION}. Bitte "
+                    f"eine neue Karriere anfangen."
                 )
 
             welt = _lies_welt(verbindung, kopf["seed"])
@@ -628,7 +646,11 @@ def _lies_statistik(
             schnellste_runden=z["schnellste_runden"],
             ausfaelle=z["ausfaelle"],
             punkte=z["punkte"],
+            fuehrungsrunden=z["fuehrungsrunden"],
+            gefahrene_runden=z["gefahrene_runden"],
         )
+    for z in verbindung.execute("SELECT * FROM saisonfuehrung"):
+        statistik.saisonfuehrung[(z["saison"], z["fahrer"])] = z["runden"]
     for z in verbindung.execute("SELECT * FROM saisonpunkt"):
         statistik.saisonpunkte[(z["saison"], z["fahrer"])] = z["punkte"]
     for z in verbindung.execute("SELECT * FROM saisonverlauf"):
@@ -651,6 +673,7 @@ def _lies_statistik(
                 schnellste_runden=z["schnellste_runden"],
                 ausfaelle=z["ausfaelle"],
                 rennen=z["rennen"],
+                fuehrungsrunden=z["fuehrungsrunden"],
             )
         )
     for z in verbindung.execute("SELECT * FROM historie ORDER BY saison"):

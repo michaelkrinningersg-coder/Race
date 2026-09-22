@@ -3,8 +3,9 @@
 Das GDD nennt an vielen Stellen eine Mechanik, ohne sie zu beziffern.
 Dieses Dokument listet jede solche Lücke, drei Varianten und die getroffene
 Entscheidung. **Stand 2026-09-17: alle 41 Punkte entschieden.**
-Was danach dazukam, steht als Nachtrag am Ende — zuletzt **Punkt 101**,
-der Umbau auf ein Feld aus 50 Autos mit festen Fahrern.
+Was danach dazukam, steht als Nachtrag am Ende — zuletzt **Punkt 102**,
+die Führungsrunden, und davor **Punkt 101**, der Umbau auf ein Feld aus
+50 Autos mit festen Fahrern.
 
 Die entschiedenen Werte stehen in `konfiguration/balancing.toml`; der
 Abschnitt `[offen]` dort ist leer. Jede Entscheidung lässt sich ändern,
@@ -3062,3 +3063,68 @@ aber Entscheidungen — jede lässt sich zurücknehmen.
   Sakhir: 1:32.338 gegen 1:34.020). Das ist kein neuer Effekt — das
   Qualifying fährt auf einer grüneren Strecke als das Rennen —, fällt im
   dichten Feld aber deutlicher auf als vorher.
+
+---
+
+## Punkt 102: Führungsrunden
+
+Vorgabe des Auftraggebers: „Eine Statistik noch als zusätzlicher Tab
+Führungsrunden. Zählen wer ist vorne bei Start/Ziel, in den Renn-Screen
+bei den verschiedenen Tabs rechts ergänzen, aber auch als Statistik im
+Hauptmenü bei den Statistiken ergänzen."
+
+Drei Nachfragen wurden dabei entschieden:
+
+| Frage | Entscheidung |
+| --- | --- |
+| Was zeigt das Blatt im Rennen? | **Live mitzählen** bis zum Abspielzeitpunkt, wie Zeitenmonitor und Meisterschaft |
+| Alte Spielstände (Version 12)? | **Abweisen**, wie bei Punkt 101 |
+| Wo in den Statistiken? | **Nur eine Spalte** in der Bestenliste der Karriere, keine eigene Ansicht |
+
+### Die Zählregel
+
+Gezählt wird an der **Start/Ziel-Linie**: Wer eine Runde als Erster
+abschließt, hat sie geführt. Die Daten lagen schon vor —
+`Rundenprotokoll.rundenende_ms` hält je Auto fest, wann es jede Runde
+beendet hat, und das kleinste Rundenende gehört dem Führenden.
+
+Drei Dinge folgen daraus von selbst:
+
+* **Die Startaufstellung zählt nicht.** Vor dem Start steht überall
+  null. Gemessen an einem umgedrehten Feld ist das kein Haarspalten:
+  Dort fährt ein Auto 170 m hinter der Pole los und ist trotzdem 4,5 s
+  früher an der Linie.
+* **Ein Boxenstopp fällt richtig aus.** Wer in Runde 30 an die Box geht,
+  schließt Runde 30 nicht als Erster ab.
+* **Die Summe ist die Renndistanz.** Jede Runde hat genau einen
+  Führenden — daraus wird auch der Nenner des Anteils, ohne dass ihn
+  jemand mitreichen müsste.
+
+### Gemessen
+
+Zwei Wochenenden in trocken, Hauptseed 0:
+
+```
+Sakhir     55 Runden   FID 15, VER 13, MEL 12, FOI 12, SCH 3    10 Wechsel
+Melbourne  56 Runden   VER 29, MEL 14, SCH 6, OBE 4, RAU 3       7 Wechsel
+```
+
+Fünf verschiedene Führende je Rennen und sieben bis zehn Wechsel an der
+Linie — das ist die Vier-Prozent-Spanne aus Punkt 101, von der anderen
+Seite betrachtet.
+
+**Beide Rennmodelle liefern die Zahl**, aber nicht dieselbe: Gemessen an
+einem Achtrundenrennen in Monza hatte die volle Simulation vier
+Führungswechsel, der Schnellmodus keinen. Das ist derselbe Unterschied
+in der Verkehrsdynamik, der schon bei den Überholmanövern steht — der
+Schnellmodus lässt je Runde nur einen Überholversuch zu.
+
+### Was bei der Umsetzung auffiel
+
+* **Sechs Reiter passen nicht mehr nebeneinander.** Die Blattleiste
+  rechts braucht 688 px, verfügbar sind rund 570; Qt blendet Rollpfeile
+  ein, und „Zeitenmonitor" rutscht aus dem Bild. Ein kürzeres Etikett
+  löst es nicht — mit „Führung" wären es immer noch 639 px. Offen: Wer
+  das behoben haben will, muss entweder die rechte Spalte breiter
+  machen oder mehrere Etiketten kürzen. Das ist eine Layoutfrage und
+  wurde nicht eigenmächtig entschieden.

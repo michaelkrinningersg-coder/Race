@@ -69,6 +69,8 @@ MERKMALE = (
     ("podien", "Podien"),
     ("poles", "Pole-Positions"),
     ("schnellste_runden", "Schnellste Runden"),
+    # Punkt 102: Wer das Rennen bestimmt hat, statt nur wer es gewonnen hat.
+    ("fuehrungsrunden", "Fuehrungsrunden"),
     ("rennen", "Rennen"),
     ("ausfaelle", "Ausfaelle"),
 )
@@ -238,7 +240,7 @@ class Statistikseite(QWidget):
         merkmal = self._merkmal.currentData()
         name = dict(MERKMALE)[merkmal]
         self._kasten.setTitle(f"Bestenliste nach {name}")
-        self._tabelle.setColumnCount(9)
+        self._tabelle.setColumnCount(11)
         self._tabelle.setHeaderLabels(
             [
                 "#",
@@ -250,7 +252,19 @@ class Statistikseite(QWidget):
                 "SR",
                 "DNF",
                 "Punkte",
+                "Fuehrung",
+                "Anteil",
             ]
+        )
+        # Punkt 102: Die Spalte zaehlt Runden, keine Rennen - der Tooltip
+        # sagt, woran sie haengt.
+        self._tabelle.headerItem().setToolTip(
+            9,
+            "Runden, die dieser Fahrer als Erster an der Start/Ziel-Linie "
+            "abgeschlossen hat, ueber die ganze Karriere.",
+        )
+        self._tabelle.headerItem().setToolTip(
+            10, "Anteil an allen Runden, die er gefahren ist."
         )
 
         beste = self._statistik.bestenliste(merkmal, anzahl=50)
@@ -273,6 +287,12 @@ class Statistikseite(QWidget):
                     str(zahlen.schnellste_runden),
                     str(zahlen.ausfaelle),
                     str(zahlen.punkte),
+                    str(zahlen.fuehrungsrunden),
+                    (
+                        f"{zahlen.fuehrungsanteil:.1%}"
+                        if zahlen.gefahrene_runden
+                        else "-"
+                    ),
                 ],
             )
             self._faerbe(zeile, fahrer)

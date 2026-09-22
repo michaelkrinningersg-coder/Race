@@ -70,6 +70,10 @@ class Schnellergebnis:
     manoever_je_auto: tuple[int, ...] = ()
     defekte_je_auto: tuple[tuple[str, ...], ...] = ()
     kilometer_je_wetter: tuple[dict[str, float], ...] = ()
+    # Punkt 102: Runden in Fuehrung je Auto. Gezaehlt an derselben
+    # Stelle wie in der vollen Simulation - am Ende jeder Runde, wer
+    # dann vorn liegt.
+    fuehrungsrunden_je_auto: tuple[int, ...] = ()
 
 
 def _grenzen(konfiguration, auto, rhythmus: float):
@@ -368,6 +372,12 @@ def fahre_wochenende(
     grenze = kern_zwischenfall.ausfallgrenze(konfiguration, wuerfel)
     # Die Startaufstellung ist die Reihenfolge vor der ersten Runde.
     vorige_reihenfolge = list(aufstellung)
+    # Punkt 102: Runden in Fuehrung. Gezaehlt wird am Ende jeder Runde,
+    # nicht an der Startaufstellung - eine Runde fuehrt, wer sie als
+    # Erster abschliesst. Die volle Simulation liest dafuer die
+    # Rundenenden aus den Protokollen; hier steht die Reihenfolge nach
+    # Gesamtzeit ohnehin schon da.
+    fuehrungsrunden = np.zeros(anzahl, dtype=int)
     # Punkt 95: Platzgewinn der Vorrunde je Auto; in der ersten Runde
     # hat noch niemand etwas gutgemacht.
     platzgewinn: dict[int, int] = {}
@@ -625,6 +635,8 @@ def fahre_wochenende(
 
         vorher_stelle = {i: platz for platz, i in enumerate(vorige_reihenfolge)}
         reihenfolge = sorted(nummern[aktiv], key=lambda i: gesamtzeit[i])
+        if reihenfolge:
+            fuehrungsrunden[reihenfolge[0]] += 1
         # Punkt 95: Was diese Runde an Plaetzen gebracht hat, steuert in
         # der naechsten das Vorzeichen der Form.
         platzgewinn = {
@@ -721,4 +733,5 @@ def fahre_wochenende(
         kilometer_je_wetter=tuple(
             {lage: km for lage, km in eintrag.items() if km} for eintrag in kilometer
         ),
+        fuehrungsrunden_je_auto=tuple(int(n) for n in fuehrungsrunden),
     )

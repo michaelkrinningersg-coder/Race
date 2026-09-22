@@ -1510,6 +1510,60 @@ Spieler und der in der Tabelle gewaehlte Fahrer.
 Beim Saisonwechsel wird der Verlauf geleert; der Endstand steht dann in
 der Historie. Er liegt im Spielstand in der Tabelle `saisonverlauf`.
 
+### Fuehrungsrunden (Punkt 102)
+
+Wer ein Rennen gewonnen hat, sagt die Ergebnisliste. Wer es **bestimmt**
+hat, sagt sie nicht: Ein Sieg in der letzten Runde und eine Fahrt von
+Start bis Ziel an der Spitze stehen dort gleich da.
+
+Gezaehlt wird an der **Start/Ziel-Linie**: Wer eine Runde als Erster
+abschliesst, hat sie gefuehrt. Das ist die Zaehlweise, die der
+Motorsport "laps led" nennt, und sie steht schon in den Daten -
+`Rundenprotokoll.rundenende_ms` haelt je Auto fest, wann es jede Runde
+beendet hat, und das kleinste Rundenende gehoert dem Fuehrenden.
+
+```python
+verlauf.fuehrungsrunden()                  # je Auto, ueber das ganze Rennen
+verlauf.fuehrungsrunden(verlauf.dauer_ms * 0.5)   # Stand zur Rennhalbzeit
+verlauf.fuehrungswechsel()                 # wie oft die Fuehrung wechselte
+```
+
+Drei Dinge folgen aus der Regel von selbst:
+
+* **Die Startaufstellung zaehlt nicht.** Gefuehrt wird eine Runde erst,
+  wenn sie gefahren ist; vor dem Start steht ueberall null. Gemessen an
+  einem umgedrehten Feld ist das kein Haarspalten: Dort faehrt ein Auto
+  170 m hinter der Pole los und ist trotzdem 4,5 s frueher an der Linie.
+* **Ein Boxenstopp faellt richtig aus.** Wer in Runde 30 an die Box
+  geht, schliesst Runde 30 nicht als Erster ab und bekommt sie nicht.
+* **Die Summe ist die Renndistanz.** Jede Runde hat genau einen
+  Fuehrenden. Daraus wird auch der Nenner des Anteils, ohne dass ihn
+  jemand mitreichen muesste.
+
+Im Rennen steht das als sechstes Blatt rechts, neben Zeitenmonitor,
+Bestmoeglicher Runde, Meisterschaft, Meldungen und Boxenbilanz. Es
+**zaehlt mit**: In Runde 30 stehen dort die Fuehrungsrunden der ersten
+30 Runden, und man sieht die Fuehrung im Rennen wandern. Gezeigt wird
+nur, wer ueberhaupt vorn lag - bei 50 Autos waeren 45 leere Zeilen kein
+Blatt, sondern Ballast. Sortiert wird nach Runden und nicht nach der
+Rennposition: Die Frage ist, wer das Rennen bestimmt hat, und die
+beantwortet keine Rangliste.
+
+In der **Bestenliste der Karriere** stehen daneben zwei Spalten,
+"Fuehrung" und "Anteil", und in der Merkmalsliste laesst sich danach
+sortieren. Der Anteil misst gegen alle Runden, die der Fahrer gefahren
+ist - 30 Fuehrungsrunden sagen wenig, solange nicht danebensteht, ob es
+60 oder 600 Runden waren.
+
+**Beide Rennmodelle liefern die Zahl**, sonst waeren die voll gefahrenen
+Rennen mit den schnell gefahrenen nicht vergleichbar. Der Schnellmodus
+bildet die Reihenfolge ohnehin je Runde; dort zaehlt ein Zaehler auf
+ihrem ersten Platz. Die Zahlen sind deshalb vergleichbar, aber nicht
+gleich: Gemessen an einem Achtrundenrennen in Monza hatte die volle
+Simulation vier Fuehrungswechsel, der Schnellmodus keinen. Das ist
+derselbe Unterschied in der Verkehrsdynamik, der weiter unten steht -
+der Schnellmodus laesst je Runde nur einen Ueberholversuch zu.
+
 ### Warum es zwei Rennmodelle gibt
 
 Ein Rennen ueber die volle Distanz kostet mit `rennmanager.kern.rennen`
@@ -1656,6 +1710,7 @@ damit das Feld verschieden.
 statistik.rekord("Monza")               # schnellste Runde in Tausendsteln
 statistik.qualirekord("Monza")          # und die schnellste Qualirunde
 statistik.bestenliste("siege")          # Karrierezahlen aller Fahrer
+statistik.bestenliste("fuehrungsrunden")  # Punkt 102
 statistik.laufbahn(fahrer)              # je Saison das Jahr und der Platz
 statistik.punkte_in(2026, fahrer)       # Gesamtpunkte einer Saison
 ```
@@ -1672,13 +1727,16 @@ gewuerfelt: Sobald jemand den Editor benutzt hat, stimmt die gewuerfelte
 Welt nicht mehr mit der gespielten ueberein. Ein Test haelt genau das
 fest.
 
-Der Stand traegt seine **Version**; die aktuelle ist **12** mit 18
+Der Stand traegt seine **Version**; die aktuelle ist **13** mit 19
 Tabellen. Sie ist zugleich die **aelteste lesbare**: Punkt 101 hat
 Weltgroesse, Punktesystem, Karriere und Wertung so veraendert, dass ein
-alter Stand nicht mehr zu retten war. Ein Stand vor Version 12 wird
-deshalb abgewiesen, mit einer Meldung, die den Grund nennt, statt still
-falsche Zahlen zu zeigen; ein Test haelt beides fest. Umgerechnet wird
-nichts - so hat es der Auftraggeber entschieden.
+alter Stand nicht mehr zu retten war, und Punkt 102 hat die
+Fuehrungsrunden hinzugefuegt - die stehen in keinem aelteren Stand, und
+nachtraeglich lassen sie sich nicht ermitteln, weil die Rennen von
+damals nicht aufgehoben sind. Ein Stand vor Version 13 wird deshalb
+abgewiesen, mit einer Meldung, die den Grund nennt, statt still falsche
+Zahlen zu zeigen; ein Test haelt beides fest. Umgerechnet wird nichts -
+so hat es der Auftraggeber entschieden.
 
 ### Streckenbilanz, Wetterbilanz und Bestmarken
 

@@ -24,6 +24,7 @@ Saisonende abgeschlossen ist. Vier Dinge werden gefuehrt:
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -60,6 +61,14 @@ class Karrierezahlen:
     schnellste_runden: int = 0
     ausfaelle: int = 0
     punkte: int = 0
+    # Punkt 102: Runden in Fuehrung, an der Start/Ziel-Linie gezaehlt.
+    # Sie kommen nicht aus dem Rennergebnis, sondern aus dem Rennmodell -
+    # deshalb werden sie getrennt gemeldet (``verbuche_fuehrungsrunden``).
+    fuehrungsrunden: int = 0
+    # Und die Runden, die er ueberhaupt gefahren ist. Ohne sie liesse
+    # sich kein Anteil bilden: 30 Fuehrungsrunden sagen wenig, solange
+    # nicht danebensteht, ob es 60 oder 600 Runden waren.
+    gefahrene_runden: int = 0
 
     def verbuche(
         self, konfiguration: Konfiguration, ergebnis: Rennergebnis
@@ -80,6 +89,15 @@ class Karrierezahlen:
     @property
     def siegquote(self) -> float:
         return self.siege / self.rennen if self.rennen else 0.0
+
+    @property
+    def fuehrungsanteil(self) -> float:
+        """Anteil der gefahrenen Runden, die er vorn lag."""
+        return (
+            self.fuehrungsrunden / self.gefahrene_runden
+            if self.gefahrene_runden
+            else 0.0
+        )
 
 
 @dataclass
@@ -151,6 +169,8 @@ class Saisonzeile:
     schnellste_runden: int = 0
     ausfaelle: int = 0
     rennen: int = 0
+    # Punkt 102: Runden in Fuehrung dieser Saison.
+    fuehrungsrunden: int = 0
 
 
 @dataclass(frozen=True)
@@ -203,6 +223,10 @@ class Statistik:
     # der Historie, und 50 Fahrer mal 20 Rennen mal beliebig viele
     # Saisons waere ein Spielstand, der nur noch waechst.
     saisonverlauf: dict[tuple[int, int], int] = field(default_factory=dict)
+    # Punkt 102: Runden in Fuehrung je (Saison, Fahrer). Die laufende
+    # Saison braucht sie fuer ihre Abschlusstabelle; die Karrierezahlen
+    # summieren daneben weiter.
+    saisonfuehrung: dict[tuple[int, int], int] = field(default_factory=dict)
     # Punkt 21 und 23: Summen je (Fahrer, Strecke) und je (Fahrer,
     # Wetterlage). Siehe ``Bilanz``, warum Summen und keine Rennliste.
     streckenbilanz: dict[tuple[int, str], Bilanz] = field(default_factory=dict)
@@ -339,6 +363,36 @@ class Statistik:
             return False
         return self.melde_runde(strecke, schnellste_runde_ms, schnellster, saison, rennen)
 
+    def verbuche_fuehrungsrunden(
+        self, saison: int, je_fahrer: dict[int, int], starter: Iterable[int]
+    ) -> None:
+        """Traegt die Runden in Fuehrung eines Rennens ein (Punkt 102).
+
+        Getrennt von ``verbuche_wochenende``, weil sie nicht im
+        Rennergebnis stehen: Wer eine Runde gefuehrt hat, weiss nur das
+        Rennmodell, und beide Modelle melden es auf demselben Weg.
+
+        Die **Renndistanz** steht dabei schon in den Zahlen selbst: Jede
+        Runde hat genau einen Fuehrenden, also ist ihre Summe die
+        Rundenzahl des Rennens.
+
+        :param je_fahrer: Runden in Fuehrung; wer nie vorn lag, fehlt
+        :param starter: alle gemeldeten Fahrer. Sie bekommen die Distanz
+            als gefahrene Runden gutgeschrieben - auch der Letzte, sonst
+            haette der Anteil keinen Nenner.
+        """
+        runden = sum(je_fahrer.values())
+        if not runden:
+            return
+        for fahrer, anzahl in je_fahrer.items():
+            self.zahlen(fahrer).fuehrungsrunden += anzahl
+            schluessel = (saison, fahrer)
+            self.saisonfuehrung[schluessel] = (
+                self.saisonfuehrung.get(schluessel, 0) + anzahl
+            )
+        for fahrer in starter:
+            self.zahlen(fahrer).gefahrene_runden += runden
+
     # -- Bilanzen (Punkte 21 und 23) ---------------------------------------
     def strecke_von(self, fahrer: int, strecke: str) -> Bilanz:
         """Die Bilanz eines Fahrers auf einer Strecke."""
@@ -394,7 +448,11 @@ class Statistik:
             Saisonabschluss(
                 saison=saison,
                 zeilen=tuple(
-                    zeile_aus(eintrag, platz)
+                    zeile_aus(
+                        eintrag,
+                        platz,
+                        self.saisonfuehrung.get((saison, eintrag.fahrer), 0),
+                    )
                     for platz, eintrag in enumerate(tabelle.stand(), start=1)
                 ),
             )
@@ -444,7 +502,7 @@ class Statistik:
         return tuple(verlauf)
 
 
-def zeile_aus(eintrag: Eintrag, platz: int) -> Saisonzeile:
+def zeile_aus(eintrag: Eintrag, platz: int, fuehrungsrunden: int = 0) -> Saisonzeile:
     """Macht aus einer Saisonzeile der Tabelle eine Zeile der Historie."""
     return Saisonzeile(
         fahrer=eintrag.fahrer,
@@ -456,6 +514,7 @@ def zeile_aus(eintrag: Eintrag, platz: int) -> Saisonzeile:
         schnellste_runden=eintrag.schnellste_runden,
         ausfaelle=eintrag.ausfaelle,
         rennen=eintrag.rennen,
+        fuehrungsrunden=fuehrungsrunden,
     )
 
 

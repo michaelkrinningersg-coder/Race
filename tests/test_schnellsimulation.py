@@ -232,3 +232,24 @@ def test_schnellmodus_trifft_die_volle_simulation(k, zandvoort, feld, umgebung):
 
     abweichung = sum(schnell_zeiten) / sum(volle_zeiten) - 1.0
     assert abs(abweichung) < 0.02, f"Siegerzeit weicht um {abweichung:+.2%} ab"
+
+
+# -- Punkt 102: Fuehrungsrunden --------------------------------------------
+def test_jede_runde_hat_auch_hier_genau_einen_fuehrenden(wochenende, feld):
+    """Dieselbe Regel wie in der vollen Simulation: eine Runde, ein Fuehrender."""
+    fuehrung = wochenende.fuehrungsrunden_je_auto
+    assert len(fuehrung) == len(feld)
+    assert sum(fuehrung) == RUNDEN
+
+
+def test_der_sieger_hat_auch_hier_gefuehrt(wochenende):
+    """Wer gewinnt, muss mindestens die Schlussrunde vorn gelegen haben."""
+    sieger = wochenende.ergebnisse[0].fahrer
+    assert wochenende.fuehrungsrunden_je_auto[sieger] >= 1
+
+
+def test_die_fuehrung_haengt_am_seed(k, zandvoort, feld, umgebung):
+    """Reproduzierbar wie alles andere: gleicher Seed, gleiche Fuehrung."""
+    erste = fahre(k, zandvoort, feld, umgebung, seed=7)
+    zweite = fahre(k, zandvoort, feld, umgebung, seed=7)
+    assert erste.fuehrungsrunden_je_auto == zweite.fuehrungsrunden_je_auto

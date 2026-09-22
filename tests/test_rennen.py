@@ -765,3 +765,58 @@ def test_der_fortschritt_aendert_das_rennen_nicht(k, zandvoort, mittel) -> None:
     assert np.array_equal(ohne.distanz_m, mit.distanz_m)
     assert ohne.ergebnisse == mit.ergebnisse
     assert gemeldet == [(1, 3), (2, 3), (3, 3)]
+
+
+# -- Punkt 102: Fuehrungsrunden --------------------------------------------
+def test_jede_gefahrene_runde_hat_genau_einen_fuehrenden(rennen) -> None:
+    """Die Summe ueber das Feld ist die Rundenzahl - nicht mehr, nicht weniger."""
+    assert sum(rennen.fuehrungsrunden()) == rennen.runden
+
+
+def test_der_sieger_fuehrt_die_letzte_runde(rennen) -> None:
+    """Wer als Erster ueber die Ziellinie faehrt, hat die Schlussrunde gefuehrt."""
+    wer, _ende = rennen._fuehrender_je_runde[-1]
+    assert wer == rennen.ergebnisse[0].teilnehmer
+
+
+def test_fuehrungsrunden_wachsen_mit_dem_abspielzeitpunkt(rennen) -> None:
+    """Das Blatt im Rennen zaehlt mit, statt den Endstand vorwegzunehmen."""
+    stand = [sum(rennen.fuehrungsrunden(rennen.dauer_ms * a)) for a in (0.0, 0.5, 1.0)]
+    assert stand[0] == 0, "Vor dem Start hat niemand eine Runde gefuehrt"
+    assert 0 < stand[1] < stand[2]
+    assert stand[2] == rennen.runden
+
+
+def test_die_startaufstellung_zaehlt_noch_nicht(rennen) -> None:
+    """Gefuehrt wird eine Runde erst, wenn sie gefahren ist."""
+    assert rennen.fuehrungsrunden(0.0) == (0,) * len(rennen.teilnehmer)
+    assert rennen.fuehrungswechsel(0.0) == 0
+
+
+def test_gezaehlt_wird_an_der_linie_und_nicht_die_aufstellung(umgedreht) -> None:
+    """Umgedrehtes Feld: Wer auf der Pole steht, fuehrt noch lange nicht.
+
+    Die Aufstellung steht auf dem Kopf, das schwaechste Auto also vorn.
+    Gemessen holt die Pace den Startplatz schon in der ersten Runde ein:
+    Auto 15 startet 170 m hinter der Pole und ist trotzdem 4,5 s frueher
+    an der Linie. Genau das ist der Unterschied zwischen "Startplatz 1"
+    und "Runde gefuehrt" - und der Grund, warum hier die Rundenenden
+    gelesen werden und nicht die Aufstellung.
+    """
+    pole = next(i for i, t in enumerate(umgedreht.teilnehmer) if t.startplatz == 1)
+    erster, _ = umgedreht._fuehrender_je_runde[0]
+    assert erster != pole
+    assert sum(umgedreht.fuehrungsrunden()) == umgedreht.runden
+
+
+def test_die_wechsel_zaehlen_die_uebergaenge(rennen) -> None:
+    """Ein Wechsel ist, wenn zwei aufeinanderfolgende Runden verschieden
+    gefuehrt werden - nicht, wie viele ueberhaupt einmal vorn lagen."""
+    fuehrende = [wer for wer, _ in rennen._fuehrender_je_runde]
+    erwartet = sum(
+        1 for a, b in zip(fuehrende, fuehrende[1:], strict=False) if a != b
+    )
+    assert rennen.fuehrungswechsel() == erwartet
+    # Und wer nie vorn lag, taucht in der Zaehlung nicht auf.
+    gezaehlt = rennen.fuehrungsrunden()
+    assert {i for i, n in enumerate(gezaehlt) if n} == set(fuehrende)

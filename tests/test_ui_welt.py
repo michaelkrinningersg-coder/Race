@@ -617,3 +617,38 @@ def test_fahrertreffer_stehen_vor_teamtreffern(qtbot, konfig) -> None:
     # Und die Teamtreffer sind trotzdem dabei.
     namen = {welt.team_von(welt.fahrer[n]).name for n in gefunden}
     assert f"{fahrer.nachname} Racing" in namen
+
+
+# -- Punkt 102: Fuehrungsrunden in der Bestenliste --------------------------
+def test_die_bestenliste_zeigt_fuehrungsrunden(qtbot, konfig) -> None:
+    """Neben Siegen und Poles steht, wer die Rennen bestimmt hat."""
+    from rennmanager.ui.statistikseite import BESTENLISTE
+
+    fenster = Hauptfenster(konfig)
+    qtbot.addWidget(fenster)
+    fenster.saisonseite.lauf.fahre_rennen()
+
+    seite = fenster.statistikseite
+    seite.ansicht.setCurrentIndex(seite.ansicht.findData(BESTENLISTE))
+    seite.merkmalauswahl.setCurrentIndex(
+        seite.merkmalauswahl.findData("fuehrungsrunden")
+    )
+    seite.aktualisiere()
+
+    kopf = [
+        seite.tabelle.headerItem().text(i)
+        for i in range(seite.tabelle.columnCount())
+    ]
+    assert kopf[-2:] == ["Fuehrung", "Anteil"]
+
+    zeilen = seite.tabelle.topLevelItemCount()
+    assert zeilen > 0
+    runden = [int(seite.tabelle.topLevelItem(i).text(9)) for i in range(zeilen)]
+    assert runden == sorted(runden, reverse=True)
+    assert runden[0] > 0, "Nach einem Rennen muss jemand gefuehrt haben"
+    # Die Summe ueber das Feld ist die Renndistanz des einen Rennens -
+    # jede Runde hat genau einen Fuehrenden.
+    wochenende = fenster.saisonseite.lauf.wochenenden[0]
+    assert sum(runden) == sum(wochenende.fuehrungsrunden_je_fahrer.values())
+    # Und der Anteil steht als Prozentzahl daneben.
+    assert seite.tabelle.topLevelItem(0).text(10).endswith("%")

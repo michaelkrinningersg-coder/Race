@@ -313,8 +313,13 @@ def test_die_meldungen_sind_ein_blatt_und_keine_fussleiste(
     ueberschriften = [
         seite.blaetter_rechts.tabText(i) for i in range(seite.blaetter_rechts.count())
     ]
-    assert ueberschriften[:4] == [
-        "Zeitenmonitor", "Bestmoegliche Runde", "Meisterschaft", "Meldungen",
+    assert ueberschriften == [
+        "Zeitenmonitor",
+        "Bestmoegliche Runde",
+        "Meisterschaft",
+        "Meldungen",
+        "Boxenbilanz",
+        "Fuehrungsrunden",
     ]
     # Der Ticker haengt wirklich in den Blaettern, nicht mehr daneben.
     assert seite.ticker.isAncestorOf(seite.ticker)

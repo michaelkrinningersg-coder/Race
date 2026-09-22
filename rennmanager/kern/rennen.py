@@ -495,6 +495,75 @@ class Rennverlauf:
                 gesehen.append(kuerzel)
         return tuple(gesehen)
 
+    @cached_property
+    def _fuehrender_je_runde(self) -> tuple[tuple[int, int], ...]:
+        """Je gefuehrter Runde: wer sie fuehrte und wann sie zu Ende war.
+
+        Gefuehrt hat eine Runde, wer sie an der **Start/Ziel-Linie** als
+        Erster abschliesst. Das ist genau die Zaehlweise, die der
+        Motorsport "laps led" nennt, und sie steht schon in den Daten:
+        ``Rundenprotokoll.rundenende_ms`` haelt je Auto fest, wann es
+        jede Runde beendet hat. Wer vorn liegt, ueberquert die Linie
+        zuerst - das kleinste Rundenende gehoert also dem Fuehrenden.
+
+        Ein Boxenstopp faellt damit von selbst richtig aus: Wer in Runde
+        30 an die Box geht, ist am Ende von Runde 30 nicht mehr vorn und
+        bekommt sie nicht.
+
+        Die Rundenzahl richtet sich nach dem Auto mit den meisten Runden;
+        Ausgefallene bringen nur die Runden ein, die sie noch geschafft
+        haben.
+        """
+        laengste = max((len(p.rundenende_ms) for p in self.protokolle), default=0)
+        fuehrung: list[tuple[int, int]] = []
+        for runde in range(laengste):
+            bester: int | None = None
+            zeit = 0
+            for i, protokoll in enumerate(self.protokolle):
+                if runde >= len(protokoll.rundenende_ms):
+                    continue
+                ende = protokoll.rundenende_ms[runde]
+                if bester is None or ende < zeit:
+                    bester, zeit = i, ende
+            if bester is not None:
+                fuehrung.append((bester, zeit))
+        return tuple(fuehrung)
+
+    def fuehrungsrunden(self, zeit_ms: float | None = None) -> tuple[int, ...]:
+        """Runden in Fuehrung je Auto (Punkt 102).
+
+        Gezaehlt wird an der Start/Ziel-Linie: Wer eine Runde als Erster
+        abschliesst, hat sie gefuehrt. Die Startaufstellung zaehlt nicht
+        mit - gefuehrt wird eine Runde erst, wenn sie gefahren ist.
+
+        :param zeit_ms: Stand zu diesem Abspielzeitpunkt. Ohne Angabe
+            zaehlt das ganze Rennen. Die Rennanzeige gibt ihn mit, damit
+            das Blatt mitwaechst, statt von Anfang an den Endstand zu
+            zeigen.
+        """
+        gezaehlt = [0] * self.anzahl
+        for wer, ende in self._fuehrender_je_runde:
+            if zeit_ms is not None and ende > zeit_ms:
+                break
+            gezaehlt[wer] += 1
+        return tuple(gezaehlt)
+
+    def fuehrungswechsel(self, zeit_ms: float | None = None) -> int:
+        """Wie oft die Fuehrung an der Linie gewechselt hat (Punkt 102).
+
+        Eine Zahl, die das Rennen beschreibt: Null heisst, dass einer von
+        der ersten bis zur letzten Runde vorn lag.
+        """
+        wechsel = 0
+        davor: int | None = None
+        for wer, ende in self._fuehrender_je_runde:
+            if zeit_ms is not None and ende > zeit_ms:
+                break
+            if davor is not None and wer != davor:
+                wechsel += 1
+            davor = wer
+        return wechsel
+
     def gummierung_zu(self, zeit_ms: float) -> float:
         """Gefahrene Auto-Runden Gummi zu diesem Zeitpunkt (Punkt 88)."""
         if self.gummierung is None or not len(self.gummierung):

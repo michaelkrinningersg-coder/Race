@@ -8,7 +8,10 @@ Bilder ab:
   vollstaendigen Zeitentafel und der Startaufstellung,
 * je Wochenende fuenf Bilder vom Rennen: aus dem **Stand** (Rennzeit 0,
   alle Autos noch auf ihren Startplaetzen) und nach 25, 50, 75 und
-  100 Prozent der Renndauer.
+  100 Prozent der Renndauer,
+* mit ``--blatt fuehrung`` dabei nicht der Zeitenmonitor, sondern ein
+  anderes der rechten Blaetter - etwa die Fuehrungsrunden (Punkt 102),
+  die ueber das Rennen mitwachsen.
 
 Fotografiert wird das **ganze Hauptfenster** mit dem Reiter, der gerade
 oben liegt - also genau das Bild, das der Spieler vor sich haette.
@@ -93,8 +96,22 @@ def _weiter(seite) -> None:
     seite.warte_auf_rechnung()
 
 
+BLAETTER = {
+    "monitor": 0,
+    "ideal": 1,
+    "meisterschaft": 2,
+    "ticker": 3,
+    "boxenbilanz": 4,
+    "fuehrung": 5,
+}
+
+
 def fahre_wochenende(
-    app: QApplication, fenster: Hauptfenster, ordner: Path, nummer: int
+    app: QApplication,
+    fenster: Hauptfenster,
+    ordner: Path,
+    nummer: int,
+    blatt: str = "",
 ) -> dict:
     """Ein ganzes Wochenende, mit Bildern an den sechs Stellen."""
     seite = fenster.wochenendeseite
@@ -116,14 +133,27 @@ def fahre_wochenende(
     _weiter(seite)
     rennen = fenster.rennseite
     rennen._halte_an()
+    if blatt:
+        rennen.blaetter_rechts.setCurrentIndex(BLAETTER[blatt])
     verlauf = rennen.verlauf
     for stelle, anteil in enumerate(MARKEN, start=2):
         rennen._springe(verlauf.dauer_ms * anteil)
+        # Ein frisch aufgeschlagenes Blatt fuellt sich erst im naechsten
+        # Takt (D2); hier wird nicht abgespielt, also von Hand.
+        rennen._erzwinge_fuellung()
+        rennen._zeichne()
         app.processEvents()
         fotografiere(
             fenster, ordner / f"{marke}_{stelle}_rennen_{int(anteil * 100):03d}.png"
         )
     sieger = verlauf.ergebnisse[0]
+    fuehrung = verlauf.fuehrungsrunden()
+    bericht["fuehrung"] = {
+        verlauf.teilnehmer[i].kuerzel: n
+        for i, n in sorted(enumerate(fuehrung), key=lambda paar: -paar[1])
+        if n
+    }
+    bericht["wechsel"] = verlauf.fuehrungswechsel()
     bericht["runden"] = seite.wochenende.runden
     bericht["dauer"] = formatiere_dauer(int(verlauf.dauer_ms))
     bericht["rennwetter"] = verlauf.wetter.zustaende
@@ -147,6 +177,12 @@ def main() -> int:
         default="trocken",
         help="Wetterlage, die festgehalten wird; 'gewuerfelt' laesst sie frei",
     )
+    zerleger.add_argument(
+        "--blatt",
+        default="",
+        help="rechtes Blatt der Rennseite: monitor, ideal, meisterschaft, "
+        "ticker, boxenbilanz oder fuehrung",
+    )
     argumente = zerleger.parse_args()
 
     konfiguration = lade()
@@ -166,14 +202,15 @@ def main() -> int:
     ordner = Path(argumente.ordner)
     print(f"Wetter: {argumente.wetter}, Ordner: {ordner}\n")
     for nummer in range(1, argumente.rennen + 1):
-        bericht = fahre_wochenende(app, fenster, ordner, nummer)
+        bericht = fahre_wochenende(app, fenster, ordner, nummer, argumente.blatt)
         print(
             f"Rennen {bericht['rennen']}: {bericht['strecke']}, "
             f"{bericht['runden']} Runden\n"
             f"  Qualifying {bericht['qualiwetter']}, Pole {bericht['polezeit']}\n"
             f"  Rennen     {bericht['rennwetter']}, Sieger {bericht['sieger']} "
             f"in {bericht['siegerzeit']}, {bericht['ausfaelle']} Ausfaelle\n"
-            f"  Renndauer  {bericht['dauer']}"
+            f"  Renndauer  {bericht['dauer']}\n"
+            f"  Fuehrung   {bericht['fuehrung']}, {bericht['wechsel']} Wechsel"
         )
 
     bilder = sorted(ordner.glob("*.png"))
