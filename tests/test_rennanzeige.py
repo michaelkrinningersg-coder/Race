@@ -1185,3 +1185,70 @@ def test_die_leiste_passt_auch_unter_windows(gefahren) -> None:
         f"{auf_windows:.0f} px, das Blatt hat {reiter.height()} px"
     )
     assert reiter.count() == 6, "Sechs Blaetter - sonst stimmt die Rechnung nicht"
+
+
+# --- Punkt 106: Wer diese Runde an die Box kommt --------------------------
+def test_der_reifenbalken_wird_lila_wenn_der_stopp_faellig_ist(
+    qtbot, konfig, stopprennen
+) -> None:
+    """Und zwar erst ab der Ueberfahrt, mit der die Runde beginnt.
+
+    Frueher waere es eine Vorhersage ueber die uebernaechste Runde. Nach
+    dem Stopp ist der Reifen frisch, und der Balken faellt in die
+    Statusfarben zurueck.
+
+    Genommen wird ``stopprennen`` und nicht ``kurzes_rennen``: Das
+    kurze Rennen faehrt ohne Strategien, und ohne Strategie gibt es
+    ueber zwanzig Runden keinen einzigen Stopp - gemessen null.
+    """
+    from rennmanager.ui.tabellen import Balkenzeichner
+
+    _fenster, seite, _verlauf = _mit_stopps(qtbot, konfig, stopprennen)
+    seite._halte_an()
+    verlauf = seite.verlauf
+    assert verlauf.boxenstopps, "Dieser Lauf hat Stopps"
+
+    stopp = verlauf.boxenstopps[0]
+    protokoll = verlauf.protokolle[stopp.teilnehmer]
+    beginn = protokoll.rundenende_ms[stopp.runde - 2] if stopp.runde >= 2 else 0
+
+    assert not seite._kommt_rein(verlauf, stopp.teilnehmer, max(beginn - 5000, 0))
+    assert seite._kommt_rein(verlauf, stopp.teilnehmer, beginn + 1000)
+    assert seite._kommt_rein(verlauf, stopp.teilnehmer, stopp.zeit_ms - 1000)
+    assert not seite._kommt_rein(verlauf, stopp.teilnehmer, stopp.zeit_ms + 5000)
+
+    # Und das kommt wirklich in der Zeile an.
+    seite._springe(beginn + 1000)
+    zeile = next(
+        seite._rangliste.topLevelItem(i)
+        for i in range(seite._rangliste.topLevelItemCount())
+        if seite._rangliste.topLevelItem(i).data(0, Qt.UserRole) == stopp.teilnehmer
+    )
+    assert zeile.data(SPALTE_REIFEN, Balkenzeichner.HERVORROLLE) is True
+    assert "Box" in zeile.toolTip(SPALTE_REIFEN)
+
+
+def test_wer_nicht_reinkommt_behaelt_die_statusfarbe(
+    qtbot, konfig, stopprennen
+) -> None:
+    """Sonst waere das Lila keine Nachricht, sondern Dekoration."""
+    from rennmanager.ui.tabellen import Balkenzeichner
+
+    _fenster, seite, _verlauf = _mit_stopps(qtbot, konfig, stopprennen)
+    seite._halte_an()
+    verlauf = seite.verlauf
+
+    stopp = verlauf.boxenstopps[0]
+    protokoll = verlauf.protokolle[stopp.teilnehmer]
+    beginn = protokoll.rundenende_ms[stopp.runde - 2] if stopp.runde >= 2 else 0
+    seite._springe(beginn + 1000)
+
+    lila = [
+        seite._rangliste.topLevelItem(i).data(0, Qt.UserRole)
+        for i in range(seite._rangliste.topLevelItemCount())
+        if seite._rangliste.topLevelItem(i).data(
+            SPALTE_REIFEN, Balkenzeichner.HERVORROLLE
+        )
+    ]
+    assert stopp.teilnehmer in lila
+    assert len(lila) < len(verlauf.teilnehmer), "Nicht alle kommen gleichzeitig rein"

@@ -174,12 +174,20 @@ class Balkenzeichner(QStyledItemDelegate):
     """
 
     ANTEILSROLLE = Qt.UserRole + 2
+    # Punkt 106: Ist hier etwas Wahres hinterlegt, wird der Balken lila
+    # statt nach Status gefaerbt. Im Rennen heisst das "kommt diese
+    # Runde an die Box" - eine Nachricht, die nichts mit dem Zustand des
+    # Reifens zu tun hat und deshalb aus der Statusreihe ausbricht.
+    HERVORROLLE = Qt.UserRole + 3
 
     # Statusfarben aus der Referenzpalette des Diagrammleitfadens.
     GUT = QColor("#2e7d32")
     WARNUNG = QColor("#eda100")
     KRITISCH = QColor("#c62828")
     SPUR = QColor("#dedcd6")
+    # Dasselbe Lila wie fuer den schnellsten Sektor - im Projekt heisst
+    # diese Farbe durchgehend "sieh her".
+    HERVOR = QColor("#8e24aa")
 
     def __init__(self, parent=None, warnung: float = 0.4, kritisch: float = 0.2) -> None:
         super().__init__(parent)
@@ -208,7 +216,8 @@ class Balkenzeichner(QStyledItemDelegate):
         maler.setPen(Qt.NoPen)
         maler.setBrush(self.SPUR)
         maler.drawRoundedRect(flaeche.x(), flaeche.y(), breite, flaeche.height(), 2, 2)
-        maler.setBrush(self.farbe(anteil))
+        hervor = bool(index.data(self.HERVORROLLE))
+        maler.setBrush(self.HERVOR if hervor else self.farbe(anteil))
         maler.drawRoundedRect(
             flaeche.x(), flaeche.y(), int(breite * anteil), flaeche.height(), 2, 2
         )

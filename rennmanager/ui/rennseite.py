@@ -231,6 +231,8 @@ class Rennseite(QWidget):
         # in der Weltsicht der Meisterschaft stehen alle 400. Je Fahrer
         # einmal aus der Welt geholt, danach gemerkt.
         self._weltnamen: dict[int, tuple[str, str, str, str]] = {}
+        # Punkt 106: Je Auto die Runden, die mit einem Stopp enden.
+        self._stopprunden: dict[int, set[int]] = {}
         # D7 und D10: je ein Puffer fuer das laufende Bild. Beide Werte
         # gelten fuer das ganze Feld, wurden aber je Zeile neu gerechnet.
         self._plaetze_puffer: tuple[object, dict[int, int]] = (None, {})
@@ -602,6 +604,9 @@ class Rennseite(QWidget):
         # anderen Team; das Gedaechtnis der Weltsicht faengt deshalb mit
         # jedem Rennen neu an.
         self._weltnamen.clear()
+        # Punkt 106: Welche Runden mit einem Stopp enden, je Auto. Die
+        # Rangliste fragt das in jedem Bild fuer fuenfzig Zeilen ab.
+        self._stopprunden.clear()
         # D1: Die Spalten werden **einmal** je Rennen ausgemessen. Bisher
         # rief jede Fuellung ``resizeColumnToContents`` fuer jede Spalte
         # jeder Tabelle auf - 37 Aufrufe je Bild.
@@ -1024,6 +1029,14 @@ class Rennseite(QWidget):
             self._faerbe_mischung(zeile, verlauf, i, zeit)
             zeile.setData(0, Qt.UserRole, i)
             zeile.setData(SPALTE_REIFEN, Balkenzeichner.ANTEILSROLLE, float(reifen[i]))
+            # Punkt 106: Wer diese Runde an die Box kommt, bekommt den
+            # Balken in Lila - ab der Ueberfahrt, mit der die Runde
+            # beginnt, nicht frueher.
+            if self._kommt_rein(verlauf, i, zeit):
+                zeile.setData(SPALTE_REIFEN, Balkenzeichner.HERVORROLLE, True)
+                zeile.setToolTip(
+                    SPALTE_REIFEN, "Kommt in dieser Runde an die Box"
+                )
             # Die Zahl rechts, der Balken links - sonst liegen sie
             # uebereinander.
             zeile.setTextAlignment(SPALTE_REIFEN, Qt.AlignRight | Qt.AlignVCenter)
@@ -1063,6 +1076,30 @@ class Rennseite(QWidget):
         stopps = sum(1 for b in verlauf.boxenstopps if b.teilnehmer == i and b.zeit_ms <= zeit)
         text = f"{kuerzel} ({stopps})"
         return text + HAKEN if self._pflicht_erfuellt(verlauf, i, zeit) else text
+
+    def _kommt_rein(self, verlauf: Rennverlauf, i: int, zeit: float) -> bool:
+        """Ob dieses Auto die laufende Runde mit einem Stopp beendet.
+
+        Gezeigt wird das **erst ab der Ueberfahrt**, mit der die Runde
+        beginnt - vorher waere es eine Vorhersage ueber die uebernaechste
+        Runde, und die geht den Zuschauer nichts an. Der Stopp selbst
+        faellt an der Linie am Ende derselben Runde; danach ist der
+        Reifen frisch und der Balken wieder gruen.
+
+        ``Boxenstopp.runde`` zaehlt die **gefahrenen** Runden im Moment
+        des Wechsels, ist also die Nummer der Runde, die er gerade
+        beendet hat. Die laufende Runde eines Autos ist eins mehr als
+        die Zahl seiner abgeschlossenen.
+        """
+        stopps = self._stopprunden.get(i)
+        if stopps is None:
+            stopps = {b.runde for b in verlauf.stopps_von(i)}
+            self._stopprunden[i] = stopps
+        if not stopps:
+            return False
+        protokoll = verlauf.protokolle[i]
+        fertig = sum(1 for ende in protokoll.rundenende_ms if ende <= zeit)
+        return (fertig + 1) in stopps
 
     def _faerbe_mischung(
         self, zeile: QTreeWidgetItem, verlauf: Rennverlauf, i: int, zeit: float

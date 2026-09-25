@@ -229,7 +229,15 @@ Vier Dinge stehen neben der Streckenansicht, alle aus dem fertigen
 * **Reifenzustand als Balken** statt als Prozentzahl - im Zeitraffer
   schneller zu lesen. Die Farbe kommt aus der Statuspalette (gut, Warnung,
   kritisch), nicht aus einer Serienpalette: Der Balken sagt "kritisch",
-  nicht "Auto Nummer drei".
+  nicht "Auto Nummer drei". Seit Punkt 106 gibt es eine vierte Farbe:
+  **Lila heisst "kommt diese Runde an die Box"** - dasselbe Lila wie
+  fuer die schnellste Runde, also die Farbe, die im Rennen ohnehin
+  "hier passiert etwas" bedeutet. Sie faellt mit der Ueberfahrt, mit
+  der die Stopprunde beginnt, und nicht frueher: Vorher waere es eine
+  Vorhersage ueber die uebernaechste Runde. Am Ende derselben Runde
+  faellt der Stopp, und der Balken ist wieder gruen. Der Balken sagt
+  damit als einziger nicht mehr nur, wie viel Profil da ist, sondern
+  auch, dass es gleich nicht mehr gebraucht wird.
 * **Zwischenfall-Ticker**: Fehler, Unfaelle und Defekte bis zur laufenden
   Rennzeit, neueste zuerst, **fuenfzig Zeilen tief** (Punkt 97). Zwoelf
   waren es bis dahin - bei 50 Autos ueber die volle Distanz fallen
