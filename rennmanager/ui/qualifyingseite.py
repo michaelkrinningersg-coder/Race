@@ -45,6 +45,7 @@ from PySide6.QtWidgets import (
 from rennmanager.kern.qualifying import Lage, Qualifying
 from rennmanager.kern.zeit import formatiere_dauer, formatiere_rueckstand
 from rennmanager.konfiguration import Konfiguration
+from rennmanager.ui.flaggen import setze_flagge
 from rennmanager.ui.streckenansicht import Streckenansicht
 from rennmanager.ui.tabellen import kurzname, schriftfarbe, verbinde_fahrerkarte
 from rennmanager.ui.wetterband import Wetterband
@@ -535,6 +536,9 @@ class Qualifyingseite(QWidget):
         zeile = QTreeWidgetItem(self._rangliste, spalten)
         zeile.setForeground(SPALTE_AUTO, schriftfarbe(teilnehmer.farbe))
         zeile.setData(SPALTE_POS, Qt.UserRole, teilnehmer.nummer)
+        # Punkt 105: Die Flagge steht im Namensfeld, nicht in einer
+        # eigenen Spalte.
+        setze_flagge(zeile, SPALTE_NAME, teilnehmer.land)
         self._faerbe_splits(zeile, stand, lila)
 
         # Eine laufende Runde ist keine Zeit, sondern eine Behauptung -

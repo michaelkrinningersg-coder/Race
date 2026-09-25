@@ -31,6 +31,7 @@ from rennmanager.kern.statistik import Statistik
 from rennmanager.kern.welt import Welt
 from rennmanager.kern.zeit import formatiere_dauer, formatiere_rueckstand
 from rennmanager.konfiguration import Konfiguration
+from rennmanager.ui.flaggen import setze_flagge
 from rennmanager.ui.tabellen import (
     BILANZSPALTEN,
     bilanzfelder,
@@ -474,6 +475,14 @@ class Statistikseite(QWidget):
             )
         return marken
 
+    def _fahrerspalte(self) -> int:
+        """Wo in der gerade aufgebauten Tabelle der Fahrername steht."""
+        kopf = self._tabelle.headerItem()
+        for stelle in range(self._tabelle.columnCount()):
+            if kopf.text(stelle) == "Fahrer":
+                return stelle
+        return -1
+
     def _faerbe(self, zeile: QTreeWidgetItem, fahrer, spalte: int = 0) -> None:
         """Faerbt eine Zeile in der Teamfarbe und haengt die Fahrernummer an.
 
@@ -484,6 +493,13 @@ class Statistikseite(QWidget):
         """
         zeile.setForeground(spalte, schriftfarbe(self._welt.team_von(fahrer).farbe))
         zeile.setData(0, Qt.UserRole, fahrer.nummer)
+        # Punkt 105: Die Flagge sucht sich ihre Spalte selbst. Die fuenf
+        # Ansichten dieser Seite haben "Fahrer" an verschiedenen Stellen
+        # - fuenf eingetippte Zahlen waeren fuenf Gelegenheiten, beim
+        # naechsten Spaltenumbau danebenzuliegen.
+        stelle = self._fahrerspalte()
+        if stelle >= 0:
+            setze_flagge(zeile, stelle, fahrer.land)
         if fahrer.ist_spieler:
             schrift = zeile.font(1)
             schrift.setBold(True)

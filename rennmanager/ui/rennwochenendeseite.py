@@ -43,6 +43,7 @@ from rennmanager.kern import saison as kern_saison
 from rennmanager.kern import wertung as kern_wertung
 from rennmanager.kern.zeit import formatiere_dauer
 from rennmanager.konfiguration import Konfiguration
+from rennmanager.ui.flaggen import setze_flagge
 from rennmanager.ui.hintergrund import Rechenlauf
 from rennmanager.ui.qualifyingseite import Qualifyingseite
 from rennmanager.ui.reifenwahl import Reifenwahl
@@ -475,6 +476,7 @@ class Rennwochenendeseite(QWidget):
             )
             zeile.setForeground(0, schriftfarbe(team.farbe))
             zeile.setData(0, Qt.UserRole, fahrer.nummer)
+            setze_flagge(zeile, 1, fahrer.land)
             self._hebe_spieler_hervor(zeile, fahrer, self._vorher.columnCount())
         for spalte in range(self._vorher.columnCount()):
             self._vorher.resizeColumnToContents(spalte)
@@ -527,6 +529,7 @@ class Rennwochenendeseite(QWidget):
             )
             zeile.setForeground(0, schriftfarbe(self._lauf.welt.team_von(fahrer).farbe))
             zeile.setData(0, Qt.UserRole, fahrer.nummer)
+            setze_flagge(zeile, 1, fahrer.land)
             self._hebe_spieler_hervor(zeile, fahrer, self._ergebnisliste.columnCount())
         for spalte in range(self._ergebnisliste.columnCount()):
             self._ergebnisliste.resizeColumnToContents(spalte)
@@ -546,6 +549,7 @@ class Rennwochenendeseite(QWidget):
             )
             zeile.setForeground(0, schriftfarbe(self._lauf.welt.team_von(fahrer).farbe))
             zeile.setData(0, Qt.UserRole, fahrer.nummer)
+            setze_flagge(zeile, 1, fahrer.land)
             if davor is not None and davor != platz:
                 zeile.setForeground(
                     3, FARBE_GUT if davor > platz else FARBE_SCHLECHT

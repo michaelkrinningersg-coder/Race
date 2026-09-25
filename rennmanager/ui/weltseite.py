@@ -30,6 +30,7 @@ from rennmanager.kern import karriere as kern_karriere
 from rennmanager.kern.auto import bereichswerte
 from rennmanager.kern.welt import Welt
 from rennmanager.konfiguration import Konfiguration
+from rennmanager.ui.flaggen import setze_flagge
 from rennmanager.ui.tabellen import schriftfarbe, verbinde_fahrerkarte
 
 # Spalten, die unabhaengig von der Eigenschaftsansicht immer stehen.
@@ -187,6 +188,9 @@ class Weltseite(QWidget):
 
             zeile = QTreeWidgetItem(self._liste, felder)
             zeile.setData(0, Qt.UserRole, fahrer.nummer)
+            # Punkt 105: Hier gibt es die Spalte "Land" schon - die
+            # Flagge steht neben ihrem eigenen Namen.
+            setze_flagge(zeile, kopf.index("Land"), fahrer.land)
             zeile.setForeground(kopf.index("Kuerzel"), schriftfarbe(team.farbe))
             if fahrer.ist_spieler:
                 schrift = zeile.font(2)

@@ -76,6 +76,12 @@ class Teilnehmer:
     farbe: str
     ist_spieler: bool = False
     nummer: int = KEIN_FAHRER
+    # Punkt 105: Die Nation fuer die Flagge in den Tabellen. Sie steht
+    # hier und nicht nur in der Welt, weil die Qualifyingseite die Welt
+    # nicht kennt - sie bekommt nur eine gefahrene Session, und in der
+    # stehen Teilnehmer. Ein Feld aus ``starterfeld`` dieses Moduls hat
+    # keinen Fahrer dahinter und damit auch keine Nation.
+    land: str = ""
 
     @property
     def kuerzel(self) -> str:

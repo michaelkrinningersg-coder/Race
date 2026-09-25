@@ -40,6 +40,8 @@ from rennmanager.kern.zeit import (
     formatiere_runden_rueckstand,
 )
 from rennmanager.konfiguration import Konfiguration
+from rennmanager.ui.flaggen import BREITE_PX as FLAGGE_BREITE_PX
+from rennmanager.ui.flaggen import setze_flagge
 from rennmanager.ui.rueckstandsansicht import Rueckstandsansicht
 from rennmanager.ui.streckenansicht import Streckenansicht
 from rennmanager.ui.tabellen import (
@@ -633,6 +635,9 @@ class Rennseite(QWidget):
 
         teilnehmer = verlauf.teilnehmer
         name = laengster(self._namen, "Mustermann")
+        # Punkt 105: Neben dem Namen steht die Flagge - sie braucht ihre
+        # Breite plus einen Abstand, sonst schneidet Qt den Namen ab.
+        mit_flagge = (name, FLAGGE_BREITE_PX + 6)
         team = laengster(self._teams, "Rennstall")
         kuerzel = laengster([t.kuerzel for t in teilnehmer], "A30")
         dauer = "1:23:45.678"
@@ -640,21 +645,21 @@ class Rennseite(QWidget):
         sektor = "0:59.999"
 
         setze_breiten(self._rangliste, [
-            "30", kuerzel, name, team, f"{PFEIL_RUNTER} 12", "48",
+            "30", kuerzel, mit_flagge, team, f"{PFEIL_RUNTER} 12", "48",
             dauer, abstand, "320", "288,8", f"WW (4){HAKEN}", None,
             "88 Rd", "88 Rd", "R88",
             "Defekt x2, 3 Fehler",
         ])
         setze_breiten(self._monitor, [
-            kuerzel, name, team, dauer, dauer, "48", "288,8",
+            kuerzel, mit_flagge, team, dauer, dauer, "48", "288,8",
             sektor, sektor, sektor, sektor,
         ])
         setze_breiten(self._ideal, [
-            kuerzel, name, team, dauer, dauer, abstand,
+            kuerzel, mit_flagge, team, dauer, dauer, abstand,
             sektor, sektor, sektor, sektor,
         ])
         setze_breiten(self._meisterschaft, [
-            "30", kuerzel, name, team, f"{PFEIL_RUNTER} 12", "888", "+40",
+            "30", kuerzel, mit_flagge, team, f"{PFEIL_RUNTER} 12", "888", "+40",
         ])
         setze_breiten(self._ticker, ["⚙", dauer, "48", kuerzel,
                                      "Dreher in der Schikane, 8,4 s verloren"])
@@ -1008,6 +1013,9 @@ class Rennseite(QWidget):
                 ],
             )
             zeile.setForeground(SPALTE_KUERZEL, schriftfarbe(teilnehmer.farbe))
+            # Punkt 105: Die Flagge steht im Namensfeld, nicht in einer
+            # eigenen Spalte - die Rangliste ist ohnehin zu schmal.
+            setze_flagge(zeile, SPALTE_NAME, teilnehmer.land)
             if gewinn:
                 zeile.setForeground(
                     SPALTE_WECHSEL,
@@ -1260,6 +1268,7 @@ class Rennseite(QWidget):
                     self._faerbe_lila(zeile, MONITOR_SEKTOR + nummer)
             zeile.setForeground(0, schriftfarbe(verlauf.teilnehmer[i].farbe))
             zeile.setData(0, Qt.UserRole, i)
+            setze_flagge(zeile, 1, verlauf.teilnehmer[i].land)
             # Die letzte Runde leuchtet auf, wenn sie zugleich die beste
             # dieses Fahrers war - eine persoenliche Bestzeit sieht man
             # so im Vorbeilaufen.
@@ -1314,6 +1323,7 @@ class Rennseite(QWidget):
             zeile = QTreeWidgetItem(self._ideal, spalten)
             zeile.setForeground(0, schriftfarbe(verlauf.teilnehmer[i].farbe))
             zeile.setData(0, Qt.UserRole, i)
+            setze_flagge(zeile, 1, verlauf.teilnehmer[i].land)
             for nummer, sektor in enumerate(sektoren):
                 if sektor is not None and bestzeiten.get(nummer) == sektor:
                     self._faerbe_lila(zeile, IDEAL_SEKTOR + nummer)
@@ -1348,11 +1358,13 @@ class Rennseite(QWidget):
                     teilnehmer.kuerzel, self._namen[stelle], self._teams[stelle]
                 )
                 farbe = teilnehmer.farbe
+                land = teilnehmer.land
             else:
                 # Ein Testrennen kann ein Feld fahren, das nicht der Welt
                 # entspricht; dann steht in der Tabelle jemand, der hier
                 # nicht mitfaehrt.
                 kuerzel, name, team, farbe = self._aus_der_welt(zeile.fahrer)
+                land = self._land_aus_der_welt(zeile.fahrer)
             eintrag = QTreeWidgetItem(
                 self._meisterschaft,
                 [
@@ -1367,6 +1379,7 @@ class Rennseite(QWidget):
             )
             if farbe:
                 eintrag.setForeground(1, schriftfarbe(farbe))
+            setze_flagge(eintrag, 2, land)
             if stelle is not None:
                 eintrag.setData(0, Qt.UserRole, stelle)
             if zeile.veraenderung:
@@ -1377,6 +1390,12 @@ class Rennseite(QWidget):
                     ),
                 )
         self._stelle_auswahl_wieder_her(self._meisterschaft)
+
+    def _land_aus_der_welt(self, nummer: int) -> str:
+        """Die Nation eines Fahrers, der nicht im Feld steht (Punkt 105)."""
+        if self._welt is None or not 0 <= nummer < len(self._welt.fahrer):
+            return ""
+        return self._welt.fahrer[nummer].land
 
     def _aus_der_welt(self, nummer: int) -> tuple[str, str, str, str]:
         """Kuerzel, Nachname, Team und Farbe eines Fahrers ausserhalb des Rennens.
@@ -1508,6 +1527,7 @@ class Rennseite(QWidget):
             )
             zeile.setForeground(0, schriftfarbe(teilnehmer.farbe))
             zeile.setData(0, Qt.UserRole, i)
+            setze_flagge(zeile, 1, verlauf.teilnehmer[i].land)
             if anzahl and mittel:
                 zeile.setForeground(
                     6,
@@ -1579,6 +1599,7 @@ class Rennseite(QWidget):
             )
             zeile.setForeground(0, schriftfarbe(teilnehmer.farbe))
             zeile.setData(0, Qt.UserRole, i)
+            setze_flagge(zeile, 1, verlauf.teilnehmer[i].land)
             if teilnehmer.ist_spieler:
                 schrift = zeile.font(0)
                 schrift.setBold(True)

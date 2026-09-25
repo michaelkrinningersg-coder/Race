@@ -1814,6 +1814,41 @@ Jeder Fahrer kennt sich dabei nicht ueberall gleich gut aus - gewuerfelt
 wird je Paar, nicht je Fahrer. Zwei Strecken derselben Saison trennen
 damit das Feld verschieden.
 
+## Mini-Flaggen in den Fahrertabellen
+
+Jede Tabelle, in der Fahrer stehen, zeigt neben dem Namen die Flagge
+seiner Nation (Punkt 105) - in der Rennseite (Rangliste, Zeitenmonitor,
+Idealrunde, Tabelle, Boxen, Fuehrung), in der Zeitentafel des
+Qualifyings sowie auf der Welt-, Saison-, Statistik- und
+Rennwochenendeseite.
+
+Sie steht **im Namensfeld**, nicht in einer eigenen Spalte: Die
+Rangliste braucht schon 1195 px fuer ihre 16 Spalten und bekommt 802
+(siehe `OFFENE_PUNKTE.md`, Vorschlag 23); eine Spalte mehr haette das
+verschlimmert. Auf der Weltseite gibt es die Spalte "Land" ohnehin -
+dort steht die Flagge neben ihrem eigenen Namen.
+
+**Gezeichnet, nicht geladen.** Naheliegend waeren die Unicode-Flaggen,
+aber Windows hat keine Flaggenglyphen: Segoe UI Emoji zeigt dort zwei
+Buchstaben in Kaestchen, und Windows ist die Zielplattform (GDD 15).
+Bilddateien kosteten zwei Dutzend Dateien im Bundle und eine
+Lizenzfrage. `rennmanager.ui.flaggen` malt sie deshalb selbst, mit
+denselben Mitteln wie die Streckenkarte, und legt jedes Symbol im
+Zwischenspeicher ab - die Rangliste baut fuenfzig Zeilen in jedem Bild
+neu.
+
+Gedeckt sind alle **32** Nationen aus `konfiguration/namen.toml`. Ein
+Test prueft das gegen die Datei; beim ersten Bau fehlten Tschechien und
+Lettland, weil die 24 Nationen einer gewuerfelten Welt nicht alle
+abdecken.
+
+**Was das nicht kann.** Bei 16 mal 11 Pixeln ist kein Wappen
+darstellbar. Italien und Mexiko sind beide gruen-weiss-rot senkrecht;
+gemessen unterscheiden sie sich nur im Farbton (#008c45/#cd212a gegen
+#006847/#ce1126), und auf einen Blick sieht man das nicht. Dasselbe
+gilt fuer Slowenien und die Slowakei. Deshalb traegt jede Flagge den
+Landesnamen als Tooltip.
+
 ## Statistik und Spielstand
 
 `rennmanager.kern.statistik` fuehrt, was die Saison ueberdauert (GDD 13):

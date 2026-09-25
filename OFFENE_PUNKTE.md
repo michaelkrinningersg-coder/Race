@@ -3458,3 +3458,71 @@ eigenen Aufwärmrunde — und die fährt jedes Auto verschieden schnell.
 Gemessen streuen die Vorsprünge in Catalunya zwischen 43,7 und 49,6 s,
 rund 3 % der Zeit auf der Strecke. Der Test prüft jetzt die Streuung
 gegen diese Bezugsgröße statt gegen null.
+
+---
+
+## Punkt 105: Mini-Flaggen in den Fahrertabellen
+
+Ansage: „Ist es möglich, Mini-Flaggen zu den Nationen der Fahrer in den
+Ranglisten und Tabellen einzufügen, überall dort, wo die Fahrer
+tabellarisch angezeigt werden?"
+
+Ja — aber nicht auf dem naheliegenden Weg.
+
+### Unicode-Flaggen scheiden aus
+
+🇩🇪 ist ein Paar aus zwei Regionalindikatoren. Windows hat dafür keine
+Glyphen: Segoe UI Emoji zeigt zwei Buchstaben in Kästchen, keine
+Flagge. Ausgeliefert wird eine Windows-`.exe` (GDD 15) — dieselbe Falle
+wie bei Vorschlag 23, wo ich die Leiste nach Linux-Zahlen entschieden
+hatte.
+
+Bilddateien wären die Alternative: genau, aber zwei Dutzend Dateien im
+Bundle plus Lizenzfrage. Gewählt: **selbst zeichnen**, mit denselben
+Mitteln wie die Streckenkarte.
+
+### Gedeckt sind alle 32 Nationen
+
+Vier Muster reichen für fast alles: waagerechte Streifen (14),
+senkrechte Streifen (8), Nordkreuz (5), dazu Schweiz,
+Großbritannien, USA, Griechenland und Tschechien als Sonderfälle.
+
+Beim ersten Bau fehlten **Tschechien und Lettland**: Ich hatte gegen
+die 24 Nationen einer gewürfelten Welt geprüft, nicht gegen die 32 der
+Konfiguration. Ein Test liest jetzt `namen.toml` und verlangt für jedes
+Land ein Symbol.
+
+### Was das nicht kann — gemessen, nicht vermutet
+
+Bei 16×11 px ist kein Wappen darstellbar. Ich hatte behauptet, Italien
+und Mexiko seien damit identisch. **Gemessen sind sie es nicht:** Die
+Farbtöne gehen auseinander (#008c45/#cd212a gegen #006847/#ce1126).
+Unterscheidbar heißt aber nicht erkennbar — auf einen Blick sieht man
+es nicht. Dasselbe bei Slowenien und der Slowakei. Deshalb trägt jede
+Flagge den Landesnamen als Tooltip.
+
+### Zwei Fehler beim Einbau
+
+**Die Nation ging auf halbem Weg verloren.** Im Qualifying trugen alle
+50 Teilnehmer ihre Nation, im Rennen keiner. Ursache:
+`saison.startfeld` baut die Teilnehmer ein **zweites** Mal neu — nur
+mit der Startaufstellung des Qualifyings als Reihenfolge — und schrieb
+das neue Feld nicht mit ab. Ein Test verfolgt die Kette jetzt von
+`welt.starterfeld` über das Qualifying bis ins Rennfeld.
+
+**Die Flaggen fraßen die Namen.** Nach dem Einbau stand „D. Verhey…"
+statt „D. Verheyden": Das Symbol nimmt der Zelle Platz, den der
+Probetext in `setze_breiten` nicht kennt. Die Funktion nimmt jetzt
+wahlweise `(Text, Zusatzpixel)` je Spalte.
+
+Und ein Absturz statt einer Zusicherung: Der erste Testentwurf
+verglich Bilder über `QBuffer(QByteArray())`. Das `QByteArray` ist ein
+temporäres Objekt, das Python sofort wieder einsammelt, während der
+Puffer es noch hält — der Testlauf stürzte ab. Gelesen wird jetzt
+direkt aus `QImage.constBits()`.
+
+### Offen
+
+Fahrerkarte (zeigt einen Fahrer, keine Tabelle), Editorseite und
+Reifenwahl haben noch keine Flaggen. Entscheidung des Auftraggebers
+steht aus.

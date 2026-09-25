@@ -43,7 +43,12 @@ def setze_breiten(tabelle: QTreeWidget, proben, rand: int = 16) -> None:
 
     :param proben: je Spalte ein Probetext; ``None`` laesst die Spalte,
         wie sie ist (fuer Spalten mit eigener Breite, etwa dem
-        Reifenbalken)
+        Reifenbalken). Statt eines Textes darf dort ``(Text, Zusatz)``
+        stehen - der Zusatz sind Pixel, die neben dem Text noch in die
+        Zelle muessen. Gebraucht fuer die Flaggenspalte (Punkt 105):
+        Ein Symbol in der Zelle nimmt dem Text Platz weg, den der
+        Probetext allein nicht kennt, und die Namen standen danach
+        abgeschnitten da.
     """
     metrik = QFontMetrics(tabelle.font())
     kopfmetrik = QFontMetrics(tabelle.header().font())
@@ -51,7 +56,10 @@ def setze_breiten(tabelle: QTreeWidget, proben, rand: int = 16) -> None:
     for spalte, probe in enumerate(proben):
         if probe is None:
             continue
-        breite = metrik.horizontalAdvance(probe)
+        zusatz = 0
+        if isinstance(probe, tuple):
+            probe, zusatz = probe
+        breite = metrik.horizontalAdvance(probe) + zusatz
         if kopf is not None:
             breite = max(breite, kopfmetrik.horizontalAdvance(kopf.text(spalte)))
         tabelle.setColumnWidth(spalte, breite + rand)

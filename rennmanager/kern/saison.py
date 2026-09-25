@@ -203,6 +203,13 @@ def startfeld(
             farbe=rennfeld[i].farbe,
             ist_spieler=rennfeld[i].ist_spieler,
             nummer=rennfeld[i].nummer,
+            # Punkt 105: Die Nation muss mit - dieses Feld wird neu
+            # gebaut, nur mit der Startaufstellung des Qualifyings als
+            # Reihenfolge, und was hier nicht abgeschrieben wird, ist im
+            # Rennen weg. Die Flaggen der Rangliste fehlten genau
+            # deshalb, waehrend die Zeitentafel des Qualifyings sie
+            # schon hatte.
+            land=rennfeld[i].land,
         )
         for platz, i in enumerate(quali.aufstellung, start=1)
     )

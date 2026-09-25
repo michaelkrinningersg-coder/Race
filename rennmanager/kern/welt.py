@@ -642,6 +642,8 @@ def starterfeld(
             farbe=welt.team_von(f).farbe,
             ist_spieler=f.ist_spieler,
             nummer=f.nummer,
+            # Punkt 105: fuer die Flagge in den Tabellen.
+            land=f.land,
         )
         for platz, f in enumerate(geordnet, start=1)
     )

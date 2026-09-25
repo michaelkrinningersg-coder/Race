@@ -32,6 +32,7 @@ from rennmanager.kern.welt import Welt
 from rennmanager.kern.zeit import formatiere_dauer
 from rennmanager.kern.zufall import Seedquelle
 from rennmanager.konfiguration import Konfiguration
+from rennmanager.ui.flaggen import setze_flagge
 from rennmanager.ui.kalenderstreifen import Kalenderstreifen
 from rennmanager.ui.punkteansicht import Punkteansicht
 from rennmanager.ui.tabellen import schriftfarbe, verbinde_fahrerkarte
@@ -360,6 +361,7 @@ class Saisonseite(QWidget):
             )
             zeile.setForeground(0, schriftfarbe(team.farbe))
             zeile.setData(0, Qt.UserRole, fahrer.nummer)
+            setze_flagge(zeile, 1, fahrer.land)
             if fahrer.ist_spieler:
                 schrift = zeile.font(1)
                 schrift.setBold(True)
@@ -445,6 +447,7 @@ class Saisonseite(QWidget):
             )
             zeile.setForeground(0, schriftfarbe(self._welt.team_von(fahrer).farbe))
             zeile.setData(0, Qt.UserRole, fahrer.nummer)
+            setze_flagge(zeile, 1, fahrer.land)
             if fahrer.ist_spieler:
                 schrift = zeile.font(1)
                 schrift.setBold(True)
