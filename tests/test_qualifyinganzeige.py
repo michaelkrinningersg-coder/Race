@@ -259,9 +259,17 @@ def test_langsamer_als_der_fuehrende_ist_rot_schneller_gruen(seite, session) -> 
 
 
 def test_neben_dem_split_steht_der_abstand(seite, session) -> None:
-    """Die Farbe allein traegt die Aussage nicht - die Zahl steht daneben."""
+    """Die Farbe allein traegt die Aussage nicht - die Zahl steht daneben.
+
+    Genommen wird der **dritte** Fahrer, nicht der zweite: Seit die
+    Autos sich eine halbe Runde nacheinander ueberlappen (Punkt 104),
+    faellt der erste Split des Zweiten, bevor der Erste eine Runde
+    stehen hat - dann gibt es nichts, wogegen zu messen waere, und
+    ``splitvergleich`` sagt das mit ``None``. Gemessen in Catalunya hat
+    erst der Dritte auf allen vier Splits einen Vergleich.
+    """
     seite._sofort.click()
-    zweiter = session.fahrten[1]
+    zweiter = session.fahrten[2]
     zeile = _zeile_von(seite, session, zweiter)
     abstand = session.splitvergleich(zweiter, 0)
     assert abstand is not None
@@ -531,27 +539,56 @@ def test_die_streckengrafik_zeigt_die_strecke_der_session(seite, session) -> Non
     assert seite._ansicht.strecke is session.strecke
 
 
-def test_auf_der_strecke_stehen_nur_die_auf_der_schnellen_runde(seite, session):
+def test_auf_der_karte_stehen_alle_die_unterwegs_sind(seite, session):
     """Ein Feld aus Aufwaermpunkten wuerde die zwei zudecken, auf die es ankommt."""
     fahrt = session.fahrten[0]
     mitte = (fahrt.runde_ab_ms + fahrt.ziel_ms) / 2
     seite._springe(mitte)
 
-    auf_der_runde = {
+    # Punkt 104: Auch die Aufwaermrunde gehoert auf die Karte - wer in
+    # der Box steht oder im Ziel ist, weiter nicht.
+    auf_der_strecke = {
         session.teilnehmer[s.fahrt.teilnehmer].kuerzel
         for s in session.lage_zu(mitte)
-        if s.lage is ql.Lage.SCHNELLE_RUNDE
+        if s.lage in (ql.Lage.SCHNELLE_RUNDE, ql.Lage.AUFWAERMUNG)
     }
-    assert auf_der_runde, "Zu diesem Zeitpunkt muss jemand auf der Runde sein"
-    gezeichnet = {kuerzel for _ort, kuerzel, _farbe, _spieler in seite._ansicht._autos}
-    assert gezeichnet == auf_der_runde
+    assert auf_der_strecke, "Zu diesem Zeitpunkt muss jemand unterwegs sein"
+    gezeichnet = {auto[1] for auto in seite._ansicht._autos}
+    assert gezeichnet == auf_der_strecke
 
 
-def test_am_anfang_und_am_ende_ist_die_strecke_leer(seite, session) -> None:
+def test_am_anfang_steht_schon_einer_auf_der_strecke(seite, session) -> None:
+    """Punkt 104: Der Erste ist ab Sekunde null auf seiner Aufwaermrunde.
+
+    Vorher war die Karte hier leer - sie zeigte nur gezeitete Runden,
+    und die faengt erst gut anderthalb Minuten spaeter an. Gemessen war
+    die Karte damit ueber ein Fuenftel der Session leer.
+    """
     seite._springe(0)
-    assert seite._ansicht._autos == []
+    autos = seite._ansicht._autos
+    assert len(autos) == 1, "Der Erste faehrt schon, die anderen warten"
+    ort, kuerzel, _farbe, _spieler, gedaempft = autos[0]
+    erste = session.fahrten[0]
+    assert kuerzel == session.teilnehmer[erste.teilnehmer].kuerzel
+    assert ort == pytest.approx(0.0, abs=1.0), "Er kommt gerade aus der Box"
+    assert gedaempft, "Die Aufwaermrunde wird blasser gezeichnet"
+
+
+def test_am_ende_ist_die_strecke_leer(seite, session) -> None:
+    """Wer im Ziel ist, rollt zurueck - der gehoert nicht auf die Karte."""
     seite._springe(session.dauer_ms)
     assert seite._ansicht._autos == []
+
+
+def test_die_gezeitete_runde_wird_nicht_gedaempft(seite, session) -> None:
+    """Der Unterschied ist der Zweck der Daempfung."""
+    fahrt = session.fahrten[0]
+    seite._springe(fahrt.runde_ab_ms + fahrt.zeit_ms * 0.5)
+    kuerzel = session.teilnehmer[fahrt.teilnehmer].kuerzel
+    seiner = next(
+        a for a in seite._ansicht._autos if a[1] == kuerzel
+    )
+    assert seiner[4] is False
 
 
 def test_der_punkt_wandert_die_runde_entlang(seite, session) -> None:
@@ -562,7 +599,7 @@ def test_der_punkt_wandert_die_runde_entlang(seite, session) -> None:
     for anteil in (0.1, 0.4, 0.7, 0.95):
         seite._springe(fahrt.runde_ab_ms + anteil * fahrt.zeit_ms)
         orte += [
-            ort for ort, kz, _farbe, _spieler in seite._ansicht._autos if kz == kuerzel
+            auto[0] for auto in seite._ansicht._autos if auto[1] == kuerzel
         ]
     assert len(orte) == 4
     assert orte == sorted(orte)

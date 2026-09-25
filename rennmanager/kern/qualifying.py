@@ -188,12 +188,20 @@ class Qualifying:
         return self.aufstellung.index(teilnehmer) + 1
 
     def ort_auf_der_runde(self, stand: Stand, zeit_ms: float) -> float | None:
-        """Wo das Auto gerade auf seiner gezeiteten Runde ist, in Metern.
+        """Wo das Auto gerade auf der Strecke ist, in Metern.
 
         Gebraucht fuer die Streckengrafik im Qualifying (Punkt 93, A9):
-        ein Punkt, der die schnelle Runde abfaehrt. Wer in der Box steht,
-        auf der Aufwaermrunde ist oder schon im Ziel, hat keinen Ort -
-        dann steht hier ``None``, und die Grafik zeichnet ihn nicht.
+        ein Punkt, der die Runde abfaehrt. Wer in der Box steht oder
+        schon im Ziel ist, hat keinen Ort - dann steht hier ``None``,
+        und die Grafik zeichnet ihn nicht.
+
+        Gezaehlt wird **beides**: die gezeitete Runde und die
+        Aufwaermrunde davor. Die Aufwaermrunde lange wegzulassen war ein
+        Fehler: Gemessen dauert sie 101 s gegen 98 s fuer die gezeitete,
+        ein Auto ist also laenger ungezeitet auf der Strecke als
+        gezeitet. Die Karte zeigte in dieser Zeit nichts - ueber eine
+        ganze Session gerechnet war sie 20,8 Prozent der Zeit leer, unter
+        anderem gleich am Anfang.
 
         **Gerechnet wird ueber die Sektorgrenzen.** Sie sind die einzigen
         Stellen, an denen Zeit und Ort beide bekannt sind; innerhalb
@@ -203,17 +211,28 @@ class Qualifying:
         der Mitte eines Sektors und dort hoechstens ein paar Dutzend
         Meter auf gut einem Kilometer.
         """
-        if stand.lage is not Lage.SCHNELLE_RUNDE:
-            return None
         fahrt = stand.fahrt
         sektoren = self.strecke.sektoren
         if not sektoren or len(fahrt.sektoren_ms) != len(sektoren):
             return None
+        if stand.lage is Lage.SCHNELLE_RUNDE:
+            return self._ort_ueber_sektoren(
+                float(fahrt.runde_ab_ms), fahrt.sektorenden_ms, zeit_ms
+            )
+        if stand.lage is Lage.AUFWAERMUNG:
+            return self._ort_ueber_sektoren(
+                float(fahrt.beginn_ms), self._aufwaermenden(fahrt), zeit_ms
+            )
+        return None
 
-        # Anfang und Ende jedes Sektors, in Zeit und in Metern.
-        uhr = float(fahrt.runde_ab_ms)
+    def _ort_ueber_sektoren(
+        self, ab_ms: float, enden_ms: tuple[int, ...] | tuple[float, ...],
+        zeit_ms: float,
+    ) -> float:
+        """Meter auf der Runde, aus Sektorgrenzen in Zeit und Ort."""
+        uhr = ab_ms
         gelaufen = 0.0
-        for sektor, ende in zip(sektoren, fahrt.sektorenden_ms, strict=True):
+        for sektor, ende in zip(self.strecke.sektoren, enden_ms, strict=True):
             if zeit_ms < ende:
                 dauer = max(float(ende) - uhr, 1.0)
                 anteil = min(max((zeit_ms - uhr) / dauer, 0.0), 1.0)
@@ -221,6 +240,32 @@ class Qualifying:
             uhr = float(ende)
             gelaufen += sektor.laenge_m
         return gelaufen
+
+    @staticmethod
+    def _aufwaermenden(fahrt: Fahrt) -> tuple[float, ...]:
+        """Sektorgrenzen der Aufwaermrunde, in Zeit.
+
+        Die Aufwaermrunde wird nicht gezeitet - ihre Sektorzeiten hebt
+        der Kern nicht auf. Bekannt ist nur ihr Fenster: Sie fuellt genau
+        die Zeit zwischen Boxenausfahrt und Beginn der gezeiteten Runde,
+        und in dieser Zeit faehrt das Auto genau eine Runde
+        (``qualifying.aufwaermrunden = 1``).
+
+        Wie sich die Zeit auf die Sektoren verteilt, wird von der
+        gezeiteten Runde uebernommen und auf das Fenster gestreckt: Es
+        ist dieselbe Strecke, also braucht derselbe Sektor anteilig
+        dieselbe Zeit. Das Auto faehrt langsamer, aber ueberall
+        langsamer. Gleichmaessig zu verteilen waere die schlechtere
+        Annahme - dann stuende der Punkt auf der Geraden zu frueh und in
+        der Kurve zu spaet.
+        """
+        dauer = max(float(fahrt.runde_ab_ms - fahrt.beginn_ms), 1.0)
+        gesamt = max(float(fahrt.zeit_ms), 1.0)
+        ab = float(fahrt.beginn_ms)
+        return tuple(
+            ab + (ende - fahrt.runde_ab_ms) / gesamt * dauer
+            for ende in fahrt.sektorenden_ms
+        )
 
     # -- Was gerade passiert ist (Punkt 93) --------------------------------
     def letzte_zielankunft(self, zeit_ms: float, fenster_ms: float):

@@ -431,3 +431,121 @@ def test_der_erste_eroeffnet_die_pole_statt_sie_zu_uebernehmen(k, strecke) -> No
     ankunft = session.letzte_zielankunft(erste.ziel_ms, fenster)
     assert ankunft is not None and ankunft.platz == 1
     assert not ankunft.neue_pole, "Vorher stand dort niemand"
+
+
+# -- Die Kaskade: Ueberlappung der gezeiteten Runden ------------------------
+def test_die_gezeiteten_runden_ueberlappen_sich(session) -> None:
+    """Vorgabe des Auftraggebers: rund ein Viertel der Zeit auf der Strecke.
+
+    Jedes Auto soll seine gezeitete Runde rund 25 Prozent seiner Zeit
+    auf der Strecke beginnen, **bevor** das vorige fertig ist - und so
+    weiter durch das ganze Feld.
+
+    Vorher war der Abstand 1,25 Runden, und damit gab es gar keine
+    Ueberlappung: Gemessen begann der Zweite seine gezeitete Runde
+    21,8 s *nachdem* der Erste die Strecke verlassen hatte, also bei
+    minus 10,9 Prozent. Auf der Karte war immer nur ein Auto gezeitet
+    unterwegs.
+    """
+    anteile = []
+    for davor, danach in zip(session.fahrten, session.fahrten[1:], strict=False):
+        auf_der_strecke = davor.ziel_ms - davor.beginn_ms
+        vorsprung = davor.ziel_ms - danach.runde_ab_ms
+        anteile.append(vorsprung / auf_der_strecke)
+    assert anteile, "Es muss mehr als ein Auto fahren"
+    # "Rund 25 Prozent" - ein Auto ist zwei Runden auf der Strecke, ein
+    # Viertel davon ist eine halbe Runde. Aufwaermrunde und gezeitete
+    # Runde sind nicht exakt gleich lang, deshalb die Spanne.
+    for anteil in anteile:
+        assert 0.20 <= anteil <= 0.30, f"{anteil:.1%} statt rund 25 %"
+
+
+def test_die_ueberlappung_gilt_fuer_jedes_paar(session) -> None:
+    """Die Kaskade, nicht nur die ersten beiden.
+
+    Millisekundengenau ist sie nicht, und das ist richtig so: Die
+    Boxenausfahrten sind gleichmaessig getaktet, der Beginn der
+    gezeiteten Runde haengt aber an der eigenen Aufwaermrunde - und die
+    faehrt jedes Auto verschieden schnell. Gemessen streuen die
+    Vorspruenge in Catalunya zwischen 43,7 und 49,6 Sekunden, also rund
+    3 Prozent der Zeit auf der Strecke.
+    """
+    vorspruenge = [
+        davor.ziel_ms - danach.runde_ab_ms
+        for davor, danach in zip(session.fahrten, session.fahrten[1:], strict=False)
+    ]
+    assert len(vorspruenge) == len(session.fahrten) - 1
+    assert all(v > 0 for v in vorspruenge), "Jedes Paar ueberlappt sich"
+
+    auf_der_strecke = session.fahrten[0].ziel_ms - session.fahrten[0].beginn_ms
+    streuung = (max(vorspruenge) - min(vorspruenge)) / auf_der_strecke
+    assert streuung < 0.10, f"{streuung:.1%} Streuung - die Kaskade eiert"
+
+
+def test_mehrere_autos_sind_gleichzeitig_gezeitet_unterwegs(session) -> None:
+    """Der sichtbare Zweck: auf der Karte ist mehr als ein Auto zu sehen."""
+    hoechstens = 0
+    zeit = 0.0
+    while zeit <= session.dauer_ms:
+        gezeitet = sum(
+            1 for s in session.lage_zu(zeit) if s.lage is ql.Lage.SCHNELLE_RUNDE
+        )
+        hoechstens = max(hoechstens, gezeitet)
+        zeit += 1000
+    assert hoechstens >= 2, "Vorher war immer nur eines gezeitet unterwegs"
+
+
+# -- Punkt 93 (A9): Ort auf der Strecke, auch auf der Aufwaermrunde ---------
+def test_auf_der_aufwaermrunde_hat_das_auto_einen_ort(session) -> None:
+    """Sonst bleibt die Karte leer, solange keiner gezeitet faehrt.
+
+    Gemessen war sie damit ueber ein Fuenftel der Session leer, und ein
+    Auto ist laenger ungezeitet auf der Strecke (101 s) als gezeitet
+    (98 s).
+    """
+    fahrt = session.fahrten[0]
+    mitte = (fahrt.beginn_ms + fahrt.runde_ab_ms) / 2
+    stand = next(
+        s for s in session.lage_zu(mitte) if s.fahrt.teilnehmer == fahrt.teilnehmer
+    )
+    assert stand.lage is ql.Lage.AUFWAERMUNG
+    ort = session.ort_auf_der_runde(stand, mitte)
+    assert ort is not None
+    assert 0.0 < ort < session.strecke.laenge_m
+
+
+def test_die_aufwaermrunde_faengt_vorn_an_und_endet_an_der_linie(session) -> None:
+    """Die Aufwaermrunde fuellt genau eine Runde - Anfang bis Ende."""
+    fahrt = session.fahrten[0]
+
+    def ort_zu(zeit):
+        stand = next(
+            s for s in session.lage_zu(zeit) if s.fahrt.teilnehmer == fahrt.teilnehmer
+        )
+        return session.ort_auf_der_runde(stand, zeit)
+
+    assert ort_zu(fahrt.beginn_ms) == pytest.approx(0.0, abs=1.0)
+    # Kurz vor Beginn der gezeiteten Runde ist er fast wieder an der Linie.
+    kurz_davor = fahrt.runde_ab_ms - 1
+    assert ort_zu(kurz_davor) > session.strecke.laenge_m * 0.98
+    # Und mit der gezeiteten Runde faengt er wieder bei null an.
+    assert ort_zu(fahrt.runde_ab_ms) == pytest.approx(0.0, abs=1.0)
+
+
+def test_wer_in_der_box_steht_oder_fertig_ist_hat_keinen_ort(session) -> None:
+    """Nur wer auf der Strecke ist, gehoert auf die Karte."""
+    letzte = session.fahrten[-1]
+    stand = next(
+        s for s in session.lage_zu(0.0) if s.fahrt.teilnehmer == letzte.teilnehmer
+    )
+    assert stand.lage is ql.Lage.WARTET
+    assert session.ort_auf_der_runde(stand, 0.0) is None
+
+    erste = session.fahrten[0]
+    nach_dem_ziel = erste.ziel_ms + 1000
+    fertig = next(
+        s for s in session.lage_zu(nach_dem_ziel)
+        if s.fahrt.teilnehmer == erste.teilnehmer
+    )
+    assert fertig.lage is ql.Lage.ZIEL
+    assert session.ort_auf_der_runde(fertig, nach_dem_ziel) is None

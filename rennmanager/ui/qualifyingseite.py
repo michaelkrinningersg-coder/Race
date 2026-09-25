@@ -202,10 +202,16 @@ class Qualifyingseite(QWidget):
         spalte.setContentsMargins(0, 0, 0, 0)
 
         # Punkt 93 (A9): Die Ansicht gibt es fuers Rennen schon - hier
-        # faehrt sie die gezeiteten Runden ab. Wer in der Box steht oder
-        # sich aufwaermt, ist **nicht** darauf: Der Vorschlag war "ein
-        # Punkt, der die schnelle Runde abfaehrt", und ein Feld aus
-        # Aufwaermpunkten wuerde die zwei, auf die es ankommt, zudecken.
+        # faehrt sie die Runden ab.
+        #
+        # Die Aufwaermrunde war urspruenglich nicht darauf: Der Vorschlag
+        # hiess "ein Punkt, der die schnelle Runde abfaehrt", und ein
+        # Feld aus Aufwaermpunkten haette die zugedeckt, auf die es
+        # ankommt. Gemessen war die Karte damit aber ueber ein Fuenftel
+        # der Session leer, unter anderem gleich am Anfang - und ein Auto
+        # ist laenger ungezeitet auf der Strecke (101 s) als gezeitet
+        # (98 s). Entscheidung des Auftraggebers: mitzeichnen, aber
+        # blasser.
         self._ansicht = Streckenansicht()
         streckenkasten = QGroupBox("Strecke")
         streckenspalte = QVBoxLayout(streckenkasten)
@@ -427,7 +433,14 @@ class Qualifyingseite(QWidget):
             self._leere_aufstellung()
 
     def _zeichne_strecke(self, zeit: float) -> None:
-        """Punkt 93 (A9): Die Punkte derer, die gerade auf der Runde sind.
+        """Punkt 93 (A9): Die Punkte derer, die gerade auf der Strecke sind.
+
+        Gezeichnet wird **beides**, die gezeitete Runde und die
+        Aufwaermrunde davor - letztere blasser, weil sie nicht gezaehlt
+        wird. Vorher stand nur da, wer gezeitet fuhr; gemessen war die
+        Karte damit ueber ein Fuenftel der Session leer, unter anderem
+        gleich am Anfang, und ein Auto ist laenger ungezeitet auf der
+        Strecke (101 s) als gezeitet (98 s).
 
         Laeuft **ausserhalb** des Takt-Deckels der Tabelle (D9): Die
         Karte soll fluessig laufen, auch wenn die Zeiten nur alle 200 ms
@@ -443,7 +456,13 @@ class Qualifyingseite(QWidget):
                 continue
             teilnehmer = session.teilnehmer[stand.fahrt.teilnehmer]
             punkte.append(
-                (float(ort), teilnehmer.kuerzel, teilnehmer.farbe, teilnehmer.ist_spieler)
+                (
+                    float(ort),
+                    teilnehmer.kuerzel,
+                    teilnehmer.farbe,
+                    teilnehmer.ist_spieler,
+                    stand.lage is Lage.AUFWAERMUNG,
+                )
             )
         self._ansicht.zeige_autos(punkte)
 

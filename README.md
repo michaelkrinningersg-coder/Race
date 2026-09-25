@@ -533,6 +533,35 @@ Rennrekord nie wieder. Gemeldet wird beim Verbuchen des Wochenendes,
 gespeichert ab Spielstandversion 10; aeltere Staende fangen bei null an,
 und die naechste Pole setzt die Marke.
 
+Auf der Streckenkarte faehrt seit Punkt 104 **auch die Aufwaermrunde**
+mit, nur blasser gezeichnet: Sie wird nicht gezeitet, das Auto ist aber
+auf der Strecke. Vorher stand dort nur, wer gezeitet fuhr - gemessen
+war die Karte damit ueber ein Fuenftel der Session leer, unter anderem
+gleich am Anfang, und ein Auto ist laenger ungezeitet unterwegs (101 s)
+als gezeitet (98 s).
+
+Wo das Auto auf der Aufwaermrunde steht, ist nicht geraten: Sie fuellt
+genau das Fenster zwischen Boxenausfahrt und Beginn der gezeiteten
+Runde, und in dieser Zeit faehrt das Auto genau eine Runde. Wie sich
+die Zeit auf die Sektoren verteilt, wird von der gezeiteten Runde
+uebernommen und auf das Fenster gestreckt - dieselbe Strecke, also
+braucht derselbe Sektor anteilig dieselbe Zeit.
+
+Die Autos starten **ueberlappend**, eine halbe Runde nacheinander
+(`qualifying.abstand_runden`). Jedes beginnt seine gezeitete Runde rund
+25 Prozent seiner Zeit auf der Strecke, bevor das vorige fertig ist -
+gemessen in Sakhir 50,1 s von 199,2 s, also 25,2 Prozent - und so
+weiter durch das ganze Feld. Es sind dann bis zu fuenf Autos
+gleichzeitig unterwegs, davon bis zu drei auf gezeiteter Runde, und die
+Session dauert 42 statt 101 Minuten. Auf die Zeiten wirkt das nicht:
+Pole, letzte Zeit, Spanne und Gummistand sind in Sakhir, Monza und
+Zandvoort auf die Millisekunde dieselben.
+
+Eine Folge davon steht in der Tafel: Die ersten Fahrer haben auf ihren
+Splits noch keinen Vergleich, weil vor ihnen noch niemand eine Runde
+stehen hat. Gemessen in Catalunya hat erst der Dritte auf allen vier
+Splits einen Gegner.
+
 ##### Warum Lila mitlaeuft und Gruen und Rot einfrieren
 
 Die Splits sind dreifarbig, und die beiden Farbgruppen messen bewusst

@@ -3389,3 +3389,72 @@ dem Faktor 1,605 auf Windows hoch; auf Windows selbst ist der Faktor 1,
 weil dort schon die richtige Schrift gemessen wird. Gegenprobe mit den
 alten Etiketten: Der Test meldet „rund 1104 px" — genau die Zahl, die
 der Windows-Runner gemeldet hatte.
+
+---
+
+## Punkt 104: Qualifying — Aufwärmrunde auf der Karte, mehr Überlappung
+
+Zwei Ansagen des Auftraggebers, beide am selben Bild aufgehängt: „Fahrer
+im Qualifying bereits in der ersten Runde anzeigen auf der Karte, aber
+hier läuft noch keine Zeit" und „etwas mehr Überlapp zwischen den Autos
+— der zweite Wagen soll ca. 25 % der benötigten Zeit auf der Strecke
+vor dem ersten seine gezeitete Runde starten … usw., die Kaskade".
+
+### Die Karte war ein Fünftel der Session leer
+
+Gemessen in Sakhir, 50 Fahrten:
+
+* Aufwärmrunde **101 s**, gezeitete Runde **98 s** — ein Auto ist also
+  länger ungezeitet auf der Strecke als gezeitet.
+* Auf der Karte stand zu jedem Zeitpunkt **genau ein** Auto.
+* Die Karte war **20,8 %** der Session (1263 s von 6062 s) völlig leer,
+  unter anderem gleich am Anfang.
+
+`ort_auf_der_runde` lieferte für alles außer `SCHNELLE_RUNDE` bewusst
+`None` — die Entscheidung stand so im Code kommentiert. Sie ist jetzt
+umgedreht: Die Aufwärmrunde wird mitgezeichnet, **blasser**
+(Deckkraft 90 von 255), damit der Unterschied sichtbar bleibt. Wer in
+der Box steht oder im Ziel ist, bleibt draußen — beide haben keinen
+ehrlichen Ort auf der Runde.
+
+Wo das Auto steht, ist nicht geraten: Die Aufwärmrunde füllt genau das
+Fenster zwischen Boxenausfahrt und Beginn der gezeiteten Runde, und in
+dieser Zeit fährt es genau eine Runde (`aufwaermrunden = 1`). Die
+Zeitverteilung über die Sektoren wird von der gezeiteten Runde
+übernommen und auf das Fenster gestreckt — dieselbe Strecke, also
+braucht derselbe Sektor anteilig dieselbe Zeit. Gleichmäßig zu
+verteilen wäre die schlechtere Annahme: Dann stünde der Punkt auf der
+Geraden zu früh und in der Kurve zu spät.
+
+### Die Kaskade: abstand_runden von 1,25 auf 0,5
+
+Gemessen, Anteil der Zeit auf der Strecke, um den der Zweite dem Ersten
+zuvorkommt:
+
+| abstand_runden | Vorsprung | Anteil | gleichzeitig / davon gezeitet | Session |
+|---|---|---|---|---|
+| 1,25 (vorher) | −21,8 s | **−10,9 %** | 2 / 1 | 1:41:02 |
+| 0,75 | +26,2 s | 13,1 % | 3 / 2 | 1:01:53 |
+| **0,5 (jetzt)** | **+50,1 s** | **25,2 %** | **5 / 3** | **42:19** |
+| 0,25 | +74,1 s | 37,2 % | 9 / 5 | 22:45 |
+
+Vorher gab es gar keine Überlappung der gezeiteten Runden: Der Zweite
+begann seine 21,8 s **nachdem** der Erste die Strecke verlassen hatte.
+
+**Auf die Zeiten wirkt das nicht.** In Sakhir, Monza und Zandvoort sind
+Pole, letzte Zeit, Spanne und Gummistand auf die Millisekunde dieselben
+— die Gummierung rechnet über die Startreihenfolge, nicht über die Uhr.
+Nur wenn das Wetter während der Session dreht, trifft ein Auto den
+Wechsel an anderer Stelle: Über zwölf Sessions in Spa blieb die
+Polezeit zehnmal gleich, zweimal wich sie um 0,030 s und 0,588 s ab.
+Die Wetterfolge selbst war in allen zwölf identisch.
+
+### Was beim Testen auffiel
+
+Ein erster Test verlangte, die Kaskade sei millisekundengenau
+gleichmäßig. Sie ist es nicht, und das ist richtig: Die Boxenausfahrten
+sind gleich getaktet, der Beginn der gezeiteten Runde hängt aber an der
+eigenen Aufwärmrunde — und die fährt jedes Auto verschieden schnell.
+Gemessen streuen die Vorsprünge in Catalunya zwischen 43,7 und 49,6 s,
+rund 3 % der Zeit auf der Strecke. Der Test prüft jetzt die Streuung
+gegen diese Bezugsgröße statt gegen null.

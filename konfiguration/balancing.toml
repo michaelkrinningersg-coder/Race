@@ -489,11 +489,30 @@ streuung = 0.80            # +/- 80 % darum
 aufwaermrunden = 1
 gezeitete_runden = 1
 # Die Autos fahren zwar allein (GDD 4), starten aber ueberlappend: jedes
-# rueckt 1,25 Runden nach dem vorigen los. Ohne Ueberlappung dauert eine
-# Session 30 x 2 Runden; in Spa waeren das drei Stunden, in denen sich das
-# Wetter zwangslaeufig mehrfach dreht und die Startreihenfolge mehr
+# rueckt eine halbe Runde nach dem vorigen los. Ohne Ueberlappung dauert
+# eine Session 50 x 2 Runden; in Spa waeren das Stunden, in denen sich
+# das Wetter zwangslaeufig mehrfach dreht und die Startreihenfolge mehr
 # entscheidet als die Fahrleistung.
-abstand_runden = 1.25
+#
+# Die halbe Runde ist die Vorgabe des Auftraggebers, in seinen Worten:
+# Jedes Auto soll seine gezeitete Runde rund 25 Prozent seiner Zeit auf
+# der Strecke beginnen, bevor das vorige fertig ist - und so weiter
+# durch das ganze Feld. Ein Auto ist zwei Runden auf der Strecke, ein
+# Viertel davon ist eine halbe Runde.
+#
+# Gemessen in Sakhir: 199,2 s auf der Strecke, der Zweite beginnt seine
+# gezeitete Runde 50,1 s bevor der Erste fertig ist - 25,2 Prozent. Es
+# sind dann bis zu fuenf Autos gleichzeitig unterwegs, davon bis zu drei
+# auf gezeiteter Runde; vorher war immer nur eines gezeitet unterwegs.
+# Die Session dauert 42 statt 101 Minuten.
+#
+# Auf die Zeiten wirkt das nicht: Pole, letzte Zeit, Spanne und
+# Gummistand sind in Sakhir, Monza und Zandvoort auf die Millisekunde
+# dieselben. Nur wenn das Wetter waehrend der Session dreht, trifft ein
+# Auto den Wechsel an anderer Stelle - gemessen ueber zwoelf Sessions in
+# Spa blieb die Polezeit zehnmal gleich, zweimal wich sie um 0,030 s und
+# 0,588 s ab.
+abstand_runden = 0.5
 # Punkt 93 (A7 und A8): Wie lange ein frisches Ereignis in der
 # Zeitentafel nachleuchtet - der Verdraengungshinweis und die neue Pole.
 # Gemessen in **Sessionzeit**, nicht in Bildschirmzeit: Bei 50-fachem

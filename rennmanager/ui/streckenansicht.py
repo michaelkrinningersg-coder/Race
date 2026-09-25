@@ -38,6 +38,10 @@ FARBEN_TEMPO = [
 
 RAND_PX = 28
 PUNKT_RADIUS_PX = 6.0
+# Wer nicht auf seiner gezeiteten Runde ist, wird blasser gezeichnet -
+# im Qualifying die Aufwaermrunde. Die Teamfarbe bleibt erkennbar, der
+# Punkt tritt aber hinter den zurueck, auf den es gerade ankommt.
+DECKKRAFT_GEDAEMPFT = 90
 SPIELER_RING_PX = 2.5
 # Seitlicher Versatz bei Duellen, damit sich Punkte nicht decken (GDD 4).
 DUELL_VERSATZ_PX = 5.0
@@ -87,11 +91,13 @@ class Streckenansicht(QWidget):
     def zeigt_tempo(self) -> bool:
         return self._tempo is not None
 
-    def zeige_autos(self, autos: list[tuple[float, str, str, bool]]) -> None:
+    def zeige_autos(self, autos: list[tuple]) -> None:
         """Setzt die Autos, die als Punkte gezeichnet werden (GDD 4).
 
         :param autos: je Auto ``(Distanz auf der Runde in m, Kuerzel,
-            Farbe, ist_spieler)``
+            Farbe, ist_spieler)``, dahinter wahlweise ``gedaempft``.
+            Gedaempft heisst blasser - im Qualifying faehrt so, wer auf
+            der Aufwaermrunde ist und noch nicht gezeitet wird.
         """
         self._autos = autos
         self.update()
@@ -294,8 +300,11 @@ class Streckenansicht(QWidget):
         # Von hinten nach vorn zeichnen, damit der Fuehrende obenauf liegt.
         for nummer in range(len(stellen) - 1, -1, -1):
             stelle = stellen[nummer]
-            _, kuerzel, farbe, ist_spieler = self._autos[nummer]
-            maler.setBrush(QColor(farbe))
+            _, kuerzel, farbe, ist_spieler, *rest = self._autos[nummer]
+            ton = QColor(farbe)
+            if rest and rest[0]:
+                ton.setAlpha(DECKKRAFT_GEDAEMPFT)
+            maler.setBrush(ton)
             maler.setPen(QPen(FARBE_START, SPIELER_RING_PX) if ist_spieler else QPen(Qt.NoPen))
             maler.drawEllipse(QPointF(*stelle), PUNKT_RADIUS_PX, PUNKT_RADIUS_PX)
             if kuerzel and kuerzel == self._hervorgehoben:
