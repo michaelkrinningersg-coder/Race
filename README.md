@@ -597,32 +597,37 @@ ausserdem nie: Solange sie nicht steht, ist sie mit nichts vergleichbar.
 
 Die Zeitentafel zeigt fuenfzig Zeilen; hinsehen will man in dem Moment
 aber auf eine. Unter der Streckenkarte steht deshalb eine Box fuer genau
-einen Fahrer: den, der auf seiner gezeiteten Runde am weitesten ist.
-Sie traegt Flagge, Namen in der Teamfarbe, Rennstall und Nation - und
-darunter die mitlaufende Rundenzeit, gross genug, um sie aus zwei Metern
-zu lesen.
+einen Fahrer. Sie traegt Flagge, Namen in der Teamfarbe, Rennstall und
+Nation - und darunter die Rundenzeit, gross genug, um sie aus zwei
+Metern zu lesen.
 
-An jedem Split faellt ein Plus oder Minus: der Vorsprung oder Rueckstand
-seiner **Gesamtzeit** bis zu dieser Stelle, gegen den, der in dem Moment
-fuehrt. Gruen ist schneller, rot langsamer, und in Klammern steht sein
-Platz unter allen Zeiten, die an dieser Stelle stehen. Drei Regeln, alle
-vom Auftraggeber:
+**Welcher Fahrer:** Zu Beginn der, der als Erster auf seine gezeitete
+Runde geht. Danach haelt die Box ihn fest, bis der Spieler im
+Zeitenmonitor einen anderen **anklickt** (Einfachklick; der Doppelklick
+bleibt die Fahrerkarte). Einen automatischen Wechsel gibt es nicht -
+Entscheidung des Auftraggebers in der Nachbesserung zu Punkt 107. Wer
+angeklickt wird, bevor er losfaehrt, steht mit "In der Box" oder "Auf
+der Aufwaermrunde" da und fuellt sich, sobald er gezeitet faehrt.
 
-* Das Plus/Minus steht **zwei Drittel** der Strecke bis zum naechsten
-  Split; das letzte Drittel davor ist frei, damit nie eine alte Zahl
-  neben einer steht, die gleich faellt. Es steht damit immer hoechstens
-  eine Zahl da - genau die, die gerade gilt.
-* Der letzte Split ist die Ziellinie und bleibt ueber den ganzen
-  Nachlauf stehen - sonst waere ausgerechnet die fertige Rundenzeit
-  nicht zu lesen.
-* Die Box gehoert einem Fahrer noch **zehn Sekunden**, nachdem er die
-  Linie ueberquert hat; dann uebernimmt der naechste.
+**Die Splits** bleiben **dauerhaft** stehen, sobald er sie passiert hat.
+Je Split steht links die Gesamtzeit bis dorthin, immer schwarz, und
+rechts daneben der Vorsprung oder Rueckstand dieser Gesamtzeit auf den,
+der in dem Moment fuehrt, mit dem Platz an dieser Stelle in Klammern -
+diese beiden gruen, wenn er schneller ist, rot, wenn langsamer. Im Ziel
+steht dasselbe noch einmal neben der grossen Endzeit: die Zeit schwarz,
+Abstand und Platz in der Farbe. Am letzten Split zaehlt dabei die
+Rundenzeit und nicht die Summe der Sektoren; beide werden getrennt
+gerundet und koennen eine Millisekunde auseinanderliegen.
 
-Gemessen ueber eine Session in Catalunya (50 Autos, 39 Minuten, Seed
-4711): Die Box ist **96 Prozent** der Zeit belegt, jeder der 50 Fahrer
-kommt darin vor, und 96 Prozent der stehenden Splits tragen ein echtes
-Plus/Minus - der Rest faellt so frueh, dass es noch keine Bezugsrunde
-gibt, und zeigt dann nur den Platz.
+Abstand und Platz gelten fuer den **Augenblick der Wiedergabe**: Wer
+einen laengst fertigen Fahrer anklickt, sieht, wo er jetzt steht, nicht
+wo er stand, als er ueber die Linie kam. Solange noch niemand sonst eine
+Runde stehen hat, steht statt des Abstands ein Gedankenstrich - der
+Platz steht trotzdem.
+
+Bis zur Nachbesserung stand das Plus/Minus nur zwei Drittel des Weges
+bis zum naechsten Split, und die Box wechselte zehn Sekunden nach der
+Ziellinie von selbst zum naechsten Fahrer. Beides ist entfallen.
 
 Die **Startaufstellung fuers Rennen**, die bis Punkt 107 an dieser
 Stelle stand, faellt ersatzlos weg (Entscheidung des Auftraggebers). Sie

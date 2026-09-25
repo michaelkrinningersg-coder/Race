@@ -194,185 +194,211 @@ def test_am_ende_steht_das_ganze_feld_mit_position(seite, session) -> None:
 
 
 # -- Die Blickpunktbox (Punkt 107) ------------------------------------------
-def _auf_der_runde(session, zeit_ms):
-    """Wer zu diesem Augenblick gezeitet unterwegs ist."""
-    return [
-        stand.fahrt
-        for stand in session.lage_zu(zeit_ms)
-        if stand.lage is ql.Lage.SCHNELLE_RUNDE
-    ]
+def _box(seite):
+    return seite._blickpunkt
 
 
-def _ort(session, fahrt, zeit_ms) -> float:
-    return session.ort_auf_der_runde(session._stand_zu(fahrt, zeit_ms), zeit_ms)
+def _kuerzel(session, fahrt) -> str:
+    return session.teilnehmer[fahrt.teilnehmer].kuerzel
 
 
-def _suche(session, augenblicke):
-    """Die erste Fahrt, die **alle** ihre Augenblicke ueber in der Box steht.
-
-    Ein fest gewaehlter Fahrer taugt nicht: Seit Punkt 104 ueberlappen
-    sich die Runden zu einem Viertel, es sind meist zwei gleichzeitig
-    unterwegs, und die Box zeigt den weiteren von beiden - mal ist das
-    der gemeinte und mal nicht. ``augenblicke`` macht aus einer Fahrt
-    die Zeitpunkte, um die es dem Test geht.
-    """
-    for fahrt in session.fahrten:
-        zeiten = augenblicke(fahrt)
-        if all(session.blickpunkt(zeit) is fahrt for zeit in zeiten):
-            return (fahrt, *zeiten)
-    raise AssertionError("keine Fahrt haelt die Box ueber alle Augenblicke")
+def _erste_runde(session):
+    """Wer als Erster auf die gezeitete Runde geht."""
+    return min(session.fahrten, key=lambda f: f.runde_ab_ms)
 
 
-def _mittendrin(session):
-    """Eine Fahrt und ein Augenblick kurz nach ihrem zweiten Split."""
-    return _suche(session, lambda f: (f.sektorenden_ms[1] + 1.0,))
+def _klicke(seite, fahrt) -> None:
+    """Ein Einfachklick auf die Zeile dieses Fahrers im Zeitenmonitor."""
+    liste = seite._rangliste
+    kuerzel = _kuerzel(seite.session, fahrt)
+    for i in range(liste.topLevelItemCount()):
+        zeile = liste.topLevelItem(i)
+        if zeile.text(qs.SPALTE_AUTO) == kuerzel:
+            liste.itemClicked.emit(zeile, qs.SPALTE_AUTO)
+            return
+    raise AssertionError(f"{kuerzel} steht nicht in der Tafel")
 
 
 def test_vor_der_ersten_gezeiteten_runde_ist_die_box_leer(seite) -> None:
     """Am Anfang faehrt noch niemand gezeitet - dann steht das auch da."""
     seite._springe(0)
-    assert seite._blickpunkt.namensfeld.text() == "-"
-    assert "niemand" in seite._blickpunkt.herkunftsfeld.text()
-    assert seite._blickpunkt.uhr.text() == "-"
+    assert _box(seite).namensfeld.text() == "-"
+    assert "niemand" in _box(seite).herkunftsfeld.text()
+    assert _box(seite).uhr.text() == "-"
 
 
-def test_die_box_zeigt_den_weitesten_fahrer_auf_der_runde(seite, session) -> None:
-    """Von mehreren gleichzeitig zaehlt der, der am naechsten am Ziel ist.
+def test_zuerst_steht_der_erste_auf_der_runde_in_der_box(seite, session) -> None:
+    erste = _erste_runde(session)
+    seite._springe(erste.runde_ab_ms + 1_000)
+    assert _box(seite).namensfeld.text() == _kuerzel(session, erste)
+    assert _box(seite).title() == "Auf der Runde"
 
-    Der Augenblick wird unabhaengig von der Box gesucht: zwei
-    Gezeitete auf der Strecke und niemand, der gerade erst ins Ziel kam
-    - sonst gehoerte die Box noch dem.
+
+def test_die_box_haelt_ihren_fahrer_ohne_klick_fest(seite, session) -> None:
+    """Kein automatischer Wechsel mehr (Entscheidung des Auftraggebers).
+
+    Auch wenn laengst zehn andere ins Ziel gekommen sind: Die Box
+    bleibt bei ihm, bis jemand einen anderen anklickt.
     """
-    for kandidat in (f.sektorenden_ms[0] + 1.0 for f in session.fahrten):
-        unterwegs = _auf_der_runde(session, kandidat)
-        frisch = [
-            f for f in session.fahrten
-            if 0 <= kandidat - f.ziel_ms <= ql.NACHLAUF_MS
-        ]
-        if len(unterwegs) >= 2 and not frisch:
-            zeit = kandidat
-            break
-    else:
-        pytest.fail("kein Augenblick mit zwei Gezeiteten und ohne Ankunft")
+    erste = _erste_runde(session)
+    seite._springe(erste.runde_ab_ms + 1_000)
+    zehnte = sorted(session.fahrten, key=lambda f: f.ziel_ms)[10]
+    seite._springe(zehnte.ziel_ms + 1_000)
+    assert _box(seite).fahrt is erste
+    assert _box(seite).namensfeld.text() == _kuerzel(session, erste)
+    assert _box(seite).title() == "Runde beendet"
 
-    weiteste = max(unterwegs, key=lambda f: _ort(session, f, zeit))
-    seite._springe(zeit)
-    assert seite._blickpunkt.namensfeld.text() == (
-        session.teilnehmer[weiteste.teilnehmer].kuerzel
-    )
-    assert seite._blickpunkt.title() == "Auf der Runde"
+
+def test_ein_klick_holt_den_fahrer_in_die_box(seite, session) -> None:
+    erste = _erste_runde(session)
+    seite._springe(erste.runde_ab_ms + 1_000)
+    andere = session.fahrten[len(session.fahrten) // 2]
+    _klicke(seite, andere)
+    assert _box(seite).fahrt is andere
+    assert _box(seite).namensfeld.text() == _kuerzel(session, andere)
+
+
+def test_der_angeklickte_bleibt_bis_zum_naechsten_klick(seite, session) -> None:
+    andere = session.fahrten[len(session.fahrten) // 2]
+    seite._springe(andere.beginn_ms - 1_000)
+    _klicke(seite, andere)
+    # Er steht noch in der Box - das sagt die Box dann auch.
+    assert _box(seite).title() == "In der Box"
+    assert all(f.text().strip() == "" for f in _box(seite).splitfelder)
+
+    # Waehrend er faehrt, und lange nachdem er fertig ist: Er bleibt.
+    for zeit in (andere.runde_ab_ms + 1_000, andere.ziel_ms + 60_000):
+        seite._springe(zeit)
+        assert _box(seite).fahrt is andere
+
+    dritte = session.fahrten[-1]
+    _klicke(seite, dritte)
+    assert _box(seite).fahrt is dritte
+
+
+def test_eine_neue_session_faengt_ohne_fahrer_an(seite, session) -> None:
+    andere = session.fahrten[len(session.fahrten) // 2]
+    seite._springe(andere.ziel_ms)
+    _klicke(seite, andere)
+    seite.zeige_session(session)
+    assert _box(seite).fahrt is None
 
 
 def test_die_rundenzeit_laeuft_in_der_box_mit(seite, session) -> None:
     """Sie zaehlt ab dem Rundenbeginn, nicht ab der Ausfahrt aus der Box."""
     from rennmanager.kern.zeit import formatiere_dauer
 
-    fahrt, frueh, spaet = _suche(
-        session, lambda f: (f.sektorenden_ms[1] + 1.0, f.sektorenden_ms[1] + 1_001.0)
-    )
-    seite._springe(frueh)
-    davor = seite._blickpunkt.uhr.text()
+    erste = _erste_runde(session)
+    seite._springe(erste.runde_ab_ms + 1_000)
+    davor = _box(seite).uhr.text()
+    spaet = erste.runde_ab_ms + 2_000
     seite._springe(spaet)
-    assert seite._blickpunkt.uhr.text() != davor
-    assert seite._blickpunkt.uhr.text() == formatiere_dauer(
-        int(spaet - fahrt.runde_ab_ms)
-    )
+    assert _box(seite).uhr.text() != davor
+    assert _box(seite).uhr.text() == formatiere_dauer(int(spaet - erste.runde_ab_ms))
 
 
-def test_die_box_bleibt_zehn_sekunden_nach_der_linie_stehen(seite, session) -> None:
-    """Wunsch des Auftraggebers - sonst waere die fertige Zeit nicht zu lesen."""
+def test_jeder_passierte_split_bleibt_stehen(seite, session) -> None:
+    """Dauerhaft - nicht mehr nur zwei Drittel bis zum naechsten Split."""
+    fahrt = session.fahrten[len(session.fahrten) // 2]
+    seite._springe(fahrt.beginn_ms)
+    _klicke(seite, fahrt)
+
+    seite._springe(fahrt.sektorenden_ms[1] + 1.0)
+    zeiten = [f.text().strip() for f in _box(seite).splitzeiten]
+    werte = [f.text().strip() for f in _box(seite).splitfelder]
+    assert zeiten[0] and zeiten[1] and not zeiten[2] and not zeiten[3]
+    assert werte[0] and werte[1] and not werte[2] and not werte[3]
+
+    # Kurz vor dem Ziel stehen die ersten drei immer noch.
+    seite._springe(fahrt.ziel_ms - 1.0)
+    assert all(f.text().strip() for f in _box(seite).splitfelder[:3])
+    assert not _box(seite).splitfelder[3].text().strip()
+
+
+def test_der_split_zeigt_die_gesamtzeit_bis_dorthin(seite, session) -> None:
     from rennmanager.kern.zeit import formatiere_dauer
 
     fahrt = session.fahrten[len(session.fahrten) // 2]
-    kuerzel = session.teilnehmer[fahrt.teilnehmer].kuerzel
-
-    seite._springe(fahrt.ziel_ms + ql.NACHLAUF_MS - 500)
-    assert seite._blickpunkt.namensfeld.text() == kuerzel
-    assert seite._blickpunkt.title() == "Runde beendet"
-    assert seite._blickpunkt.uhr.text() == formatiere_dauer(fahrt.zeit_ms)
-
-    # Eine Sekunde spaeter gehoert die Box wieder dem naechsten.
-    seite._springe(fahrt.ziel_ms + ql.NACHLAUF_MS + 500)
-    assert seite._blickpunkt.namensfeld.text() != kuerzel
+    seite._springe(fahrt.ziel_ms)
+    _klicke(seite, fahrt)
+    for nummer, feld in enumerate(_box(seite).splitzeiten):
+        assert feld.text() == formatiere_dauer(session.gesamt_bis(fahrt, nummer))
 
 
-def test_der_split_traegt_plusminus_und_platz(seite, session) -> None:
-    """Gesamtzeit bis hierher gegen den Fuehrenden, dahinter der Platz."""
-    _, zeit = _mittendrin(session)
-    seite._springe(zeit)
-    text = seite._blickpunkt.splitfelder[1].text()
-    assert "(P" in text
-    # Vorzeichen oder Gedankenstrich, solange noch keiner eine Zeit hat.
-    assert text[0] in "+-\u2014", text
+def test_die_gesamtzeit_ist_schwarz_nur_abstand_und_platz_farbig(seite, session) -> None:
+    """Wunsch des Auftraggebers: Die Zeit selbst traegt keine Farbe."""
+    fahrt = session.fahrten[len(session.fahrten) // 2]
+    seite._springe(fahrt.ziel_ms + 1_000)
+    _klicke(seite, fahrt)
+    for feld in _box(seite).splitzeiten:
+        assert feld.styleSheet() == ""
+    assert _box(seite).uhr.styleSheet() == ""
+    farben = (bp.FARBE_SCHNELLER.name(), bp.FARBE_LANGSAMER.name())
+    for feld in _box(seite).splitfelder + [_box(seite).endabstand]:
+        assert any(farbe in feld.styleSheet() for farbe in farben), feld.text()
+        assert "(P" in feld.text()
 
 
-def test_das_plusminus_faellt_vor_dem_naechsten_split_weg(seite, session) -> None:
-    """Zwei Drittel steht es, das letzte Drittel ist frei (Punkt 107).
+def test_im_ziel_steht_abstand_und_platz_neben_der_endzeit(seite, session) -> None:
+    """Dieselben Zahlen wie am letzten Split - es ist dieselbe Stelle."""
+    from rennmanager.kern.zeit import formatiere_dauer
 
-    Sonst stuende die alte Zahl noch da, wenn gleich die neue faellt.
-    """
-    _, frueh, spaet = _suche(
-        session, lambda f: (f.sektorenden_ms[0] + 1.0, f.sektorenden_ms[1] - 200.0)
-    )
-    seite._springe(frueh)
-    assert seite._blickpunkt.splitfelder[0].text().strip() != ""
-    seite._springe(spaet)
-    assert seite._blickpunkt.splitfelder[0].text().strip() == ""
+    fahrt = session.fahrten[len(session.fahrten) // 2]
+    seite._springe(fahrt.runde_ab_ms + 1_000)
+    _klicke(seite, fahrt)
+    assert _box(seite).endabstand.text() == ""
+
+    seite._springe(fahrt.ziel_ms + 1_000)
+    assert _box(seite).title() == "Runde beendet"
+    assert _box(seite).uhr.text() == formatiere_dauer(fahrt.zeit_ms)
+    assert _box(seite).endabstand.text() == _box(seite).splitfelder[-1].text()
+    assert _box(seite).splitzeiten[-1].text() == formatiere_dauer(fahrt.zeit_ms)
 
 
 def _split_mit_vorzeichen(session, langsamer: bool):
-    """Ein Augenblick, in dem die Box ein echtes Plus (oder Minus) zeigt.
-
-    Frueh in der Session gibt es keine Bezugsrunde - dann steht dort ein
-    Gedankenstrich und gar keine Farbe.
-    """
+    """Eine Fahrt und ein Split mit echtem Plus (oder Minus), ab Ziel."""
     for fahrt in session.fahrten:
-        for nummer in range(len(session.strecke.sektoren) - 1):
-            zeit = float(fahrt.sektorenden_ms[nummer] + 1)
-            if session.blickpunkt(zeit) is not fahrt:
-                continue
+        zeit = float(fahrt.ziel_ms)
+        for nummer in range(len(session.strecke.sektoren)):
             abstand = session.splitabstand(fahrt, nummer, zeit)
-            if abstand is None or (abstand > 0) is not langsamer:
-                continue
-            return fahrt, nummer, zeit
+            if abstand is not None and (abstand > 0) is langsamer:
+                return fahrt, nummer, zeit
     raise AssertionError("kein Split mit diesem Vorzeichen gefunden")
 
 
 def test_ein_langsamerer_split_steht_rot(seite, session) -> None:
-    _, nummer, zeit = _split_mit_vorzeichen(session, langsamer=True)
+    fahrt, nummer, zeit = _split_mit_vorzeichen(session, langsamer=True)
     seite._springe(zeit)
-    feld = seite._blickpunkt.splitfelder[nummer]
+    _klicke(seite, fahrt)
+    feld = _box(seite).splitfelder[nummer]
     assert feld.text().startswith("+")
     assert bp.FARBE_LANGSAMER.name() in feld.styleSheet()
 
 
 def test_ein_schnellerer_split_steht_gruen(seite, session) -> None:
-    _, nummer, zeit = _split_mit_vorzeichen(session, langsamer=False)
+    fahrt, nummer, zeit = _split_mit_vorzeichen(session, langsamer=False)
     seite._springe(zeit)
-    feld = seite._blickpunkt.splitfelder[nummer]
+    _klicke(seite, fahrt)
+    feld = _box(seite).splitfelder[nummer]
     assert feld.text().startswith("-")
     assert bp.FARBE_SCHNELLER.name() in feld.styleSheet()
 
 
-def test_die_fertige_zeit_misst_gegen_den_fuehrenden_von_jetzt(seite, session) -> None:
+def test_die_endzeit_misst_gegen_den_fuehrenden_von_jetzt(seite, session) -> None:
     """Nicht gegen die Pole - die ist das Ergebnis, das erst spaeter feststeht.
 
-    Der erste Fahrer, der ueber die Linie kommt, fuehrt in diesem
-    Augenblick - seine Uhr steht gruen, auch wenn ihn spaeter noch
-    dreissig andere unterbieten.
+    Der Erste, der ueber die Linie kommt, hat niemanden vor sich; der
+    Zweite misst sich an ihm, auch wenn spaeter dreissig andere die Pole
+    noch unterbieten.
     """
-    erste = min(session.fahrten, key=lambda f: f.ziel_ms)
-    assert erste is not session.pole, "Testanlage: der Erste ist schon die Pole"
-    seite._springe(erste.ziel_ms + 1_000)
-    assert bp.FARBE_SCHNELLER.name() in seite._blickpunkt.uhr.styleSheet()
+    zweite = sorted(session.fahrten, key=lambda f: f.ziel_ms)[1]
+    erste = sorted(session.fahrten, key=lambda f: f.ziel_ms)[0]
+    seite._springe(zweite.ziel_ms + 1_000)
+    _klicke(seite, zweite)
+    erwartet = zweite.zeit_ms - erste.zeit_ms
+    from rennmanager.kern.zeit import formatiere_rueckstand
 
-
-def test_der_letzte_split_bleibt_den_ganzen_nachlauf_stehen(seite, session) -> None:
-    """Er ist die Rundenzeit selbst - die will man lesen koennen."""
-    fahrt = session.fahrten[len(session.fahrten) // 2]
-    letzter = len(fahrt.sektoren_ms) - 1
-    seite._springe(fahrt.ziel_ms + ql.NACHLAUF_MS - 500)
-    assert seite._blickpunkt.splitfelder[letzter].text().strip() != ""
+    assert _box(seite).endabstand.text().startswith(formatiere_rueckstand(erwartet))
 
 
 def test_name_rennstall_und_flagge_kommen_aus_der_welt(qtbot, konfig, session) -> None:
@@ -384,16 +410,16 @@ def test_name_rennstall_und_flagge_kommen_aus_der_welt(qtbot, konfig, session) -
     seite = qs.Qualifyingseite(konfig)
     qtbot.addWidget(seite)
     seite.zeige_session(session)
-    fahrt, zeit = _mittendrin(session)
-    nummer = session.teilnehmer[fahrt.teilnehmer].nummer
+    erste = _erste_runde(session)
+    nummer = session.teilnehmer[erste.teilnehmer].nummer
     seite.zeige_namen({nummer: "Michael Krinninger"}, {nummer: "Kestrel Racing"})
-    seite._springe(zeit)
+    seite._springe(erste.runde_ab_ms + 1_000)
 
-    assert seite._blickpunkt.namensfeld.text() == "M. Krinninger"
-    assert "Kestrel Racing" in seite._blickpunkt.herkunftsfeld.text()
-    land = session.teilnehmer[fahrt.teilnehmer].land
-    assert land in seite._blickpunkt.herkunftsfeld.text()
-    assert seite._blickpunkt.flaggenfeld.toolTip() == land
+    assert _box(seite).namensfeld.text() == "M. Krinninger"
+    assert "Kestrel Racing" in _box(seite).herkunftsfeld.text()
+    land = session.teilnehmer[erste.teilnehmer].land
+    assert land in _box(seite).herkunftsfeld.text()
+    assert _box(seite).flaggenfeld.toolTip() == land
 
 
 # -- Die drei Splitfarben ---------------------------------------------------

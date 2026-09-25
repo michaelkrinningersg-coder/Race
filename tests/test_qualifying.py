@@ -616,45 +616,14 @@ def test_der_splitplatz_zaehlt_nur_die_schon_durch_sind(session) -> None:
     assert frueher_platz >= 1
 
 
-def test_das_plusminus_steht_zwei_drittel_bis_zum_naechsten_split(session) -> None:
-    """Das letzte Drittel vor dem naechsten Split bleibt frei.
+def test_am_letzten_split_zaehlt_die_rundenzeit(session) -> None:
+    """Letzter Split und Endzeit stehen in der Box nebeneinander.
 
-    Sonst stuende eine alte Zahl neben einer, die gleich faellt.
-    Gemessen: In Catalunya steht ein Split 14 bis 20 Sekunden.
+    Sektoren und Runde werden getrennt gerundet; die Summe der Sektoren
+    darf deshalb eine Millisekunde neben der Rundenzeit liegen. Am
+    letzten Split gilt die Rundenzeit - sonst stuenden zwei Zahlen
+    nebeneinander, die dasselbe meinen und verschieden sind.
     """
-    fahrt = session.fahrten[10]
-    sektoren = session.strecke.sektoren
-    nummer = 1
-
-    ende = fahrt.sektorenden_ms[nummer]
-    assert not session.split_steht_noch(fahrt, nummer, ende - 1000)
-    assert session.split_steht_noch(fahrt, nummer, ende)
-
-    # Die Grenze liegt bei zwei Dritteln des naechsten Sektors.
-    bis_hier = sum(s.laenge_m for s in sektoren[: nummer + 1])
-    grenze = bis_hier + sektoren[nummer + 1].laenge_m * 2 / 3
-    zeit = ende
-    while session.split_steht_noch(fahrt, nummer, zeit):
-        zeit += 100
-    stand = session._stand_zu(fahrt, zeit)
-    ort = session.ort_auf_der_runde(stand, zeit)
-    assert ort is not None
-    assert abs(ort - grenze) < sektoren[nummer + 1].laenge_m * 0.05
-
-
-def test_der_letzte_split_bleibt_ueber_den_nachlauf_stehen(session) -> None:
-    """Sonst waere ausgerechnet die fertige Rundenzeit nicht lesbar.
-
-    Der letzte Split faellt auf der Ziellinie; danach ist die Runde
-    vorbei und es gibt keinen naechsten Sektor mehr, ueber dessen erste
-    zwei Drittel er stehen koennte.
-    """
-    fahrt = session.fahrten[10]
-    letzter = len(fahrt.sektoren_ms) - 1
-    assert session.split_steht_noch(fahrt, letzter, fahrt.ziel_ms)
-    assert session.split_steht_noch(
-        fahrt, letzter, fahrt.ziel_ms + ql.NACHLAUF_MS - 500
-    )
-    assert not session.split_steht_noch(
-        fahrt, letzter, fahrt.ziel_ms + ql.NACHLAUF_MS + 500
-    )
+    letzter = len(session.strecke.sektoren) - 1
+    for fahrt in session.fahrten:
+        assert session.gesamt_bis(fahrt, letzter) == fahrt.zeit_ms

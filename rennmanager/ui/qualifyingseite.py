@@ -21,9 +21,10 @@ Die Splits sind dreifarbig (Entscheidung des Auftraggebers):
   wenn spaeter jemand schneller ist.
 
 Rechts steht seit Punkt 107 von oben nach unten: die Streckenkarte, die
-**Blickpunktbox** mit dem einen Fahrer, auf den es gerade ankommt, die
+**Blickpunktbox** mit einem Fahrer und seinen Splits, die
 Streckenbestmarke und das Wetter der Session. Die Startaufstellung
-fuers Rennen, die bis dahin unten stand, faellt ersatzlos weg.
+fuers Rennen, die bis dahin unten stand, faellt ersatzlos weg. Welcher
+Fahrer in der Box steht, bestimmt ein Einfachklick in den Zeitenmonitor.
 
 Die Seite rechnet nichts: Sie bekommt eine gefahrene Session von aussen -
 vom gefuehrten Rennwochenende (Punkt 12) - und macht daraus ein Bild.
@@ -83,6 +84,11 @@ SPALTE_RUECKSTAND = 4
 # nur die erste.
 SPALTE_INTERVALL = 5
 SPALTE_SEKTOR_AB = 6
+
+# Nachbesserung zu Punkt 107: Die Stelle des Autos im Feld der Session,
+# damit ein Klick die Blickpunktbox umstellen kann. ``Qt.UserRole``
+# traegt schon die Fahrernummer fuer die Fahrerkarte.
+ROLLE_TEILNEHMER = Qt.UserRole + 1
 
 
 class Qualifyingseite(QWidget):
@@ -194,6 +200,12 @@ class Qualifyingseite(QWidget):
         self._rangliste.setRootIsDecorated(False)
         self._rangliste.setAlternatingRowColors(True)
         verbinde_fahrerkarte(self._rangliste, self.fahrerkarte_gewuenscht.emit)
+        # Nachbesserung zu Punkt 107: Ein Einfachklick holt den Fahrer in
+        # die Blickpunktbox; der Doppelklick bleibt die Fahrerkarte.
+        # ``itemClicked`` und nicht ``currentItemChanged``: Die Tafel wird
+        # alle 200 ms neu gefuellt, und jedes ``clear()`` meldet einen
+        # Wechsel, den niemand angeklickt hat.
+        self._rangliste.itemClicked.connect(self._waehle_blickpunkt)
         spalte.addWidget(self._rangliste)
         return kasten
 
@@ -486,6 +498,19 @@ class Qualifyingseite(QWidget):
             )
         self._ansicht.zeige_autos(punkte)
 
+    def _waehle_blickpunkt(self, zeile: QTreeWidgetItem) -> None:
+        """Holt den angeklickten Fahrer in die Blickpunktbox.
+
+        Er bleibt dort, bis der naechste angeklickt wird (Entscheidung
+        des Auftraggebers) - auch wenn er noch in der Box steht oder
+        laengst im Ziel ist.
+        """
+        teilnehmer = zeile.data(SPALTE_AUTO, ROLLE_TEILNEHMER)
+        if teilnehmer is None:
+            return
+        self._blickpunkt.waehle(int(teilnehmer))
+        self._blickpunkt.zeichne(self._zeit_ms)
+
     def _zeige_verdraengung(self, ankunft) -> None:
         """Punkt 93 (A7): Wer wen gerade um wie viel verdraengt hat.
 
@@ -555,6 +580,7 @@ class Qualifyingseite(QWidget):
         zeile = QTreeWidgetItem(self._rangliste, spalten)
         zeile.setForeground(SPALTE_AUTO, schriftfarbe(teilnehmer.farbe))
         zeile.setData(SPALTE_POS, Qt.UserRole, teilnehmer.nummer)
+        zeile.setData(SPALTE_AUTO, ROLLE_TEILNEHMER, fahrt.teilnehmer)
         # Punkt 105: Die Flagge steht im Namensfeld, nicht in einer
         # eigenen Spalte.
         setze_flagge(zeile, SPALTE_NAME, teilnehmer.land)
