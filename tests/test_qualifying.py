@@ -549,3 +549,112 @@ def test_wer_in_der_box_steht_oder_fertig_ist_hat_keinen_ort(session) -> None:
     )
     assert fertig.lage is ql.Lage.ZIEL
     assert session.ort_auf_der_runde(fertig, nach_dem_ziel) is None
+
+
+# -- Punkt 107: der Fahrer im Blickpunkt ------------------------------------
+def test_gezeigt_wird_wer_am_weitesten_auf_der_runde_ist(session) -> None:
+    """Unter mehreren gleichzeitig ist es der Weiteste, in Metern."""
+    zeit = session.dauer_ms * 0.5
+    unterwegs = [
+        s for s in session.lage_zu(zeit) if s.lage is ql.Lage.SCHNELLE_RUNDE
+    ]
+    assert len(unterwegs) >= 2, "Seit Punkt 104 sind mehrere gleichzeitig dran"
+
+    gezeigt = session.blickpunkt(zeit)
+    assert gezeigt is not None
+    orte = {
+        s.fahrt.teilnehmer: session.ort_auf_der_runde(s, zeit) for s in unterwegs
+    }
+    assert orte[gezeigt.teilnehmer] == max(orte.values())
+
+
+def test_wer_ins_ziel_kommt_behaelt_die_box_zehn_sekunden(session) -> None:
+    """Sonst verschwaende seine Zeit im Moment, in dem sie fertig wird."""
+    fahrt = session.fahrten[10]
+    kurz_danach = fahrt.ziel_ms + ql.NACHLAUF_MS - 500
+    spaeter = fahrt.ziel_ms + ql.NACHLAUF_MS + 500
+
+    assert session.blickpunkt(kurz_danach) is fahrt
+    danach = session.blickpunkt(spaeter)
+    assert danach is not fahrt
+
+
+def test_ohne_gezeitete_runde_gibt_es_keinen_blickpunkt(session) -> None:
+    """Am Anfang waermt der Erste erst auf - da ist nichts zu zeigen."""
+    assert session.blickpunkt(0.0) is None
+
+
+def test_der_splitabstand_misst_die_gesamtzeit_gegen_die_pole(session) -> None:
+    """Nicht den einzelnen Sektor - die Frage ist das Poleniveau."""
+    fahrt = next(
+        f for f in session.fahrten
+        if session.splitabstand(f, 1, f.sektorenden_ms[1]) is not None
+    )
+    zeit = fahrt.sektorenden_ms[1]
+    fuehrt = session.fuehrender_zu(zeit, ohne=fahrt)
+    assert fuehrt is not None
+
+    erwartet = (
+        sum(fahrt.sektoren_ms[:2]) - sum(fuehrt.sektoren_ms[:2])
+    )
+    assert session.splitabstand(fahrt, 1, zeit) == erwartet
+    # Und das ist etwas anderes als der Vergleich des einzelnen Sektors.
+    assert session.gesamt_bis(fahrt, 1) == sum(fahrt.sektoren_ms[:2])
+
+
+def test_der_splitplatz_zaehlt_nur_die_schon_durch_sind(session) -> None:
+    """Es ist der Stand an dieser Stelle, keine Hochrechnung."""
+    fahrt = session.fahrten[20]
+    nummer = 1
+    frueh = fahrt.sektorenden_ms[nummer]
+    spaet = session.dauer_ms
+
+    frueher_platz = session.splitplatz(fahrt, nummer, frueh)
+    spaeter_platz = session.splitplatz(fahrt, nummer, spaet)
+    # Je mehr durch sind, desto weiter hinten steht er - nie weiter vorn.
+    assert spaeter_platz >= frueher_platz
+    assert frueher_platz >= 1
+
+
+def test_das_plusminus_steht_zwei_drittel_bis_zum_naechsten_split(session) -> None:
+    """Das letzte Drittel vor dem naechsten Split bleibt frei.
+
+    Sonst stuende eine alte Zahl neben einer, die gleich faellt.
+    Gemessen: In Catalunya steht ein Split 14 bis 20 Sekunden.
+    """
+    fahrt = session.fahrten[10]
+    sektoren = session.strecke.sektoren
+    nummer = 1
+
+    ende = fahrt.sektorenden_ms[nummer]
+    assert not session.split_steht_noch(fahrt, nummer, ende - 1000)
+    assert session.split_steht_noch(fahrt, nummer, ende)
+
+    # Die Grenze liegt bei zwei Dritteln des naechsten Sektors.
+    bis_hier = sum(s.laenge_m for s in sektoren[: nummer + 1])
+    grenze = bis_hier + sektoren[nummer + 1].laenge_m * 2 / 3
+    zeit = ende
+    while session.split_steht_noch(fahrt, nummer, zeit):
+        zeit += 100
+    stand = session._stand_zu(fahrt, zeit)
+    ort = session.ort_auf_der_runde(stand, zeit)
+    assert ort is not None
+    assert abs(ort - grenze) < sektoren[nummer + 1].laenge_m * 0.05
+
+
+def test_der_letzte_split_bleibt_ueber_den_nachlauf_stehen(session) -> None:
+    """Sonst waere ausgerechnet die fertige Rundenzeit nicht lesbar.
+
+    Der letzte Split faellt auf der Ziellinie; danach ist die Runde
+    vorbei und es gibt keinen naechsten Sektor mehr, ueber dessen erste
+    zwei Drittel er stehen koennte.
+    """
+    fahrt = session.fahrten[10]
+    letzter = len(fahrt.sektoren_ms) - 1
+    assert session.split_steht_noch(fahrt, letzter, fahrt.ziel_ms)
+    assert session.split_steht_noch(
+        fahrt, letzter, fahrt.ziel_ms + ql.NACHLAUF_MS - 500
+    )
+    assert not session.split_steht_noch(
+        fahrt, letzter, fahrt.ziel_ms + ql.NACHLAUF_MS + 500
+    )

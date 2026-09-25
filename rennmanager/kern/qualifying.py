@@ -44,6 +44,14 @@ if TYPE_CHECKING:  # pragma: no cover
     from rennmanager.konfiguration import Konfiguration
 
 
+# Punkt 107: Wie lange die Blickpunkt-Box nach der Ziellinie noch dem
+# Fahrer gehoert, der gerade angekommen ist. Zehn Sekunden - Entscheidung
+# des Auftraggebers. In **Sessionzeit** gemessen wie alles hier, nicht in
+# Bildschirmzeit: Bei 50-fachem Zeitraffer waere eine Sekunde Bildschirm
+# fast eine Minute Session.
+NACHLAUF_MS = 10_000
+
+
 class Lage(Enum):
     """Was ein Auto zu einem Zeitpunkt der Session macht (Punkt 85).
 
@@ -370,6 +378,109 @@ class Qualifying:
         if fuehrt is None:
             return None
         return fahrt.sektoren_ms[nummer] - fuehrt.sektoren_ms[nummer]
+
+    # -- Punkt 107: der Fahrer im Blickpunkt -------------------------------
+    def blickpunkt(self, zeit_ms: float) -> Fahrt | None:
+        """Wessen Runde gerade gezeigt wird.
+
+        Gezeigt wird, wer auf seiner gezeiteten Runde **am weitesten**
+        ist - gemessen in Metern auf der Runde, nicht in Sektoren: Zwei
+        Autos im selben Sektor sind verschieden weit.
+
+        Wer gerade ins Ziel gekommen ist, behaelt den Platz noch
+        ``NACHLAUF_MS`` lang (Entscheidung des Auftraggebers: zehn
+        Sekunden). Sonst verschwaende seine Zeit im selben Augenblick,
+        in dem sie fertig wird, und niemand koennte sie lesen. Kommen
+        zwei kurz nacheinander an, gehoert der Platz dem Spaeteren.
+        """
+        gerade_fertig = [
+            f for f in self.fahrten if 0 <= zeit_ms - f.ziel_ms <= NACHLAUF_MS
+        ]
+        if gerade_fertig:
+            return max(gerade_fertig, key=lambda f: f.ziel_ms)
+
+        unterwegs = [
+            stand for stand in self.lage_zu(zeit_ms)
+            if stand.lage is Lage.SCHNELLE_RUNDE
+        ]
+        if not unterwegs:
+            return None
+        weiteste = max(
+            unterwegs, key=lambda s: self.ort_auf_der_runde(s, zeit_ms) or 0.0
+        )
+        return weiteste.fahrt
+
+    @staticmethod
+    def gesamt_bis(fahrt: Fahrt, nummer: int) -> int:
+        """Die Gesamtzeit einer Runde bis zum Ende dieses Sektors."""
+        return sum(fahrt.sektoren_ms[: nummer + 1])
+
+    def splitabstand(
+        self, fahrt: Fahrt, nummer: int, zeit_ms: float
+    ) -> int | None:
+        """Vorsprung oder Rueckstand der **Gesamtzeit** bis zu diesem Split.
+
+        Verglichen wird gegen die schnellste bis dahin beendete Runde -
+        also gegen den, der gerade die Pole haelt (Entscheidung des
+        Auftraggebers). Negativ heisst schneller.
+
+        Anders als ``splitvergleich`` misst das nicht den einzelnen
+        Sektor, sondern die aufgelaufene Zeit: Die Frage ist, ob er auf
+        Poleniveau liegt, nicht ob ihm ein einzelner Sektor geraten ist.
+
+        ``None``, solange noch niemand sonst eine Runde stehen hat.
+        """
+        fuehrt = self.fuehrender_zu(zeit_ms, ohne=fahrt)
+        if fuehrt is None:
+            return None
+        return self.gesamt_bis(fahrt, nummer) - self.gesamt_bis(fuehrt, nummer)
+
+    def splitplatz(self, fahrt: Fahrt, nummer: int, zeit_ms: float) -> int:
+        """Der Wievieltbeste er bis zu diesem Split ist.
+
+        Gezaehlt werden alle, die den Split bis ``zeit_ms`` passiert
+        haben - auch die, die noch unterwegs sind. Es ist also der Stand
+        an dieser Stelle der Strecke, keine Hochrechnung aufs Ergebnis.
+        """
+        meins = self.gesamt_bis(fahrt, nummer)
+        schneller = sum(
+            1
+            for andere in self.fahrten
+            if andere is not fahrt
+            and andere.sektorenden_ms[nummer] <= zeit_ms
+            and self.gesamt_bis(andere, nummer) < meins
+        )
+        return schneller + 1
+
+    def split_steht_noch(
+        self, fahrt: Fahrt, nummer: int, zeit_ms: float
+    ) -> bool:
+        """Ob das Plus/Minus dieses Splits gerade noch angezeigt wird.
+
+        Entscheidung des Auftraggebers, in Distanz gemessen: Es bleibt
+        **zwei Drittel** der Strecke bis zum naechsten Split stehen, das
+        letzte Drittel vor dem naechsten Split ist frei. So steht nie
+        eine alte Zahl neben einer, die gleich faellt.
+
+        Der letzte Split ist die Ziellinie - dort gibt es keinen
+        naechsten Sektor mehr. Er bleibt deshalb ueber den ganzen
+        Nachlauf stehen, so lange wie die Box selbst: Sonst verschwaende
+        ausgerechnet die fertige Rundenzeit in dem Augenblick, in dem
+        sie faellt, und niemand koennte sie lesen.
+        """
+        sektoren = self.strecke.sektoren
+        if not 0 <= nummer < len(sektoren):
+            return False
+        if zeit_ms < fahrt.sektorenden_ms[nummer]:
+            return False
+        if nummer == len(sektoren) - 1:
+            return zeit_ms <= fahrt.ziel_ms + NACHLAUF_MS
+        stand = self._stand_zu(fahrt, zeit_ms)
+        ort = self.ort_auf_der_runde(stand, zeit_ms)
+        if ort is None:
+            return False
+        bis_hier = sum(s.laenge_m for s in sektoren[: nummer + 1])
+        return ort <= bis_hier + sektoren[nummer + 1].laenge_m * 2 / 3
 
     def beste_splits_zu(self, zeit_ms: float) -> tuple[int | None, ...]:
         """Wer je Sektor bis dahin den schnellsten Split hat.

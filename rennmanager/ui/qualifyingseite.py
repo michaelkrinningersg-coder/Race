@@ -20,6 +20,11 @@ Die Splits sind dreifarbig (Entscheidung des Auftraggebers):
   friert im Moment des Ueberfahrens ein und dreht sich nicht mehr um,
   wenn spaeter jemand schneller ist.
 
+Rechts steht seit Punkt 107 von oben nach unten: die Streckenkarte, die
+**Blickpunktbox** mit dem einen Fahrer, auf den es gerade ankommt, die
+Streckenbestmarke und das Wetter der Session. Die Startaufstellung
+fuers Rennen, die bis dahin unten stand, faellt ersatzlos weg.
+
 Die Seite rechnet nichts: Sie bekommt eine gefahrene Session von aussen -
 vom gefuehrten Rennwochenende (Punkt 12) - und macht daraus ein Bild.
 """
@@ -45,6 +50,7 @@ from PySide6.QtWidgets import (
 from rennmanager.kern.qualifying import Lage, Qualifying
 from rennmanager.kern.zeit import formatiere_dauer, formatiere_rueckstand
 from rennmanager.konfiguration import Konfiguration
+from rennmanager.ui.blickpunkt import Blickpunktbox
 from rennmanager.ui.flaggen import setze_flagge
 from rennmanager.ui.streckenansicht import Streckenansicht
 from rennmanager.ui.tabellen import kurzname, schriftfarbe, verbinde_fahrerkarte
@@ -198,6 +204,17 @@ class Qualifyingseite(QWidget):
         return kopf + ["Lage", "Wetter", "Form"]
 
     def _baue_seitenspalte(self) -> QWidget:
+        """Strecke, Blickpunkt, Bestmarke, Wetter - in dieser Reihenfolge.
+
+        Punkt 107, Entscheidung des Auftraggebers: Die
+        "Startaufstellung fuers Rennen" faellt ersatzlos weg. Sie stand
+        die ganze Session ueber leer da und fuellte sich erst, wenn
+        ohnehin niemand mehr hinsah - und das Ergebnis steht eine
+        Sekunde spaeter im Zeitenmonitor und auf dem naechsten Blatt.
+        Ihren Platz nimmt das Wetter ein, und wo das Wetter stand -
+        direkt unter der Karte - steht jetzt der Fahrer, um den es
+        gerade geht.
+        """
         seite = QWidget()
         spalte = QVBoxLayout(seite)
         spalte.setContentsMargins(0, 0, 0, 0)
@@ -217,12 +234,14 @@ class Qualifyingseite(QWidget):
         streckenkasten = QGroupBox("Strecke")
         streckenspalte = QVBoxLayout(streckenkasten)
         streckenspalte.addWidget(self._ansicht)
-        spalte.addWidget(streckenkasten, stretch=2)
+        # Der einzige Dehner der Spalte: Alles darunter ist Text fester
+        # Hoehe, die Karte nimmt, was uebrig bleibt.
+        spalte.addWidget(streckenkasten, stretch=1)
 
-        self._wetterfeld = QFormLayout()
-        wetterkasten = QGroupBox("Wetter der Session")
-        wetterkasten.setLayout(self._wetterfeld)
-        spalte.addWidget(wetterkasten)
+        # Punkt 107: Der Fahrer, auf den es gerade ankommt - unter der
+        # Karte, auf der man ihn fahren sieht.
+        self._blickpunkt = Blickpunktbox()
+        spalte.addWidget(self._blickpunkt)
 
         # Punkt 93 (A17): Die schnellste je hier gefahrene Qualirunde,
         # mit Fahrer und Jahr. Getrennt vom Rennrekord gefuehrt: Eine
@@ -233,18 +252,10 @@ class Qualifyingseite(QWidget):
         marken_spalte.addWidget(self._bestmarke)
         spalte.addWidget(markenkasten)
 
-        self._aufstellung = QTreeWidget()
-        self._aufstellung.setHeaderLabels(["Startplatz", "Auto", "Zeit"])
-        self._aufstellung.setRootIsDecorated(False)
-        self._aufstellung.setAlternatingRowColors(True)
-        verbinde_fahrerkarte(self._aufstellung, self.fahrerkarte_gewuenscht.emit)
-        # Entscheidung des Auftraggebers: Die Aufstellung fuellt sich erst
-        # am Ende. Vorher stuende dort das Ergebnis, auf das die
-        # Uebertragung gerade zulaeuft.
-        self._aufstellungskasten = QGroupBox("Startaufstellung fuers Rennen")
-        kasten_spalte = QVBoxLayout(self._aufstellungskasten)
-        kasten_spalte.addWidget(self._aufstellung)
-        spalte.addWidget(self._aufstellungskasten, stretch=1)
+        self._wetterfeld = QFormLayout()
+        wetterkasten = QGroupBox("Wetter der Session")
+        wetterkasten.setLayout(self._wetterfeld)
+        spalte.addWidget(wetterkasten)
         return seite
 
     # -- Session uebernehmen -----------------------------------------------
@@ -263,14 +274,24 @@ class Qualifyingseite(QWidget):
             f"{formatiere_dauer(rekord.zeit_ms)}   {wer}   {rekord.saison}"
         )
 
-    def zeige_namen(self, namen: dict[int, str]) -> None:
+    def zeige_namen(
+        self,
+        namen: dict[int, str],
+        teams: dict[int, str] | None = None,
+    ) -> None:
         """Gibt der Seite die Fahrernamen je Nummer (Punkt 98).
 
         Wie in der Karriereseite: Der Kern kennt nur Nummern, die Namen
         stehen in der Welt. Abgekuerzt wird hier, nicht beim Aufrufer -
         so steht die Regel an einer Stelle.
+
+        Punkt 107: Die Blickpunktbox nennt zum Namen auch den Rennstall,
+        deshalb kommen die Teams denselben Weg herein. Ohne sie bleibt
+        dort nur die Nation stehen - ein Testlauf ohne Welt laeuft
+        weiter durch.
         """
         self._namen = {nummer: kurzname(name) for nummer, name in namen.items()}
+        self._blickpunkt.zeige_namen(namen, teams or {})
         if self._session is not None:
             self._letzte_tabelle_ms = None
             self._zeichne()
@@ -288,7 +309,7 @@ class Qualifyingseite(QWidget):
             knopf.setEnabled(True)
         self._waehle_zeitraffer()
         self._fuelle_wetter()
-        self._leere_aufstellung()
+        self._blickpunkt.zeige_session(session)
         self._springe(0)
 
     def _waehle_zeitraffer(self) -> None:
@@ -368,6 +389,10 @@ class Qualifyingseite(QWidget):
         self._fortschritt.setValue(int(zeit))
         self._wetterband.setze_marke(zeit)
         self._zeichne_strecke(zeit)
+        # Punkt 107: Wie die Karte ausserhalb des Takt-Deckels (D9) - in
+        # der Box laeuft eine Rundenzeit, die alle 200 ms zu springen
+        # anfinge.
+        self._blickpunkt.zeichne(zeit)
         if not self._tabelle_faellig(zeit):
             return
 
@@ -426,12 +451,6 @@ class Qualifyingseite(QWidget):
                 vorherige_zeit = zeile.zeit_ms
         for spalte in range(self._rangliste.columnCount()):
             self._rangliste.resizeColumnToContents(spalte)
-
-        # Die Aufstellung steht erst, wenn der Letzte durch ist.
-        if len(fertig) == len(session.fahrten):
-            self._fuelle_aufstellung()
-        else:
-            self._leere_aufstellung()
 
     def _zeichne_strecke(self, zeit: float) -> None:
         """Punkt 93 (A9): Die Punkte derer, die gerade auf der Strecke sind.
@@ -601,29 +620,6 @@ class Qualifyingseite(QWidget):
         # der umgekehrte Meisterschaftsstand (GDD 4).
         self._gummianzeige = QLabel("+0,00 %")
         self._wetterfeld.addRow("Strecke:", self._gummianzeige)
-
-    def _leere_aufstellung(self) -> None:
-        if self._aufstellung.topLevelItemCount():
-            self._aufstellung.clear()
-        self._aufstellungskasten.setTitle(
-            "Startaufstellung fuers Rennen (steht nach der letzten Runde)"
-        )
-
-    def _fuelle_aufstellung(self) -> None:
-        self._aufstellungskasten.setTitle("Startaufstellung fuers Rennen")
-        if self._aufstellung.topLevelItemCount():
-            return
-        for platz, i in enumerate(self._session.aufstellung, start=1):
-            fahrt = next(f for f in self._session.fahrten if f.teilnehmer == i)
-            teilnehmer = self._session.teilnehmer[i]
-            zeile = QTreeWidgetItem(
-                self._aufstellung,
-                [str(platz), teilnehmer.kuerzel, formatiere_dauer(fahrt.zeit_ms)],
-            )
-            zeile.setForeground(1, schriftfarbe(teilnehmer.farbe))
-            zeile.setData(0, Qt.UserRole, teilnehmer.nummer)
-        for spalte in range(3):
-            self._aufstellung.resizeColumnToContents(spalte)
 
     @staticmethod
     def _leere(formular: QFormLayout) -> None:

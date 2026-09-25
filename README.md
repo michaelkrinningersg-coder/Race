@@ -593,9 +593,44 @@ Wer als Erster faehrt, bekommt kein Gruen und kein Rot - es gibt noch
 niemanden, gegen den zu messen waere. Eine laufende Runde fuehrt
 ausserdem nie: Solange sie nicht steht, ist sie mit nichts vergleichbar.
 
-Die **Startaufstellung fuers Rennen** rechts fuellt sich erst, wenn der
-Letzte durch ist (ebenfalls Entscheidung des Auftraggebers). Vorher
-stuende dort das Ergebnis, auf das die Uebertragung gerade zulaeuft.
+##### Die Blickpunktbox - ein Fahrer statt fuenfzig (Punkt 107)
+
+Die Zeitentafel zeigt fuenfzig Zeilen; hinsehen will man in dem Moment
+aber auf eine. Unter der Streckenkarte steht deshalb eine Box fuer genau
+einen Fahrer: den, der auf seiner gezeiteten Runde am weitesten ist.
+Sie traegt Flagge, Namen in der Teamfarbe, Rennstall und Nation - und
+darunter die mitlaufende Rundenzeit, gross genug, um sie aus zwei Metern
+zu lesen.
+
+An jedem Split faellt ein Plus oder Minus: der Vorsprung oder Rueckstand
+seiner **Gesamtzeit** bis zu dieser Stelle, gegen den, der in dem Moment
+fuehrt. Gruen ist schneller, rot langsamer, und in Klammern steht sein
+Platz unter allen Zeiten, die an dieser Stelle stehen. Drei Regeln, alle
+vom Auftraggeber:
+
+* Das Plus/Minus steht **zwei Drittel** der Strecke bis zum naechsten
+  Split; das letzte Drittel davor ist frei, damit nie eine alte Zahl
+  neben einer steht, die gleich faellt. Es steht damit immer hoechstens
+  eine Zahl da - genau die, die gerade gilt.
+* Der letzte Split ist die Ziellinie und bleibt ueber den ganzen
+  Nachlauf stehen - sonst waere ausgerechnet die fertige Rundenzeit
+  nicht zu lesen.
+* Die Box gehoert einem Fahrer noch **zehn Sekunden**, nachdem er die
+  Linie ueberquert hat; dann uebernimmt der naechste.
+
+Gemessen ueber eine Session in Catalunya (50 Autos, 39 Minuten, Seed
+4711): Die Box ist **96 Prozent** der Zeit belegt, jeder der 50 Fahrer
+kommt darin vor, und 96 Prozent der stehenden Splits tragen ein echtes
+Plus/Minus - der Rest faellt so frueh, dass es noch keine Bezugsrunde
+gibt, und zeigt dann nur den Platz.
+
+Die **Startaufstellung fuers Rennen**, die bis Punkt 107 an dieser
+Stelle stand, faellt ersatzlos weg (Entscheidung des Auftraggebers). Sie
+fuellte sich erst, wenn der Letzte durch war - und bis dahin stand ein
+leerer Kasten da. Das Ergebnis steht eine Sekunde spaeter im
+Zeitenmonitor und auf dem naechsten Blatt. Die rechte Spalte des
+Qualifyings liest sich jetzt von oben nach unten: Strecke, der Fahrer
+auf der Runde, Streckenbestmarke, Wetter der Session.
 
 #### Warum das Rennen im Hintergrund rechnet
 

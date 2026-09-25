@@ -18,6 +18,7 @@ pytest.importorskip("PySide6")
 
 from rennmanager.ui import qualifyingseite as qs  # noqa: E402
 from rennmanager.ui.hauptfenster import Hauptfenster  # noqa: E402
+from rennmanager.ui.tabellen import kurzname  # noqa: E402
 from tests.oberflaeche import (  # noqa: E402
     gefahrenes_qualifying,
     kurzes_rennen,
@@ -246,18 +247,33 @@ def test_qualifying_sortiert_live_ein(qtbot, konfig: kf.Konfiguration) -> None:
     assert mit_position() == autos
 
 
-def test_qualifying_zeigt_aufstellung_und_wetter(qtbot, konfig: kf.Konfiguration) -> None:
-    """Das Wetter steht sofort, die Aufstellung erst am Ende (Punkt 85)."""
+def test_qualifying_zeigt_wetter_und_blickpunkt(qtbot, konfig: kf.Konfiguration) -> None:
+    """Die rechte Spalte des Qualifyings (Punkt 107).
+
+    Sie hiess bis Punkt 107 "Aufstellung und Wetter" und pruefte eine
+    Startaufstellung, die es nicht mehr gibt: Sie stand die ganze
+    Session leer da, und ihr Ergebnis steht eine Sekunde spaeter im
+    Zeitenmonitor. An ihrer Stelle steht jetzt die Blickpunktbox - und
+    die kennt hier, anders als im Test mit blosser Seite, den Namen aus
+    der Welt.
+    """
     fenster = Hauptfenster(konfig)
     qtbot.addWidget(fenster)
     seite = gefahrenes_qualifying(fenster)
+    session = seite.session
 
     assert seite._wetterfeld.rowCount() > 0
-    assert seite._aufstellung.topLevelItemCount() == 0
 
-    seite._sofort.click()
-    assert seite._aufstellung.topLevelItemCount() == konfig.wert("rennen", "autos")
-    assert seite._aufstellung.topLevelItem(0).text(0) == "1"
+    fahrt = next(
+        f for f in session.fahrten
+        if session.blickpunkt(f.sektorenden_ms[1] + 1.0) is f
+    )
+    seite._springe(fahrt.sektorenden_ms[1] + 1.0)
+    nummer = session.teilnehmer[fahrt.teilnehmer].nummer
+    fahrer = next(f for f in fenster.welt.fahrer if f.nummer == nummer)
+    assert seite._blickpunkt.namensfeld.text() == kurzname(fahrer.name)
+    team = fenster.welt.team_von(fahrer).name
+    assert team in seite._blickpunkt.herkunftsfeld.text()
 
 
 def test_qualifying_rueckstand_nur_ab_platz_zwei(qtbot, konfig: kf.Konfiguration) -> None:

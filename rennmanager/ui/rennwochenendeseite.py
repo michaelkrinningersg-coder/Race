@@ -96,8 +96,13 @@ class Rennwochenendeseite(QWidget):
         self._quali = Qualifyingseite(konfiguration)
         self._quali.fahrerkarte_gewuenscht.connect(self.fahrerkarte_gewuenscht.emit)
         # Punkt 98: Die Zeitentafel zeigt den Namen neben dem Kuerzel.
-        # Der Kern kennt nur Nummern; die Welt hat die Namen.
-        self._quali.zeige_namen({f.nummer: f.name for f in self._lauf.welt.fahrer})
+        # Der Kern kennt nur Nummern; die Welt hat die Namen. Punkt 107:
+        # dazu den Rennstall fuer die Blickpunktbox.
+        welt = self._lauf.welt
+        self._quali.zeige_namen(
+            {f.nummer: f.name for f in welt.fahrer},
+            {f.nummer: welt.team_von(f).name for f in welt.fahrer},
+        )
         self._reifenwahl = Reifenwahl(konfiguration)
         self._reifenwahl.gewaehlt.connect(self._reifen_gewaehlt)
         self._blaetter.addWidget(self._baue_qualifyingblatt())

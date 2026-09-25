@@ -5,7 +5,7 @@ Oberflaeche - Vorschau, Qualifying, Rennen, Ergebnis - und legt dabei
 Bilder ab:
 
 * je Wochenende ein Bild vom **Ende des Qualifyings**, also mit der
-  vollstaendigen Zeitentafel und der Startaufstellung,
+  vollstaendigen Zeitentafel,
 * je Wochenende fuenf Bilder vom Rennen: aus dem **Stand** (Rennzeit 0,
   alle Autos noch auf ihren Startplaetzen) und nach 25, 50, 75 und
   100 Prozent der Renndauer,
