@@ -32,6 +32,7 @@ import numpy as np
 from rennmanager.kern import boxenstopp as kern_boxenstopp
 from rennmanager.kern import gummierung as kern_gummierung
 from rennmanager.kern import reifen as kern_reifen
+from rennmanager.kern import sprit as kern_sprit
 from rennmanager.kern import tempo as kern_tempo
 from rennmanager.kern import wetter as kern_wetter
 from rennmanager.kern.auto import Auto, gesamtwert
@@ -324,7 +325,8 @@ def _stinttabelle(
     dass der Planer das kennt - den wachsenden **Grip** dagegen nicht.
     Ein Stint am Rennanfang ist damit kuerzer als derselbe Stint am
     Rennende, und die Reihenfolge der Mischungen ist keine freie Wahl
-    mehr.
+    mehr. ``feldstrategien`` legt die Masse mit hinein: Mit vollem Tank
+    zehrt ein Auto staerker, und das hat dieselbe Form.
     """
     feld = naesse_je_runde(naesse, runden)
     # Was von aussen am Reifen zehrt: das Wetter (GDD 7) und die Strecke
@@ -1240,6 +1242,13 @@ def feldstrategien(
     gummifaktor = gummivorhersage(
         konfiguration, wetter, runden, rundenzeit, len(autos)
     )
+    # Spritverbrauch: Mit vollem Tank frisst ein Auto mehr Reifen, fast
+    # leer weniger - ueber das Rennen gemittelt gleich viel. Der Planer
+    # kennt das, wie den Zustand der Strecke; es zehrt Runde fuer Runde
+    # mit ihr zusammen, deshalb faehrt es im selben Feld mit. Gerechnet
+    # wird mit dem Tank des Medianfahrers, wie alles hier.
+    masse = kern_sprit.abrieb_je_runde(konfiguration, referenz, runden, strecke.laenge_m)
+    gummifaktor = tuple(g * m for g, m in zip(gummifaktor, masse, strict=True))
     lagen = lagen_im_rennen(konfiguration, wetter, runden, rundenzeit)
     pflicht = pflicht_zwei_mischungen(konfiguration, lagen)
 

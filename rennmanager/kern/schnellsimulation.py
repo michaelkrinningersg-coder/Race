@@ -25,6 +25,7 @@ from rennmanager.kern import boxenstopp as kern_boxenstopp
 from rennmanager.kern import form as kern_form
 from rennmanager.kern import gummierung as kern_gummierung
 from rennmanager.kern import reifen as kern_reifen
+from rennmanager.kern import sprit as kern_sprit
 from rennmanager.kern import strategie as kern_strategie
 from rennmanager.kern import tempoverlauf as kern_tempoverlauf
 from rennmanager.kern import wetter as kern_wetter
@@ -228,27 +229,55 @@ def fahre_wochenende(
         for i, t in enumerate(teilnehmer)
     ]
     autos = [f.auto for f in formen]
+    # Die Runde des **leeren** Autos - so wie im Qualifying. Auf ihr
+    # stehen das Wetter, die Startaufstellung und das Ueberholen: Das
+    # Wetter muss aus derselben Rechnung kommen wie in der Saison, die
+    # damit die Strategien plant, und beim Ueberholen zaehlt nur, wer
+    # schneller ist - der Sprit bremst alle gleich.
     grundrunde = _grundrunden(konfiguration, strecke, autos, rhythmusfaktor)
-    # Dieselbe Runde mit der Bremse des Rennendes (Punkt 20). Zwischen
-    # beiden wird nach gefahrener Distanz gemischt - so wie die volle
+    # Spritverbrauch: Getankt wird fuer die ganze Distanz. Gefahren wird
+    # zwischen zwei Runden gemischt - voller Tank zum Start, Reserve und
+    # die Bremse des Rennendes (Punkt 20) im Ziel -, so wie die volle
     # Simulation zwischen zwei Geschwindigkeitsprofilen mischt.
-    grundrunde_ende = np.array(
-        [
-            fahre_runde(
-                konfiguration,
-                strecke,
-                auto,
-                grenzen=replace(
-                    _grenzen(konfiguration, auto, faktor),
-                    brems=kern_tempoverlauf.bremsgrenze_am_ende(
-                        konfiguration, auto, _grenzen(konfiguration, auto, faktor).brems
-                    ),
-                ),
-            ).zeit_ms
-            for auto, faktor in zip(autos, rhythmusfaktor, strict=True)
-        ],
-        dtype=float,
+    renndistanz_m = runden * strecke.laenge_m
+    tanks = [kern_sprit.tank(konfiguration, auto, renndistanz_m) for auto in autos]
+    grenzen_leer = [
+        _grenzen(konfiguration, auto, faktor)
+        for auto, faktor in zip(autos, rhythmusfaktor, strict=True)
+    ]
+    grenzen_start = [
+        kern_sprit.grenzen_mit_sprit(konfiguration, g, t.start_kg)
+        for g, t in zip(grenzen_leer, tanks, strict=True)
+    ]
+    grenzen_ende = [
+        kern_sprit.grenzen_mit_sprit(
+            konfiguration,
+            replace(
+                g, brems=kern_tempoverlauf.bremsgrenze_am_ende(konfiguration, auto, g.brems)
+            ),
+            float(t.menge_kg(renndistanz_m)),
+        )
+        for auto, g, t in zip(autos, grenzen_leer, tanks, strict=True)
+    ]
+    runden_start = [
+        fahre_runde(konfiguration, strecke, auto, grenzen=g)
+        for auto, g in zip(autos, grenzen_start, strict=True)
+    ]
+    runden_ende = [
+        fahre_runde(konfiguration, strecke, auto, grenzen=g)
+        for auto, g in zip(autos, grenzen_ende, strict=True)
+    ]
+    grundrunde_start = np.array([r.zeit_ms for r in runden_start], dtype=float)
+    grundrunde_ende = np.array([r.zeit_ms for r in runden_ende], dtype=float)
+    masse_leer = float(konfiguration.wert("sprit", "masse_leer_kg"))
+    masse_mittel = np.array(
+        [kern_sprit.mittlere_masse_kg(konfiguration, t, renndistanz_m) for t in tanks]
     )
+
+    def abrieb(i: int, runde: int) -> float:
+        """Der Faktor der Masse auf den Abrieb dieser Runde - zu ihrer Mitte."""
+        mitte = (runde - 0.5) * strecke.laenge_m
+        return float((masse_leer + tanks[i].menge_kg(mitte)) / masse_mittel[i])
     sog_gewinn = np.array(
         [kern_windschatten.gewinn(konfiguration, auto) for auto in autos]
     )
@@ -324,19 +353,26 @@ def fahre_wochenende(
     naesse_start = kern_reifen.naesse_von(konfiguration, wetter.startzustand)
     verschleiss_je_runde = np.array([je_runde(i, naesse_start) for i in range(anzahl)])
     # Was ein Stopp kostet - ohne die Standzeit, die je Stopp gewuerfelt
-    # wird. Durchfahrt, Bremsen und Anfahren haengen nur am Auto.
-    stoppgrundlast = np.array(
-        [
-            kern_boxenstopp.durchfahrtsverlust_ms(
-                konfiguration, strecke, _grenzen(konfiguration, auto, faktor_r)
-            )
-            + kern_boxenstopp.haltverlust_ms(
-                konfiguration, _grenzen(konfiguration, auto, faktor_r)
-            )
-            for auto, faktor_r in zip(autos, rhythmusfaktor, strict=True)
-        ],
-        dtype=float,
-    )
+    # wird. Durchfahrt, Bremsen und Anfahren haengen am Auto und an dem,
+    # was es gerade wiegt: Mit vollem Tank bremst es frueher und kommt
+    # langsamer aus der Box. Gerechnet wird fuer beide Enden des Rennens
+    # und zur Stopprunde hin gemischt - wie im Zeitraffer.
+    def stoppkosten(grenzen, frei) -> np.ndarray:
+        # Das freie Profil steht schon aus der Grundrunde - nur das mit
+        # dem Deckel auf der Boxengasse kommt dazu.
+        return np.array(
+            [
+                kern_boxenstopp.durchfahrtsverlust_ms(
+                    konfiguration, strecke, g, frei=runde.profil
+                )
+                + kern_boxenstopp.haltverlust_ms(konfiguration, g)
+                for g, runde in zip(grenzen, frei, strict=True)
+            ],
+            dtype=float,
+        )
+
+    stoppgrundlast_start = stoppkosten(grenzen_start, runden_start)
+    stoppgrundlast_ende = stoppkosten(grenzen_ende, runden_ende)
     strategie_stand = list(strategien) if strategien is not None else None
     pflicht_zwei = kern_strategie.pflicht_zwei_mischungen(konfiguration, wetter.zustaende)
     stint_stand = np.zeros(anzahl, dtype=int)
@@ -424,7 +460,13 @@ def fahre_wochenende(
             # nach, die Ermuedung waechst, die kalten Reifen kosten die
             # erste Runde. Der Anteil gilt zu Rundenbeginn.
             anteil = (runde - 1) / runden
-            basis = grundrunde[i] + anteil * (grundrunde_ende[i] - grundrunde[i])
+            # Sprit und Bremse werden zur **Mitte** der Runde gemischt: Der
+            # Zeitraffer mischt stetig, und ueber eine Runde gemittelt ist
+            # das die Mitte. Zu Rundenbeginn gemischt, waere jede Runde um
+            # eine halbe Runde Sprit zu schwer - bei drei Sekunden ueber
+            # das Rennen rund anderthalb Sekunden zu viel.
+            mitte = (runde - 0.5) / runden
+            basis = grundrunde_start[i] + mitte * (grundrunde_ende[i] - grundrunde_start[i])
             ermuedung = kern_tempoverlauf.ermuedungsfaktor(konfiguration, auto, anteil)
             kalt = kern_tempoverlauf.kaltreifenfaktor_runde(
                 konfiguration, auto, runde, strecke.laenge_m
@@ -454,7 +496,10 @@ def fahre_wochenende(
             # Fuer die Wetter-Erfahrung aus GDD 10: Die Runde zaehlt zu der
             # Lage, die zu ihrem Beginn galt.
             kilometer[i][zustand] += strecke.laenge_m / 1000.0
-            verschleiss[i] += verschleiss_je_runde[i] * wetter_verschleiss * gummi_verschleiss
+            verschleiss[i] += (
+                verschleiss_je_runde[i] * wetter_verschleiss * gummi_verschleiss
+                * abrieb(i, runde)
+            )
             gefahrene_runden[i] += 1
 
             # --- Boxenstopp (Punkt 39) --------------------------------
@@ -479,6 +524,7 @@ def fahre_wochenende(
                 kuenftig = 1.0 - float(
                     verschleiss[i]
                     + verschleiss_je_runde[i] * wetter_verschleiss * gummi_verschleiss
+                    * abrieb(i, runde + 1)
                 )
                 if kuenftig > kern_strategie.verschiebeschwelle(
                     konfiguration, nach_notstopp=bool(letzter_war_notstopp[i])
@@ -572,7 +618,12 @@ def fahre_wochenende(
                 konfiguration,
                 seedquelle.zweig("standzeit", i, int(stopps_je_auto[i])),
             )
-            gesamtzeit[i] += stoppgrundlast[i] + standzeit
+            # Der Stopp faellt an der Linie am Ende dieser Runde.
+            stand = runde / runden
+            stoppgrundlast = stoppgrundlast_start[i] + stand * (
+                stoppgrundlast_ende[i] - stoppgrundlast_start[i]
+            )
+            gesamtzeit[i] += stoppgrundlast + standzeit
             gefahrene[i] = gestreut(i, neu)
             kuerzel_gefahren[i].add(neu.kuerzel)
             runden_falscher_reifen[i] = 0

@@ -81,7 +81,10 @@ SPALTE_REIFEN = 11
 SPALTE_ALTER = 12
 SPALTE_REICHT = 13
 SPALTE_PLANSTOPP = 14
-SPALTE_STATUS = 15
+# Spritverbrauch: Was noch im Tank ist, in kg. Neben den Reifen und dem
+# Stopp, weil es dieselbe Frage ist - was das Auto noch hergibt.
+SPALTE_SPRIT = 15
+SPALTE_STATUS = 16
 # Spalten des Zeitenmonitors.
 MONITOR_KUERZEL = 0
 MONITOR_NAME = 1
@@ -441,8 +444,13 @@ class Rennseite(QWidget):
             [
                 "Pos", "Auto", "Fahrer", "Team", "+/-", "Rd", "Zeit / Rueckstand",
                 "Intervall", "km/h", "Ø km/h", "Mischung", "Reifen",
-                "Alter", "Reicht", "Stopp", "Status",
+                "Alter", "Reicht", "Stopp", "Sprit", "Status",
             ]
+        )
+        self._rangliste.headerItem().setToolTip(
+            SPALTE_SPRIT,
+            "Sprit im Tank, in kg. Getankt wird fuer die Renndistanz und "
+            "2 % Reserve - je leichter das Auto, desto schneller.",
         )
         self._rangliste.setRootIsDecorated(False)
         self._rangliste.setAlternatingRowColors(True)
@@ -652,7 +660,7 @@ class Rennseite(QWidget):
         setze_breiten(self._rangliste, [
             "30", kuerzel, mit_flagge, team, f"{PFEIL_RUNTER} 12", "48",
             dauer, abstand, "320", "288,8", f"WW (4){HAKEN}", None,
-            "88 Rd", "88 Rd", "R88",
+            "88 Rd", "88 Rd", "R88", "110,0 kg",
             "Defekt x2, 3 Fehler",
         ])
         setze_breiten(self._monitor, [
@@ -967,6 +975,7 @@ class Rennseite(QWidget):
         bild = verlauf.bild_zu(zeit)
         raus = verlauf.ausgefallen[bild]
         mischungen = verlauf.mischung_zu(zeit)
+        sprit = verlauf.sprit_zu(zeit)
         vorher = self._plaetze_vorige_runde(verlauf, fuehrender, zeit)
 
         for platz, i in enumerate(reihenfolge, start=1):
@@ -1014,9 +1023,11 @@ class Rennseite(QWidget):
                     f"{verlauf.reifenalter(i, runde, zeit)} Rd",
                     self._reichttext(verlauf, i, runde, zeit),
                     self._planstopptext(verlauf, i, runde),
+                    self._sprittext(sprit, i),
                     status,
                 ],
             )
+            zeile.setTextAlignment(SPALTE_SPRIT, Qt.AlignRight | Qt.AlignVCenter)
             zeile.setForeground(SPALTE_KUERZEL, schriftfarbe(teilnehmer.farbe))
             # Punkt 105: Die Flagge steht im Namensfeld, nicht in einer
             # eigenen Spalte - die Rangliste ist ohnehin zu schmal.
@@ -1054,6 +1065,18 @@ class Rennseite(QWidget):
                 for spalte in range(SPALTE_ZEIT + 1):
                     zeile.setFont(spalte, schrift)
         self._stelle_auswahl_wieder_her(self._rangliste)
+
+    @staticmethod
+    def _sprittext(sprit, i: int) -> str:
+        """Was noch im Tank ist - mit einer Nachkommastelle, damit man es fallen sieht.
+
+        Rund 1,5 kg je Runde: Ganze Kilogramm sprangen nur jede zweite
+        Runde. Ohne Tanks - im zufallsfreien Laborrennen - steht ein
+        Strich.
+        """
+        if sprit is None:
+            return "-"
+        return f"{float(sprit[i]):.1f} kg".replace(".", ",")
 
     @staticmethod
     def _pflicht_erfuellt(verlauf: Rennverlauf, i: int, zeit: float) -> bool:

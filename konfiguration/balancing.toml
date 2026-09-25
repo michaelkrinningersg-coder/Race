@@ -1875,3 +1875,33 @@ verlust_am_ende_bei_maximum = 0.005
 
 
 # --- Punkt 34: Dauerhafte Prozentwirkungen der Ereignisse (GDD 14) --------
+
+# --- Spritverbrauch und Masse ----------------------------------------------
+# Das Auto wird ueber das Rennen leichter. Abgestimmt mit dem Auftraggeber:
+#
+# * Der Verbrauch haengt am **Materialgefuehl** des Fahrers: +5 % beim
+#   Wert 0, -5 % beim Hoechstwert, linear im Leistungsanteil p wie ueberall.
+# * Jeder tankt, was er fuer die Renndistanz braucht, **plus 2 % Reserve**.
+#   Der Sprit reicht damit immer; wer sparsam faehrt, ist das ganze Rennen
+#   ueber leichter.
+# * Mit vollem Tank soll ein Auto rund **3 s je Runde** langsamer sein als
+#   mit leerem.
+# * Qualifying und die Kalibrierung aus GDD 9 fahren mit leerem Tank - das
+#   leere Auto ist der Bezugszustand, den ``tempo.grenzen_aus`` liefert.
+#
+# Wie die Masse wirkt, steht in ``kern/sprit.py``: Beschleunigen voll mit
+# m_leer / m, Bremsen und Kurven nur ueber den Anteil der Haftung, den der
+# Abtrieb traegt - der mechanische Grip waechst mit dem Gewicht mit. Die
+# Hoechstgeschwindigkeit bleibt; sie haengt an Leistung und Luftwiderstand.
+[sprit]
+# Auto und Fahrer ohne Sprit.
+masse_leer_kg = 800.0
+# Mittlerer Verbrauch; ueber 290 km sind das rund 100 kg.
+verbrauch_kg_je_km = 0.34
+verbrauch_faktor_bei_null = 1.05
+verbrauch_faktor_bei_maximum = 0.95
+reserve_anteil = 0.02
+# Anteil des Abtriebs an der Haftung. In engen Kurven ist das Tempo
+# niedrig und der Abtrieb gering, dort traegt der mechanische Grip mehr.
+abtriebsanteil = 0.6
+abtriebsanteil_enge_kurve = 0.3

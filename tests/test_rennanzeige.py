@@ -80,11 +80,14 @@ def gefahren(qtbot, konfig, vierrundenrennen):
     return fenster, seite
 
 
-# Vorschlag 2: Der Standardlauf (Seed 4711) hat keinen einzigen
-# Fuehrungswechsel - einer faehrt vier Runden lang vorn. Gemessen ueber
-# die Seeds 1 bis 24 auf derselben Strecke: Seed 4 bringt drei Wechsel
+# Vorschlag 2: Der Standardlauf (Seed 4711) hatte keinen einzigen
+# Fuehrungswechsel - einer fuhr vier Runden lang vorn. Gemessen ueber
+# die Seeds 1 bis 24 auf derselben Strecke: Seed 4 brachte drei Wechsel
 # (VER, FOI, MEL, FOI) und dazu sieben Zwischenfaelle, also beide
-# Quellen des Tickers in einem Rennen.
+# Quellen des Tickers in einem Rennen. Seit dem Spritverbrauch hat auch
+# der Standardlauf zwei Wechsel (Seed 4: drei Wechsel, zehn
+# Zwischenfaelle) - verlassen darf sich darauf kein Test; wer Wechsel
+# braucht, nimmt weiter ``wechselrennen``.
 SEED_MIT_WECHSELN = 4
 
 
@@ -302,13 +305,27 @@ def test_der_balken_faerbt_nach_zustand(konfig) -> None:
 
 
 # --- Punkt 4: Zwischenfall-Ticker -----------------------------------------
+def _meldungen_bis(seite, zeit: float) -> int:
+    """Was bis hierher im Ticker stehen muss: Zwischenfaelle **und** Wechsel.
+
+    Seit Vorschlag 2 fuehrt der Ticker beide Quellen. Die Tests hier
+    zaehlten nur die Zwischenfaelle und gingen damit nur durch, solange
+    der Standardlauf keinen Fuehrungswechsel hatte - mit dem Sprit hat er
+    welche, und die Zaehlung war schlicht zu kurz.
+    """
+    bisher = [z for z in seite.verlauf.zwischenfaelle if z.zeit_ms <= zeit]
+    return len(bisher) + len(seite._fuehrungsmeldungen(seite.verlauf, zeit))
+
+
 def test_der_ticker_zeigt_nur_geschehenes(gefahren) -> None:
     _fenster, seite = gefahren
     schlage_blatt_auf(seite, "ticker")
     zeit = seite.zeit_ms
     bisher = [z for z in seite.verlauf.zwischenfaelle if z.zeit_ms <= zeit]
     assert str(len(bisher)) in seite._tickerkasten.title()
-    assert seite.ticker.topLevelItemCount() == min(len(bisher), rs.TICKER_ZEILEN)
+    assert seite.ticker.topLevelItemCount() == min(
+        _meldungen_bis(seite, zeit), rs.TICKER_ZEILEN
+    )
 
 
 def test_der_ticker_zeigt_fuenfzig_zeilen(gefahren, konfig) -> None:
@@ -321,7 +338,7 @@ def test_der_ticker_zeigt_fuenfzig_zeilen(gefahren, konfig) -> None:
     assert rs.TICKER_ZEILEN == 50
     seite._springe(seite.verlauf.dauer_ms)
     schlage_blatt_auf(seite, "ticker")
-    bisher = len(seite.verlauf.zwischenfaelle)
+    bisher = _meldungen_bis(seite, seite.verlauf.dauer_ms)
     assert seite.ticker.topLevelItemCount() == min(bisher, rs.TICKER_ZEILEN)
 
 
@@ -339,7 +356,7 @@ def test_der_ticker_fuehrt_fuenfzig_zeilen(gefahren) -> None:
     assert rs.TICKER_ZEILEN == 50
     seite._springe(seite.verlauf.dauer_ms)
     schlage_blatt_auf(seite, "ticker")
-    gefallen = len(seite.verlauf.zwischenfaelle)
+    gefallen = _meldungen_bis(seite, seite.verlauf.dauer_ms)
     assert seite.ticker.topLevelItemCount() == min(gefallen, rs.TICKER_ZEILEN)
 
 
@@ -735,6 +752,43 @@ def test_die_rangliste_hat_alter_reicht_und_stopp(gefahren) -> None:
     assert kopf.text(rs.SPALTE_ALTER) == "Alter"
     assert kopf.text(rs.SPALTE_REICHT) == "Reicht"
     assert kopf.text(rs.SPALTE_PLANSTOPP) == "Stopp"
+
+
+# -- Spritverbrauch ----------------------------------------------------------
+def _kg(text: str) -> float:
+    """``"96,5 kg"`` als Zahl."""
+    return float(text.split()[0].replace(",", "."))
+
+
+def test_die_rangliste_zeigt_den_sprit(gefahren) -> None:
+    """Was noch im Tank ist - neben Reifen und Stopp, vor dem Status."""
+    _fenster, seite = gefahren
+    kopf = seite.rangliste.headerItem()
+    assert kopf.text(rs.SPALTE_SPRIT) == "Sprit"
+    assert kopf.text(rs.SPALTE_STATUS) == "Status"
+    assert "kg" in kopf.toolTip(rs.SPALTE_SPRIT)
+    werte = _spalte_je_auto(seite, rs.SPALTE_SPRIT)
+    assert all(text.endswith(" kg") for text in werte.values()), werte
+    assert all(_kg(text) > 0.0 for text in werte.values())
+
+
+def test_der_sprit_in_der_rangliste_nimmt_ab(gefahren) -> None:
+    """Dieselbe Zahl wie im Kern - und sie faellt ueber das Rennen."""
+    _fenster, seite = gefahren
+    verlauf = seite.verlauf
+    seite._springe(0)
+    anfang = _spalte_je_auto(seite, rs.SPALTE_SPRIT)
+    seite._springe(verlauf.dauer_ms)
+    ende = _spalte_je_auto(seite, rs.SPALTE_SPRIT)
+    for i, text in anfang.items():
+        assert _kg(ende[i]) < _kg(text)
+        assert _kg(text) == pytest.approx(float(verlauf.sprit_kg[0][i]), abs=0.05)
+
+
+def test_ohne_tank_steht_ein_strich(gefahren) -> None:
+    """Im zufallsfreien Laborrennen faehrt das leere Auto."""
+    _fenster, seite = gefahren
+    assert seite._sprittext(None, 0) == "-"
 
 
 def test_das_reifenalter_faengt_nach_dem_stopp_von_vorn_an(qtbot, konfig, stopprennen):

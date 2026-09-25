@@ -1775,7 +1775,7 @@ Alle Entscheidungen dazu stehen in OFFENE_PUNKTE.md (Punkte 48 bis 53).
 | **Bremskuehlung** | bis -4,0 % Bremsgrenze am Rennende | `kern.tempoverlauf` |
 | **Windschatten** | bis +2,5 % Tempo, 30 m bis auf gleiche Hoehe, einmal je Gerade, danach Nachlauf | `kern.windschatten` |
 | **Rhythmus** | +/- 1,5 % Querbeschleunigung, je nach Kurvenanteil der Strecke | `kern.rhythmus` |
-| **Materialgefuehl** | Defektrate mal 1,0 bis 0,6 | `kern.zwischenfall` |
+| **Materialgefuehl** | Defektrate mal 1,0 bis 0,6; Spritverbrauch +5 bis -5 % (siehe *Spritverbrauch und Masse*) | `kern.zwischenfall`, `kern.sprit` |
 | **Heimstrecke** | +0,5 bis +1,0 % auf fuenf je Wochenende gezogene Eigenschaften | `kern.heimstrecke` |
 | **Popularitaet** | Bekanntheit eines Fahrers, waechst mit Siegen und Podien | `kern.popularitaet` |
 | **Ueberrunden** | war schon richtig - siehe unten | `kern.rennen` |
@@ -1844,6 +1844,125 @@ liegt damit eine ganze Rundenlaenge zurueck und kommt nie ins
 10.000er ueber 12 Runden: neun Autos fuenfmal ueberrundet, und die
 Rundenzeiten des Schnellen im Verkehr sind auf die Millisekunde identisch
 mit seiner Alleinfahrt. Zwei Tests halten das jetzt fest.
+
+## Spritverbrauch und Masse
+
+Das Auto wird ueber das Rennen leichter. `rennmanager.kern.sprit` bringt
+dafuer zum ersten Mal eine **Masse** ins Tempomodell. Bis dahin bestand
+ein Auto aus fuenf Grenzen - Querbeschleunigung in engen und normalen
+Kurven, Beschleunigen, Bremsen, Hoechstgeschwindigkeit. Diese Grenzen
+gelten jetzt fuer das **leere** Auto: Qualifying und Kalibrierung (GDD 9)
+fahren ohne Sprit, und dort bleibt alles, wie es war. Im Rennen kommt der
+Tank dazu, und er wirkt so, wie Masse physikalisch wirkt.
+
+Mit `mu = m_leer / m` - 1,0 fuer das leere Auto (800 kg mit Fahrer),
+rund 0,89 mit vollem Tank:
+
+| Grenze | mit Sprit | weil |
+| --- | --- | --- |
+| Beschleunigen | `a * mu` | F = m * a, die Kraft des Motors bleibt |
+| Bremsen, Kurven | `a * (1 - alpha + alpha * mu)`, `alpha` = 0,6 | die Haftung waechst mit dem Gewicht mit, der Abtrieb nicht |
+| enge Kurven | dasselbe mit `alpha` = 0,3 | langsam, also wenig Abtrieb |
+| Hoechstgeschwindigkeit | unveraendert | Leistung gegen Luftwiderstand |
+| Reifenabrieb | mal `m / m_mittel` | mehr Last, mehr Abrieb - verteilt, nicht vermehrt |
+
+Daraus folgt, was der Auftraggeber sich gewuenscht hat: Ein leichtes Auto
+**bremst kuerzer** (`v^2 / 2a` aus gleichem Tempo), bei gleichem Tempo
+zerrt eine **kleinere Fliehkraft** (`m * v^2 / r`) an ihm, und es kommt
+schneller aus den Kurven und aus der Box.
+
+**Getankt** wird, was ein Fahrer fuer die Renndistanz braucht, plus 2 %
+Reserve - der Sprit reicht also immer. Der Verbrauch liegt bei 0,34 kg/km,
+ueber 290 km rund 100 kg, und haengt am **Materialgefuehl**: +5 % beim
+Wert 0, -5 % beim Hoechstwert. Wer sparsam faehrt, traegt das ganze
+Rennen ueber weniger mit sich herum.
+
+**Der Abrieb verteilt sich nur um** (Entscheidung des Auftraggebers):
+Gemessen wird gegen die *mittlere* Masse des Rennens. Mit vollem Tank
+frisst ein Auto rund 6 % mehr Reifen, fast leer rund 6 % weniger, und was
+ein Satz ueber das Rennen hergibt, bleibt gleich. Der Planer der
+Strategie kennt das, wie den Zustand der Strecke: Er rechnet es fuer den
+Medianfahrer Runde fuer Runde in den Verschleiss.
+
+### Was ein voller Tank kostet
+
+Vorgabe des Auftraggebers: rund **3 s je Runde** gegen den leeren Tank.
+Mit den physikalischen Startwerten oben trifft das Modell das ohne
+Nachjustieren - gemessen am Medianfahrer ueber alle zwanzig Strecken
+**3,16 s im Mittel**. Je Strecke weicht es ab, weil die Physik in Prozent
+rechnet: eine lange Runde verliert mehr Sekunden als eine kurze
+(Norisring 1,56 s bei 42 s Rundenzeit, Spa 4,20 s bei 116 s). Geringe
+Abweichungen sind ausdruecklich erlaubt.
+
+Im Rennen, ein Auto allein in Catalunya (64 Runden), gegen dasselbe
+Rennen ohne Verbrauch:
+
+| Runde | 2 | 32 (Mitte) | 64 (letzte) | ganzes Rennen |
+| --- | --- | --- | --- | --- |
+| langsamer um | 3,00 s | 1,51 s | 0,08 s | 99,9 s |
+
+Mit dem ganzen Feld (50 Autos, drei trockene Rennen, gleicher Seed)
+bleibt die Zahl der Stopps im Rahmen (Catalunya gleich, Monza +2,
+Silverstone +5 von 121), und es gibt **keine zusaetzlichen
+Zwangsstopps**: Der Planer legt den ersten Stopp frueher, weil der erste
+Stint mit vollem Tank mehr Reifen frisst - zwischen einer halben und
+dreieinhalb Runden:
+
+| Strecke | Stopps ohne / mit | unter 30 % Profil | geplanter 1. Stopp | Siegerzeit |
+| --- | --- | --- | --- | --- |
+| Catalunya | 81 / 81 | 4 / 3 | Runde 23,2 / 19,6 | +96 s |
+| Monza | 64 / 66 | 0 / 0 | Runde 21,9 / 21,5 | +69 s |
+| Silverstone | 121 / 126 | 0 / 0 | Runde 13,9 / 13,0 | +90 s |
+
+### Wie es gerechnet wird
+
+Wie die Bremskuehlung ueber zwei Profile: eines mit vollem Tank, eines mit
+der Reserve und der Bremse des Rennendes. Der Tank nimmt linear mit der
+Strecke ab, genau wie die Bremse nachlaesst - **ein** Endprofil traegt also
+beides, und dazwischen wird nach gefahrener Distanz gemischt. Die
+Boxengasse bekommt dieselben zwei Enden. Nur die Beschleunigung aus dem
+Stand und hinter einem Langsameren steckt nicht im Profil; sie wird je
+Schritt mit dem Sprit von jetzt nachgerechnet, ebenso der Bremsverlust
+beim Halt in der Box.
+
+Der **Schnellmodus** mischt dieselben zwei Runden, und zwar zur *Mitte*
+jeder Runde - der Zeitraffer mischt stetig, und ueber eine Runde
+gemittelt ist das die Mitte. Zu Rundenbeginn gemischt, waere jede Runde
+eine halbe Runde Sprit zu schwer. Bei gleichem Wetter kostet der Sprit in
+beiden Modellen dasselbe: gemessen 0,3 bis 2,6 % auseinander, waehrend
+die Modelle selbst ohne Sprit schon um rund ein Prozent auseinanderliegen.
+
+Wie alle Wirkungen ueber die Distanz liegt der Sprit hinter
+`ohne_zufall`: Die Kalibrierung faehrt das leere Auto.
+
+Was es an Rechenzeit kostet, zweimal gemessen an einem Rennen in
+Catalunya mit 50 Autos: Die volle Simulation braucht 28,9 bis 29,4 s
+statt 27,2 bis 27,6 s (+6 %) - rund ein Viertel davon, weil das Rennen
+mit Sprit selbst 1,7 % laenger dauert. Der Schnellmodus braucht 1,47 bis
+1,54 s statt 1,25 bis 1,36 s je Wochenende; er nimmt fuer die Kosten der
+Durchfahrt das freie Profil, das er fuer die Rundenzeit ohnehin schon
+gerechnet hat.
+
+### Die Anzeige
+
+Die Rangliste hat eine Spalte **Sprit** zwischen *Stopp* und *Status*,
+mit einer Nachkommastelle - rund 1,5 kg je Runde, ganze Kilogramm
+sprangen nur jede zweite Runde. Der Rennverlauf fuehrt dafuer den
+**Stand je Bild** (`Rennverlauf.sprit_kg`), nicht Startmenge und
+Verbrauch: So bleibt die Anzeige richtig, falls spaeter nachgetankt wird.
+
+### Was dabei aufgefallen ist
+
+* **Das Materialgefuehl ist im Feld zusammengedrueckt.** Mehr als die
+  Haelfte der 50 Fahrer steht beim Hoechstwert 100.000, der schwaechste
+  bei rund 50.000 bis 68.000. Die vereinbarte Spanne von +5 bis -5 %
+  ueber die ganze Skala ergibt im echten Feld deshalb nur 2 bis 3 %
+  Unterschied, und die meisten Fahrer verbrauchen gleich wenig.
+* **Die Rangliste ist schon ohne Sprit zu breit.** Im Normalmodus
+  braucht sie 1.217 px und hat 800 - sie rollt waagerecht, und die
+  Spalte *Sprit* liegt dort hinter dem Rollbalken. Im Kompaktmodus passt
+  sie unter Linux (die Spalte *Status* gibt ihren Ueberschuss ab),
+  hochgerechnet auf Windows fehlen dort schon ohne Sprit rund 1.000 px.
 
 ## Streckenkenntnis
 

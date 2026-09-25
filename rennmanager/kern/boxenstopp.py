@@ -309,14 +309,21 @@ def durchfahrtsverlust_ms(
     strecke: Strecke,
     grenzen: Grenzen,
     grip=1.0,
+    frei=None,
 ) -> int:
     """Was die Durchfahrt kostet, ohne Standzeit - in Millisekunden.
 
     Die Differenz zweier Rundenzeiten: einmal frei gefahren, einmal mit
     dem Deckel auf der Boxengasse. Beide aus demselben Profil, also mit
     Bremsen davor und Beschleunigen danach.
+
+    :param frei: das freie Profil zu diesen Grenzen und diesem Grip, wenn
+        es schon gerechnet ist. Der Schnellmodus hat es fuer die
+        Rundenzeit ohnehin - ein Profil kostet bis zu 2,5 ms, und er
+        braucht es je Auto zweimal.
     """
-    frei = kern_tempo.geschwindigkeitsprofil(strecke, grenzen, grip)
+    if frei is None:
+        frei = kern_tempo.geschwindigkeitsprofil(strecke, grenzen, grip)
     mit_box = kern_tempo.geschwindigkeitsprofil(
         strecke,
         grenzen,

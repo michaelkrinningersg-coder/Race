@@ -34,6 +34,7 @@ from rennmanager.kern import boxenstopp as kern_boxenstopp
 from rennmanager.kern import form as kern_form
 from rennmanager.kern import gummierung as kern_gummierung
 from rennmanager.kern import reifen as kern_reifen
+from rennmanager.kern import sprit as kern_sprit
 from rennmanager.kern import strategie as kern_strategie
 from rennmanager.kern import tempoverlauf as kern_tempoverlauf
 from rennmanager.kern import wetter as kern_wetter
@@ -345,6 +346,13 @@ class Rennverlauf:
     # nicht aus Strecke geteilt durch Tempo.
     messzeiten: tuple[tuple[int, ...], ...] = ()
     messpunkte_je_runde: int = 0
+    # Spritverbrauch: Was jedes Auto in jedem Bild noch im Tank hat, in kg.
+    # Form ``(Bilder, Autos)``, ``float32`` wie der Reifenzustand - eine
+    # reine Anzeigegroesse. Gefuehrt wird der **Stand** je Bild und nicht
+    # Startmenge und Verbrauch: So bleibt die Anzeige richtig, falls
+    # spaeter nachgetankt wird. ``None`` im zufallsfreien Modus, der mit
+    # leerem Auto faehrt.
+    sprit_kg: np.ndarray | None = None
 
     @property
     def anzahl(self) -> int:
@@ -435,6 +443,12 @@ class Rennverlauf:
     def reifen_zu(self, zeit_ms: float) -> np.ndarray:
         """Reifenzustand je Auto zu einem Zeitpunkt, 1,0 frisch bis 0,0."""
         return self.reifenzustand[self.bild_zu(zeit_ms)]
+
+    def sprit_zu(self, zeit_ms: float) -> np.ndarray | None:
+        """Sprit je Auto zu einem Zeitpunkt in kg, oder ``None`` ohne Tanks."""
+        if self.sprit_kg is None or not len(self.sprit_kg):
+            return None
+        return self.sprit_kg[self.bild_zu(zeit_ms)]
 
     def mischung_zu(self, zeit_ms: float) -> tuple[str, ...]:
         """Welche Mischung jedes Auto zu diesem Zeitpunkt faehrt (Punkt 39)."""
@@ -888,7 +902,30 @@ class _Lauf:
                 replace(g, quer=g.quer * faktor)
                 for g, faktor in zip(grenzen, rhythmusfaktor, strict=True)
             ]
-        self.profile = np.array([geschwindigkeitsprofil(strecke, g) for g in grenzen])
+        # --- Sprit und Masse ------------------------------------------
+        # Die Grenzen oben gelten fuer das **leere** Auto - so faehrt es im
+        # Qualifying und in der Kalibrierung aus GDD 9. Im Rennen ist der
+        # Tank voll und wird ueber die Distanz leer; wie jede andere
+        # Wirkung ueber die Distanz faellt das im zufallsfreien Modus weg.
+        self.grenzen_leer = grenzen
+        renndistanz_m = runden * strecke.laenge_m
+        self.tanks: tuple[kern_sprit.Tank, ...] | None = (
+            None
+            if ohne_zufall
+            else tuple(
+                kern_sprit.tank(konfiguration, auto, renndistanz_m) for auto in self.autos
+            )
+        )
+        if self.tanks is None:
+            grenzen_start = grenzen
+        else:
+            grenzen_start = [
+                kern_sprit.grenzen_mit_sprit(konfiguration, g, t.start_kg)
+                for g, t in zip(grenzen, self.tanks, strict=True)
+            ]
+        self.profile = np.array(
+            [geschwindigkeitsprofil(strecke, g) for g in grenzen_start]
+        )
         # Grip je Auto und Sektor, gegen die Wetterfaehigkeiten gerechnet.
         # Er wird beim Rundenwechsel neu gesetzt, weil sich das Wetter
         # waehrend des Rennens aendern kann (GDD 7).
@@ -898,8 +935,10 @@ class _Lauf:
         # (GDD 11). Als Tempofaktor ist es der Kehrwert.
         self.tempoform = np.ones(self.anzahl)
         # Fuer den stehenden Start und das Wiederbeschleunigen hinter einem
-        # langsameren Auto.
+        # langsameren Auto - die Grenze des **leeren** Autos. Was der
+        # Sprit davon nimmt, rechnet ``schritt`` je Schritt nach.
         self.laengs = np.array([g.laengs for g in grenzen])
+        self._richte_tank_ein(renndistanz_m)
         self.ist_zone = np.zeros(self.punkte, dtype=bool)
         for zone in strecke.ueberholzonen:
             indizes = (zone.von + np.arange(zone.punkte)) % self.punkte
@@ -1057,7 +1096,26 @@ class _Lauf:
         self.verschleiss = np.zeros(self.anzahl)
         self.reifen_tempo = np.ones(self.anzahl)
         self.reifen_fehler = np.ones(self.anzahl)
-        self._richte_boxengasse_ein(grenzen)
+        # Die Grenzen des Rennendes: fast leerer Tank und die Bremse, die
+        # nach der Distanz noch bleibt (Punkt 20). Das Boxenprofil braucht
+        # beide Enden, damit es zum freien Profil passt, das gleich
+        # dazwischen gemischt wird.
+        grenzen_ende = grenzen_start
+        if not ohne_zufall:
+            grenzen_ende = [
+                kern_sprit.grenzen_mit_sprit(
+                    konfiguration,
+                    replace(
+                        g,
+                        brems=kern_tempoverlauf.bremsgrenze_am_ende(
+                            konfiguration, auto, g.brems
+                        ),
+                    ),
+                    float(t.menge_kg(renndistanz_m)),
+                )
+                for auto, g, t in zip(self.autos, grenzen, self.tanks, strict=True)
+            ]
+        self._richte_boxengasse_ein(grenzen_start, grenzen_ende)
 
         # --- Ueber die Distanz (Punkte 9, 11 und 20) ------------------
         # Ermuedung, kalte Reifen und nachlassende Bremsen haengen alle an
@@ -1072,10 +1130,12 @@ class _Lauf:
         )
         self.ermuedung_verlust = np.zeros(self.anzahl)
         self.kaltreifen_verlust = np.zeros(self.anzahl)
-        # Zweites Profil mit der Bremsgrenze des Rennendes. Die
-        # Bremskuehlung senkt die *Grenze*, nicht das Tempo: Was sie
-        # kostet, haengt davon ab, wie viel auf der Strecke gebremst wird.
-        # Zwischen beiden Profilen wird nach gefahrener Distanz gemischt.
+        # Zweites Profil mit den Grenzen des Rennendes. Die Bremskuehlung
+        # senkt die *Grenze*, nicht das Tempo: Was sie kostet, haengt davon
+        # ab, wie viel auf der Strecke gebremst wird. Der Sprit geht
+        # denselben Weg - er nimmt linear mit der Strecke ab, genau wie die
+        # Bremse nachlaesst, also traegt **ein** Endprofil beides. Zwischen
+        # beiden Profilen wird nach gefahrener Distanz gemischt.
         self.profil_ende = self.profile
         if not ohne_zufall:
             self.ermuedung_verlust = np.array(
@@ -1091,18 +1151,7 @@ class _Lauf:
                 ]
             )
             self.profil_ende = np.array(
-                [
-                    geschwindigkeitsprofil(
-                        strecke,
-                        replace(
-                            g,
-                            brems=kern_tempoverlauf.bremsgrenze_am_ende(
-                                konfiguration, auto, g.brems
-                            ),
-                        ),
-                    )
-                    for auto, g in zip(self.autos, grenzen, strict=True)
-                ]
+                [geschwindigkeitsprofil(strecke, g) for g in grenzen_ende]
             )
 
         # --- Windschatten (Punkt 7) -----------------------------------
@@ -1167,6 +1216,66 @@ class _Lauf:
         self._setze_startform()
         self._setze_grip(0.0)
 
+    def _richte_tank_ein(self, renndistanz_m: float) -> None:
+        """Legt den Sprit als Felder an, damit ``schritt`` nur noch rechnet.
+
+        Je Auto: was beim Start im Tank ist, was ein Meter kostet und die
+        mittlere Masse des Rennens, gegen die der Abrieb gemessen wird.
+        Ohne Tanks - im zufallsfreien Modus - bleibt alles beim leeren
+        Auto, und ``schritt`` rechnet gar nicht erst nach.
+        """
+        self.masse_leer_kg = float(self.k.wert("sprit", "masse_leer_kg"))
+        # Gezaehlt wird ab dem Startplatz, nicht ab der Linie: Auch der
+        # Weg aus der hinteren Reihe kostet Sprit. Die Reserve deckt ihn
+        # um ein Vielfaches.
+        self.startdistanz = np.array(
+            [startdistanz_m(self.k, t.startplatz) for t in self.teilnehmer]
+        )
+        if self.tanks is None:
+            self.sprit_start = np.zeros(self.anzahl)
+            self.sprit_verbrauch = np.zeros(self.anzahl)
+            self.masse_mittel = np.full(self.anzahl, self.masse_leer_kg)
+        else:
+            self.sprit_start = np.array([t.start_kg for t in self.tanks])
+            self.sprit_verbrauch = np.array([t.verbrauch_kg_je_m for t in self.tanks])
+            self.masse_mittel = np.array(
+                [
+                    kern_sprit.mittlere_masse_kg(self.k, t, renndistanz_m)
+                    for t in self.tanks
+                ]
+            )
+        self.sprit = self.sprit_start.copy()
+        self.abrieb_masse = (self.masse_leer_kg + self.sprit) / self.masse_mittel
+        # Wie E1 bis E8: Was fuer ein Rennen feststeht, wird einmal
+        # gerechnet. ``schritt`` laeuft rund 120.000 Mal - gemessen kostet
+        # die Rechnung so 3,9 statt 4,6 Mikrosekunden je Schritt.
+        self._sprit_bei_null = self.sprit_start + self.sprit_verbrauch * self.startdistanz
+        self._kehrwert_mittel = 1.0 / self.masse_mittel
+        self._laengs_mal_leer = self.laengs * self.masse_leer_kg
+
+    def _tanke_ab(self) -> np.ndarray:
+        """Stellt den Sprit auf die gefahrene Strecke und liefert die Beschleunigung.
+
+        Der Tank nimmt linear mit der Strecke ab - gezaehlt ab dem
+        Startplatz. Daraus folgen die Beschleunigungsgrenze - ``F = m * a``,
+        die Kraft des Motors bleibt - und der Faktor auf den Abrieb gegen
+        die mittlere Masse.
+        """
+        if self.tanks is None:
+            return self.laengs
+        # ``arr.clip`` statt ``np.maximum``, wie E2: dieselbe Rechnung.
+        self.sprit = (self._sprit_bei_null - self.sprit_verbrauch * self.distanz).clip(0.0)
+        masse = self.sprit + self.masse_leer_kg
+        self.abrieb_masse = masse * self._kehrwert_mittel
+        return self._laengs_mal_leer / masse
+
+    def _bremsverlust_ms(self, i: int) -> int:
+        """Was das Bremsen bis zum Halt in der Box kostet - mit dem Sprit von jetzt."""
+        grenzen = self.grenzen_leer[i]
+        if self.tanks is not None:
+            grenzen = kern_sprit.grenzen_mit_sprit(self.k, grenzen, float(self.sprit[i]))
+        return kern_boxenstopp.bremsverlust_ms(self.k, grenzen)
+
     def _setze_verschleissrate(self, i: int) -> None:
         """Wie schnell dieses Auto gerade Profil verliert, je Meter.
 
@@ -1204,7 +1313,7 @@ class _Lauf:
             self._streuung[i][misch.schluessel] = bekannt
         return bekannt
 
-    def _richte_boxengasse_ein(self, grenzen) -> None:
+    def _richte_boxengasse_ein(self, grenzen, grenzen_ende) -> None:
         """Legt Boxenprofil, Stoppfenster und Standzeiten an.
 
         Das Boxenprofil ist dasselbe Geschwindigkeitsprofil wie sonst,
@@ -1213,13 +1322,14 @@ class _Lauf:
         Zeitverlust entsteht also von selbst und muss nicht aufaddiert
         werden. Genau diese Differenz rechnet
         ``boxenstopp.durchfahrtsverlust_ms`` dem Schnellmodus vor.
+
+        Das Boxenprofil gibt es zweimal, wie das freie Profil: mit den
+        Grenzen des Rennbeginns und mit denen des Rennendes. Ein Auto mit
+        vollem Tank bremst frueher auf die Boxengasse zu als eines, das fast
+        leer ist.
         """
         self.faehrt_stopps = self.strategien is not None and not self.ohne_zufall
         self.boxenstopps: list[Boxenstopp] = []
-        self.bremsverlust = np.array(
-            [kern_boxenstopp.bremsverlust_ms(self.k, g) for g in grenzen],
-            dtype=float,
-        )
         # Das Fenster des naechsten Stopps, in gefahrenen Metern. Es
         # bleibt nach dem Wechsel stehen, bis das Auto die Boxengasse
         # verlassen hat - sonst faehrt es mit vollem Tempo heraus und der
@@ -1262,6 +1372,7 @@ class _Lauf:
         )
         if not self.faehrt_stopps:
             self.profil_box = self.profile
+            self.profil_box_ende = self.profil_box
             return
 
         von, bis = kern_boxenstopp.abschnitt(self.k, self.strecke)
@@ -1279,6 +1390,18 @@ class _Lauf:
                     ),
                 )
                 for g in grenzen
+            ]
+        )
+        self.profil_box_ende = np.array(
+            [
+                geschwindigkeitsprofil(
+                    self.strecke,
+                    g,
+                    limit=kern_boxenstopp.gedeckeltes_limit(
+                        self.k, self.strecke, g
+                    ),
+                )
+                for g in grenzen_ende
             ]
         )
         # Das Fenster ist nicht der Abschnitt selbst: Gebremst wird lange
@@ -1369,7 +1492,7 @@ class _Lauf:
         # fuer den Halt in der Box muss er deshalb ausdruecklich dazu. Das
         # Anfahren danach entsteht von selbst, es steckt in der
         # Beschleunigungsgrenze.
-        halt = standzeit + self.bremsverlust[i]
+        halt = standzeit + self._bremsverlust_ms(i)
         self.pause_ms[i] = max(float(self.pause_ms[i]), float(halt))
         self.runde_letzter_stopp[i] = int(self.runden_gefahren[i])
         self.letzter_war_notstopp[i] = notstopp
@@ -1515,6 +1638,7 @@ class _Lauf:
             * self.laenge
             * self.wetter_verschleiss
             * self.gummi_verschleiss
+            * self.abrieb_masse[i]
         )
         if 1.0 - naechste <= schwelle:
             return False
@@ -1704,8 +1828,10 @@ class _Lauf:
         ziel = self._ziel_tempo(zeit_ms)
         # Aus dem Stand und hinter einem langsameren Auto wird mit der
         # eigenen Beschleunigungsgrenze aufgeholt, nicht gesprungen. Der
-        # Grip senkt auch sie, und zwar quadratisch (siehe kern.tempo).
-        self.tempo = np.minimum(ziel, self.tempo + self.laengs * self.grip**2 * dt)
+        # Grip senkt auch sie, und zwar quadratisch (siehe kern.tempo) -
+        # und der Sprit, denn ein volles Auto kommt langsamer vom Fleck.
+        laengs = self._tanke_ab()
+        self.tempo = np.minimum(ziel, self.tempo + laengs * self.grip**2 * dt)
         self.tempo = np.where(wirksam > 0.0, self.tempo, 0.0)
 
         vorher = self.distanz.copy()
@@ -1715,12 +1841,16 @@ class _Lauf:
         # Reifen bauen mit jedem gefahrenen Meter ab (GDD 4). Das Wetter
         # zehrt mit (GDD 7), und der falsche Reifen fuer die Lage zehrt
         # zusaetzlich (Punkt 39) - beides steckt in
-        # ``wetter_verschleiss`` und wird beim Rundenwechsel gesetzt.
+        # ``wetter_verschleiss`` und wird beim Rundenwechsel gesetzt. Die
+        # Masse verteilt den Abrieb um: Mit vollem Tank frisst ein Auto
+        # mehr, fast leer weniger, im Mittel des Rennens genau so viel wie
+        # ohne Sprit.
         self.verschleiss += (
             (self.distanz - vorher)
             * self.verschleiss_je_meter
             * self.wetter_verschleiss
             * self.gummi_verschleiss
+            * self.abrieb_masse
         )
         # Eine angefangene Pause nach einem Fehler laeuft ab.
         self.pause_ms = np.maximum(self.pause_ms - dt * 1000.0, 0.0)
@@ -1782,8 +1912,15 @@ class _Lauf:
         if self.faehrt_stopps:
             in_box = (self.distanz >= self.box_von_m) & (self.distanz < self.box_bis_m)
             if in_box.any():
-                hier = np.where(in_box, self.profil_box[self.laufende_nummer, index], hier)
-                dort = np.where(in_box, self.profil_box[self.laufende_nummer, danach], dort)
+                box_hier = self.profil_box[self.laufende_nummer, index]
+                box_dort = self.profil_box[self.laufende_nummer, danach]
+                if self.profil_box_ende is not self.profil_box:
+                    ende_hier = self.profil_box_ende[self.laufende_nummer, index]
+                    ende_dort = self.profil_box_ende[self.laufende_nummer, danach]
+                    box_hier = box_hier + anteil * (ende_hier - box_hier)
+                    box_dort = box_dort + anteil * (ende_dort - box_dort)
+                hier = np.where(in_box, box_hier, hier)
+                dort = np.where(in_box, box_dort, dort)
 
         # Ermuedung ab der halben Distanz (GDD 8, Bereich er) und kalte
         # Reifen in der ersten Runde (Punkt 48).
@@ -2436,6 +2573,7 @@ def simuliere(
     reifen = [np.ones(lauf.anzahl)]
     mischungsbilder = [mischungszeile()]
     gummibilder = [lauf.gummierung]
+    spritbilder = [lauf.sprit.copy()]
 
     zeit_ms = 0
     nummer = 0
@@ -2459,6 +2597,7 @@ def simuliere(
             reifen.append(np.clip(1.0 - lauf.verschleiss, 0.0, 1.0))
             mischungsbilder.append(mischungszeile())
             gummibilder.append(lauf.gummierung)
+            spritbilder.append(lauf.sprit.copy())
 
     # Das letzte Bild immer festhalten, damit der Zielstand sichtbar ist.
     if zeitpunkte[-1] != zeit_ms:
@@ -2468,6 +2607,7 @@ def simuliere(
         reifen.append(np.clip(1.0 - lauf.verschleiss, 0.0, 1.0))
         mischungsbilder.append(mischungszeile())
         gummibilder.append(lauf.gummierung)
+        spritbilder.append(lauf.sprit.copy())
 
     return Rennverlauf(
         strecke=strecke,
@@ -2493,6 +2633,9 @@ def simuliere(
         mischungsindex=np.array(mischungsbilder),
         mischungen=kuerzel,
         gummierung=np.array(gummibilder, dtype=np.float32) if wetter is not None else None,
+        sprit_kg=(
+            np.array(spritbilder, dtype=np.float32) if lauf.tanks is not None else None
+        ),
         boxenstopps=tuple(lauf.boxenstopps),
         mischungspflicht=mischungspflicht,
         stoppplan=(
