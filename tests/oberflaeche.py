@@ -42,7 +42,7 @@ def schlage_blatt_auf(seite, name: str):
     """Oeffnet eines der vier rechten Blaetter der Rennseite (D2).
 
     Seit D2 fuellt die Rennseite nur noch das Blatt, das man auch sieht:
-    Zeitenmonitor, Bestmoegliche Runde, Meisterschaft und Meldungen
+    Zeiten, Idealrunde, Tabelle und Meldungen
     liegen in einem Reiter, und alle vier in jedem Bild zu fuellen
     kostete ein Drittel der Zeit, die ein Bild braucht. Ein Test, der
     aus einem Blatt liest, muss es also aufschlagen - genau wie der

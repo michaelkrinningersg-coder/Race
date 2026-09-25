@@ -513,8 +513,10 @@ und 30. Sie beschreiben etwas, das heute nachweislich schief steht.
     Wegen trug keiner: „rechte Spalte breiter" geht nicht (das
     Streckenbild hat 424 px Mindestbreite und gibt nichts ab, die
     Breite käme also von der ohnehin zu schmalen Rangliste), „zwei
-    Reihen" kann `QTabWidget` nicht. Kürzere Etiketten hätten gereicht,
-    aber erst ab 1600 px Fenster. Einzelheiten in `OFFENE_PUNKTE.md`.
+    Reihen" kann `QTabWidget` nicht. Gebraucht wurden am Ende **beide**
+    übrigen Wege — senkrecht *und* kürzere Etiketten, weil die Leiste
+    unter Windows 1104 px statt 688 braucht. Einzelheiten in
+    `OFFENE_PUNKTE.md`.
 24. **Tastatur im Rennen und im Qualifying**: Leertaste Start/Pause,
     Pfeiltasten für den Zeitraffer, Pos1 an den Anfang. Heute ist alles
     Maus.

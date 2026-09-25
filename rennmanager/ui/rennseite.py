@@ -503,28 +503,39 @@ class Rennseite(QWidget):
         self._ideal.currentItemChanged.connect(self._auswahl_geaendert)
 
         self._monitorblaetter = QTabWidget()
-        # Vorschlag 23: Die Leiste steht senkrecht an der linken Kante.
-        # Waagerecht brauchen die sechs Etiketten 688 px, und so breit
-        # wird der Kasten nie: gemessen 358 px bei einem 1366er Fenster,
-        # 579 px bei 1920 - erst ab rund 2560 px passte es. Qt blendete
-        # deshalb Rollpfeile ein, und "Fuehrungsrunden" war nur ueber den
-        # Pfeil erreichbar. Senkrecht braucht dieselbe Leiste 26 px
-        # Breite und 688 px Hoehe, und Hoehe ist da: 963 px bei einem
-        # 1080er Fenster. Nebenbei bekommen die Tabellen die Zeile Hoehe
-        # zurueck, die die waagerechte Leiste fraß.
+        # Vorschlag 23: Die Leiste steht senkrecht an der linken Kante,
+        # und die Etiketten sind kurz. Beides zusammen, weil keines
+        # allein reicht.
+        #
+        # Waagerecht brauchen die sechs Etiketten unter Linux 688 px und
+        # bekommen 579 bei einem 1920er Fenster, 358 bei einem 1366er -
+        # erst ab rund 2560 px passte es. Qt blendete Rollpfeile ein, und
+        # das letzte Blatt war nur ueber den Pfeil erreichbar.
+        #
+        # Senkrecht ist Platz: Auf einem 1080er Schirm bleiben dem Blatt
+        # 846 px Hoehe (1080 abzueglich 234 px fuer Menue, Suche,
+        # Reiterleiste, Seitenkopf und Statuszeile).
+        #
+        # Das genuegte aber nur unter Linux. Gemessen auf dem
+        # Windows-Runner brauchen **dieselben** Etiketten dort 1104 px
+        # statt 688 - Segoe UI ist breiter als die Linux-Schrift, Faktor
+        # 1,6. Senkrecht haette die Leiste damit auch auf Windows
+        # gerollt, und Windows ist die Zielplattform (GDD 15). Deshalb
+        # sind die Etiketten gekuerzt: gemessen 451 px unter Linux,
+        # hochgerechnet 724 px auf Windows, also 122 px Luft.
         self._monitorblaetter.setTabPosition(QTabWidget.West)
-        self._monitorblaetter.addTab(self._monitor, "Zeitenmonitor")
-        self._monitorblaetter.addTab(self._ideal, "Bestmoegliche Runde")
-        self._monitorblaetter.addTab(self._meisterschaft, "Meisterschaft")
+        self._monitorblaetter.addTab(self._monitor, "Zeiten")
+        self._monitorblaetter.addTab(self._ideal, "Idealrunde")
+        self._monitorblaetter.addTab(self._meisterschaft, "Tabelle")
         # Punkt 82: Die Meldungen standen fest unter der Seite und nahmen
         # den Tabellen Hoehe weg. Als viertes Blatt stoeren sie nicht mehr
         # und sind trotzdem einen Klick entfernt.
         self._monitorblaetter.addTab(self._baue_ticker(), "Meldungen")
-        self._monitorblaetter.addTab(self._baue_boxenbilanz(), "Boxenbilanz")
+        self._monitorblaetter.addTab(self._baue_boxenbilanz(), "Boxen")
         # Punkt 102: Wer wie viele Runden vorn lag. Das Blatt zaehlt mit,
         # statt den Endstand vorwegzunehmen - man sieht die Fuehrung im
         # Rennen wandern.
-        self._monitorblaetter.addTab(self._baue_fuehrung(), "Fuehrungsrunden")
+        self._monitorblaetter.addTab(self._baue_fuehrung(), "Fuehrung")
         # D2: Ein frisch aufgeschlagenes Blatt steht sonst so lange leer
         # oder veraltet da, bis der naechste Takt faellig ist.
         self._monitorblaetter.currentChanged.connect(self._blatt_gewechselt)

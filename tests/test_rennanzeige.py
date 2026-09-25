@@ -7,6 +7,8 @@ deshalb, dass sie das Richtige lesen, nicht die Simulation selbst.
 
 from __future__ import annotations
 
+import sys
+
 import pytest
 
 from rennmanager import konfiguration as kf
@@ -14,7 +16,7 @@ from rennmanager import konfiguration as kf
 pytest.importorskip("PySide6")
 
 from PySide6.QtCore import Qt  # noqa: E402
-from PySide6.QtWidgets import QTabWidget  # noqa: E402
+from PySide6.QtWidgets import QApplication, QTabWidget  # noqa: E402
 
 from rennmanager.kern import rennen as rn  # noqa: E402
 from rennmanager.ui import rennseite as rs  # noqa: E402
@@ -855,7 +857,7 @@ def test_die_boxenbilanz_ist_ein_eigenes_blatt(gefahren) -> None:
     """B53: Standzeit, Gesamtverlust, Vergleich zum Feld."""
     _fenster, seite = gefahren
     blaetter = seite.blaetter_rechts
-    assert blaetter.tabText(rs.BLATT_BOXENBILANZ) == "Boxenbilanz"
+    assert blaetter.tabText(rs.BLATT_BOXENBILANZ) == "Boxen"
     kopf = seite._boxenbilanz.headerItem()
     assert [kopf.text(s) for s in range(seite._boxenbilanz.columnCount())] == [
         "Auto", "Fahrer", "Team", "Stopps", "Standzeit", "Verlust", "zum Feld",
@@ -1098,42 +1100,88 @@ def test_die_meldungen_stehen_nach_zeit_gemischt(gewechselt) -> None:
 
 
 # --- Vorschlag 23: die Blattleiste rollte ---------------------------------
-# Was ein 1080er Fenster dem rechten Blatt an Hoehe laesst, gemessen am
-# laufenden Rennen. Der Deckel steht hier, damit ein siebtes Blatt den
-# Test umwirft und nicht stillschweigend wieder Rollpfeile erzeugt.
-HOEHE_FUERS_BLATT = 963
+# Der kleinste Schirm, auf dem das Spiel laufen soll. 1080 ist die
+# verbreitetste Aufloesung; passt es dort, passt es ueberall darueber.
+SCHIRM_HOCH = 1080
+# Was Menue, Suchzeile, Reiterleiste und Statuszeile des Hauptfensters
+# ueber und unter der Rennseite wegnehmen - gemessen als Differenz
+# zwischen Fensterhoehe und Seitenhoehe (1197 minus 1034).
+FENSTERRAHMEN = 163
+# Wie viel breiter dieselbe Schrift unter Windows baut. Gemessen auf dem
+# Windows-Runner: die sechs vollen Etiketten brauchten dort 1104 px, wo
+# Linux 688 misst.
+WINDOWS_SCHRIFT = 1104 / 688
+
+
+def _ausgelegte_seite(seite):
+    """Zeigt die Rennseite allein und laesst Qt sie wirklich auslegen.
+
+    Im Hauptfenster liegt die Rennseite hinter dem gefuehrten Wochenende;
+    Qt legt versteckte Widgets nicht aus, und ``width()`` liefert dann
+    Platzhalterwerte. Hier wird sie deshalb zum eigenen Fenster gemacht -
+    so hoch, wie sie auf einem 1080er Schirm waere.
+    """
+    seite.setParent(None)
+    seite.resize(1920, SCHIRM_HOCH - FENSTERRAHMEN)
+    seite.show()
+    for _ in range(3):
+        QApplication.processEvents()
+    return seite
 
 
 def test_die_blattleiste_steht_senkrecht_und_passt(gefahren) -> None:
     """Sechs Etiketten passen waagerecht nicht nebeneinander.
 
-    Gemessen am 1920er Fenster: waagerecht braucht die Leiste 688 px und
-    bekommt 579 - Qt blendete Rollpfeile ein, und "Fuehrungsrunden" war
-    nur ueber den Pfeil zu erreichen. Bei 1366 px Fenster fehlten sogar
-    330 px. Senkrecht braucht dieselbe Leiste 26 px Breite und 688 px
-    Hoehe, und Hoehe ist da.
+    Gemessen unter Linux: waagerecht braucht die Leiste 688 px und
+    bekommt 579 bei einem 1920er Fenster, 358 bei einem 1366er - Qt
+    blendete Rollpfeile ein, und das letzte Blatt war nur ueber den Pfeil
+    zu erreichen.
+
+    Gemessen wird hier **nicht** gegen eine eingetippte Zahl, sondern
+    gegen den Platz, den die ausgelegte Seite dem Blatt wirklich laesst.
+    Eine feste Zahl waere plattformabhaengig gewesen: Auf dem
+    Windows-Runner brauchen dieselben sechs vollen Etiketten 1104 px
+    statt 688, weil Segoe UI breiter ist.
     """
     _fenster, seite = gefahren
+    seite = _ausgelegte_seite(seite)
     reiter = seite.blaetter_rechts
     assert reiter.tabPosition() == QTabWidget.West
 
     leiste = reiter.tabBar()
     gebraucht = leiste.sizeHint()
-    assert gebraucht.height() <= HOEHE_FUERS_BLATT, (
+    assert gebraucht.height() <= reiter.height(), (
         f"{reiter.count()} Blaetter brauchen {gebraucht.height()} px Hoehe, "
-        f"da sind {HOEHE_FUERS_BLATT}"
+        f"das Blatt hat {reiter.height()} px"
     )
-    # Und waagerecht kostet sie fast nichts mehr.
+    # Und waagerecht kostet die Leiste fast nichts mehr.
     assert gebraucht.width() < 40
 
 
-def test_jedes_blatt_ist_ohne_rollpfeil_erreichbar(gefahren) -> None:
-    """Der eigentliche Schaden war, dass ein Blatt nicht mehr dastand."""
+def test_die_leiste_passt_auch_unter_windows(gefahren) -> None:
+    """Der Test oben prueft die Plattform, auf der er gerade laeuft.
+
+    Ausgeliefert wird aber eine Windows-.exe (GDD 15), und dort ist die
+    Schrift breiter: Der Windows-Runner meldete fuer dieselben sechs
+    vollen Etiketten 1104 px, wo Linux 688 misst - Faktor 1,605. Ein
+    Lauf unter Linux allein haette den Rollbalken auf Windows also nicht
+    bemerkt; genau das ist beim ersten Anlauf passiert.
+
+    Deshalb wird die unter Linux gemessene Laenge hochgerechnet. Auf
+    Windows ist der Faktor 1, weil dort schon die richtige Schrift
+    gemessen wird.
+    """
     _fenster, seite = gefahren
+    seite = _ausgelegte_seite(seite)
     reiter = seite.blaetter_rechts
     leiste = reiter.tabBar()
 
-    # Die Leiste raeumt jedem Reiter seinen Platz ein, keiner faellt raus.
-    gesamt = sum(leiste.tabSizeHint(i).height() for i in range(reiter.count()))
-    assert gesamt <= HOEHE_FUERS_BLATT
-    assert reiter.count() == 6, "Sechs Blaetter - sonst stimmt der Deckel nicht"
+    gebraucht = sum(
+        leiste.tabSizeHint(i).height() for i in range(reiter.count())
+    )
+    auf_windows = gebraucht * (1.0 if sys.platform == "win32" else WINDOWS_SCHRIFT)
+    assert auf_windows <= reiter.height(), (
+        f"{reiter.count()} Blaetter brauchen unter Windows rund "
+        f"{auf_windows:.0f} px, das Blatt hat {reiter.height()} px"
+    )
+    assert reiter.count() == 6, "Sechs Blaetter - sonst stimmt die Rechnung nicht"

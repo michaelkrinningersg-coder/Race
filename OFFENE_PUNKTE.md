@@ -3338,3 +3338,54 @@ Die Rennseite ist nicht die Ursache; ihre eigene Mindesthöhe liegt bei
 (`QStackedWidget` nimmt das Maximum über alle Seiten). Nicht weiter
 verfolgt — das ist ein eigener Punkt und keine Layoutfrage der
 Blattleiste.
+
+### Nachtrag: senkrecht allein reichte nicht — auf Windows
+
+Der erste Anlauf ging auf Linux durch und **fiel im Windows-Build um**:
+
+```
+FAILED test_die_blattleiste_steht_senkrecht_und_passt
+  AssertionError: 6 Blaetter brauchen 1104 px Hoehe, da sind 963
+```
+
+Zwei Fehler auf einmal, beide meine:
+
+1. **Eine auf Linux gemessene Zahl stand fest im Test.** 963 px war der
+   Platz, den ein Linux-Fenster dem Blatt lässt. Ein Test, der eine
+   Messung der einen Plattform als allgemeingültig behauptet, prüft auf
+   der anderen etwas anderes, als er zu prüfen vorgibt.
+2. **Die Empfehlung beruhte auf Linux-Zahlen, für ein Windows-Programm.**
+   Ausgeliefert wird eine `.exe` (GDD 15). Dort ist Segoe UI breiter:
+   dieselben sechs Etiketten brauchen **1104 px statt 688**, Faktor
+   1,605. Senkrecht hätte die Leiste also auch auf Windows gerollt.
+
+Dazu kam, dass 963 px selbst für Linux zu großzügig war: Im echten
+Fenster gehen 234 px für Menü, Suchzeile, Reiterleiste, Seitenkopf und
+Statuszeile ab. Auf einem 1080er Schirm bleiben dem Blatt **846 px**.
+
+#### Gemessen, statt wieder geraten
+
+| Etiketten | Linux | Windows (hochgerechnet) | Rest von 846 px |
+|---|---|---|---|
+| voll | 688 px | 1104 px | −258 px, rollt |
+| drei längste gekürzt | 526 px | 844 px | +2 px |
+| dazu „Boxen" | 490 px | 786 px | +60 px |
+| **„Tabelle" statt „Meisterschaft"** | **451 px** | **724 px** | **+122 px** |
+| durchgehend kurz | 405 px | 650 px | +196 px |
+
+Gewählt: **Zeiten · Idealrunde · Tabelle · Meldungen · Boxen ·
+Führung** — 122 px Luft, und jedes Wort sagt noch, was das Blatt zeigt.
+„Ideal / Meister / Box" hätte mehr Luft gegeben, aber schlechteres
+Deutsch.
+
+#### Und die Tests messen jetzt
+
+Beide Tests legen die Rennseite wirklich aus (als eigenes Fenster, so
+hoch wie auf einem 1080er Schirm) und vergleichen gegen den Platz, den
+das Blatt **tatsächlich** hat — keine eingetippte Zahl mehr.
+
+Der zweite Test rechnet die unter Linux gemessene Länge zusätzlich mit
+dem Faktor 1,605 auf Windows hoch; auf Windows selbst ist der Faktor 1,
+weil dort schon die richtige Schrift gemessen wird. Gegenprobe mit den
+alten Etiketten: Der Test meldet „rund 1104 px" — genau die Zahl, die
+der Windows-Runner gemeldet hatte.

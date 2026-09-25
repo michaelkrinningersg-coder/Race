@@ -313,13 +313,15 @@ def test_die_meldungen_sind_ein_blatt_und_keine_fussleiste(
     ueberschriften = [
         seite.blaetter_rechts.tabText(i) for i in range(seite.blaetter_rechts.count())
     ]
+    # Vorschlag 23: kurze Etiketten, damit die senkrechte Leiste auch
+    # unter Windows ohne Rollpfeile auskommt.
     assert ueberschriften == [
-        "Zeitenmonitor",
-        "Bestmoegliche Runde",
-        "Meisterschaft",
+        "Zeiten",
+        "Idealrunde",
+        "Tabelle",
         "Meldungen",
-        "Boxenbilanz",
-        "Fuehrungsrunden",
+        "Boxen",
+        "Fuehrung",
     ]
     # Der Ticker haengt wirklich in den Blaettern, nicht mehr daneben.
     assert seite.ticker.isAncestorOf(seite.ticker)
