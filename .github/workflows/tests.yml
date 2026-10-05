@@ -48,3 +48,12 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: pytest
+
+  # Wie im Windows-Build: je Workflow nur die fuenf neuesten Laeufe.
+  aufraeumen:
+    name: Alte Laeufe aufraeumen
+    needs: tests
+    if: always()
+    permissions:
+      actions: write
+    uses: ./.github/workflows/cleanup-runs.yml

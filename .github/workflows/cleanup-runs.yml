@@ -1,0 +1,62 @@
+name: Alte Laeufe aufraeumen
+
+# Je Workflow bleiben die fuenf neuesten Laeufe stehen, alles Aeltere wird
+# geloescht - samt Logs und hochgeladener .exe (Wunsch des Auftraggebers).
+#
+# Aufgerufen wird das am Ende jedes Windows-Builds und jedes Testlaufs
+# (``workflow_call``). Ein eigener Zeitplan haette hier nichts genuetzt:
+# Zeitplaene laufen nur auf dem Hauptzweig, und dort liegt kein Workflow.
+#
+# Gezaehlt wird **mit** dem gerade laufenden Lauf: Er ist der neueste und
+# steht als Erster in der Liste. Nach dem Build sind es also wirklich
+# hoechstens fuenf. Laeufe, die noch nicht fertig sind, werden nie
+# angefasst - GitHub liesse sie auch nicht loeschen.
+#
+# Statt der Community-Action Mattraks/delete-workflow-runs steht hier das
+# ``gh``, das auf jedem Runner schon installiert ist: Keine fremde Action
+# bekommt Schreibrechte auf die Actions des Repos.
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+env:
+  BEHALTEN: 5
+
+jobs:
+  aufraeumen:
+    name: Je Workflow die letzten 5 Laeufe behalten
+    runs-on: ubuntu-latest
+    steps:
+      - name: Aeltere Laeufe loeschen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          # In Variablen statt in einer Pipe: Scheitert ein Abruf, bricht
+          # der Job sichtbar ab, statt still nichts zu loeschen.
+          workflows=$(gh api "repos/$repo/actions/workflows" --jq '.workflows[].id')
+          for workflow in $workflows; do
+            # Erst die ganze Liste holen, dann loeschen - sonst verschoeben
+            # die Loeschungen die Seiten, waehrend noch geblaettert wird.
+            # Die Liste kommt neueste zuerst; die ersten $BEHALTEN bleiben.
+            laeufe=$(gh api --paginate "repos/$repo/actions/workflows/$workflow/runs?per_page=100" \
+              --jq '.workflow_runs[] | "\(.id) \(.status) \(.run_number) \(.name)"')
+            stelle=0
+            while read -r id status nummer name; do
+              [ -n "$id" ] || continue
+              stelle=$((stelle + 1))
+              if [ "$stelle" -le "$BEHALTEN" ]; then
+                continue
+              fi
+              if [ "$status" != "completed" ]; then
+                echo "uebersprungen: $name #$nummer ist noch nicht fertig ($status)"
+                continue
+              fi
+              gh api -X DELETE "repos/$repo/actions/runs/$id" --silent < /dev/null
+              echo "geloescht: $name #$nummer"
+            done <<< "$laeufe"
+          done

@@ -71,3 +71,14 @@ jobs:
           name: Rennmanager-windows
           path: dist/Rennmanager.exe
           if-no-files-found: error
+
+  # Danach: je Workflow nur die fuenf neuesten Laeufe behalten, dieser
+  # mitgezaehlt (Wunsch des Auftraggebers). Auch wenn der Build scheitert -
+  # sonst sammelten sich gerade die gescheiterten Laeufe an.
+  aufraeumen:
+    name: Alte Laeufe aufraeumen
+    needs: exe
+    if: always()
+    permissions:
+      actions: write
+    uses: ./.github/workflows/cleanup-runs.yml
